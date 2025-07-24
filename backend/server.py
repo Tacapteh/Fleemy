@@ -250,6 +250,11 @@ async def get_earnings(year: int, week: int, current_user: User = Depends(get_cu
     
     return earnings
 
+# Basic test route
+@api_router.get("/")
+async def root():
+    return {"message": "Fleemy API is running!"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
