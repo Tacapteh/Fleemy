@@ -164,6 +164,55 @@ class FleemyAPITester:
         
         return True
 
+    def test_event_creation_with_valid_data(self):
+        """Test event creation with valid data structure"""
+        print("\n🔍 Testing Event Creation with Valid Data (No Auth)...")
+        
+        # Test data from the request
+        event_data = {
+            "description": "Réunion client",
+            "client": "Test Client",
+            "day": "monday",
+            "start_time": "09:00",
+            "end_time": "10:00",
+            "status": "pending"
+        }
+        
+        # Should still fail with 401 due to no authentication
+        success, data = self.run_api_test(
+            "Create event with valid data (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,
+            event_data
+        )
+        
+        return success
+
+    def test_task_creation_with_valid_data(self):
+        """Test task creation with valid data structure"""
+        print("\n🔍 Testing Task Creation with Valid Data (No Auth)...")
+        
+        # Test data from the request
+        task_data = {
+            "name": "Développement",
+            "price": 100.0,
+            "color": "#FFB3E6",
+            "icon": "💼",
+            "time_slots": [{"day": "monday", "start": "09:00", "end": "10:00"}]
+        }
+        
+        # Should still fail with 401 due to no authentication
+        success, data = self.run_api_test(
+            "Create task with valid data (no auth)", 
+            "POST", 
+            "/planning/tasks", 
+            401,
+            task_data
+        )
+        
+        return success
+
     def test_cors_headers(self):
         """Test CORS configuration"""
         print("\n🔍 Testing CORS Configuration...")
