@@ -247,6 +247,8 @@ class FleemyAPITester:
             self.test_planning_endpoints_unauthorized,
             self.test_invalid_endpoints,
             self.test_data_validation,
+            self.test_event_creation_with_valid_data,
+            self.test_task_creation_with_valid_data,
             self.test_cors_headers,
         ]
         
