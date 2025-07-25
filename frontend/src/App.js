@@ -1437,17 +1437,6 @@ const GridBody = ({
     });
   };
 
-  const handleDayClick = (date) => {
-    const dayEvents = getEventsForDate(date);
-    setDayEventsModal({ isOpen: true, events: dayEvents, date });
-  };
-
-  const handleEventClick = (event) => {
-    if (!viewingMember) { // Only allow editing own events
-      setEventModal({ isOpen: true, event, timeSlot: null, selectedDate: null });
-    }
-  };
-
   const handleTimeSlotClick = (day, start) => {
     if (!viewingMember) {
       const endIndex = timeSlots.indexOf(start) + 1;
@@ -1458,6 +1447,17 @@ const GridBody = ({
         timeSlot: { day, start, end }, 
         selectedDate: null 
       });
+    }
+  };
+
+  const handleDayClick = (date) => {
+    const dayEvents = getEventsForDate(date);
+    setDayEventsModal({ isOpen: true, events: dayEvents, date });
+  };
+
+  const handleEventClick = (event) => {
+    if (!viewingMember) { // Only allow editing own events
+      setEventModal({ isOpen: true, event, timeSlot: null, selectedDate: null });
     }
   };
 
