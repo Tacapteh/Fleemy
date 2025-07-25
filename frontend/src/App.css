@@ -1111,6 +1111,65 @@ body {
   color: #6b7280 !important;
 }
 
+/* Month View Responsive Design */
+@media (max-width: 768px) {
+  .month-week {
+    min-height: 80px;
+  }
+  
+  .month-day {
+    padding: 6px 4px;
+  }
+  
+  .month-day-number {
+    font-size: 12px;
+  }
+  
+  .month-day-label {
+    font-size: 12px;
+    padding: 8px 4px;
+  }
+  
+  .month-event {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  
+  .month-more-events {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .month-week {
+    min-height: 70px;
+  }
+  
+  .month-day {
+    padding: 4px 2px;
+  }
+  
+  .month-day-number {
+    font-size: 11px;
+  }
+  
+  .month-day-label {
+    font-size: 11px;
+    padding: 6px 2px;
+  }
+  
+  .month-event {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+  
+  .month-more-events {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+}
+
 /* Enhanced Responsive Design for Ultra Clean Components */
 @media (max-width: 1200px) {
   .planning-grid-row {
