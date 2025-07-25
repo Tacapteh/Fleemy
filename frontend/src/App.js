@@ -768,6 +768,7 @@ const Planning = ({ user, sessionToken }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
   const [eventModal, setEventModal] = useState({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
   const [dayEventsModal, setDayEventsModal] = useState({ isOpen: false, events: [], date: null });
   const [team, setTeam] = useState(null);
@@ -817,9 +818,16 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
-  const loadEvents = async () => {
+  const loadEvents = async (smooth = false) => {
     try {
-      setLoading(true);
+      if (smooth) {
+        setTransitioning(true);
+        // Small delay to show transition
+        await new Promise(resolve => setTimeout(resolve, 150));
+      } else {
+        setLoading(true);
+      }
+      
       const targetUid = viewingMember ? viewingMember.uid : user.uid;
       
       if (view === 'week') {
@@ -829,6 +837,11 @@ const Planning = ({ user, sessionToken }) => {
         const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
         setEvents(response.data.events || []);
       }
+      
+      if (smooth) {
+        // Add slight delay for smooth animation
+        setTimeout(() => setTransitioning(false), 100);
+      }
     } catch (error) {
       console.error('Error loading events:', error);
       if (!isOnline) {
@@ -836,8 +849,13 @@ const Planning = ({ user, sessionToken }) => {
         const offlineEvents = await offlineStorage.getEvents(user.uid, currentYear, currentWeek);
         setEvents(offlineEvents);
       }
+      if (smooth) {
+        setTransitioning(false);
+      }
     } finally {
-      setLoading(false);
+      if (!smooth) {
+        setLoading(false);
+      }
     }
   };
 
