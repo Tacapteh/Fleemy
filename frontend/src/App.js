@@ -2165,6 +2165,14 @@ const GridBody = ({
         onCreateEvent={handleCreateFromDay}
       />
 
+      <TaskModal
+        isOpen={taskModal.isOpen}
+        onClose={() => setTaskModal({ isOpen: false, task: null })}
+        onSave={taskModal.task ? handleUpdateTask : handleCreateTask}
+        onDelete={handleDeleteTask}
+        task={taskModal.task}
+      />
+
       {/* Hourly Rate Modal */}
       {showRateModal && (
         <div className="modal-overlay">
