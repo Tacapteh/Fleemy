@@ -187,17 +187,17 @@ frontend:
         agent: "main"
         comment: "Style ultra-épuré appliqué selon l'image de référence exacte : fond blanc pur, bordures fines #e5e7eb, entêtes 'Lundi 21' format simple, hauteur 96px par créneau, design minimaliste parfait"
 
-  - task: "Navigation Simple et Discrète"
+  - task: "Navigation Fluide avec Transitions Douces"
     implemented: true
     working: true
-    file: "App.js"
+    file: "App.js + App.css"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Animations simplifiées pour style épuré : fadeIn simple, transitions discrètes, pas d'effets complexes"
+        comment: "Navigation fluide améliorée : fadeIn, slideIn animations, skeleton loading avec shimmer effet, transitions 0.3s ease-out, changement de semaine sans rechargement complet"
 
   - task: "Event Modals - CRUD Operations"
     implemented: true
