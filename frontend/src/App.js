@@ -890,12 +890,15 @@ const Planning = ({ user, sessionToken }) => {
       console.error('Error creating event:', error);
       // If offline, save locally only
       if (!isOnline) {
-        const localEvent = {
-          ...eventToCreate,
+        const eventToCreateLocal = {
+          ...eventData,
+          uid: user.uid,
+          week: currentWeek,
+          year: currentYear,
           id: Date.now().toString(),
           created_at: new Date().toISOString()
         };
-        await offlineStorage.saveEvent(localEvent);
+        await offlineStorage.saveEvent(eventToCreateLocal);
         setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
         loadEvents();
       }
