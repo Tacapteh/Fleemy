@@ -396,6 +396,47 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Event deleted"}
 
+@api_router.get("/planning/earnings/{year}/{week}")
+async def get_earnings(year: int, week: int, current_user: User = Depends(get_current_user)):
+    events = await db.planning_events.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
+    
+    earnings = {
+        "paid": 0,
+        "unpaid": 0,
+        "pending": 0,
+        "not_worked": 0,
+        "total": 0
+    }
+    
+    # Calculate earnings from events based on hours and rate
+    for event in events:
+        try:
+            start_hour = int(event["start"].split(":")[0])
+            end_hour = int(event["end"].split(":")[0])
+            hours = end_hour - start_hour
+            amount = hours * current_user.hourly_rate
+            
+            if event["type"] == "paid":
+                earnings["paid"] += amount
+            elif event["type"] == "unpaid":
+                earnings["unpaid"] += amount
+            elif event["type"] == "pending":
+                earnings["pending"] += amount
+            elif event["type"] == "not_worked":
+                earnings["not_worked"] += amount
+        except:
+            # Fallback calculation
+            if event["type"] == "paid":
+                earnings["paid"] += current_user.hourly_rate
+            elif event["type"] == "unpaid":
+                earnings["unpaid"] += current_user.hourly_rate
+            elif event["type"] == "pending":
+                earnings["pending"] += current_user.hourly_rate
+    
+    earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"]
+    
+    return earnings
+
 # Tasks endpoints
 @api_router.post("/planning/tasks")
 async def create_task(task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
