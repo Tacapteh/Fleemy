@@ -888,11 +888,11 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
-// Modular Planning Components
+// Ultra Clean Planning Components - Simple Labels + Clean Grid
 const DayHeader = ({ weekDates, dayNames }) => {
   return (
     <div className="planning-days-header">
-      <div className="planning-time-placeholder">Heure</div>
+      <div className="planning-time-placeholder"></div>
       {weekDates.map((date, index) => (
         <div key={index} className="planning-day-header">
           {dayNames[index]} {date.getDate()}
@@ -902,7 +902,7 @@ const DayHeader = ({ weekDates, dayNames }) => {
   );
 };
 
-const HourSidebar = ({ timeSlots }) => {
+const HourLabels = ({ timeSlots }) => {
   return (
     <div className="planning-hours-sidebar">
       {timeSlots.slice(0, -1).map((time, index) => (
