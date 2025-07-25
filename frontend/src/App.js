@@ -892,10 +892,12 @@ const Planning = ({ user, sessionToken }) => {
     try {
       const eventToCreate = {
         description: eventData.description,
-        day: eventData.day,
-        start: eventData.start,
-        end: eventData.end,
-        type: eventData.type,
+        client_id: eventData.client_id || '',
+        client_name: eventData.client_name || '',
+        day: dayNames[eventData.day].toLowerCase(),
+        start_time: eventData.start,
+        end_time: eventData.end,
+        status: eventData.type,
         uid: user.uid,
         week: currentWeek,
         year: currentYear
