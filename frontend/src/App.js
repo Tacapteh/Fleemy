@@ -434,18 +434,29 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
     day: 0,
     start: '09:00',
     end: '10:00',
-    type: 'pending'
+    type: 'pending',
+    client_id: '',
+    client_name: ''
   });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (event) {
+      // Convert day from string to number if needed
+      let dayIndex = event.day;
+      if (typeof dayIndex === 'string') {
+        dayIndex = dayNames.findIndex(d => d.toLowerCase() === dayIndex.toLowerCase());
+        if (dayIndex === -1) dayIndex = 0;
+      }
+      
       setFormData({
         description: event.description || '',
-        day: event.day || 0,
-        start: event.start || '09:00',
-        end: event.end || '10:00',
-        type: event.type || 'pending'
+        day: dayIndex || 0,
+        start: event.start_time || event.start || '09:00',
+        end: event.end_time || event.end || '10:00',
+        type: event.status || event.type || 'pending',
+        client_id: event.client_id || '',
+        client_name: event.client_name || ''
       });
     } else if (timeSlot) {
       setFormData({
@@ -453,7 +464,9 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         day: timeSlot.day,
         start: timeSlot.start,
         end: timeSlot.end,
-        type: 'pending'
+        type: 'pending',
+        client_id: '',
+        client_name: ''
       });
     } else if (selectedDate) {
       const dayOfWeek = selectedDate.getDay();
@@ -463,7 +476,9 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         day: adjustedDay < 5 ? adjustedDay : 0,
         start: '09:00',
         end: '10:00',
-        type: 'pending'
+        type: 'pending',
+        client_id: '',
+        client_name: ''
       });
     } else {
       setFormData({
@@ -471,15 +486,23 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         day: 0,
         start: '09:00',
         end: '10:00',
-        type: 'pending'
+        type: 'pending',
+        client_id: '',
+        client_name: ''
       });
     }
   }, [event, timeSlot, selectedDate, isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     
+    // Validation : client obligatoire, description facultative
+    if (!formData.client_name.trim()) {
+      alert('Le nom du client est obligatoire.');
+      return;
+    }
+    
+    setLoading(true);
     try {
       await onSave(formData);
     } catch (error) {
@@ -513,15 +536,27 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Description *</label>
+            <label className="form-label">Client *</label>
+            <input
+              type="text"
+              value={formData.client_name}
+              onChange={(e) => setFormData({...formData, client_name: e.target.value})}
+              className="form-input"
+              required
+              disabled={loading}
+              placeholder="Nom du client (obligatoire)"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Description</label>
             <input
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
               className="form-input"
-              required
               disabled={loading}
-              placeholder="Description de l'événement"
+              placeholder="Description de l'événement (optionnel)"
             />
           </div>
 
@@ -768,6 +803,7 @@ const Planning = ({ user, sessionToken }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [transitioning, setTransitioning] = useState(false);
   const [eventModal, setEventModal] = useState({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
   const [dayEventsModal, setDayEventsModal] = useState({ isOpen: false, events: [], date: null });
   const [team, setTeam] = useState(null);
@@ -817,9 +853,16 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
-  const loadEvents = async () => {
+  const loadEvents = async (smooth = false) => {
     try {
-      setLoading(true);
+      if (smooth) {
+        setTransitioning(true);
+        // Small delay to show transition
+        await new Promise(resolve => setTimeout(resolve, 150));
+      } else {
+        setLoading(true);
+      }
+      
       const targetUid = viewingMember ? viewingMember.uid : user.uid;
       
       if (view === 'week') {
@@ -829,6 +872,11 @@ const Planning = ({ user, sessionToken }) => {
         const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
         setEvents(response.data.events || []);
       }
+      
+      if (smooth) {
+        // Add slight delay for smooth animation
+        setTimeout(() => setTransitioning(false), 100);
+      }
     } catch (error) {
       console.error('Error loading events:', error);
       if (!isOnline) {
@@ -836,10 +884,322 @@ const Planning = ({ user, sessionToken }) => {
         const offlineEvents = await offlineStorage.getEvents(user.uid, currentYear, currentWeek);
         setEvents(offlineEvents);
       }
+      if (smooth) {
+        setTransitioning(false);
+      }
     } finally {
-      setLoading(false);
+      if (!smooth) {
+        setLoading(false);
+      }
     }
   };
+
+// Revenue Summary Component - Colorized Cards
+const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
+  const calculateRevenue = () => {
+    const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
+    const revenue = { paid: 0, unpaid: 0, pending: 0 };
+
+    weekEvents.forEach(event => {
+      if ((event.status || event.type) !== 'not_worked') {
+        const startTime = event.start_time || event.start || '09:00';
+        const endTime = event.end_time || event.end || '10:00';
+        const startHour = parseInt(startTime.split(':')[0]);
+        const endHour = parseInt(endTime.split(':')[0]);
+        const hours = endHour - startHour;
+        const amount = hours * hourlyRate;
+
+        const eventType = event.status || event.type;
+        switch (eventType) {
+          case 'paid':
+            revenue.paid += amount;
+            break;
+          case 'unpaid':
+            revenue.unpaid += amount;
+            break;
+          case 'pending':
+            revenue.pending += amount;
+            break;
+        }
+      }
+    });
+
+    return revenue;
+  };
+
+  const revenue = calculateRevenue();
+
+  return (
+    <div className="revenue-cards">
+      <div className="revenue-card revenue-card-paid">
+        <div className="revenue-amount">{revenue.paid}€</div>
+        <div className="revenue-label">Revenus payés</div>
+      </div>
+      <div className="revenue-card revenue-card-unpaid">
+        <div className="revenue-amount">{revenue.unpaid}€</div>
+        <div className="revenue-label">Revenus impayés</div>
+      </div>
+      <div className="revenue-card revenue-card-pending">
+        <div className="revenue-amount">{revenue.pending}€</div>
+        <div className="revenue-label">Revenus en attente</div>
+      </div>
+    </div>
+  );
+};
+
+// Navigation Header Components - Smooth Transitions
+const WeekNavigationHeader = ({ currentDate, currentWeek, currentYear, monthNames, onNavigate, transitioning }) => {
+  const weekDates = getWeekDates(currentYear, currentWeek);
+  
+  return (
+    <div className={`week-navigation ${transitioning ? 'transitioning' : ''}`}>
+      <button
+        onClick={() => onNavigate('week', -1)}
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
+        disabled={transitioning}
+      >
+        {!transitioning && '◀'}
+      </button>
+      
+      <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
+        Semaine {currentWeek} - {monthNames[weekDates[0].getMonth()]} {currentYear}
+      </h2>
+      
+      <button
+        onClick={() => onNavigate('week', 1)}
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
+        disabled={transitioning}
+      >
+        {!transitioning && '▶'}
+      </button>
+    </div>
+  );
+};
+
+const MonthNavigationHeader = ({ currentDate, currentMonth, currentYear, monthNames, onNavigate, transitioning }) => {
+  return (
+    <div className={`week-navigation ${transitioning ? 'transitioning' : ''}`}>
+      <button
+        onClick={() => onNavigate('month', -1)}
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
+        disabled={transitioning}
+      >
+        {!transitioning && '◀'}
+      </button>
+      
+      <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
+        {monthNames[currentMonth]} {currentYear}
+      </h2>
+      
+      <button
+        onClick={() => onNavigate('month', 1)}
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
+        disabled={transitioning}
+      >
+        {!transitioning && '▶'}
+      </button>
+    </div>
+  );
+};
+
+// Month View Components - Ultra Clean Design
+const MonthHeader = ({ dayLabels }) => {
+  return (
+    <div className="month-header">
+      {dayLabels.map((day, index) => (
+        <div key={index} className="month-day-label">
+          {day}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const MonthEvent = ({ event, onClick }) => {
+  const eventType = event.status || event.type;
+  const eventClass = `month-event ${
+    eventType === 'paid' ? 'event-meeting' : 
+    eventType === 'unpaid' ? 'event-task' : 
+    eventType === 'pending' ? 'event-break' : 
+    'event-notworked'
+  }`;
+
+  return (
+    <div
+      className={eventClass}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(event);
+      }}
+    >
+      {event.description}
+    </div>
+  );
+};
+
+const MonthGrid = ({ 
+  monthData, 
+  onDayClick, 
+  onEventClick, 
+  getEventsForDate,
+  viewingMember 
+}) => {
+  const rows = [];
+  for (let i = 0; i < monthData.length; i += 7) {
+    rows.push(monthData.slice(i, i + 7));
+  }
+
+  return (
+    <div className="month-grid">
+      {rows.map((week, weekIndex) => (
+        <div key={weekIndex} className="month-week">
+          {week.map((day, dayIndex) => {
+            const dayEvents = getEventsForDate(day.date);
+            const visibleEvents = dayEvents.slice(0, 2);
+            const remainingCount = dayEvents.length - visibleEvents.length;
+            const isToday = day.date.toDateString() === new Date().toDateString();
+            const isCurrentMonth = day.isCurrentMonth;
+
+            return (
+              <div
+                key={dayIndex}
+                className={`month-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}`}
+                onClick={() => onDayClick(day.date)}
+              >
+                <div className="month-day-number">
+                  {day.date.getDate()}
+                </div>
+                
+                <div className="month-day-events">
+                  {visibleEvents.map(event => (
+                    <MonthEvent
+                      key={event.id}
+                      event={event}
+                      onClick={onEventClick}
+                    />
+                  ))}
+                  {remainingCount > 0 && (
+                    <div 
+                      className="month-more-events"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDayClick(day.date);
+                      }}
+                    >
+                      +{remainingCount} autres
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+const DayHeader = ({ weekDates, dayNames }) => {
+  return (
+    <div className="planning-days-header">
+      <div className="planning-time-placeholder"></div>
+      {weekDates.map((date, index) => (
+        <div key={index} className="planning-day-header">
+          {dayNames[index]} {date.getDate()}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const HourLabels = ({ timeSlots }) => {
+  // Add 18h to the end for final alignment
+  const allTimeSlots = [...timeSlots]; // This includes 18:00 already
+  
+  return (
+    <div className="planning-hours-sidebar">
+      {allTimeSlots.map((time, index) => (
+        <div key={index} className="planning-hour-cell">
+          {time}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const GridBody = ({ 
+  timeSlots, 
+  dayNames, 
+  events, 
+  currentWeek, 
+  currentYear, 
+  onTimeSlotClick, 
+  onEventClick, 
+  viewingMember, 
+  transitioning 
+}) => {
+  const getEventsForTimeSlot = (day, time) => {
+    return events.filter(event => 
+      event.day === day && 
+      (event.start_time || event.start) === time &&
+      event.week === currentWeek &&
+      event.year === currentYear
+    );
+  };
+
+  return (
+    <div className="planning-grid-body">
+      {timeSlots.slice(0, -1).map((time, timeIndex) => (
+        <div key={time} className="planning-grid-row">
+          {dayNames.map((dayName, dayIndex) => {
+            const slotEvents = getEventsForTimeSlot(dayIndex, time);
+            
+            return (
+              <div
+                key={dayIndex}
+                className={`planning-grid-cell ${viewingMember ? 'readonly' : ''}`}
+                onClick={() => !viewingMember && onTimeSlotClick(dayIndex, time)}
+              >
+                {slotEvents.map(event => (
+                  <div
+                    key={event.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEventClick(event);
+                    }}
+                    className={`planning-event ${
+                      (event.status || event.type) === 'paid' ? 'event-meeting' : 
+                      (event.status || event.type) === 'unpaid' ? 'event-task' : 
+                      (event.status || event.type) === 'pending' ? 'event-break' : 
+                      'event-notworked'
+                    } ${transitioning ? '' : 'new-event'}`}
+                  >
+                    <div className="planning-event-description">{event.description}</div>
+                    <div className="planning-event-time">
+                      {(event.start_time || event.start)} - {(event.end_time || event.end)}
+                    </div>
+                    {event.client_name && (
+                      <div className="planning-event-client">{event.client_name}</div>
+                    )}
+                  </div>
+                ))}
+                
+                {/* Smooth loading skeleton during transition */}
+                {transitioning && (
+                  <div className="planning-skeleton" style={{
+                    width: '90%',
+                    height: '16px',
+                    borderRadius: '2px',
+                    margin: '4px auto'
+                  }}></div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
 
   const loadTeam = async () => {
     try {
@@ -860,10 +1220,15 @@ const Planning = ({ user, sessionToken }) => {
   };
 
   useEffect(() => {
-    loadEvents();
-  }, [view, currentYear, currentWeek, currentMonth, viewingMember]);
+    // Only load events on initial mount and when viewing member changes
+    // Navigation will handle loading events directly
+    if (!transitioning && events.length === 0) {
+      loadEvents();
+    }
+  }, [viewingMember]);
 
   useEffect(() => {
+    // Load team and user rate only on mount
     loadTeam();
     loadUserRate();
   }, []);
@@ -871,11 +1236,13 @@ const Planning = ({ user, sessionToken }) => {
   const handleCreateEvent = async (eventData) => {
     try {
       const eventToCreate = {
-        description: eventData.description,
-        day: eventData.day,
-        start: eventData.start,
-        end: eventData.end,
-        type: eventData.type,
+        description: eventData.description || '', // Description facultative
+        client_id: eventData.client_id || '',
+        client_name: eventData.client_name || '', // Client obligatoire (validé dans la modal)
+        day: dayNames[eventData.day].toLowerCase(),
+        start_time: eventData.start,
+        end_time: eventData.end,
+        status: eventData.type,
         uid: user.uid,
         week: currentWeek,
         year: currentYear
@@ -890,14 +1257,28 @@ const Planning = ({ user, sessionToken }) => {
       // Save to offline storage
       await offlineStorage.saveEvent(response.data);
 
+      // Update local state immediately
+      const newEvent = {
+        ...response.data,
+        day: eventData.day, // Keep day as number for local filtering
+        start: eventData.start, // Keep both formats for compatibility
+        end: eventData.end
+      };
+
+      setEvents(prevEvents => [...prevEvents, newEvent]);
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents();
+      
+      // Force revenue recalculation
+      setTimeout(() => {
+        // This will trigger a re-render with updated revenue
+      }, 100);
     } catch (error) {
       console.error('Error creating event:', error);
       // If offline, save locally only
       if (!isOnline) {
         const eventToCreateLocal = {
           ...eventData,
+          description: eventData.description || '',
           uid: user.uid,
           week: currentWeek,
           year: currentYear,
@@ -905,21 +1286,45 @@ const Planning = ({ user, sessionToken }) => {
           created_at: new Date().toISOString()
         };
         await offlineStorage.saveEvent(eventToCreateLocal);
+        setEvents(prevEvents => [...prevEvents, eventToCreateLocal]);
         setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-        loadEvents();
       }
     }
   };
 
   const handleUpdateEvent = async (eventData) => {
     try {
+      const updateData = {
+        description: eventData.description,
+        client_id: eventData.client_id || '',
+        client_name: eventData.client_name || '',
+        day: dayNames[eventData.day].toLowerCase(),
+        start_time: eventData.start,
+        end_time: eventData.end,
+        status: eventData.type
+      };
+
       await apiCall(`/planning/events/${eventModal.event.id}`, {
         method: 'PUT',
-        data: eventData
+        data: updateData
       });
 
+      // Update local state immediately
+      setEvents(prevEvents => 
+        prevEvents.map(event => 
+          event.id === eventModal.event.id 
+            ? { 
+                ...event, 
+                ...updateData,
+                day: eventData.day, // Keep day as number for local filtering
+                start: eventData.start, // Keep both formats for compatibility
+                end: eventData.end
+              }
+            : event
+        )
+      );
+
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents();
     } catch (error) {
       console.error('Error updating event:', error);
     }
@@ -932,8 +1337,10 @@ const Planning = ({ user, sessionToken }) => {
       });
 
       await offlineStorage.deleteEvent(eventId);
+      
+      // Update local state immediately
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents();
     } catch (error) {
       console.error('Error deleting event:', error);
     }
@@ -949,64 +1356,87 @@ const Planning = ({ user, sessionToken }) => {
         );
 
         await offlineStorage.clearWeekEvents(user.uid, currentYear, currentWeek);
-        loadEvents();
+        
+        // Update local state immediately
+        setEvents(prevEvents => 
+          prevEvents.filter(event => !(event.week === currentWeek && event.year === currentYear))
+        );
       } catch (error) {
         console.error('Error clearing week:', error);
       }
     }
   };
 
-  const navigateWeek = (direction) => {
+  const [transitionDirection, setTransitionDirection] = useState('forward'); // 'forward' or 'backward'
+
+  const navigateWeek = async (direction) => {
+    // Set transition direction for animations
+    setTransitionDirection(direction > 0 ? 'forward' : 'backward');
+    setTransitioning(true);
+    
+    // Update date
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + (direction * 7));
     setCurrentDate(newDate);
+    
+    // Load events for the new week smoothly
+    const newWeek = getWeekNumber(newDate);
+    const newYear = newDate.getFullYear();
+    
+    try {
+      const targetUid = viewingMember ? viewingMember.uid : user.uid;
+      const response = await apiCall(`/planning/week/${newYear}/${newWeek}`);
+      
+      // Longer delay for smoother animation
+      setTimeout(() => {
+        setEvents(response.data.events || []);
+        setTransitioning(false);
+      }, 300);
+    } catch (error) {
+      console.error('Error loading week events:', error);
+      setTransitioning(false);
+    }
   };
 
-  const navigateMonth = (direction) => {
+  const navigateMonth = async (direction) => {
+    // Set transition direction for animations
+    setTransitionDirection(direction > 0 ? 'forward' : 'backward');
+    setTransitioning(true);
+    
+    // Update date
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
+    
+    // Load events for the new month smoothly
+    const newMonth = newDate.getMonth();
+    const newYear = newDate.getFullYear();
+    
+    try {
+      const targetUid = viewingMember ? viewingMember.uid : user.uid;
+      const response = await apiCall(`/planning/month/${newYear}/${newMonth}`);
+      
+      // Longer delay for smoother animation
+      setTimeout(() => {
+        setEvents(response.data.events || []);
+        setTransitioning(false);
+      }, 300);
+    } catch (error) {
+      console.error('Error loading month events:', error);
+      setTransitioning(false);
+    }
   };
 
-  const calculateRevenue = () => {
-    const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
-    const revenue = { paid: 0, unpaid: 0, pending: 0 };
-
-    weekEvents.forEach(event => {
-      if (event.type !== 'not_worked') {
-        const startHour = parseInt(event.start.split(':')[0]);
-        const endHour = parseInt(event.end.split(':')[0]);
-        const hours = endHour - startHour;
-        const amount = hours * hourlyRate;
-
-        switch (event.type) {
-          case 'paid':
-            revenue.paid += amount;
-            break;
-          case 'unpaid':
-            revenue.unpaid += amount;
-            break;
-          case 'pending':
-            revenue.pending += amount;
-            break;
-        }
-      }
-    });
-
-    return revenue;
+  // Unified smooth navigation handler
+  const handleNavigation = (type, direction) => {
+    if (type === 'week') {
+      navigateWeek(direction);
+    } else {
+      navigateMonth(direction);
+    }
   };
 
-  const revenue = calculateRevenue();
   const weekDates = getWeekDates(currentYear, currentWeek);
-
-  const getEventsForTimeSlot = (day, time) => {
-    return events.filter(event => 
-      event.day === day && 
-      event.start === time &&
-      event.week === currentWeek &&
-      event.year === currentYear
-    );
-  };
 
   const getEventsForDate = (date) => {
     const dayOfWeek = date.getDay();
@@ -1021,6 +1451,19 @@ const Planning = ({ user, sessionToken }) => {
     });
   };
 
+  const handleTimeSlotClick = (day, start) => {
+    if (!viewingMember) {
+      const startIndex = timeSlots.indexOf(start);
+      const endTime = timeSlots[startIndex + 1] || '18:00';
+      setEventModal({ 
+        isOpen: true, 
+        event: null, 
+        timeSlot: { day, start, end: endTime }, 
+        selectedDate: null 
+      });
+    }
+  };
+
   const handleDayClick = (date) => {
     const dayEvents = getEventsForDate(date);
     setDayEventsModal({ isOpen: true, events: dayEvents, date });
@@ -1029,19 +1472,6 @@ const Planning = ({ user, sessionToken }) => {
   const handleEventClick = (event) => {
     if (!viewingMember) { // Only allow editing own events
       setEventModal({ isOpen: true, event, timeSlot: null, selectedDate: null });
-    }
-  };
-
-  const handleTimeSlotClick = (day, start) => {
-    if (!viewingMember) {
-      const endIndex = timeSlots.indexOf(start) + 1;
-      const end = endIndex < timeSlots.length ? timeSlots[endIndex] : '18:00';
-      setEventModal({ 
-        isOpen: true, 
-        event: null, 
-        timeSlot: { day, start, end }, 
-        selectedDate: null 
-      });
     }
   };
 
@@ -1137,10 +1567,11 @@ const Planning = ({ user, sessionToken }) => {
                 {hourlyRate}€/h
               </button>
               
-              {view === 'week' && (
+              {!viewingMember && (
                 <button
                   onClick={handleClearWeek}
-                  className="btn btn-danger"
+                  className="btn btn-outline btn-danger"
+                  style={{ marginLeft: '12px' }}
                 >
                   Vider semaine
                 </button>
@@ -1157,197 +1588,79 @@ const Planning = ({ user, sessionToken }) => {
         </div>
       </div>
 
-      {/* Week Navigation */}
-      <div className="week-navigation">
-        <button
-          onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
-          className="week-nav-btn"
-        >
-          ◀
-        </button>
-        
-        <h2 className="week-title">
-          {view === 'week' 
-            ? `Semaine ${currentWeek} - ${monthNames[weekDates[0].getMonth()]} ${currentYear}`
-            : `${monthNames[currentMonth]} ${currentYear}`
-          }
-        </h2>
-        
-        <button
-          onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
-          className="week-nav-btn"
-        >
-          ▶
-        </button>
-      </div>
+      {/* Navigation Header */}
+      {view === 'week' ? (
+        <WeekNavigationHeader
+          currentDate={currentDate}
+          currentWeek={currentWeek}
+          currentYear={currentYear}
+          monthNames={monthNames}
+          onNavigate={handleNavigation}
+          transitioning={transitioning}
+        />
+      ) : (
+        <MonthNavigationHeader
+          currentDate={currentDate}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+          monthNames={monthNames}
+          onNavigate={handleNavigation}
+          transitioning={transitioning}
+        />
+      )}
 
       {/* Revenue Summary - Only show for personal view */}
       {view === 'week' && !viewingMember && (
-        <div className="revenue-cards">
-          <div className="revenue-card paid">
-            <div className="revenue-amount">{formatCurrency(revenue.paid)}</div>
-            <div className="revenue-label">Revenus payés</div>
-          </div>
-          <div className="revenue-card unpaid">
-            <div className="revenue-amount">{formatCurrency(revenue.unpaid)}</div>
-            <div className="revenue-label">Revenus impayés</div>
-          </div>
-          <div className="revenue-card pending">
-            <div className="revenue-amount">{formatCurrency(revenue.pending)}</div>
-            <div className="revenue-label">Revenus en attente</div>
-          </div>
-        </div>
+        <RevenueSummary
+          events={events}
+          currentWeek={currentWeek}
+          currentYear={currentYear}
+          hourlyRate={hourlyRate}
+        />
       )}
 
       {/* Planning Table */}
       {view === 'week' ? (
-        <div className="planning-container">
-          <table className="planning-table">
-            <thead>
-              <tr>
-                <th className="time-header">Heure</th>
-                {weekDates.map((date, index) => (
-                  <th key={index} className="day-header">
-                    {dayNames[index]}
-                    <div className="day-date">
-                      {date.getDate()}/{date.getMonth() + 1}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {timeSlots.slice(0, -1).map((time, timeIndex) => (
-                <tr key={time}>
-                  <td className="time-header">{time}</td>
-                  {dayNames.map((dayName, dayIndex) => {
-                    const slotEvents = getEventsForTimeSlot(dayIndex, time);
-                    
-                    return (
-                      <td
-                        key={dayIndex}
-                        onClick={() => handleTimeSlotClick(dayIndex, time)}
-                      >
-                        {slotEvents.map(event => {
-                          const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
-                                              event.type === 'unpaid' ? 'task' : 
-                                              event.type === 'pending' ? 'break' : 'notworked'}`;
-                          
-                          return (
-                            <div
-                              key={event.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEventClick(event);
-                              }}
-                              className={`event ${eventClass}`}
-                            >
-                              <div className="event-description">
-                                {event.description}
-                              </div>
-                              <div className="event-time">
-                                {event.start} - {event.end}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={`planning-content ${
+          transitioning 
+            ? transitionDirection === 'forward' ? 'transitioning' : 'transitioning-reverse'
+            : transitionDirection === 'backward' ? 'entering-reverse' : ''
+        }`}>
+          <div className="planning-layout">
+            <DayHeader weekDates={weekDates} dayNames={dayNames} />
+            <div className="planning-grid-container">
+              <HourLabels timeSlots={timeSlots} />
+              <GridBody
+                timeSlots={timeSlots}
+                dayNames={dayNames}
+                events={events}
+                currentWeek={currentWeek}
+                currentYear={currentYear}
+                onTimeSlotClick={handleTimeSlotClick}
+                onEventClick={handleEventClick}
+                viewingMember={viewingMember}
+                transitioning={transitioning}
+              />
+            </div>
+          </div>
         </div>
       ) : (
-        /* Month View - Using same style as before but with original styling */
-        <div className="planning-container">
-          <table className="planning-table">
-            <thead>
-              <tr>
-                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
-                  <th key={day} className="day-header">{day}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {getMonthDays(currentYear, currentMonth).reduce((rows, day, index) => {
-                if (index % 7 === 0) rows.push([]);
-                rows[rows.length - 1].push(day);
-                return rows;
-              }, []).map((week, weekIndex) => (
-                <tr key={weekIndex}>
-                  {week.map((day, dayIndex) => {
-                    const dayEvents = getEventsForDate(day.date);
-                    const visibleEvents = dayEvents.slice(0, 2);
-                    const remainingCount = dayEvents.length - visibleEvents.length;
-                    const isToday = day.date.toDateString() === new Date().toDateString();
-
-                    return (
-                      <td
-                        key={dayIndex}
-                        onClick={() => handleDayClick(day.date)}
-                        style={{
-                          backgroundColor: !day.isCurrentMonth ? '#f8f9fa' : 
-                                          isToday ? '#e3f2fd' : '#fff',
-                          color: !day.isCurrentMonth ? '#6c757d' : '#212529',
-                          height: '100px',
-                          verticalAlign: 'top',
-                          padding: '8px'
-                        }}
-                      >
-                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>
-                          {day.date.getDate()}
-                        </div>
-                        
-                        <div style={{ fontSize: '11px' }}>
-                          {visibleEvents.map(event => {
-                            const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
-                                                event.type === 'unpaid' ? 'task' : 
-                                                event.type === 'pending' ? 'break' : 'notworked'}`;
-                            
-                            return (
-                              <div
-                                key={event.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEventClick(event);
-                                }}
-                                className={`${eventClass}`}
-                                style={{
-                                  padding: '2px 4px',
-                                  marginBottom: '2px',
-                                  borderRadius: '3px',
-                                  fontSize: '10px',
-                                  cursor: 'pointer',
-                                  borderLeft: '3px solid',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {event.description}
-                              </div>
-                            );
-                          })}
-                          {remainingCount > 0 && (
-                            <div style={{ 
-                              fontSize: '10px', 
-                              color: '#007bff', 
-                              fontWeight: '600',
-                              cursor: 'pointer'
-                            }}>
-                              +{remainingCount} autres
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        /* Month View - Ultra Clean Design */
+        <div className={`planning-content ${
+          transitioning 
+            ? transitionDirection === 'forward' ? 'transitioning' : 'transitioning-reverse'
+            : transitionDirection === 'backward' ? 'entering-reverse' : ''
+        }`}>
+          <div className="planning-layout">
+            <MonthHeader dayLabels={['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']} />
+            <MonthGrid
+              monthData={getMonthDays(currentYear, currentMonth)}
+              onDayClick={handleDayClick}
+              onEventClick={handleEventClick}
+              getEventsForDate={getEventsForDate}
+              viewingMember={viewingMember}
+            />
+          </div>
         </div>
       )}
 

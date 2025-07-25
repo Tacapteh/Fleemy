@@ -364,76 +364,555 @@ button:active {
   }
 }
 
-/* Original Planning Styles from style.css */
-.planning-container {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+/* Ultra Smooth Navigation Animations - No Flash */
+@keyframes slideOutLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
 }
 
-.planning-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
-.planning-table th {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes titleFadeUpdate {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.planning-content {
+  animation: slideInRight 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+  will-change: transform, opacity;
+}
+
+.planning-content.transitioning {
+  animation: slideOutLeft 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.planning-content.transitioning-reverse {
+  animation: slideOutRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.planning-content.entering-reverse {
+  animation: slideInLeft 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* Header animations */
+.week-title.updating {
+  animation: titleFadeUpdate 0.6s ease-in-out;
+}
+
+/* Event transitions */
+.planning-event.transitioning,
+.month-event.transitioning {
+  animation: slideOutLeft 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.planning-event.new-event,
+.month-event.new-event {
+  animation: slideInRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* Grid stability during transitions */
+.planning-grid-container,
+.month-grid {
+  position: relative;
+  background: #ffffff;
+  transition: none; /* Keep grid stable */
+}
+
+.planning-layout {
+  overflow: hidden; /* Prevent scrollbars during animations */
+}
+
+/* Enhanced Smooth Transitions - No Page Reload */
+@keyframes fadeSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes headerPulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.planning-content {
+  animation: fadeSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.planning-content.transitioning {
+  animation: fadeSlideOut 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.planning-content.transitioning .planning-layout {
+  opacity: 0.4;
+  transform: translateY(4px);
+  transition: all 0.3s ease;
+}
+
+.planning-content.transitioning .month-grid {
+  opacity: 0.4;
+  transform: translateY(4px);
+  transition: all 0.3s ease;
+}
+
+/* Enhanced week header animation */
+.week-title.updating {
+  animation: headerPulse 0.4s ease-in-out;
+}
+
+/* Smooth event transitions */
+.planning-event.new-event,
+.month-event.new-event {
+  animation: fadeSlideIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.planning-event.transitioning,
+.month-event.transitioning {
+  animation: fadeSlideOut 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Subtle loading indicator during transitions */
+.week-nav-btn.loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.week-nav-btn.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border: 2px solid #d1d5db;
+  border-top: 2px solid #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Enhanced navigation transitions */
+.week-navigation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  padding: 8px 0;
+  transition: all 0.3s ease;
+}
+
+.week-navigation.transitioning {
+  opacity: 0.7;
+}
+
+/* Navigation button states */
+.week-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.week-nav-btn:disabled:hover {
+  background: #ffffff;
+  transform: none;
+}
+
+/* Month View Transitions */
+.month-grid {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.planning-content.transitioning .month-grid {
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.month-event.new-event {
+  animation: slideIn 0.25s ease-out;
+}
+
+/* Month View Components - Ultra Clean Design */
+.month-header {
+  display: flex;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.month-day-label {
+  flex: 1;
   padding: 12px 8px;
   text-align: center;
-  font-weight: 600;
   font-size: 14px;
-  color: #495057;
+  font-weight: 500;
+  color: #374151;
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
 }
 
-.planning-table td {
-  border: 1px solid #dee2e6;
-  height: 96px;
-  width: 120px;
+.month-day-label:last-child {
+  border-right: none;
+}
+
+.month-grid {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+}
+
+.month-week {
+  display: flex;
+  min-height: 100px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.month-week:last-child {
+  border-bottom: none;
+}
+
+.month-day {
+  flex: 1;
+  padding: 8px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
   position: relative;
-  vertical-align: top;
-  padding: 0;
-  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+
+.month-day:last-child {
+  border-right: none;
+}
+
+.month-day:hover {
+  background-color: #f8fafc;
+}
+
+.month-day.other-month {
+  background: #f8f9fa;
+  color: #6b7280;
+}
+
+.month-day.today {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.month-day-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+  text-align: right;
+}
+
+.month-day.other-month .month-day-number {
+  color: #9ca3af;
+}
+
+.month-day.today .month-day-number {
+  color: #1d4ed8;
+}
+
+.month-day-events {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.month-event {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+  border-left: 3px solid;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.month-event:hover {
+  opacity: 0.8;
+}
+
+.month-event.event-meeting {
+  background: #dcfce7;
+  border-left-color: #16a34a;
+  color: #166534;
+}
+
+.month-event.event-task {
+  background: #fee2e2;
+  border-left-color: #dc2626;
+  color: #991b1b;
+}
+
+.month-event.event-break {
+  background: #fef3c7;
+  border-left-color: #d97706;
+  color: #92400e;
+}
+
+.month-event.event-notworked {
+  background: #f1f5f9;
+  border-left-color: #64748b;
+  color: #475569;
+}
+
+.month-more-events {
+  font-size: 10px;
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
   transition: background-color 0.2s ease;
 }
 
-.planning-table td:hover {
-  background-color: #f8f9fa;
+.month-more-events:hover {
+  background-color: #dbeafe;
+}
+.planning-layout {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.planning-days-header {
+  display: flex;
+  background: #ffffff;
+  padding: 0;
+  margin-bottom: 0;
+}
+
+.planning-time-placeholder {
+  width: 80px;
+  min-width: 80px;
+  padding: 12px 8px;
+  background: #ffffff;
+  font-size: 14px;
+  color: transparent;
+  font-weight: 500;
+  text-align: center;
+  border: none;
+}
+
+.planning-day-header {
+  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  background: #ffffff;
+  border: none;
+}
+
+.planning-grid-container {
+  display: flex;
+  flex: 1;
+  max-height: calc(100vh - 300px);
+  min-height: 864px; /* 9 slots * 96px */
+  background: #ffffff;
+  position: relative;
+}
+
+.planning-hours-sidebar {
+  width: 80px;
+  min-width: 80px;
+  background: #ffffff;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  padding-right: 8px;
+  position: relative;
+  height: 100%;
+}
+
+.planning-hour-cell {
+  height: 96px;
+  min-height: 96px;
+  padding: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+  border: none;
+  background: #ffffff;
+  position: relative;
+  padding-top: 0;
+  margin-top: 0;
+}
+
+/* Perfect alignment with grid lines */
+.planning-hour-cell:first-child {
+  /* 9h aligns with top of grid */
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.planning-hour-cell:not(:first-child):not(:last-child) {
+  /* All intermediate hours align with grid separators */
+  margin-top: -48px;
+  padding-top: 0;
+}
+
+.planning-hour-cell:last-child {
+  /* 18h aligns with bottom of grid */
+  position: absolute;
+  bottom: 0;
+  right: 8px;
+  height: auto;
+  min-height: auto;
+  margin-top: 0;
+  padding-top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.planning-grid-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+}
+
+.planning-grid-row {
+  display: flex;
+  height: 96px;
+  min-height: 96px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.planning-grid-row:last-child {
+  border-bottom: none;
+}
+
+.planning-grid-cell {
+  flex: 1;
+  position: relative;
+  border-right: 1px solid #e5e7eb;
+  background: #ffffff;
+  transition: background-color 0.2s ease;
+}
+
+.planning-grid-cell:last-child {
+  border-right: none;
+}
+
+.planning-grid-cell:hover {
+  background-color: #f8fafc;
   cursor: pointer;
 }
 
-.time-header {
-  background: #f8f9fa !important;
-  font-weight: 600;
-  font-size: 13px;
-  color: #6c757d;
-  text-align: center;
-  vertical-align: middle;
-  width: 80px;
-  min-width: 80px;
+.planning-grid-cell.readonly {
+  cursor: default;
 }
 
-.day-header {
-  background: #f8f9fa !important;
-  font-weight: 600;
-  font-size: 14px;
-  color: #495057;
-  text-align: center;
-  padding: 12px 8px;
-  border-bottom: 2px solid #dee2e6;
+.planning-grid-cell.readonly:hover {
+  background-color: #ffffff;
 }
 
-.day-date {
-  font-size: 12px;
-  color: #6c757d;
-  font-weight: normal;
-  margin-top: 2px;
-}
-
-/* Event Styles */
-.event {
+/* Modular Event Styles */
+.planning-event {
   position: absolute;
   top: 2px;
   left: 2px;
@@ -445,57 +924,59 @@ button:active {
   line-height: 1.3;
   cursor: pointer;
   transition: all 0.2s ease;
-  border-left: 4px solid;
+  border-left: 3px solid;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.event:hover {
+.planning-event:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 10;
 }
 
-.event-meeting {
-  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-  border-left-color: #28a745;
-  color: #155724;
+.planning-event.event-meeting {
+  background: #dcfce7;
+  border-left-color: #16a34a;
+  color: #166534;
 }
 
-.event-task {
-  background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-  border-left-color: #dc3545;
-  color: #721c24;
+.planning-event.event-task {
+  background: #fee2e2;
+  border-left-color: #dc2626;
+  color: #991b1b;
 }
 
-.event-break {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
-  border-left-color: #ffc107;
-  color: #856404;
+.planning-event.event-break {
+  background: #fef3c7;
+  border-left-color: #d97706;
+  color: #92400e;
 }
 
-.event-notworked {
-  background: linear-gradient(135deg, #e2e3e5 0%, #d6d8db 100%);
-  border-left-color: #6c757d;
-  color: #383d41;
+.planning-event.event-notworked {
+  background: #f1f5f9;
+  border-left-color: #64748b;
+  color: #475569;
 }
 
-.event-description {
-  font-weight: 600;
+.planning-event-description {
+  font-weight: 500;
   margin-bottom: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
 }
 
-.event-time {
+.planning-event-time {
   font-size: 11px;
   opacity: 0.8;
-  font-weight: 500;
+  font-weight: 400;
 }
 
-.event-client {
+.planning-event-client {
   font-size: 10px;
   opacity: 0.7;
   margin-top: auto;
@@ -504,49 +985,51 @@ button:active {
   white-space: nowrap;
 }
 
-/* Planning Header */
+/* Light and Clean Planning Header */
 .planning-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 20px 0;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid #e5e7eb;
   margin-bottom: 20px;
+  background: #ffffff;
 }
 
 .planning-title {
   font-size: 24px;
-  font-weight: 700;
-  color: #212529;
+  font-weight: 600;
+  color: #111827;
   margin: 0;
+  letter-spacing: -0.025em;
 }
 
 .planning-nav {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .planning-nav button {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
-  padding: 8px 16px;
+  padding: 8px 12px;
   font-size: 14px;
   font-weight: 500;
-  color: #495057;
+  color: #374151;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .planning-nav button:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .planning-nav button.active {
-  background: #007bff;
-  border-color: #007bff;
+  background: #2563eb;
+  border-color: #2563eb;
   color: white;
 }
 
@@ -554,95 +1037,127 @@ button:active {
   display: flex;
   align-items: center;
   gap: 12px;
+  background: #ffffff;
 }
 
 .week-nav-btn {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
   border-radius: 6px;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 16px;
-  color: #495057;
+  font-size: 14px;
+  color: #374151;
 }
 
 .week-nav-btn:hover {
-  background: #e9ecef;
-  border-color: #adb5bd;
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.week-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .week-title {
   font-size: 18px;
-  font-weight: 600;
-  color: #212529;
+  font-weight: 500;
+  color: #111827;
   min-width: 200px;
   text-align: center;
+  letter-spacing: -0.025em;
 }
 
-/* Revenue Cards */
+/* Colorized Revenue Cards - Full Background Colors */
 .revenue-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+  background: #ffffff;
 }
 
 .revenue-card {
-  background: white;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  padding: 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
   text-align: center;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
 }
 
 .revenue-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.revenue-card.paid {
-  border-left: 4px solid #28a745;
-  background: linear-gradient(135deg, #fff 0%, #f8fff9 100%);
+/* Full colored backgrounds for revenue cards */
+.revenue-card-paid {
+  background: #dcfce7 !important;
+  border-color: #bbf7d0 !important;
 }
 
-.revenue-card.unpaid {
-  border-left: 4px solid #dc3545;
-  background: linear-gradient(135deg, #fff 0%, #fff8f8 100%);
+.revenue-card-unpaid {
+  background: #fee2e2 !important;
+  border-color: #fecaca !important;
 }
 
-.revenue-card.pending {
-  border-left: 4px solid #ffc107;
-  background: linear-gradient(135deg, #fff 0%, #fffef8 100%);
+.revenue-card-pending {
+  background: #ffedd5 !important;
+  border-color: #fed7aa !important;
 }
 
 .revenue-amount {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  text-align: center;
 }
 
-.revenue-card.paid .revenue-amount {
-  color: #28a745;
+.revenue-card-paid .revenue-amount {
+  color: #15803d !important;
 }
 
-.revenue-card.unpaid .revenue-amount {
-  color: #dc3545;
+.revenue-card-unpaid .revenue-amount {
+  color: #b91c1c !important;
 }
 
-.revenue-card.pending .revenue-amount {
-  color: #ffc107;
+.revenue-card-pending .revenue-amount {
+  color: #c2410c !important;
 }
 
 .revenue-label {
   font-size: 14px;
-  color: #6c757d;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.revenue-card-paid .revenue-label {
+  color: #166534 !important;
+}
+
+.revenue-card-unpaid .revenue-label {
+  color: #991b1b !important;
+}
+
+.revenue-card-pending .revenue-label {
+  color: #9a3412 !important;
 }
 
 /* Modal Styles */
@@ -812,16 +1327,235 @@ button:active {
   color: #721c24;
 }
 
-/* Responsive Design */
+/* Smooth and Fluid Transitions for Modular Components */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.planning-content {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.planning-content.transitioning {
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
+}
+
+.planning-content.transitioning .planning-layout {
+  opacity: 0.7;
+}
+
+/* Smooth week header transition */
+.week-title.updating {
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+}
+
+/* Smooth event appearance */
+.planning-event.new-event {
+  animation: slideIn 0.25s ease-out;
+}
+
+/* Smooth skeleton loading */
+.planning-skeleton {
+  background: linear-gradient(90deg, #f8fafc 25%, #e2e8f0 50%, #f8fafc 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Force Light Mode - Override any dark mode */
+* {
+  color-scheme: light;
+}
+
+body {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+/* Remove dark mode support that was causing issues */
+.planning-container,
+.planning-table,
+.planning-table th,
+.planning-table td,
+.planning-header,
+.revenue-cards,
+.revenue-card,
+.week-navigation {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+.planning-table th {
+  background-color: #f9fafb !important;
+  color: #374151 !important;
+}
+
+.time-header {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+}
+
+/* Month View Responsive Design */
 @media (max-width: 768px) {
-  .planning-table td {
-    height: 80px;
-    width: 100px;
+  .month-week {
+    min-height: 80px;
   }
   
-  .event {
+  .month-day {
+    padding: 6px 4px;
+  }
+  
+  .month-day-number {
+    font-size: 12px;
+  }
+  
+  .month-day-label {
+    font-size: 12px;
+    padding: 8px 4px;
+  }
+  
+  .month-event {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+  
+  .month-more-events {
+    font-size: 9px;
+    padding: 1px 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .month-week {
+    min-height: 70px;
+  }
+  
+  .month-day {
+    padding: 4px 2px;
+  }
+  
+  .month-day-number {
+    font-size: 11px;
+  }
+  
+  .month-day-label {
+    font-size: 11px;
+    padding: 6px 2px;
+  }
+  
+  .month-event {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+  
+  .month-more-events {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+}
+
+/* Enhanced Responsive Design for Ultra Clean Components */
+@media (max-width: 1200px) {
+  .planning-grid-row {
+    height: 90px;
+    min-height: 90px;
+  }
+  
+  .planning-hour-cell {
+    height: 90px;
+    min-height: 90px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -45px; /* Adjust for 90px height */
+  }
+  
+  .planning-hour-cell:last-child {
+    height: 0;
+    min-height: 0;
+  }
+  
+  .planning-time-placeholder,
+  .planning-hours-sidebar {
+    width: 75px;
+    min-width: 75px;
+  }
+}
+
+@media (max-width: 768px) {
+  .planning-layout {
+    border-radius: 0;
+    margin: 0 -8px;
+  }
+  
+  .planning-grid-row {
+    height: 80px;
+    min-height: 80px;
+  }
+  
+  .planning-hour-cell {
+    height: 80px;
+    min-height: 80px;
+    font-size: 11px;
+    padding-right: 4px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -40px; /* Adjust for 80px height */
+  }
+  
+  .planning-hour-cell:last-child {
+    height: 0;
+    min-height: 0;
+    right: 4px;
+  }
+  
+  .planning-time-placeholder,
+  .planning-hours-sidebar {
+    width: 60px;
+    min-width: 60px;
+  }
+  
+  .planning-day-header {
+    font-size: 13px;
+    padding: 10px 6px;
+  }
+  
+  .planning-event {
     font-size: 11px;
     padding: 4px 6px;
+  }
+  
+  .planning-event-description {
+    font-size: 11px;
   }
   
   .planning-header {
@@ -832,49 +1566,137 @@ button:active {
   
   .planning-nav {
     justify-content: center;
+    flex-wrap: wrap;
   }
   
-  .revenue-cards {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  }
-  
-  .modal-content {
-    margin: 20px;
-    padding: 20px;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 480px) {
-  .planning-table td {
-    height: 70px;
-    width: 80px;
-  }
-  
-  .time-header {
-    width: 60px;
-    min-width: 60px;
-    font-size: 11px;
-  }
-  
-  .event {
-    font-size: 10px;
-    padding: 3px 4px;
-  }
-  
-  .event-description {
-    margin-bottom: 1px;
-  }
-  
-  .event-time {
-    font-size: 9px;
+  .planning-title {
+    font-size: 20px;
+    text-align: center;
   }
   
   .week-title {
     font-size: 16px;
-    min-width: 150px;
+    min-width: 160px;
+  }
+  
+  .revenue-cards {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  
+  .revenue-card {
+    padding: 16px 12px;
+  }
+  
+  .revenue-amount {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .planning-grid-row {
+    height: 70px;
+    min-height: 70px;
+  }
+  
+  .planning-hour-cell {
+    height: 70px;
+    min-height: 70px;
+    font-size: 10px;
+    padding-right: 2px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -35px; /* Adjust for 70px height */
+  }
+  
+  .planning-hour-cell:last-child {
+    height: 0;
+    min-height: 0;
+    right: 2px;
+  }
+  
+  .planning-time-placeholder,
+  .planning-hours-sidebar {
+    width: 50px;
+    min-width: 50px;
+  }
+  
+  .planning-day-header {
+    font-size: 12px;
+    padding: 8px 4px;
+  }
+  
+  .planning-event {
+    font-size: 10px;
+    padding: 3px 4px;
+    top: 1px;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+  }
+  
+  .planning-event-description {
+    font-size: 10px;
+    margin-bottom: 1px;
+  }
+  
+  .planning-event-time {
+    font-size: 9px;
+  }
+  
+  .planning-title {
+    font-size: 18px;
+  }
+  
+  .week-title {
+    font-size: 14px;
+    min-width: 140px;
+  }
+  
+  .week-nav-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .revenue-cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .revenue-amount {
+    font-size: 20px;
+  }
+  
+  .revenue-label {
+    font-size: 12px;
+  }
+}
+
+/* Dark mode support disabled to prevent conflicts */
+/* @media (prefers-color-scheme: dark) {
+  Removed dark mode rules that were causing dark backgrounds
+} */
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .planning-content,
+  .planning-content.transitioning,
+  .week-title.updating,
+  .event.new-event {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .planning-table td {
+    border: 1px solid #000;
+  }
+  
+  .event {
+    border: 1px solid;
   }
 }

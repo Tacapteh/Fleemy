@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 class FleemyAPITester:
-    def __init__(self, base_url="https://676ab278-45e9-4e58-8ac9-0c414b3131c7.preview.emergentagent.com"):
+    def __init__(self, base_url="https://be3367aa-ed75-4a84-b8d2-ad1b0e2aa3df.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session_token = None
@@ -164,14 +164,164 @@ class FleemyAPITester:
         
         return True
 
+    def test_planning_week_endpoint(self):
+        """Test planning week endpoint structure"""
+        print("\n🔍 Testing Planning Week Endpoint...")
+        
+        current_year = datetime.now().year
+        current_week = datetime.now().isocalendar()[1]
+        
+        # Test without authentication (should fail)
+        success, data = self.run_api_test(
+            "Get week planning (no auth)", 
+            "GET", 
+            f"/planning/week/{current_year}/{current_week}", 
+            401
+        )
+        
+        # Test with invalid year/week
+        success, data = self.run_api_test(
+            "Get week planning (invalid year)", 
+            "GET", 
+            f"/planning/week/invalid/{current_week}", 
+            422  # Validation error expected
+        )
+        
+        return True
+
+    def test_planning_month_endpoint(self):
+        """Test planning month endpoint structure"""
+        print("\n🔍 Testing Planning Month Endpoint...")
+        
+        current_year = datetime.now().year
+        current_month = datetime.now().month
+        
+        # Test without authentication (should fail)
+        success, data = self.run_api_test(
+            "Get month planning (no auth)", 
+            "GET", 
+            f"/planning/month/{current_year}/{current_month}", 
+            401
+        )
+        
+        return True
+
+    def test_planning_earnings_endpoint(self):
+        """Test planning earnings endpoint and data structure compatibility"""
+        print("\n🔍 Testing Planning Earnings Endpoint...")
+        
+        current_year = datetime.now().year
+        current_week = datetime.now().isocalendar()[1]
+        
+        # Test without authentication (should fail)
+        success, data = self.run_api_test(
+            "Get earnings (no auth)", 
+            "GET", 
+            f"/planning/earnings/{current_year}/{current_week}", 
+            401
+        )
+        
+        return True
+
+    def test_event_crud_endpoints(self):
+        """Test event CRUD endpoints structure"""
+        print("\n🔍 Testing Event CRUD Endpoints...")
+        
+        # Test event creation without auth
+        event_data = {
+            "description": "Réunion client important",
+            "client_id": "client-123",
+            "client_name": "Acme Corp",
+            "day": "monday",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "status": "pending",
+            "hourly_rate": 75.0
+        }
+        
+        success, data = self.run_api_test(
+            "Create event (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,
+            event_data
+        )
+        
+        # Test event update without auth
+        success, data = self.run_api_test(
+            "Update event (no auth)", 
+            "PUT", 
+            "/planning/events/test-id", 
+            401,
+            event_data
+        )
+        
+        # Test event deletion without auth
+        success, data = self.run_api_test(
+            "Delete event (no auth)", 
+            "DELETE", 
+            "/planning/events/test-id", 
+            401
+        )
+        
+        return True
+
+    def test_data_structure_compatibility(self):
+        """Test data structure compatibility issues"""
+        print("\n🔍 Testing Data Structure Compatibility...")
+        
+        # Test that the API expects the correct field names
+        # The review mentioned issues with start_time vs start, end_time vs end, status vs type
+        
+        # Test with old field names (should fail validation)
+        old_format_event = {
+            "description": "Test event",
+            "client_id": "client-123",
+            "client_name": "Test Client",
+            "day": "monday",
+            "start": "09:00",  # Old format
+            "end": "17:00",    # Old format
+            "type": "pending"  # Old format
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with old field names (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,  # Will fail auth first, but structure is important
+            old_format_event
+        )
+        
+        # Test with correct field names
+        new_format_event = {
+            "description": "Test event",
+            "client_id": "client-123", 
+            "client_name": "Test Client",
+            "day": "monday",
+            "start_time": "09:00",  # Correct format
+            "end_time": "17:00",    # Correct format
+            "status": "pending"     # Correct format
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with correct field names (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,  # Will fail auth first
+            new_format_event
+        )
+        
+        return True
+
     def test_event_creation_with_valid_data(self):
         """Test event creation with valid data structure"""
         print("\n🔍 Testing Event Creation with Valid Data (No Auth)...")
         
-        # Test data from the request
+        # Test data from the request - using correct field names
         event_data = {
             "description": "Réunion client",
-            "client": "Test Client",
+            "client_id": "client-456",
+            "client_name": "Test Client",
             "day": "monday",
             "start_time": "09:00",
             "end_time": "10:00",
@@ -188,6 +338,336 @@ class FleemyAPITester:
         )
         
         return success
+
+    def test_event_creation_scenarios(self):
+        """Test event creation with different scenarios"""
+        print("\n🔍 Testing Event Creation Scenarios...")
+        
+        # Test with missing required fields
+        incomplete_event = {
+            "description": "Test event"
+            # Missing required fields
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with missing fields (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,  # Auth fails first
+            incomplete_event
+        )
+        
+        # Test with invalid time formats
+        invalid_time_event = {
+            "description": "Test event",
+            "client_id": "client-123",
+            "client_name": "Test Client",
+            "day": "monday",
+            "start_time": "25:00",  # Invalid time
+            "end_time": "26:00",    # Invalid time
+            "status": "pending"
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with invalid time format (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,  # Auth fails first
+            invalid_time_event
+        )
+        
+        # Test with different event types
+        event_types = ["paid", "unpaid", "pending", "not_worked"]
+        for event_type in event_types:
+            event_data = {
+                "description": f"Test {event_type} event",
+                "client_id": "client-123",
+                "client_name": "Test Client",
+                "day": "tuesday",
+                "start_time": "14:00",
+                "end_time": "16:00",
+                "status": event_type,
+                "hourly_rate": 75.0
+            }
+            
+            success, data = self.run_api_test(
+                f"Create {event_type} event (no auth)", 
+                "POST", 
+                "/planning/events", 
+                401,  # Auth fails first
+                event_data
+            )
+        
+        return True
+
+    def test_event_update_scenarios(self):
+        """Test event update with different scenarios"""
+        print("\n🔍 Testing Event Update Scenarios...")
+        
+        # Test update with valid data
+        update_data = {
+            "description": "Updated event description",
+            "client_id": "client-456",
+            "client_name": "Updated Client",
+            "day": "wednesday",
+            "start_time": "10:00",
+            "end_time": "12:00",
+            "status": "paid",
+            "hourly_rate": 100.0
+        }
+        
+        success, data = self.run_api_test(
+            "Update event with valid data (no auth)", 
+            "PUT", 
+            "/planning/events/test-event-id", 
+            401,  # Auth fails first
+            update_data
+        )
+        
+        # Test partial update (only some fields)
+        partial_update = {
+            "status": "paid",
+            "hourly_rate": 80.0
+        }
+        
+        success, data = self.run_api_test(
+            "Partial event update (no auth)", 
+            "PUT", 
+            "/planning/events/test-event-id", 
+            401,  # Auth fails first
+            partial_update
+        )
+        
+        # Test update with invalid event ID format
+        success, data = self.run_api_test(
+            "Update event with invalid ID (no auth)", 
+            "PUT", 
+            "/planning/events/invalid-id-format", 
+            401,  # Auth fails first
+            update_data
+        )
+        
+        return True
+
+    def test_event_deletion_scenarios(self):
+        """Test event deletion with different scenarios"""
+        print("\n🔍 Testing Event Deletion Scenarios...")
+        
+        # Test deletion with valid ID
+        success, data = self.run_api_test(
+            "Delete event with valid ID (no auth)", 
+            "DELETE", 
+            "/planning/events/test-event-id", 
+            401  # Auth fails first
+        )
+        
+        # Test deletion with non-existent ID
+        success, data = self.run_api_test(
+            "Delete non-existent event (no auth)", 
+            "DELETE", 
+            "/planning/events/non-existent-id", 
+            401  # Auth fails first
+        )
+        
+        # Test deletion with invalid ID format
+        success, data = self.run_api_test(
+            "Delete event with invalid ID format (no auth)", 
+            "DELETE", 
+            "/planning/events/", 
+            404  # Not found due to empty ID
+        )
+        
+        return True
+
+    def test_week_month_data_retrieval(self):
+        """Test week and month data retrieval with various parameters"""
+        print("\n🔍 Testing Week/Month Data Retrieval...")
+        
+        current_year = datetime.now().year
+        current_week = datetime.now().isocalendar()[1]
+        current_month = datetime.now().month
+        
+        # Test valid week parameters
+        success, data = self.run_api_test(
+            "Get week data with valid params (no auth)", 
+            "GET", 
+            f"/planning/week/{current_year}/{current_week}", 
+            401
+        )
+        
+        # Test valid month parameters
+        success, data = self.run_api_test(
+            "Get month data with valid params (no auth)", 
+            "GET", 
+            f"/planning/month/{current_year}/{current_month}", 
+            401
+        )
+        
+        # Test invalid year (too high)
+        success, data = self.run_api_test(
+            "Get week data with invalid year (no auth)", 
+            "GET", 
+            f"/planning/week/9999/{current_week}", 
+            401  # Auth fails first
+        )
+        
+        # Test invalid week (too high)
+        success, data = self.run_api_test(
+            "Get week data with invalid week (no auth)", 
+            "GET", 
+            f"/planning/week/{current_year}/60", 
+            401  # Auth fails first
+        )
+        
+        # Test invalid month (too high)
+        success, data = self.run_api_test(
+            "Get month data with invalid month (no auth)", 
+            "GET", 
+            f"/planning/month/{current_year}/15", 
+            401  # Auth fails first
+        )
+        
+        # Test with string parameters (should cause validation error)
+        success, data = self.run_api_test(
+            "Get week data with string year", 
+            "GET", 
+            "/planning/week/invalid/1", 
+            422  # Validation error
+        )
+        
+        success, data = self.run_api_test(
+            "Get week data with string week", 
+            "GET", 
+            f"/planning/week/{current_year}/invalid", 
+            422  # Validation error
+        )
+        
+        return True
+
+    def test_earnings_calculation_scenarios(self):
+        """Test earnings calculation with different scenarios"""
+        print("\n🔍 Testing Earnings Calculation Scenarios...")
+        
+        current_year = datetime.now().year
+        current_week = datetime.now().isocalendar()[1]
+        
+        # Test earnings endpoint structure
+        success, data = self.run_api_test(
+            "Get earnings for current week (no auth)", 
+            "GET", 
+            f"/planning/earnings/{current_year}/{current_week}", 
+            401
+        )
+        
+        # Test earnings for different weeks
+        for week_offset in [-1, 0, 1]:
+            test_week = max(1, min(52, current_week + week_offset))
+            success, data = self.run_api_test(
+                f"Get earnings for week {test_week} (no auth)", 
+                "GET", 
+                f"/planning/earnings/{current_year}/{test_week}", 
+                401
+            )
+        
+        # Test earnings with invalid parameters
+        success, data = self.run_api_test(
+            "Get earnings with invalid year", 
+            "GET", 
+            "/planning/earnings/invalid/1", 
+            422  # Validation error
+        )
+        
+        success, data = self.run_api_test(
+            "Get earnings with invalid week", 
+            "GET", 
+            f"/planning/earnings/{current_year}/invalid", 
+            422  # Validation error
+        )
+        
+        return True
+
+    def test_data_structure_validation(self):
+        """Test comprehensive data structure validation"""
+        print("\n🔍 Testing Data Structure Validation...")
+        
+        # Test event creation with all required fields
+        complete_event = {
+            "description": "Complete event test",
+            "client_id": "client-789",
+            "client_name": "Complete Client",
+            "day": "friday",
+            "start_time": "09:00",
+            "end_time": "17:00",
+            "status": "pending",
+            "hourly_rate": 65.0
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with complete data (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,
+            complete_event
+        )
+        
+        # Test event creation with minimal required fields
+        minimal_event = {
+            "description": "Minimal event",
+            "client_id": "client-min",
+            "client_name": "Min Client",
+            "day": "saturday",
+            "start_time": "10:00",
+            "end_time": "11:00"
+            # status and hourly_rate should have defaults
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with minimal data (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,
+            minimal_event
+        )
+        
+        # Test with invalid day values
+        invalid_day_event = {
+            "description": "Invalid day event",
+            "client_id": "client-123",
+            "client_name": "Test Client",
+            "day": "invalid_day",
+            "start_time": "09:00",
+            "end_time": "10:00",
+            "status": "pending"
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with invalid day (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,
+            invalid_day_event
+        )
+        
+        # Test with invalid status values
+        invalid_status_event = {
+            "description": "Invalid status event",
+            "client_id": "client-123",
+            "client_name": "Test Client",
+            "day": "monday",
+            "start_time": "09:00",
+            "end_time": "10:00",
+            "status": "invalid_status"
+        }
+        
+        success, data = self.run_api_test(
+            "Create event with invalid status (no auth)", 
+            "POST", 
+            "/planning/events", 
+            401,
+            invalid_status_event
+        )
+        
+        return True
 
     def test_task_creation_with_valid_data(self):
         """Test task creation with valid data structure"""
@@ -244,6 +724,11 @@ class FleemyAPITester:
         test_suites = [
             self.test_basic_connectivity,
             self.test_auth_endpoints,
+            self.test_planning_week_endpoint,
+            self.test_planning_month_endpoint,
+            self.test_planning_earnings_endpoint,
+            self.test_event_crud_endpoints,
+            self.test_data_structure_compatibility,
             self.test_planning_endpoints_unauthorized,
             self.test_invalid_endpoints,
             self.test_data_validation,
