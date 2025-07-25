@@ -1158,12 +1158,15 @@ const GridBody = ({
   };
 
   useEffect(() => {
-    if (!transitioning) {
+    // Only load events on initial mount and when viewing member changes
+    // Navigation will handle loading events directly
+    if (!transitioning && events.length === 0) {
       loadEvents();
     }
-  }, [view, currentYear, currentWeek, currentMonth, viewingMember]);
+  }, [viewingMember]);
 
   useEffect(() => {
+    // Load team and user rate only on mount
     loadTeam();
     loadUserRate();
   }, []);
