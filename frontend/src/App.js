@@ -1275,7 +1275,9 @@ const Planning = ({ user, sessionToken }) => {
                               } ${transitioning ? '' : 'new-event'}`}
                             >
                               <div className="event-description">{event.description}</div>
-                              <div className="event-time">{event.start} - {event.end}</div>
+                              <div className="event-time">
+                                {(event.start_time || event.start)} - {(event.end_time || event.end)}
+                              </div>
                               {event.client_name && (
                                 <div className="event-client">{event.client_name}</div>
                               )}
