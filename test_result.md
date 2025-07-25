@@ -211,17 +211,41 @@ frontend:
         agent: "main"
         comment: "Navigation ultra-fluide implémentée : WeekNavigationHeader + MonthNavigationHeader, transitions fadeSlideIn/Out, headerPulse, indicateur loading, state management optimisé, pas de rechargement complet"
 
-  - task: "Hour Labels - Perfect Grid Alignment"
+  - task: "Revenue Cards - Full Background Colors"
     implemented: true
     working: true
-    file: "App.js + App.css"
+    file: "App.css"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
       - working: true
         agent: "main"
-        comment: "ALIGNEMENT PARFAIT : Heures alignées avec lignes de séparation horizontales (9h en haut, 18h en bas), positioning optimisé, responsive maintenu, effet grille agenda pro comme Google Agenda"
+        comment: "Fonds colorés complets appliqués : Payés (vert #dcfce7), Impayés (rouge #fee2e2), En attente (orange #ffedd5) avec texte contrasté, montants en gras et centrés"
+
+  - task: "Event Form - Client Required, Description Optional"
+    implemented: true
+    working: true
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Formulaire modifié : Client obligatoire avec validation, Description facultative, ordre des champs inversé, création d'événements sans description possible"
+
+  - task: "Perfect Hour Alignment with Grid Lines"
+    implemented: true
+    working: true
+    file: "App.css"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Alignement parfait des heures : 9h sur première ligne, 18h sur dernière ligne, toutes les heures alignées avec séparations horizontales via margin-top: -48px"
 
 metadata:
   created_by: "main_agent"
