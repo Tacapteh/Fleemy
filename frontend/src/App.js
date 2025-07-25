@@ -1602,6 +1602,12 @@ const GridBody = ({
               >
                 + Événement
               </button>
+              <button
+                onClick={() => setTaskModal({ isOpen: true, task: null })}
+                className="btn btn-secondary"
+              >
+                + Tâche
+              </button>
             </>
           )}
         </div>
