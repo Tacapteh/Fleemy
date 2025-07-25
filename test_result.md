@@ -294,9 +294,10 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Planning Table - Modern Styling"
-    - "Navigation Fluide Entre Semaines"
-    - "Event Modals - CRUD Operations"
+    - "API CRUD Tasks - Integrated in Planning"
+    - "API Earnings Calculation with Tasks Integration"
+    - "Tasks Integration in Planning Grid - Conditional Display"
+    - "Revenue Summary with Tasks Integration"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
