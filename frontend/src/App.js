@@ -3161,12 +3161,274 @@ const Quotes = ({ user, sessionToken }) => {
   );
 };
 
-const Invoices = () => (
-  <div className="bg-white p-6 rounded-xl shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-4">🧾 Factures</h1>
-    <p className="text-gray-600">Module de facturation en développement...</p>
-  </div>
-);
+// Invoices Module - Complete Implementation  
+const Invoices = ({ user, sessionToken }) => {
+  const [invoices, setInvoices] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+
+  const apiCall = async (url, options = {}) => {
+    return await axios({
+      url: `${API}${url}`,
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+  };
+
+  const loadInvoices = async () => {
+    try {
+      const [invoicesResponse, clientsResponse, quotesResponse] = await Promise.all([
+        apiCall('/invoices'),
+        apiCall('/clients'),
+        apiCall('/quotes')
+      ]);
+      setInvoices(invoicesResponse.data);
+      setClients(clientsResponse.data);
+      setQuotes(quotesResponse.data);
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateInvoice = () => {
+    setEditingInvoice(null);
+    setShowInvoiceModal(true);
+  };
+
+  const handleEditInvoice = (invoice) => {
+    setEditingInvoice(invoice);
+    setShowInvoiceModal(true);
+  };
+
+  const handleSaveInvoice = async (invoiceData) => {
+    try {
+      if (editingInvoice) {
+        await apiCall(`/invoices/${editingInvoice.id}`, {
+          method: 'PUT',
+          data: invoiceData
+        });
+        setInvoices(prevInvoices =>
+          prevInvoices.map(i => i.id === editingInvoice.id ? { ...i, ...invoiceData } : i)
+        );
+      } else {
+        const response = await apiCall('/invoices', {
+          method: 'POST',
+          data: invoiceData
+        });
+        setInvoices(prevInvoices => [response.data, ...prevInvoices]);
+      }
+      setShowInvoiceModal(false);
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+    }
+  };
+
+  const updateInvoiceStatus = async (invoiceId, status) => {
+    try {
+      await apiCall(`/invoices/${invoiceId}/status`, {
+        method: 'PUT',
+        data: { status }
+      });
+      setInvoices(prevInvoices =>
+        prevInvoices.map(i => i.id === invoiceId ? { ...i, status } : i)
+      );
+    } catch (error) {
+      console.error('Error updating invoice status:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadInvoices();
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'sent': return 'bg-blue-100 text-blue-700';
+      case 'paid': return 'bg-green-100 text-green-700';
+      case 'overdue': return 'bg-red-100 text-red-700';
+      case 'cancelled': return 'bg-gray-100 text-gray-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'sent': return 'Envoyée';
+      case 'paid': return 'Payée';
+      case 'overdue': return 'En retard';
+      case 'cancelled': return 'Annulée';
+      default: return status;
+    }
+  };
+
+  const isOverdue = (invoice) => {
+    return new Date(invoice.due_date) < new Date() && invoice.status !== 'paid';
+  };
+
+  const getTotalPaid = () => {
+    return invoices
+      .filter(i => i.status === 'paid')
+      .reduce((sum, i) => sum + i.total, 0);
+  };
+
+  const getTotalUnpaid = () => {
+    return invoices
+      .filter(i => i.status === 'sent' || i.status === 'overdue')
+      .reduce((sum, i) => sum + i.total, 0);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des factures...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">🧾 Factures</h1>
+          <p className="text-gray-600 mt-1">Gérez vos factures et suivez les paiements</p>
+        </div>
+        <button
+          onClick={handleCreateInvoice}
+          className="btn btn-primary"
+        >
+          + Nouvelle facture
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-green-600">{formatCurrency(getTotalPaid())}</div>
+          <div className="text-sm text-gray-500">Total payé</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-red-600">{formatCurrency(getTotalUnpaid())}</div>
+          <div className="text-sm text-gray-500">En attente de paiement</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-orange-600">{invoices.filter(i => isOverdue(i)).length}</div>
+          <div className="text-sm text-gray-500">En retard</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-gray-700">{invoices.length}</div>
+          <div className="text-sm text-gray-500">Total factures</div>
+        </div>
+      </div>
+
+      {/* Invoices List */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        {invoices.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-6xl mb-4">🧾</div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Aucune facture</h3>
+            <p className="text-gray-500 mb-4">Commencez par créer votre première facture !</p>
+            <button
+              onClick={handleCreateInvoice}
+              className="btn btn-primary"
+            >
+              Créer une facture
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {invoices.map(invoice => (
+              <div key={invoice.id} className={`p-6 transition-all ${isOverdue(invoice) ? 'bg-red-50 border-l-4 border-red-400' : 'hover:bg-gray-50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h3 className="font-semibold text-gray-800">{invoice.invoice_number}</h3>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                        {getStatusText(invoice.status)}
+                      </span>
+                      {isOverdue(invoice) && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          ⏰ En retard
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-900 font-medium">{invoice.title}</p>
+                    <p className="text-gray-600 text-sm">Client: {invoice.client_name}</p>
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                      <span>💰 {formatCurrency(invoice.total)}</span>
+                      <span>📅 Créée le {formatDate(invoice.created_at)}</span>
+                      <span>📋 Échéance: {formatDate(invoice.due_date)}</span>
+                      {invoice.paid_date && (
+                        <span>✅ Payée le {formatDate(invoice.paid_date)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleEditInvoice(invoice)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="Voir/Modifier"
+                    >
+                      ✏️
+                    </button>
+                    {invoice.status === 'sent' && (
+                      <button
+                        onClick={() => updateInvoiceStatus(invoice.id, 'paid')}
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                        title="Marquer comme payée"
+                      >
+                        ✅
+                      </button>
+                    )}
+                    {invoice.status !== 'paid' && (
+                      <button
+                        onClick={() => updateInvoiceStatus(invoice.id, 'cancelled')}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Annuler"
+                      >
+                        ❌
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {/* TODO: Generate PDF */}}
+                      className="btn btn-outline btn-sm"
+                    >
+                      📄 PDF
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && (
+        <InvoiceModal
+          isOpen={showInvoiceModal}
+          onClose={() => setShowInvoiceModal(false)}
+          onSave={handleSaveInvoice}
+          invoice={editingInvoice}
+          clients={clients}
+          quotes={quotes}
+        />
+      )}
+    </div>
+  );
+};
 
 const Settings = () => (
   <div className="bg-white p-6 rounded-xl shadow-sm">
