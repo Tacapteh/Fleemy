@@ -282,6 +282,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "CODE ANALYSIS: ✅ Tasks menu removed from sidebar (lines 63-71 show only Dashboard, Planning, To-do List, Clients, Devis, Factures, Paramètres). ✅ + Tâche button implemented (line 2062). ✅ Conditional display logic perfect (lines 1522-1587): if hasEvent shows task as corner icon (16px circle), else shows colored block with icon and name. ✅ TaskModal with 50 icons (lines 740-746) and 15 colors (lines 749-753). ✅ Tasks loaded in GridBody and displayed correctly. Implementation is complete and correct."
+      - working: true
+        agent: "main"
+        comment: "Nettoyage final : suppression du composant de page 'Tasks' et du case correspondant dans renderCurrentPage. Toutes les tâches sont désormais gérées uniquement dans la vue Planning."
 
   - task: "Revenue Summary with Tasks Integration"
     implemented: true
@@ -327,3 +330,5 @@ agent_communication:
     message: "✅ PHASE 3 TERMINÉE ! Module Devis & Factures complet : 1) Composant Quotes avec CRUD, stats, statuts, templates rapides 2) Composant Invoices avec conversion devis→facture, gestion échéances, statuts 3) QuoteModal & InvoiceModal modulables avec lignes dynamiques, calculs auto, TVA 4) CSS moderne ajouté. Prêt pour test backend endpoints."
   - agent: "main"
     message: "🔧 PHASE 4 DÉMARRÉE : Corrections finales Planning et complétion Devis & Factures : 1) Correction alignement exact heures 9h-18h 2) Ajustement couleurs cartes revenus selon spécifications 3) Transitions fade plus discrètes 4) Ajout export PDF pour devis/factures 5) Tests backend complets."
+  - agent: "main"
+    message: "Nettoyage final du module Planning : suppression complète de la page 'Tâches'. Toutes les fonctionnalités de tâches restent dans la vue Planning."

@@ -2231,12 +2231,6 @@ const GridBody = ({
   );
 };
 
-const Tasks = () => (
-  <div className="bg-white p-6 rounded-xl shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-4">✅ Tâches hebdomadaires</h1>
-    <p className="text-gray-600">Module de gestion des tâches en développement...</p>
-  </div>
-);
 
 const TodoList = ({ sessionToken }) => {
   const [todos, setTodos] = useState([]);
@@ -4427,8 +4421,6 @@ function App() {
         return <Dashboard {...pageProps} />;
       case 'planning':
         return <Planning {...pageProps} />;
-      case 'tasks':
-        return <Tasks {...pageProps} />;
       case 'todos':
         return <TodoList {...pageProps} />;
       case 'clients':
