@@ -364,6 +364,111 @@ button:active {
   }
 }
 
+/* Ultra Smooth Navigation Animations - No Flash */
+@keyframes slideOutLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes titleFadeUpdate {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.planning-content {
+  animation: slideInRight 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+  will-change: transform, opacity;
+}
+
+.planning-content.transitioning {
+  animation: slideOutLeft 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.planning-content.transitioning-reverse {
+  animation: slideOutRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.planning-content.entering-reverse {
+  animation: slideInLeft 0.5s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* Header animations */
+.week-title.updating {
+  animation: titleFadeUpdate 0.6s ease-in-out;
+}
+
+/* Event transitions */
+.planning-event.transitioning,
+.month-event.transitioning {
+  animation: slideOutLeft 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.planning-event.new-event,
+.month-event.new-event {
+  animation: slideInRight 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+/* Grid stability during transitions */
+.planning-grid-container,
+.month-grid {
+  position: relative;
+  background: #ffffff;
+  transition: none; /* Keep grid stable */
+}
+
+.planning-layout {
+  overflow: hidden; /* Prevent scrollbars during animations */
+}
+
 /* Enhanced Smooth Transitions - No Page Reload */
 @keyframes fadeSlideOut {
   from {
