@@ -303,37 +303,37 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
         "uid": current_user.uid,
         "year": current_year,
         "week": {"$in": [current_week, current_week + 1]}
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Get pending todos
     pending_todos = await db.todos.find({
         "uid": current_user.uid,
         "completed": False
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Get recent clients
     recent_clients = await db.clients.find({
         "uid": current_user.uid
-    }).sort("created_at", -1).limit(5).to_list(5)
+    }, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
     
     # Get pending quotes
     pending_quotes = await db.quotes.find({
         "uid": current_user.uid,
         "status": {"$in": ["draft", "sent"]}
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Get unpaid invoices
     unpaid_invoices = await db.invoices.find({
         "uid": current_user.uid,
         "status": {"$in": ["sent", "overdue"]}
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Calculate revenue stats
     paid_events = await db.planning_events.find({
         "uid": current_user.uid,
         "status": "paid",
         "year": current_year
-    }).to_list(1000)
+    }, {"_id": 0}).to_list(1000)
     
     monthly_revenue = 0
     for event in paid_events:
