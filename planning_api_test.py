@@ -7,7 +7,7 @@ from datetime import datetime
 def test_planning_api_structure():
     """Test Planning API structure and data compatibility"""
     
-    base_url = "https://cbab3dec-a290-4386-b94a-75a85cc38fee.preview.emergentagent.com"
+    base_url = "https://335cbee7-62f7-45d4-8dab-be3c3a14905b.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     print("🔍 Testing Planning API Data Structure Compatibility")
