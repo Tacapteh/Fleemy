@@ -325,3 +325,5 @@ agent_communication:
     message: "🚀 DÉMARRAGE PHASE 3 : Création du module Devis & Factures modulable et fluide. Interface avec lignes dynamiques, calculs automatiques, templates réutilisables, export PDF, conversion devis→facture, gestion statuts. Tout sans rechargement complet."
   - agent: "main"
     message: "✅ PHASE 3 TERMINÉE ! Module Devis & Factures complet : 1) Composant Quotes avec CRUD, stats, statuts, templates rapides 2) Composant Invoices avec conversion devis→facture, gestion échéances, statuts 3) QuoteModal & InvoiceModal modulables avec lignes dynamiques, calculs auto, TVA 4) CSS moderne ajouté. Prêt pour test backend endpoints."
+  - agent: "main"
+    message: "🔧 PHASE 4 DÉMARRÉE : Corrections finales Planning et complétion Devis & Factures : 1) Correction alignement exact heures 9h-18h 2) Ajustement couleurs cartes revenus selon spécifications 3) Transitions fade plus discrètes 4) Ajout export PDF pour devis/factures 5) Tests backend complets."
