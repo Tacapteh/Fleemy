@@ -45,7 +45,7 @@ npm install
 npm start
 ```
 
-The frontend expects `REACT_APP_BACKEND_URL` to be defined in a `.env` file at the project root.
+Create a `.env` file based on `.env.example` at the project root to configure both frontend and backend URLs.
 
 ## Project structure
 
@@ -55,4 +55,16 @@ The frontend expects `REACT_APP_BACKEND_URL` to be defined in a `.env` file at t
 
 ## Deployment
 
-The application can be deployed to any platform supporting Node and Python. A typical setup is Vercel for the frontend and Render for the backend.
+The frontend can be deployed to **Firebase Hosting** and the backend to **Google Cloud Run**.
+Build the frontend and deploy with Firebase:
+
+```bash
+npm run firebase:deploy
+```
+
+Build a container for the backend and deploy to Cloud Run:
+
+```bash
+docker build -t fleemy-backend ./backend
+# push the image to your registry then deploy on Cloud Run
+```
