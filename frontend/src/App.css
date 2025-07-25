@@ -832,19 +832,25 @@ button:active {
   border: none;
   background: #ffffff;
   position: relative;
+  padding-top: 0;
   margin-top: 0;
 }
 
-.planning-hour-cell:not(:first-child) {
-  margin-top: -48px; /* Align with grid line separators */
+/* Perfect alignment with grid lines */
+.planning-hour-cell:first-child {
+  /* 9h aligns with top of grid */
+  margin-top: 0;
+  padding-top: 0;
 }
 
-.planning-hour-cell:first-child {
-  margin-top: 0; /* 9h aligns with top */
+.planning-hour-cell:not(:first-child):not(:last-child) {
+  /* All intermediate hours align with grid separators */
+  margin-top: -48px;
   padding-top: 0;
 }
 
 .planning-hour-cell:last-child {
+  /* 18h aligns with bottom of grid */
   position: absolute;
   bottom: 0;
   right: 8px;
@@ -1093,6 +1099,7 @@ button:active {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* Full colored backgrounds for revenue cards */
 .revenue-card-paid {
   background: #dcfce7 !important;
   border-color: #bbf7d0 !important;
@@ -1118,6 +1125,7 @@ button:active {
   align-items: center;
   justify-content: center;
   height: 40px;
+  text-align: center;
 }
 
 .revenue-card-paid .revenue-amount {
@@ -1137,6 +1145,7 @@ button:active {
   font-weight: 600;
   letter-spacing: 0.025em;
   line-height: 1.4;
+  text-align: center;
 }
 
 .revenue-card-paid .revenue-label {
@@ -1485,6 +1494,10 @@ body {
     min-height: 90px;
   }
   
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -45px; /* Adjust for 90px height */
+  }
+  
   .planning-hour-cell:last-child {
     height: 0;
     min-height: 0;
@@ -1513,6 +1526,10 @@ body {
     min-height: 80px;
     font-size: 11px;
     padding-right: 4px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -40px; /* Adjust for 80px height */
   }
   
   .planning-hour-cell:last-child {
@@ -1587,6 +1604,10 @@ body {
     min-height: 70px;
     font-size: 10px;
     padding-right: 2px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -35px; /* Adjust for 70px height */
   }
   
   .planning-hour-cell:last-child {
