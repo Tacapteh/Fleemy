@@ -364,6 +364,25 @@ button:active {
   }
 }
 
+/* Month View Transitions */
+.month-grid {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.planning-content.transitioning .month-grid {
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.month-event.new-event {
+  animation: slideIn 0.25s ease-out;
+}
+
 /* Month View Components - Ultra Clean Design */
 .month-header {
   display: flex;
