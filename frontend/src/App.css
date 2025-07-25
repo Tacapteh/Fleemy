@@ -832,12 +832,16 @@ button:active {
   border: none;
   background: #ffffff;
   position: relative;
-  padding-top: 0;
-  margin-top: -6px; /* Align with grid lines */
+  margin-top: 0;
+}
+
+.planning-hour-cell:not(:first-child) {
+  margin-top: -48px; /* Align with grid line separators */
 }
 
 .planning-hour-cell:first-child {
   margin-top: 0; /* 9h aligns with top */
+  padding-top: 0;
 }
 
 .planning-hour-cell:last-child {
@@ -851,6 +855,9 @@ button:active {
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
 }
 
 .planning-grid-body {
