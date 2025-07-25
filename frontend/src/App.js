@@ -1326,6 +1326,15 @@ const GridBody = ({
     }
   };
 
+  // Unified smooth navigation handler
+  const handleNavigation = (type, direction) => {
+    if (type === 'week') {
+      navigateWeek(direction);
+    } else {
+      navigateMonth(direction);
+    }
+  };
+
   const calculateRevenue = () => {
     const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
     const revenue = { paid: 0, unpaid: 0, pending: 0 };
