@@ -364,7 +364,153 @@ button:active {
   }
 }
 
-/* Ultra Clean Planning Layout - Simple Labels + Clean Grid */
+/* Month View Components - Ultra Clean Design */
+.month-header {
+  display: flex;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.month-day-label {
+  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  background: #f9fafb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.month-day-label:last-child {
+  border-right: none;
+}
+
+.month-grid {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+}
+
+.month-week {
+  display: flex;
+  min-height: 100px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.month-week:last-child {
+  border-bottom: none;
+}
+
+.month-day {
+  flex: 1;
+  padding: 8px;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.month-day:last-child {
+  border-right: none;
+}
+
+.month-day:hover {
+  background-color: #f8fafc;
+}
+
+.month-day.other-month {
+  background: #f8f9fa;
+  color: #6b7280;
+}
+
+.month-day.today {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.month-day-number {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+  text-align: right;
+}
+
+.month-day.other-month .month-day-number {
+  color: #9ca3af;
+}
+
+.month-day.today .month-day-number {
+  color: #1d4ed8;
+}
+
+.month-day-events {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.month-event {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+  border-left: 3px solid;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.month-event:hover {
+  opacity: 0.8;
+}
+
+.month-event.event-meeting {
+  background: #dcfce7;
+  border-left-color: #16a34a;
+  color: #166534;
+}
+
+.month-event.event-task {
+  background: #fee2e2;
+  border-left-color: #dc2626;
+  color: #991b1b;
+}
+
+.month-event.event-break {
+  background: #fef3c7;
+  border-left-color: #d97706;
+  color: #92400e;
+}
+
+.month-event.event-notworked {
+  background: #f1f5f9;
+  border-left-color: #64748b;
+  color: #475569;
+}
+
+.month-more-events {
+  font-size: 10px;
+  color: #2563eb;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.month-more-events:hover {
+  background-color: #dbeafe;
+}
 .planning-layout {
   display: flex;
   flex-direction: column;
