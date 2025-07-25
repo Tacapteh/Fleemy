@@ -175,17 +175,17 @@ frontend:
         agent: "main"
         comment: "Structure de base du composant Planning fonctionnelle"
 
-  - task: "Planning Table - Simple Clean Styling" 
+  - task: "Planning Table - Ultra Clean Style (Reference Image)" 
     implemented: true
     working: true
-    file: "App.css"
+    file: "App.css + App.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Style simple et épuré appliqué comme demandé : fond blanc pur, bordures fines #e5e7eb, police simple, pas d'ombres, design minimaliste identique à l'image de référence"
+        comment: "Style ultra-épuré appliqué selon l'image de référence exacte : fond blanc pur, bordures fines #e5e7eb, entêtes 'Lundi 21' format simple, hauteur 96px par créneau, design minimaliste parfait"
 
   - task: "Navigation Simple et Discrète"
     implemented: true
