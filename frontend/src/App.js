@@ -1518,31 +1518,26 @@ const GridBody = ({
         </div>
       </div>
 
-      {/* Week Navigation */}
-      <div className="week-navigation">
-        <button
-          onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
-          className="week-nav-btn"
-          disabled={transitioning}
-        >
-          ◀
-        </button>
-        
-        <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
-          {view === 'week' 
-            ? `Semaine ${currentWeek} - ${monthNames[weekDates[0].getMonth()]} ${currentYear}`
-            : `${monthNames[currentMonth]} ${currentYear}`
-          }
-        </h2>
-        
-        <button
-          onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
-          className="week-nav-btn"
-          disabled={transitioning}
-        >
-          ▶
-        </button>
-      </div>
+      {/* Navigation Header */}
+      {view === 'week' ? (
+        <WeekNavigationHeader
+          currentDate={currentDate}
+          currentWeek={currentWeek}
+          currentYear={currentYear}
+          monthNames={monthNames}
+          onNavigate={handleNavigation}
+          transitioning={transitioning}
+        />
+      ) : (
+        <MonthNavigationHeader
+          currentDate={currentDate}
+          currentMonth={currentMonth}
+          currentYear={currentYear}
+          monthNames={monthNames}
+          onNavigate={handleNavigation}
+          transitioning={transitioning}
+        />
+      )}
 
       {/* Revenue Summary - Only show for personal view */}
       {view === 'week' && !viewingMember && (
