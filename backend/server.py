@@ -612,7 +612,7 @@ async def delete_client(client_id: str, current_user: User = Depends(get_current
 # Quotes endpoints
 @api_router.get("/quotes")
 async def get_quotes(current_user: User = Depends(get_current_user)):
-    quotes = await db.quotes.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    quotes = await db.quotes.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return quotes
 
 @api_router.post("/quotes")
