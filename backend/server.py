@@ -416,6 +416,7 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
 @api_router.get("/planning/earnings/{year}/{week}")
 async def get_earnings(year: int, week: int, current_user: User = Depends(get_current_user)):
     events = await db.planning_events.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
+    tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
     
     earnings = {
         "paid": 0,
@@ -450,6 +451,19 @@ async def get_earnings(year: int, week: int, current_user: User = Depends(get_cu
                 earnings["unpaid"] += amount
             elif event["status"] == "pending":
                 earnings["pending"] += amount
+    
+    # Add earnings from tasks - tasks are always considered as "paid"
+    for task in tasks:
+        for time_slot in task.get("time_slots", []):
+            try:
+                start_hour = int(time_slot["start"].split(":")[0])
+                end_hour = int(time_slot["end"].split(":")[0])
+                hours = end_hour - start_hour
+                amount = hours * task.get("price", 0)  # task price is per hour
+                earnings["paid"] += amount
+            except:
+                # Fallback: add base task price
+                earnings["paid"] += task.get("price", 0)
     
     earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"]
     
