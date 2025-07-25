@@ -682,7 +682,7 @@ async def update_quote_status(quote_id: str, status: str, current_user: User = D
 # Invoices endpoints
 @api_router.get("/invoices")
 async def get_invoices(current_user: User = Depends(get_current_user)):
-    invoices = await db.invoices.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    invoices = await db.invoices.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return invoices
 
 @api_router.post("/invoices")
