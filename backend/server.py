@@ -552,7 +552,7 @@ async def update_todo(todo_id: str, todo_request: TodoCreateRequest, current_use
         {"$set": {**todo_data, "updated_at": datetime.utcnow()}}
     )
     
-    updated_todo = await db.todos.find_one({"id": todo_id})
+    updated_todo = await db.todos.find_one({"id": todo_id}, {"_id": 0})
     return updated_todo
 
 @api_router.put("/todos/{todo_id}/toggle")
