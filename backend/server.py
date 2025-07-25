@@ -19,7 +19,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 # External authentication service
-AUTH_URL = os.environ.get('AUTH_URL', 'https://demobackend.emergentagent.com')
+AUTH_URL = os.environ.get('AUTH_URL', 'http://localhost:8000')
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
