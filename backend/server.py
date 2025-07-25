@@ -33,6 +33,8 @@ class User(BaseModel):
     email: str
     picture: Optional[str] = None
     team_id: Optional[str] = None
+    hourly_rate: float = 50.0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Team(BaseModel):
     team_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -40,6 +42,7 @@ class Team(BaseModel):
     members: List[str] = []
     created_by: str
     invite_code: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class PlanningEvent(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -47,12 +50,13 @@ class PlanningEvent(BaseModel):
     week: int
     year: int
     description: str
-    client: str
+    client_id: str
+    client_name: str
     day: str  # "monday", "tuesday", etc
     start_time: str  # "09:00"
     end_time: str  # "17:00"
     status: str  # "paid", "unpaid", "pending", "not_worked"
-    hourly_rate: Optional[float] = 50.0
+    hourly_rate: float = 50.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -68,11 +72,70 @@ class WeeklyTask(BaseModel):
     time_slots: List[Dict[str, str]] = []  # [{"day": "monday", "start": "09:00", "end": "10:00"}]
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class Todo(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    uid: str
+    title: str
+    description: Optional[str] = ""
+    priority: str = "normal"  # "low", "normal", "urgent"
+    completed: bool = False
+    due_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     uid: str
     name: str
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    address: Optional[str] = ""
+    company: Optional[str] = ""
+    notes: Optional[str] = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class QuoteItem(BaseModel):
+    description: str
+    quantity: float = 1.0
+    unit_price: float = 0.0
+    total: float = 0.0
+
+class Quote(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    uid: str
+    client_id: str
+    client_name: str
+    quote_number: str
+    title: str
+    items: List[QuoteItem] = []
+    subtotal: float = 0.0
+    tax_rate: float = 20.0
+    tax_amount: float = 0.0
+    total: float = 0.0
+    status: str = "draft"  # "draft", "sent", "accepted", "rejected"
+    valid_until: datetime
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Invoice(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    uid: str
+    quote_id: Optional[str] = None
+    client_id: str
+    client_name: str
+    invoice_number: str
+    title: str
+    items: List[QuoteItem] = []
+    subtotal: float = 0.0
+    tax_rate: float = 20.0
+    tax_amount: float = 0.0
+    total: float = 0.0
+    status: str = "sent"  # "sent", "paid", "overdue", "cancelled"
+    due_date: datetime
+    paid_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Session(BaseModel):
     session_token: str
@@ -86,7 +149,8 @@ class AuthRequest(BaseModel):
 
 class EventCreateRequest(BaseModel):
     description: str
-    client: str
+    client_id: str
+    client_name: str
     day: str
     start_time: str
     end_time: str
@@ -99,6 +163,37 @@ class TaskCreateRequest(BaseModel):
     color: str
     icon: str
     time_slots: List[Dict[str, str]] = []
+
+class TodoCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    priority: str = "normal"
+    due_date: Optional[str] = None
+
+class ClientCreateRequest(BaseModel):
+    name: str
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    address: Optional[str] = ""
+    company: Optional[str] = ""
+    notes: Optional[str] = ""
+
+class QuoteCreateRequest(BaseModel):
+    client_id: str
+    client_name: str
+    title: str
+    items: List[QuoteItem]
+    tax_rate: float = 20.0
+    valid_until: str
+
+class InvoiceCreateRequest(BaseModel):
+    quote_id: Optional[str] = None
+    client_id: str
+    client_name: str
+    title: str
+    items: List[QuoteItem]
+    tax_rate: float = 20.0
+    due_date: str
 
 class TeamCreateRequest(BaseModel):
     name: str
@@ -179,6 +274,74 @@ async def login(auth_request: AuthRequest):
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
+# Dashboard endpoint
+@api_router.get("/dashboard")
+async def get_dashboard(current_user: User = Depends(get_current_user)):
+    now = datetime.now()
+    current_week = now.isocalendar()[1]
+    current_year = now.year
+    
+    # Get upcoming events (next 7 days)
+    upcoming_events = await db.planning_events.find({
+        "uid": current_user.uid,
+        "year": current_year,
+        "week": {"$in": [current_week, current_week + 1]}
+    }).limit(5).to_list(5)
+    
+    # Get pending todos
+    pending_todos = await db.todos.find({
+        "uid": current_user.uid,
+        "completed": False
+    }).limit(5).to_list(5)
+    
+    # Get recent clients
+    recent_clients = await db.clients.find({
+        "uid": current_user.uid
+    }).sort("created_at", -1).limit(5).to_list(5)
+    
+    # Get pending quotes
+    pending_quotes = await db.quotes.find({
+        "uid": current_user.uid,
+        "status": {"$in": ["draft", "sent"]}
+    }).limit(5).to_list(5)
+    
+    # Get unpaid invoices
+    unpaid_invoices = await db.invoices.find({
+        "uid": current_user.uid,
+        "status": {"$in": ["sent", "overdue"]}
+    }).limit(5).to_list(5)
+    
+    # Calculate revenue stats
+    paid_events = await db.planning_events.find({
+        "uid": current_user.uid,
+        "status": "paid",
+        "year": current_year
+    }).to_list(1000)
+    
+    monthly_revenue = 0
+    for event in paid_events:
+        try:
+            start_hour = int(event["start_time"].split(":")[0])
+            end_hour = int(event["end_time"].split(":")[0])
+            hours = end_hour - start_hour
+            monthly_revenue += hours * event.get("hourly_rate", 50)
+        except:
+            monthly_revenue += 50
+    
+    return {
+        "upcoming_events": upcoming_events,
+        "pending_todos": pending_todos,
+        "recent_clients": recent_clients,
+        "pending_quotes": pending_quotes,
+        "unpaid_invoices": unpaid_invoices,
+        "stats": {
+            "monthly_revenue": monthly_revenue,
+            "total_clients": await db.clients.count_documents({"uid": current_user.uid}),
+            "pending_todos_count": await db.todos.count_documents({"uid": current_user.uid, "completed": False}),
+            "unpaid_invoices_count": len(unpaid_invoices)
+        }
+    }
+
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
 async def get_week_planning(year: int, week: int, current_user: User = Depends(get_current_user)):
@@ -186,24 +349,22 @@ async def get_week_planning(year: int, week: int, current_user: User = Depends(g
     tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
     
     return {
-        "events": [PlanningEvent(**event) for event in events],
-        "tasks": [WeeklyTask(**task) for task in tasks]
+        "events": events,
+        "tasks": tasks
     }
 
 @api_router.get("/planning/month/{year}/{month}")
 async def get_month_planning(year: int, month: int, current_user: User = Depends(get_current_user)):
-    # Get all events for the month (approximate by weeks)
     events = await db.planning_events.find({"uid": current_user.uid, "year": year}).to_list(1000)
     tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year}).to_list(1000)
     
     return {
-        "events": [PlanningEvent(**event) for event in events],
-        "tasks": [WeeklyTask(**task) for task in tasks]
+        "events": events,
+        "tasks": tasks
     }
 
 @api_router.post("/planning/events")
 async def create_event(event_request: EventCreateRequest, current_user: User = Depends(get_current_user)):
-    # Get current week and year
     now = datetime.now()
     year = now.year
     week = now.isocalendar()[1]
@@ -220,20 +381,13 @@ async def create_event(event_request: EventCreateRequest, current_user: User = D
 
 @api_router.put("/planning/events/{event_id}")
 async def update_event(event_id: str, event_request: EventCreateRequest, current_user: User = Depends(get_current_user)):
-    event = await db.planning_events.find_one({"id": event_id, "uid": current_user.uid})
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    
-    update_data = event_request.dict()
-    update_data["updated_at"] = datetime.utcnow()
-    
     await db.planning_events.update_one(
-        {"id": event_id},
-        {"$set": update_data}
+        {"id": event_id, "uid": current_user.uid},
+        {"$set": {**event_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
     updated_event = await db.planning_events.find_one({"id": event_id})
-    return PlanningEvent(**updated_event)
+    return updated_event
 
 @api_router.delete("/planning/events/{event_id}")
 async def delete_event(event_id: str, current_user: User = Depends(get_current_user)):
@@ -242,15 +396,7 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Event deleted"}
 
-@api_router.delete("/planning/events/week/{year}/{week}")
-async def delete_week_events(year: int, week: int, current_user: User = Depends(get_current_user)):
-    result = await db.planning_events.delete_many({
-        "uid": current_user.uid, 
-        "year": year, 
-        "week": week
-    })
-    return {"message": f"Deleted {result.deleted_count} events"}
-
+# Tasks endpoints
 @api_router.post("/planning/tasks")
 async def create_task(task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
     now = datetime.now()
@@ -267,83 +413,211 @@ async def create_task(task_request: TaskCreateRequest, current_user: User = Depe
     await db.weekly_tasks.insert_one(task.dict())
     return task
 
-@api_router.put("/planning/tasks/{task_id}")
-async def update_task(task_id: str, task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
-    task = await db.weekly_tasks.find_one({"id": task_id, "uid": current_user.uid})
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+@api_router.get("/todos")
+async def get_todos(current_user: User = Depends(get_current_user)):
+    todos = await db.todos.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    return todos
+
+@api_router.post("/todos")
+async def create_todo(todo_request: TodoCreateRequest, current_user: User = Depends(get_current_user)):
+    todo_data = todo_request.dict()
+    if todo_data.get("due_date"):
+        todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
     
-    await db.weekly_tasks.update_one(
-        {"id": task_id},
-        {"$set": task_request.dict()}
+    todo = Todo(
+        uid=current_user.uid,
+        **todo_data
     )
     
-    updated_task = await db.weekly_tasks.find_one({"id": task_id})
-    return WeeklyTask(**updated_task)
+    await db.todos.insert_one(todo.dict())
+    return todo
 
-@api_router.delete("/planning/tasks/{task_id}")
-async def delete_task(task_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.weekly_tasks.delete_one({"id": task_id, "uid": current_user.uid})
+@api_router.put("/todos/{todo_id}")
+async def update_todo(todo_id: str, todo_request: TodoCreateRequest, current_user: User = Depends(get_current_user)):
+    todo_data = todo_request.dict()
+    if todo_data.get("due_date"):
+        todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
+    
+    await db.todos.update_one(
+        {"id": todo_id, "uid": current_user.uid},
+        {"$set": {**todo_data, "updated_at": datetime.utcnow()}}
+    )
+    
+    updated_todo = await db.todos.find_one({"id": todo_id})
+    return updated_todo
+
+@api_router.put("/todos/{todo_id}/toggle")
+async def toggle_todo(todo_id: str, current_user: User = Depends(get_current_user)):
+    todo = await db.todos.find_one({"id": todo_id, "uid": current_user.uid})
+    if not todo:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    
+    await db.todos.update_one(
+        {"id": todo_id},
+        {"$set": {"completed": not todo["completed"], "updated_at": datetime.utcnow()}}
+    )
+    
+    updated_todo = await db.todos.find_one({"id": todo_id})
+    return updated_todo
+
+@api_router.delete("/todos/{todo_id}")
+async def delete_todo(todo_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.todos.delete_one({"id": todo_id, "uid": current_user.uid})
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return {"message": "Task deleted"}
-
-@api_router.get("/planning/earnings/{year}/{week}")
-async def get_earnings(year: int, week: int, current_user: User = Depends(get_current_user)):
-    events = await db.planning_events.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
-    tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
-    
-    earnings = {
-        "paid": 0,
-        "unpaid": 0,
-        "pending": 0,
-        "not_worked": 0,
-        "tasks_total": sum(task["price"] for task in tasks)
-    }
-    
-    # Calculate earnings from events based on hours and rate
-    for event in events:
-        try:
-            start_hour = int(event["start_time"].split(":")[0])
-            end_hour = int(event["end_time"].split(":")[0])
-            hours = end_hour - start_hour
-            amount = hours * event.get("hourly_rate", 50)
-            
-            if event["status"] == "paid":
-                earnings["paid"] += amount
-            elif event["status"] == "unpaid":
-                earnings["unpaid"] += amount
-            elif event["status"] == "pending":
-                earnings["pending"] += amount
-            elif event["status"] == "not_worked":
-                earnings["not_worked"] += amount
-        except:
-            # Fallback calculation
-            if event["status"] == "paid":
-                earnings["paid"] += 50
-            elif event["status"] == "unpaid":
-                earnings["unpaid"] += 50
-            elif event["status"] == "pending":
-                earnings["pending"] += 50
-    
-    earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"] + earnings["tasks_total"]
-    
-    return earnings
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return {"message": "Todo deleted"}
 
 # Clients endpoints
 @api_router.get("/clients")
 async def get_clients(current_user: User = Depends(get_current_user)):
-    clients = await db.clients.find({"uid": current_user.uid}).to_list(1000)
-    return [client["name"] for client in clients]
+    clients = await db.clients.find({"uid": current_user.uid}).sort("name", 1).to_list(1000)
+    return clients
 
 @api_router.post("/clients")
-async def add_client(client_name: str, current_user: User = Depends(get_current_user)):
-    # Check if client already exists
-    existing = await db.clients.find_one({"uid": current_user.uid, "name": client_name})
-    if not existing:
-        client = Client(uid=current_user.uid, name=client_name)
-        await db.clients.insert_one(client.dict())
-    return {"message": "Client added"}
+async def create_client(client_request: ClientCreateRequest, current_user: User = Depends(get_current_user)):
+    client = Client(
+        uid=current_user.uid,
+        **client_request.dict()
+    )
+    
+    await db.clients.insert_one(client.dict())
+    return client
+
+@api_router.put("/clients/{client_id}")
+async def update_client(client_id: str, client_request: ClientCreateRequest, current_user: User = Depends(get_current_user)):
+    await db.clients.update_one(
+        {"id": client_id, "uid": current_user.uid},
+        {"$set": {**client_request.dict(), "updated_at": datetime.utcnow()}}
+    )
+    
+    updated_client = await db.clients.find_one({"id": client_id})
+    return updated_client
+
+@api_router.delete("/clients/{client_id}")
+async def delete_client(client_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.clients.delete_one({"id": client_id, "uid": current_user.uid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"message": "Client deleted"}
+
+# Quotes endpoints
+@api_router.get("/quotes")
+async def get_quotes(current_user: User = Depends(get_current_user)):
+    quotes = await db.quotes.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    return quotes
+
+@api_router.post("/quotes")
+async def create_quote(quote_request: QuoteCreateRequest, current_user: User = Depends(get_current_user)):
+    # Generate quote number
+    quote_count = await db.quotes.count_documents({"uid": current_user.uid})
+    quote_number = f"DEV-{datetime.now().year}-{quote_count + 1:04d}"
+    
+    quote_data = quote_request.dict()
+    quote_data["quote_number"] = quote_number
+    quote_data["valid_until"] = datetime.fromisoformat(quote_data["valid_until"].replace("Z", "+00:00"))
+    
+    # Calculate totals
+    subtotal = sum(item["quantity"] * item["unit_price"] for item in quote_data["items"])
+    tax_amount = subtotal * (quote_data["tax_rate"] / 100)
+    total = subtotal + tax_amount
+    
+    quote_data.update({
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
+        "total": total
+    })
+    
+    quote = Quote(
+        uid=current_user.uid,
+        **quote_data
+    )
+    
+    await db.quotes.insert_one(quote.dict())
+    return quote
+
+@api_router.put("/quotes/{quote_id}")
+async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, current_user: User = Depends(get_current_user)):
+    quote_data = quote_request.dict()
+    quote_data["valid_until"] = datetime.fromisoformat(quote_data["valid_until"].replace("Z", "+00:00"))
+    
+    # Calculate totals
+    subtotal = sum(item["quantity"] * item["unit_price"] for item in quote_data["items"])
+    tax_amount = subtotal * (quote_data["tax_rate"] / 100)
+    total = subtotal + tax_amount
+    
+    quote_data.update({
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
+        "total": total,
+        "updated_at": datetime.utcnow()
+    })
+    
+    await db.quotes.update_one(
+        {"id": quote_id, "uid": current_user.uid},
+        {"$set": quote_data}
+    )
+    
+    updated_quote = await db.quotes.find_one({"id": quote_id})
+    return updated_quote
+
+@api_router.put("/quotes/{quote_id}/status")
+async def update_quote_status(quote_id: str, status: str, current_user: User = Depends(get_current_user)):
+    await db.quotes.update_one(
+        {"id": quote_id, "uid": current_user.uid},
+        {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+    )
+    
+    updated_quote = await db.quotes.find_one({"id": quote_id})
+    return updated_quote
+
+# Invoices endpoints
+@api_router.get("/invoices")
+async def get_invoices(current_user: User = Depends(get_current_user)):
+    invoices = await db.invoices.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    return invoices
+
+@api_router.post("/invoices")
+async def create_invoice(invoice_request: InvoiceCreateRequest, current_user: User = Depends(get_current_user)):
+    # Generate invoice number
+    invoice_count = await db.invoices.count_documents({"uid": current_user.uid})
+    invoice_number = f"FACT-{datetime.now().year}-{invoice_count + 1:04d}"
+    
+    invoice_data = invoice_request.dict()
+    invoice_data["invoice_number"] = invoice_number
+    invoice_data["due_date"] = datetime.fromisoformat(invoice_data["due_date"].replace("Z", "+00:00"))
+    
+    # Calculate totals
+    subtotal = sum(item["quantity"] * item["unit_price"] for item in invoice_data["items"])
+    tax_amount = subtotal * (invoice_data["tax_rate"] / 100)
+    total = subtotal + tax_amount
+    
+    invoice_data.update({
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
+        "total": total
+    })
+    
+    invoice = Invoice(
+        uid=current_user.uid,
+        **invoice_data
+    )
+    
+    await db.invoices.insert_one(invoice.dict())
+    return invoice
+
+@api_router.put("/invoices/{invoice_id}/status")
+async def update_invoice_status(invoice_id: str, status: str, current_user: User = Depends(get_current_user)):
+    update_data = {"status": status, "updated_at": datetime.utcnow()}
+    if status == "paid":
+        update_data["paid_date"] = datetime.utcnow()
+    
+    await db.invoices.update_one(
+        {"id": invoice_id, "uid": current_user.uid},
+        {"$set": update_data}
+    )
+    
+    updated_invoice = await db.invoices.find_one({"id": invoice_id})
+    return updated_invoice
 
 # Teams endpoints
 @api_router.post("/teams")
@@ -363,27 +637,6 @@ async def create_team(team_request: TeamCreateRequest, current_user: User = Depe
     )
     
     return team
-
-@api_router.post("/teams/join")
-async def join_team(join_request: TeamJoinRequest, current_user: User = Depends(get_current_user)):
-    team = await db.teams.find_one({"invite_code": join_request.invite_code})
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-    
-    # Add user to team
-    if current_user.uid not in team["members"]:
-        await db.teams.update_one(
-            {"team_id": team["team_id"]},
-            {"$push": {"members": current_user.uid}}
-        )
-        
-        # Update user's team_id
-        await db.users.update_one(
-            {"uid": current_user.uid},
-            {"$set": {"team_id": team["team_id"]}}
-        )
-    
-    return {"message": "Joined team successfully"}
 
 @api_router.get("/teams/my")
 async def get_my_team(current_user: User = Depends(get_current_user)):
@@ -411,28 +664,6 @@ async def get_my_team(current_user: User = Depends(get_current_user)):
         "invite_code": team["invite_code"],
         "members": members,
         "created_by": team["created_by"]
-    }
-
-@api_router.get("/teams/member/{member_uid}/planning/{year}/{week}")
-async def get_member_planning(member_uid: str, year: int, week: int, current_user: User = Depends(get_current_user)):
-    # Check if user is in same team as requested member
-    if not current_user.team_id:
-        raise HTTPException(status_code=403, detail="Not in a team")
-    
-    member = await db.users.find_one({"uid": member_uid})
-    if not member or member.get("team_id") != current_user.team_id:
-        raise HTTPException(status_code=403, detail="Member not in same team")
-    
-    events = await db.planning_events.find({"uid": member_uid, "year": year, "week": week}).to_list(1000)
-    tasks = await db.weekly_tasks.find({"uid": member_uid, "year": year, "week": week}).to_list(1000)
-    
-    return {
-        "events": [PlanningEvent(**event) for event in events],
-        "tasks": [WeeklyTask(**task) for task in tasks],
-        "member": {
-            "uid": member["uid"],
-            "name": member["name"]
-        }
     }
 
 # Basic test route
