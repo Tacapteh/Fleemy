@@ -1093,6 +1093,7 @@ button:active {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* Full colored backgrounds for revenue cards */
 .revenue-card-paid {
   background: #dcfce7 !important;
   border-color: #bbf7d0 !important;
@@ -1118,6 +1119,7 @@ button:active {
   align-items: center;
   justify-content: center;
   height: 40px;
+  text-align: center;
 }
 
 .revenue-card-paid .revenue-amount {
@@ -1137,6 +1139,7 @@ button:active {
   font-weight: 600;
   letter-spacing: 0.025em;
   line-height: 1.4;
+  text-align: center;
 }
 
 .revenue-card-paid .revenue-label {
