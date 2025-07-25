@@ -969,7 +969,7 @@ const Planning = ({ user, sessionToken }) => {
         );
 
         await offlineStorage.clearWeekEvents(user.uid, currentYear, currentWeek);
-        loadEvents();
+        loadEvents(true);
       } catch (error) {
         console.error('Error clearing week:', error);
       }
