@@ -470,6 +470,23 @@ async def get_earnings(year: int, week: int, current_user: User = Depends(get_cu
     return earnings
 
 # Tasks endpoints
+# Tasks endpoints
+@api_router.post("/planning/tasks")
+async def create_task(task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
+    now = datetime.now()
+    year = now.year
+    week = now.isocalendar()[1]
+    
+    task = WeeklyTask(
+        uid=current_user.uid,
+        week=week,
+        year=year,
+        **task_request.dict()
+    )
+    
+    await db.weekly_tasks.insert_one(task.dict())
+    return task
+
 @api_router.put("/planning/tasks/{task_id}")
 async def update_task(task_id: str, task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
     await db.weekly_tasks.update_one(
