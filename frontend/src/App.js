@@ -889,7 +889,7 @@ const Planning = ({ user, sessionToken }) => {
   };
 
 // Navigation Header Components - Smooth Transitions
-const WeekHeader = ({ currentDate, currentWeek, currentYear, monthNames, onNavigate, transitioning }) => {
+const WeekNavigationHeader = ({ currentDate, currentWeek, currentYear, monthNames, onNavigate, transitioning }) => {
   const weekDates = getWeekDates(currentYear, currentWeek);
   
   return (
@@ -917,39 +917,29 @@ const WeekHeader = ({ currentDate, currentWeek, currentYear, monthNames, onNavig
   );
 };
 
-const MonthHeader = ({ currentDate, currentMonth, currentYear, monthNames, onNavigate, transitioning, dayLabels }) => {
+const MonthNavigationHeader = ({ currentDate, currentMonth, currentYear, monthNames, onNavigate, transitioning }) => {
   return (
-    <>
-      <div className="week-navigation">
-        <button
-          onClick={() => onNavigate('month', -1)}
-          className="week-nav-btn"
-          disabled={transitioning}
-        >
-          ◀
-        </button>
-        
-        <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
-          {monthNames[currentMonth]} {currentYear}
-        </h2>
-        
-        <button
-          onClick={() => onNavigate('month', 1)}
-          className="week-nav-btn"
-          disabled={transitioning}
-        >
-          ▶
-        </button>
-      </div>
+    <div className="week-navigation">
+      <button
+        onClick={() => onNavigate('month', -1)}
+        className="week-nav-btn"
+        disabled={transitioning}
+      >
+        ◀
+      </button>
       
-      <div className="month-header">
-        {dayLabels.map((day, index) => (
-          <div key={index} className="month-day-label">
-            {day}
-          </div>
-        ))}
-      </div>
-    </>
+      <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
+        {monthNames[currentMonth]} {currentYear}
+      </h2>
+      
+      <button
+        onClick={() => onNavigate('month', 1)}
+        className="week-nav-btn"
+        disabled={transitioning}
+      >
+        ▶
+      </button>
+    </div>
   );
 };
 
