@@ -3161,6 +3161,364 @@ const Quotes = ({ user, sessionToken }) => {
   );
 };
 
+// Invoice Modal Component - Modular Invoice Creation/Edition
+const InvoiceModal = ({ isOpen, onClose, onSave, invoice, clients, quotes }) => {
+  const [formData, setFormData] = useState({
+    quote_id: '',
+    client_id: '',
+    client_name: '',
+    title: '',
+    items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+    tax_rate: 20.0,
+    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    subtotal: 0,
+    tax_amount: 0,
+    total: 0
+  });
+
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (invoice) {
+      setFormData({
+        quote_id: invoice.quote_id || '',
+        client_id: invoice.client_id || '',
+        client_name: invoice.client_name || '',
+        title: invoice.title || '',
+        items: invoice.items || [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: invoice.tax_rate || 20.0,
+        due_date: invoice.due_date ? invoice.due_date.split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: invoice.subtotal || 0,
+        tax_amount: invoice.tax_amount || 0,
+        total: invoice.total || 0
+      });
+    } else {
+      setFormData({
+        quote_id: '',
+        client_id: '',
+        client_name: '',
+        title: '',
+        items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: 20.0,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: 0,
+        tax_amount: 0,
+        total: 0
+      });
+    }
+    setErrors({});
+  }, [invoice, isOpen]);
+
+  const handleQuoteSelection = (quoteId) => {
+    const selectedQuote = quotes.find(q => q.id === quoteId);
+    if (selectedQuote) {
+      setFormData(prev => ({
+        ...prev,
+        quote_id: quoteId,
+        client_id: selectedQuote.client_id,
+        client_name: selectedQuote.client_name,
+        title: selectedQuote.title,
+        items: selectedQuote.items,
+        tax_rate: selectedQuote.tax_rate,
+        subtotal: selectedQuote.subtotal,
+        tax_amount: selectedQuote.tax_amount,
+        total: selectedQuote.total
+      }));
+    }
+  };
+
+  const handleClientChange = (clientId) => {
+    const selectedClient = clients.find(c => c.id === clientId);
+    setFormData(prev => ({
+      ...prev,
+      client_id: clientId,
+      client_name: selectedClient ? selectedClient.name : ''
+    }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...formData.items];
+    newItems[index][field] = value;
+    
+    if (field === 'quantity' || field === 'unit_price') {
+      newItems[index].total = (parseFloat(newItems[index].quantity) || 0) * (parseFloat(newItems[index].unit_price) || 0);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      items: newItems
+    }));
+    
+    calculateTotals(newItems);
+  };
+
+  const calculateTotals = (items) => {
+    const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax_amount = subtotal * (formData.tax_rate / 100);
+    const total = subtotal + tax_amount;
+    
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      tax_amount,
+      total
+    }));
+  };
+
+  const addItem = () => {
+    const newItems = [...formData.items, { description: '', quantity: 1, unit_price: 0, total: 0 }];
+    setFormData(prev => ({
+      ...prev,
+      items: newItems
+    }));
+  };
+
+  const removeItem = (index) => {
+    if (formData.items.length > 1) {
+      const newItems = formData.items.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        items: newItems
+      }));
+      calculateTotals(newItems);
+    }
+  };
+
+  const handleTaxRateChange = (taxRate) => {
+    setFormData(prev => ({
+      ...prev,
+      tax_rate: taxRate
+    }));
+    calculateTotals(formData.items);
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+    
+    if (!formData.client_name.trim()) {
+      newErrors.client_name = 'Le client est obligatoire';
+    }
+    
+    if (!formData.title.trim()) {
+      newErrors.title = 'Le titre est obligatoire';
+    }
+    
+    if (formData.items.length === 0 || !formData.items[0].description.trim()) {
+      newErrors.items = 'Au moins un élément est obligatoire';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    onSave({
+      ...formData,
+      due_date: formData.due_date + 'T23:59:59.999Z'
+    });
+  };
+
+  const acceptedQuotes = quotes.filter(q => q.status === 'accepted');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 className="modal-header">
+          {invoice ? '✏️ Modifier la facture' : '➕ Nouvelle facture'}
+        </h2>
+
+        {/* Quote to Invoice Conversion */}
+        {!invoice && acceptedQuotes.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Convertir depuis un devis</label>
+            <select
+              value={formData.quote_id}
+              onChange={(e) => handleQuoteSelection(e.target.value)}
+              className="form-input"
+            >
+              <option value="">Créer une nouvelle facture</option>
+              {acceptedQuotes.map(quote => (
+                <option key={quote.id} value={quote.id}>
+                  {quote.quote_number} - {quote.client_name} - {formatCurrency(quote.total)}
+                </option>
+              ))}
+            </select>
+            <div className="text-sm text-gray-500 mt-1">
+              Sélectionnez un devis accepté pour créer automatiquement une facture
+            </div>
+          </div>
+        )}
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Client *</label>
+            <select
+              value={formData.client_id}
+              onChange={(e) => handleClientChange(e.target.value)}
+              className={`form-input ${errors.client_name ? 'error' : ''}`}
+              disabled={!!formData.quote_id}
+              style={{ borderColor: errors.client_name ? '#dc3545' : '' }}
+            >
+              <option value="">Sélectionner un client</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+            {errors.client_name && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.client_name}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Titre de la facture *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              className={`form-input ${errors.title ? 'error' : ''}`}
+              placeholder="Ex: Prestation développement web"
+              style={{ borderColor: errors.title ? '#dc3545' : '' }}
+            />
+            {errors.title && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.title}</div>}
+          </div>
+        </div>
+
+        {/* Items Section */}
+        <div className="form-group">
+          <div className="flex justify-between items-center mb-3">
+            <label className="form-label">Éléments de la facture</label>
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn btn-outline btn-sm"
+            >
+              + Ajouter une ligne
+            </button>
+          </div>
+          
+          <div className="space-y-3">
+            {formData.items.map((item, index) => (
+              <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-5">
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Qté"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      min="0"
+                      step="0.25"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Prix unitaire"
+                      value={item.unit_price}
+                      onChange={(e) => handleItemChange(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={`${item.total.toFixed(2)}€`}
+                      readOnly
+                      className="form-input bg-gray-100"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                      disabled={formData.items.length === 1}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {errors.items && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.items}</div>}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Taux TVA (%)</label>
+            <select
+              value={formData.tax_rate}
+              onChange={(e) => handleTaxRateChange(parseFloat(e.target.value))}
+              className="form-input"
+            >
+              <option value={0}>0% (Exonéré)</option>
+              <option value={5.5}>5.5% (Réduit)</option>
+              <option value={10}>10% (Intermédiaire)</option>
+              <option value={20}>20% (Normal)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Date d'échéance</label>
+            <input
+              type="date"
+              value={formData.due_date}
+              onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        {/* Totals */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="space-y-2 text-right">
+            <div className="flex justify-between">
+              <span>Sous-total:</span>
+              <span>{formData.subtotal.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between">
+              <span>TVA ({formData.tax_rate}%):</span>
+              <span>{formData.tax_amount.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
+              <span>Total:</span>
+              <span>{formData.total.toFixed(2)}€</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="btn btn-primary"
+          >
+            {invoice ? 'Modifier' : 'Créer la facture'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Invoices Module - Complete Implementation  
 const Invoices = ({ user, sessionToken }) => {
   const [invoices, setInvoices] = useState([]);
