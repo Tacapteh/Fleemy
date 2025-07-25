@@ -305,11 +305,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "API CRUD Tasks - Integrated in Planning"
-    - "API Earnings Calculation with Tasks Integration"
-    - "Tasks Integration in Planning Grid - Conditional Display"
-    - "Revenue Summary with Tasks Integration"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
