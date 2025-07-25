@@ -1030,7 +1030,7 @@ const Planning = ({ user, sessionToken }) => {
   const getEventsForTimeSlot = (day, time) => {
     return events.filter(event => 
       event.day === day && 
-      event.start === time &&
+      (event.start_time || event.start) === time &&
       event.week === currentWeek &&
       event.year === currentYear
     );
