@@ -878,7 +878,9 @@ const Planning = ({ user, sessionToken }) => {
   };
 
   useEffect(() => {
-    loadEvents();
+    if (!transitioning) {
+      loadEvents();
+    }
   }, [view, currentYear, currentWeek, currentMonth, viewingMember]);
 
   useEffect(() => {
