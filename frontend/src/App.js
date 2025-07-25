@@ -1453,6 +1453,10 @@ const GridBody = ({
     }
   };
 
+  const handleTaskClick = (task) => {
+    setTaskModal({ isOpen: true, task });
+  };
+
   const handleClearWeek = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?')) {
       try {
