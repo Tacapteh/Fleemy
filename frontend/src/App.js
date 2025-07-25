@@ -1439,12 +1439,12 @@ const GridBody = ({
 
   const handleTimeSlotClick = (day, start) => {
     if (!viewingMember) {
-      const endIndex = timeSlots.indexOf(start) + 1;
-      const end = endIndex < timeSlots.length ? timeSlots[endIndex] : '18:00';
+      const startIndex = timeSlots.indexOf(start);
+      const endTime = timeSlots[startIndex + 1] || '18:00';
       setEventModal({ 
         isOpen: true, 
         event: null, 
-        timeSlot: { day, start, end }, 
+        timeSlot: { day, start, end: endTime }, 
         selectedDate: null 
       });
     }
