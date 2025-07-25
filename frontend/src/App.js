@@ -1457,6 +1457,69 @@ const GridBody = ({
     setTaskModal({ isOpen: true, task });
   };
 
+  const handleCreateTask = async (taskData) => {
+    try {
+      const response = await apiCall('/planning/tasks', {
+        method: 'POST',
+        data: {
+          name: taskData.name,
+          price: parseFloat(taskData.price) || 0,
+          color: taskData.color,
+          icon: taskData.icon,
+          time_slots: taskData.time_slots || []
+        }
+      });
+
+      // Update local state immediately
+      setTasks(prevTasks => [...prevTasks, response.data]);
+      setTaskModal({ isOpen: false, task: null });
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
+  };
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      await apiCall(`/planning/tasks/${taskModal.task.id}`, {
+        method: 'PUT',
+        data: {
+          name: taskData.name,
+          price: parseFloat(taskData.price) || 0,
+          color: taskData.color,
+          icon: taskData.icon,
+          time_slots: taskData.time_slots || []
+        }
+      });
+
+      // Update local state immediately
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskModal.task.id 
+            ? { ...task, ...taskData }
+            : task
+        )
+      );
+
+      setTaskModal({ isOpen: false, task: null });
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await apiCall(`/planning/tasks/${taskId}`, {
+        method: 'DELETE'
+      });
+
+      // Update local state immediately
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+      setTaskModal({ isOpen: false, task: null });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
+  };
+
   const handleClearWeek = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?')) {
       try {
