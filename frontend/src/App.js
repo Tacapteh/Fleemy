@@ -888,7 +888,7 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
-// Revenue Summary Component
+// Revenue Summary Component - Colorized Cards
 const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
   const calculateRevenue = () => {
     const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
@@ -925,15 +925,15 @@ const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
 
   return (
     <div className="revenue-cards">
-      <div className="revenue-card paid">
+      <div className="revenue-card revenue-card-paid">
         <div className="revenue-amount">{revenue.paid}€</div>
         <div className="revenue-label">Revenus payés</div>
       </div>
-      <div className="revenue-card unpaid">
+      <div className="revenue-card revenue-card-unpaid">
         <div className="revenue-amount">{revenue.unpaid}€</div>
         <div className="revenue-label">Revenus impayés</div>
       </div>
-      <div className="revenue-card pending">
+      <div className="revenue-card revenue-card-pending">
         <div className="revenue-amount">{revenue.pending}€</div>
         <div className="revenue-label">Revenus en attente</div>
       </div>
