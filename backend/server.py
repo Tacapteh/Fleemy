@@ -417,27 +417,28 @@ async def get_earnings(year: int, week: int, current_user: User = Depends(get_cu
     # Calculate earnings from events based on hours and rate
     for event in events:
         try:
-            start_hour = int(event["start"].split(":")[0])
-            end_hour = int(event["end"].split(":")[0])
+            start_hour = int(event["start_time"].split(":")[0])
+            end_hour = int(event["end_time"].split(":")[0])
             hours = end_hour - start_hour
-            amount = hours * current_user.hourly_rate
+            amount = hours * event.get("hourly_rate", current_user.hourly_rate)
             
-            if event["type"] == "paid":
+            if event["status"] == "paid":
                 earnings["paid"] += amount
-            elif event["type"] == "unpaid":
+            elif event["status"] == "unpaid":
                 earnings["unpaid"] += amount
-            elif event["type"] == "pending":
+            elif event["status"] == "pending":
                 earnings["pending"] += amount
-            elif event["type"] == "not_worked":
+            elif event["status"] == "not_worked":
                 earnings["not_worked"] += amount
         except:
             # Fallback calculation
-            if event["type"] == "paid":
-                earnings["paid"] += current_user.hourly_rate
-            elif event["type"] == "unpaid":
-                earnings["unpaid"] += current_user.hourly_rate
-            elif event["type"] == "pending":
-                earnings["pending"] += current_user.hourly_rate
+            amount = event.get("hourly_rate", current_user.hourly_rate)
+            if event["status"] == "paid":
+                earnings["paid"] += amount
+            elif event["status"] == "unpaid":
+                earnings["unpaid"] += amount
+            elif event["status"] == "pending":
+                earnings["pending"] += amount
     
     earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"]
     
