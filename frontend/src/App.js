@@ -352,13 +352,1050 @@ const Dashboard = ({ user, sessionToken }) => {
   );
 };
 
-// Placeholder Components for other pages
-const Planning = () => (
-  <div className="bg-white p-6 rounded-xl shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-4">📅 Planning</h1>
-    <p className="text-gray-600">Module de planning interactif en développement...</p>
-  </div>
-);
+// Planning Constants
+const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+const dayNamesShort = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
+const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+const timeSlots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+
+const eventTypes = {
+  paid: { label: "Payé", color: "bg-green-100 border-green-300 text-green-800", bgColor: "#dcfce7" },
+  unpaid: { label: "Non payé", color: "bg-red-100 border-red-300 text-red-800", bgColor: "#fee2e2" },
+  pending: { label: "En attente", color: "bg-orange-100 border-orange-300 text-orange-800", bgColor: "#fed7aa" },
+  not_worked: { label: "Pas travaillé", color: "bg-purple-100 border-purple-300 text-purple-800", bgColor: "#e9d5ff" }
+};
+
+// Utility functions for planning
+const getWeekNumber = (date) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+};
+
+const getWeekDates = (year, week) => {
+  const simple = new Date(year, 0, 1 + (week - 1) * 7);
+  const dow = simple.getDay();
+  const ISOweekStart = simple;
+  if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+  else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+  
+  const days = [];
+  for (let i = 0; i < 5; i++) { // Lundi à Vendredi
+    const day = new Date(ISOweekStart);
+    day.setDate(ISOweekStart.getDate() + i);
+    days.push(day);
+  }
+  return days;
+};
+
+const getMonthDays = (year, month) => {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startDay = firstDay.getDay();
+  
+  const days = [];
+  
+  // Previous month days
+  const prevMonth = new Date(year, month - 1, 0);
+  for (let i = startDay === 0 ? 6 : startDay - 1; i >= 0; i--) {
+    days.push({
+      date: new Date(year, month - 1, prevMonth.getDate() - i),
+      isCurrentMonth: false
+    });
+  }
+  
+  // Current month days
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push({
+      date: new Date(year, month, i),
+      isCurrentMonth: true
+    });
+  }
+  
+  // Next month days to fill the grid
+  const remaining = 42 - days.length;
+  for (let i = 1; i <= remaining; i++) {
+    days.push({
+      date: new Date(year, month + 1, i),
+      isCurrentMonth: false
+    });
+  }
+  
+  return days;
+};
+
+// Event Modal Component
+const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, selectedDate }) => {
+  const [formData, setFormData] = useState({
+    description: '',
+    day: 0,
+    start: '09:00',
+    end: '10:00',
+    type: 'pending'
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (event) {
+      setFormData({
+        description: event.description || '',
+        day: event.day || 0,
+        start: event.start || '09:00',
+        end: event.end || '10:00',
+        type: event.type || 'pending'
+      });
+    } else if (timeSlot) {
+      setFormData({
+        description: '',
+        day: timeSlot.day,
+        start: timeSlot.start,
+        end: timeSlot.end,
+        type: 'pending'
+      });
+    } else if (selectedDate) {
+      const dayOfWeek = selectedDate.getDay();
+      const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      setFormData({
+        description: '',
+        day: adjustedDay < 5 ? adjustedDay : 0,
+        start: '09:00',
+        end: '10:00',
+        type: 'pending'
+      });
+    } else {
+      setFormData({
+        description: '',
+        day: 0,
+        start: '09:00',
+        end: '10:00',
+        type: 'pending'
+      });
+    }
+  }, [event, timeSlot, selectedDate, isOpen]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      await onSave(formData);
+    } catch (error) {
+      console.error('Error saving event:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cet événement ?')) {
+      setLoading(true);
+      try {
+        await onDelete(event.id);
+      } catch (error) {
+        console.error('Error deleting event:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            {event ? 'Modifier l\'événement' : 'Nouvel événement'}
+          </h2>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description *
+              </label>
+              <input
+                type="text"
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+                disabled={loading}
+                placeholder="Description de l'événement"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Jour
+              </label>
+              <select
+                value={formData.day}
+                onChange={(e) => setFormData({...formData, day: parseInt(e.target.value)})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+              >
+                {dayNames.map((day, index) => (
+                  <option key={index} value={index}>{day}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Heure de début
+                </label>
+                <select
+                  value={formData.start}
+                  onChange={(e) => setFormData({...formData, start: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loading}
+                >
+                  {timeSlots.slice(0, -1).map(time => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Heure de fin
+                </label>
+                <select
+                  value={formData.end}
+                  onChange={(e) => setFormData({...formData, end: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loading}
+                >
+                  {timeSlots.slice(1).map(time => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Type
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({...formData, type: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+              >
+                {Object.entries(eventTypes).map(([key, type]) => (
+                  <option key={key} value={key}>{type.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
+                disabled={loading}
+              >
+                Annuler
+              </button>
+              {event && (
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="py-3 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-all disabled:opacity-50"
+                  disabled={loading}
+                >
+                  {loading ? '...' : 'Supprimer'}
+                </button>
+              )}
+              <button
+                type="submit"
+                className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? '...' : (event ? 'Modifier' : 'Créer')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Day Events Modal Component
+const DayEventsModal = ({ isOpen, onClose, events, date, onEventClick, onCreateEvent }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-96 overflow-y-auto">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <span className="mr-2">📅</span>
+            {date && formatDate(date)}
+          </h2>
+          
+          <div className="space-y-3 mb-6">
+            {events.length > 0 ? (
+              events.map(event => (
+                <div
+                  key={event.id}
+                  onClick={() => onEventClick(event)}
+                  className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-all ${eventTypes[event.type]?.color}`}
+                >
+                  <div className="font-medium">{event.description}</div>
+                  <div className="text-sm opacity-75">
+                    {event.start} - {event.end}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-4">
+                Aucun événement pour cette journée
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
+            >
+              Fermer
+            </button>
+            <button
+              onClick={() => onCreateEvent(date)}
+              className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all"
+            >
+              + Nouvel événement
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Offline Storage Class
+class PlanningOfflineStorage {
+  constructor() {
+    this.dbName = 'FleemyPlanningDB';
+    this.version = 1;
+    this.db = null;
+  }
+
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        if (!db.objectStoreNames.contains('events')) {
+          const store = db.createObjectStore('events', { keyPath: 'id' });
+          store.createIndex('week_year', ['week', 'year']);
+          store.createIndex('uid', 'uid');
+        }
+      };
+    });
+  }
+
+  async saveEvent(event) {
+    if (!this.db) await this.init();
+    const transaction = this.db.transaction(['events'], 'readwrite');
+    const store = transaction.objectStore('events');
+    await store.put(event);
+  }
+
+  async getEvents(uid, year, week) {
+    if (!this.db) await this.init();
+    const transaction = this.db.transaction(['events'], 'readonly');
+    const store = transaction.objectStore('events');
+    const request = store.getAll();
+    
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const events = request.result.filter(e => 
+          e.uid === uid && e.year === year && e.week === week
+        );
+        resolve(events);
+      };
+    });
+  }
+
+  async deleteEvent(eventId) {
+    if (!this.db) await this.init();
+    const transaction = this.db.transaction(['events'], 'readwrite');
+    const store = transaction.objectStore('events');
+    await store.delete(eventId);
+  }
+
+  async clearWeekEvents(uid, year, week) {
+    if (!this.db) await this.init();
+    const transaction = this.db.transaction(['events'], 'readwrite');
+    const store = transaction.objectStore('events');
+    const request = store.getAll();
+    
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const events = request.result.filter(e => 
+          e.uid === uid && e.year === year && e.week === week
+        );
+        events.forEach(event => store.delete(event.id));
+        resolve();
+      };
+    });
+  }
+}
+
+// Main Planning Component
+const Planning = ({ user, sessionToken }) => {
+  const [view, setView] = useState('week'); // 'week' or 'month'
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [eventModal, setEventModal] = useState({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+  const [dayEventsModal, setDayEventsModal] = useState({ isOpen: false, events: [], date: null });
+  const [team, setTeam] = useState(null);
+  const [viewingMember, setViewingMember] = useState(null);
+  const [hourlyRate, setHourlyRate] = useState(50);
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineStorage] = useState(new PlanningOfflineStorage());
+
+  const currentYear = currentDate.getFullYear();
+  const currentWeek = getWeekNumber(currentDate);
+  const currentMonth = currentDate.getMonth();
+
+  useEffect(() => {
+    // Initialize offline storage
+    offlineStorage.init();
+    
+    // Listen for online/offline events
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const apiCall = async (url, options = {}) => {
+    try {
+      return await axios({
+        url: `${API}${url}`,
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        ...options
+      });
+    } catch (error) {
+      if (!isOnline) {
+        throw new Error('Offline mode');
+      }
+      throw error;
+    }
+  };
+
+  const loadEvents = async () => {
+    try {
+      setLoading(true);
+      const targetUid = viewingMember ? viewingMember.uid : user.uid;
+      
+      if (view === 'week') {
+        const response = await apiCall(`/planning/week/${currentYear}/${currentWeek}`);
+        setEvents(response.data.events || []);
+      } else {
+        const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
+        setEvents(response.data.events || []);
+      }
+    } catch (error) {
+      console.error('Error loading events:', error);
+      if (!isOnline) {
+        // Load from offline storage
+        const offlineEvents = await offlineStorage.getEvents(user.uid, currentYear, currentWeek);
+        setEvents(offlineEvents);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadTeam = async () => {
+    try {
+      const response = await apiCall('/teams/my');
+      setTeam(response.data);
+    } catch (error) {
+      console.error('Error loading team:', error);
+    }
+  };
+
+  const loadUserRate = async () => {
+    try {
+      const response = await apiCall('/auth/me');
+      setHourlyRate(response.data.hourly_rate || 50);
+    } catch (error) {
+      console.error('Error loading user rate:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadEvents();
+  }, [view, currentYear, currentWeek, currentMonth, viewingMember]);
+
+  useEffect(() => {
+    loadTeam();
+    loadUserRate();
+  }, []);
+
+  const handleCreateEvent = async (eventData) => {
+    try {
+      const eventToCreate = {
+        ...eventData,
+        uid: user.uid,
+        week: currentWeek,
+        year: currentYear
+      };
+
+      // Save to server
+      const response = await apiCall('/planning/events', {
+        method: 'POST',
+        data: eventToCreate
+      });
+
+      // Save to offline storage
+      await offlineStorage.saveEvent(response.data);
+
+      setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+      loadEvents();
+    } catch (error) {
+      console.error('Error creating event:', error);
+      // If offline, save locally only
+      if (!isOnline) {
+        const localEvent = {
+          ...eventToCreate,
+          id: Date.now().toString(),
+          created_at: new Date().toISOString()
+        };
+        await offlineStorage.saveEvent(localEvent);
+        setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+        loadEvents();
+      }
+    }
+  };
+
+  const handleUpdateEvent = async (eventData) => {
+    try {
+      await apiCall(`/planning/events/${eventModal.event.id}`, {
+        method: 'PUT',
+        data: eventData
+      });
+
+      setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+      loadEvents();
+    } catch (error) {
+      console.error('Error updating event:', error);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      await apiCall(`/planning/events/${eventId}`, {
+        method: 'DELETE'
+      });
+
+      await offlineStorage.deleteEvent(eventId);
+      setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+      loadEvents();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+    }
+  };
+
+  const handleClearWeek = async () => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?')) {
+      try {
+        // Delete all events for current week
+        const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
+        await Promise.all(
+          weekEvents.map(event => apiCall(`/planning/events/${event.id}`, { method: 'DELETE' }))
+        );
+
+        await offlineStorage.clearWeekEvents(user.uid, currentYear, currentWeek);
+        loadEvents();
+      } catch (error) {
+        console.error('Error clearing week:', error);
+      }
+    }
+  };
+
+  const navigateWeek = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(newDate.getDate() + (direction * 7));
+    setCurrentDate(newDate);
+  };
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentDate(newDate);
+  };
+
+  const calculateRevenue = () => {
+    const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
+    const revenue = { paid: 0, unpaid: 0, pending: 0 };
+
+    weekEvents.forEach(event => {
+      if (event.type !== 'not_worked') {
+        const startHour = parseInt(event.start.split(':')[0]);
+        const endHour = parseInt(event.end.split(':')[0]);
+        const hours = endHour - startHour;
+        const amount = hours * hourlyRate;
+
+        switch (event.type) {
+          case 'paid':
+            revenue.paid += amount;
+            break;
+          case 'unpaid':
+            revenue.unpaid += amount;
+            break;
+          case 'pending':
+            revenue.pending += amount;
+            break;
+        }
+      }
+    });
+
+    return revenue;
+  };
+
+  const revenue = calculateRevenue();
+  const weekDates = getWeekDates(currentYear, currentWeek);
+
+  const getEventsForTimeSlot = (day, time) => {
+    return events.filter(event => 
+      event.day === day && 
+      event.start === time &&
+      event.week === currentWeek &&
+      event.year === currentYear
+    );
+  };
+
+  const getEventsForDate = (date) => {
+    const dayOfWeek = date.getDay();
+    const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    
+    if (adjustedDay >= 5) return []; // Weekend
+    
+    return events.filter(event => {
+      const eventDate = new Date(currentYear, 0, 1);
+      eventDate.setDate(eventDate.getDate() + (event.week - 1) * 7 + event.day);
+      return eventDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const handleDayClick = (date) => {
+    const dayEvents = getEventsForDate(date);
+    setDayEventsModal({ isOpen: true, events: dayEvents, date });
+  };
+
+  const handleEventClick = (event) => {
+    if (!viewingMember) { // Only allow editing own events
+      setEventModal({ isOpen: true, event, timeSlot: null, selectedDate: null });
+    }
+  };
+
+  const handleTimeSlotClick = (day, start) => {
+    if (!viewingMember) {
+      const endIndex = timeSlots.indexOf(start) + 1;
+      const end = endIndex < timeSlots.length ? timeSlots[endIndex] : '18:00';
+      setEventModal({ 
+        isOpen: true, 
+        event: null, 
+        timeSlot: { day, start, end }, 
+        selectedDate: null 
+      });
+    }
+  };
+
+  const handleCreateFromDay = (date) => {
+    setDayEventsModal({ isOpen: false, events: [], date: null });
+    setEventModal({ isOpen: true, event: null, timeSlot: null, selectedDate: date });
+  };
+
+  const updateHourlyRate = async (newRate) => {
+    try {
+      await apiCall('/auth/me', {
+        method: 'PUT',
+        data: { hourly_rate: newRate }
+      });
+      setHourlyRate(newRate);
+      setShowRateModal(false);
+    } catch (error) {
+      console.error('Error updating hourly rate:', error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement du planning...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex items-center space-x-4">
+          <h1 className="text-2xl font-bold text-gray-800">📅 Planning</h1>
+          
+          {/* Online/Offline indicator */}
+          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+            isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {isOnline ? '🟢 En ligne' : '🔴 Hors ligne'}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Team member selector */}
+          {team && (
+            <div className="flex items-center space-x-2">
+              <select
+                value={viewingMember ? viewingMember.uid : 'own'}
+                onChange={(e) => {
+                  if (e.target.value === 'own') {
+                    setViewingMember(null);
+                  } else {
+                    const member = team.members.find(m => m.uid === e.target.value);
+                    setViewingMember(member);
+                  }
+                }}
+                className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="own">Mon planning</option>
+                {team.members.filter(m => m.uid !== user.uid).map(member => (
+                  <option key={member.uid} value={member.uid}>
+                    {member.name} (lecture seule)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* View toggle */}
+          <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setView('week')}
+              className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                view === 'week' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'
+              }`}
+            >
+              Semaine
+            </button>
+            <button
+              onClick={() => setView('month')}
+              className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                view === 'month' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'
+              }`}
+            >
+              Mois
+            </button>
+          </div>
+
+          {/* Actions */}
+          {!viewingMember && (
+            <>
+              <button
+                onClick={() => setShowRateModal(true)}
+                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-all"
+              >
+                {hourlyRate}€/h
+              </button>
+              
+              {view === 'week' && (
+                <button
+                  onClick={handleClearWeek}
+                  className="text-sm bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-lg transition-all"
+                >
+                  Vider semaine
+                </button>
+              )}
+              
+              <button
+                onClick={() => setEventModal({ isOpen: true, event: null, timeSlot: null, selectedDate: null })}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
+              >
+                + Événement
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
+          className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-lg transition-all"
+        >
+          <span>←</span>
+          <span className="text-sm">Précédent</span>
+        </button>
+        
+        <h2 className="text-xl font-semibold text-gray-800">
+          {view === 'week' 
+            ? `Semaine ${currentWeek} - ${monthNames[weekDates[0].getMonth()]} ${currentYear}`
+            : `${monthNames[currentMonth]} ${currentYear}`
+          }
+        </h2>
+        
+        <button
+          onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
+          className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-lg transition-all"
+        >
+          <span className="text-sm">Suivant</span>
+          <span>→</span>
+        </button>
+      </div>
+
+      {/* Revenue Summary - Only show for personal view */}
+      {view === 'week' && !viewingMember && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
+            <div className="text-green-700 font-semibold text-sm">Revenus payés</div>
+            <div className="text-2xl font-bold text-green-800">{formatCurrency(revenue.paid)}</div>
+          </div>
+          <div className="bg-red-50 border border-red-200 p-4 rounded-xl">
+            <div className="text-red-700 font-semibold text-sm">Revenus impayés</div>
+            <div className="text-2xl font-bold text-red-800">{formatCurrency(revenue.unpaid)}</div>
+          </div>
+          <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl">
+            <div className="text-orange-700 font-semibold text-sm">Revenus en attente</div>
+            <div className="text-2xl font-bold text-orange-800">{formatCurrency(revenue.pending)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Views */}
+      {view === 'week' ? (
+        /* Week View */
+        <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
+          <div className="min-w-full">
+            {/* Week header */}
+            <div className="grid grid-cols-6 border-b bg-gray-50">
+              <div className="p-4 font-medium text-sm text-gray-600">Heure</div>
+              {weekDates.map((date, index) => (
+                <div key={index} className="p-4 text-center">
+                  <div className="font-medium text-sm">{dayNamesShort[index]}</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {date.getDate()}/{date.getMonth() + 1}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Time slots */}
+            {timeSlots.slice(0, -1).map((time, timeIndex) => (
+              <div key={time} className="grid grid-cols-6 border-b min-h-16 hover:bg-gray-50">
+                <div className="p-4 bg-gray-50 text-sm font-medium border-r flex items-center">
+                  {time}
+                </div>
+                {dayNames.map((dayName, dayIndex) => {
+                  const slotEvents = getEventsForTimeSlot(dayIndex, time);
+                  
+                  return (
+                    <div
+                      key={dayIndex}
+                      className="border-r cursor-pointer transition-all hover:bg-blue-50 relative"
+                      onClick={() => handleTimeSlotClick(dayIndex, time)}
+                    >
+                      {slotEvents.map(event => (
+                        <div
+                          key={event.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEventClick(event);
+                          }}
+                          className={`absolute inset-0 m-1 p-2 rounded border-l-4 cursor-pointer hover:shadow-md transition-all ${eventTypes[event.type]?.color}`}
+                          style={{ backgroundColor: eventTypes[event.type]?.bgColor }}
+                        >
+                          <div className="text-xs font-medium truncate">
+                            {event.description}
+                          </div>
+                          <div className="text-xs opacity-75">
+                            {event.start}-{event.end}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* Month View */
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          {/* Month header */}
+          <div className="grid grid-cols-7 border-b bg-gray-50">
+            {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
+              <div key={day} className="p-3 text-center text-sm font-medium text-gray-600">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div className="grid grid-cols-7">
+            {getMonthDays(currentYear, currentMonth).map((day, index) => {
+              const dayEvents = getEventsForDate(day.date);
+              const visibleEvents = dayEvents.slice(0, 2);
+              const remainingCount = dayEvents.length - visibleEvents.length;
+              const isToday = day.date.toDateString() === new Date().toDateString();
+
+              return (
+                <div
+                  key={index}
+                  onClick={() => handleDayClick(day.date)}
+                  className={`min-h-24 p-2 border-b border-r cursor-pointer hover:bg-gray-50 transition-all ${
+                    !day.isCurrentMonth ? 'bg-gray-100 text-gray-400' : ''
+                  } ${isToday ? 'bg-blue-50 border-blue-200' : ''}`}
+                >
+                  <div className={`text-sm font-medium mb-1 ${
+                    isToday ? 'text-blue-600' : day.isCurrentMonth ? 'text-gray-800' : 'text-gray-400'
+                  }`}>
+                    {day.date.getDate()}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {visibleEvents.map(event => (
+                      <div
+                        key={event.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEventClick(event);
+                        }}
+                        className={`text-xs p-1 rounded border-l-2 cursor-pointer hover:opacity-80 ${eventTypes[event.type]?.color}`}
+                        style={{ backgroundColor: eventTypes[event.type]?.bgColor }}
+                      >
+                        <div className="truncate font-medium">
+                          {event.description}
+                        </div>
+                      </div>
+                    ))}
+                    {remainingCount > 0 && (
+                      <div className="text-xs text-blue-600 font-medium cursor-pointer hover:text-blue-800">
+                        +{remainingCount} autres
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      <EventModal
+        isOpen={eventModal.isOpen}
+        onClose={() => setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null })}
+        onSave={eventModal.event ? handleUpdateEvent : handleCreateEvent}
+        onDelete={handleDeleteEvent}
+        event={eventModal.event}
+        timeSlot={eventModal.timeSlot}
+        selectedDate={eventModal.selectedDate}
+      />
+
+      <DayEventsModal
+        isOpen={dayEventsModal.isOpen}
+        onClose={() => setDayEventsModal({ isOpen: false, events: [], date: null })}
+        events={dayEventsModal.events}
+        date={dayEventsModal.date}
+        onEventClick={handleEventClick}
+        onCreateEvent={handleCreateFromDay}
+      />
+
+      {/* Hourly Rate Modal */}
+      {showRateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">
+                Modifier le taux horaire
+              </h2>
+              
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const newRate = parseFloat(formData.get('rate'));
+                if (newRate > 0) {
+                  updateHourlyRate(newRate);
+                }
+              }}>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Taux horaire (€)
+                  </label>
+                  <input
+                    type="number"
+                    name="rate"
+                    defaultValue={hourlyRate}
+                    step="0.01"
+                    min="0"
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowRateModal(false)}
+                    className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all"
+                  >
+                    Modifier
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Tasks = () => (
   <div className="bg-white p-6 rounded-xl shadow-sm">
