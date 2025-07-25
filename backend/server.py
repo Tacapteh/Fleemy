@@ -415,7 +415,7 @@ async def update_event(event_id: str, event_request: EventCreateRequest, current
         {"$set": {**event_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
-    updated_event = await db.planning_events.find_one({"id": event_id})
+    updated_event = await db.planning_events.find_one({"id": event_id}, {"_id": 0})
     return updated_event
 
 @api_router.delete("/planning/events/{event_id}")
