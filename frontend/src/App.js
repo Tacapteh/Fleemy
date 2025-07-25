@@ -22,7 +22,7 @@ const getWeekDays = (year, week) => {
   else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
   
   const days = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < 5; i++) { // Lundi à Vendredi seulement
     const day = new Date(ISOweekStart);
     day.setDate(ISOweekStart.getDate() + i);
     days.push(day);
@@ -71,21 +71,29 @@ const timeSlots = [
   "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"
 ];
 
-const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
-const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
+const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday"];
+const fullDayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
 const statusColors = {
-  paid: "bg-green-100 border-green-300 text-green-800",
-  unpaid: "bg-red-100 border-red-300 text-red-800",
-  pending: "bg-yellow-100 border-yellow-300 text-yellow-800",
-  not_worked: "bg-gray-100 border-gray-300 text-gray-800"
+  paid: "bg-green-100 border-green-400 text-green-800",
+  unpaid: "bg-red-100 border-red-400 text-red-800",
+  pending: "bg-yellow-100 border-yellow-400 text-yellow-800",
+  not_worked: "bg-gray-100 border-gray-400 text-gray-600"
+};
+
+const statusLabels = {
+  paid: "Payé",
+  unpaid: "Non payé", 
+  pending: "En attente",
+  not_worked: "Pas travaillé"
 };
 
 const pastelloColors = [
-  "#FFB3E6", "#FFE5B3", "#B3FFB3", "#B3E5FF", "#E5B3FF", 
-  "#FFB3B3", "#B3FFFF", "#FFE5FF", "#E5FFB3", "#B3B3FF",
-  "#FFD4E5", "#E5CCFF", "#CCFFE5", "#CCE5FF", "#FFCCDD"
+  "#FFE5E5", "#E5F3FF", "#E5FFE5", "#FFF3E5", "#FFE5F3",
+  "#F3E5FF", "#E5FFFF", "#FFFFE5", "#F0F0F0", "#E5E5FF",
+  "#FFE5CC", "#CCE5FF", "#E5FFCC", "#FFCCCC", "#CCCCFF"
 ];
 
 // 50 icônes par catégories
@@ -94,20 +102,84 @@ const iconCategories = {
   "Documents": ["📝", "📋", "📄", "📑", "📊", "📈", "📉", "🗂️", "📁", "🗃️"],
   "Communication": ["📧", "💬", "📞", "☎️", "📱", "📲", "💌", "📩", "📨", "📮"],
   "Outils": ["🔧", "⚙️", "🔨", "🪛", "⚡", "🔋", "🔌", "💡", "🔍", "🔎"],
-  "Général": ["⭐", "🎯", "🚀", "💰", "💎", "🎨", "🎵", "🎪", "🎭", "🎨"]
+  "Général": ["⭐", "🎯", "🚀", "💰", "💎", "🎨", "🎵", "🎪", "🎭", "🏆"]
 };
 
 const allIcons = Object.values(iconCategories).flat();
 
-// Load clients from localStorage
-const loadClients = () => {
-  const saved = localStorage.getItem('fleemy_clients');
-  return saved ? JSON.parse(saved) : [];
-};
+// IndexedDB pour le mode offline
+class OfflineStorage {
+  constructor() {
+    this.dbName = 'FleemyDB';
+    this.version = 1;
+    this.db = null;
+  }
 
-const saveClients = (clients) => {
-  localStorage.setItem('fleemy_clients', JSON.stringify(clients));
-};
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve();
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        
+        // Create stores
+        if (!db.objectStoreNames.contains('events')) {
+          db.createObjectStore('events', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('tasks')) {
+          db.createObjectStore('tasks', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('clients')) {
+          db.createObjectStore('clients', { keyPath: 'name' });
+        }
+      };
+    });
+  }
+
+  async saveEvent(event) {
+    const transaction = this.db.transaction(['events'], 'readwrite');
+    const store = transaction.objectStore('events');
+    await store.put(event);
+  }
+
+  async saveTask(task) {
+    const transaction = this.db.transaction(['tasks'], 'readwrite');
+    const store = transaction.objectStore('tasks');
+    await store.put(task);
+  }
+
+  async getEvents(year, week) {
+    const transaction = this.db.transaction(['events'], 'readonly');
+    const store = transaction.objectStore('events');
+    const request = store.getAll();
+    
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const events = request.result.filter(e => e.year === year && e.week === week);
+        resolve(events);
+      };
+    });
+  }
+
+  async getTasks(year, week) {
+    const transaction = this.db.transaction(['tasks'], 'readonly');
+    const store = transaction.objectStore('tasks');
+    const request = store.getAll();
+    
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const tasks = request.result.filter(t => t.year === year && t.week === week);
+        resolve(tasks);
+      };
+    });
+  }
+}
 
 // Authentication component
 const AuthScreen = ({ onLogin }) => {
@@ -130,10 +202,10 @@ const AuthScreen = ({ onLogin }) => {
       <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md">
         <div className="text-6xl mb-6">📅</div>
         <h1 className="text-3xl font-bold text-gray-800 mb-2">Fleemy</h1>
-        <p className="text-gray-600 mb-8">Votre outil de gestion de planning et tâches</p>
+        <p className="text-gray-600 mb-8">Votre outil complet de gestion de planning et tâches</p>
         <button
           onClick={handleLogin}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105"
         >
           Se connecter
         </button>
@@ -150,7 +222,7 @@ const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-lg w-full mx-4">
+      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">Choisir une icône</h2>
         
         {/* Categories */}
@@ -159,9 +231,9 @@ const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
             <button
               key={category}
               onClick={() => setActiveCategory(category)}
-              className={`px-3 py-1 rounded-lg text-sm ${
+              className={`px-3 py-1 rounded-lg text-sm transition-all ${
                 activeCategory === category 
-                  ? 'bg-blue-100 text-blue-700' 
+                  ? 'bg-blue-100 text-blue-700 border border-blue-300' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -171,12 +243,12 @@ const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
         </div>
         
         {/* Icons Grid */}
-        <div className="grid grid-cols-10 gap-2 mb-6 max-h-48 overflow-y-auto">
+        <div className="grid grid-cols-10 gap-2 mb-6">
           {iconCategories[activeCategory].map(icon => (
             <button
               key={icon}
               onClick={() => onSelect(icon)}
-              className={`p-2 rounded-lg border text-lg hover:bg-gray-50 ${
+              className={`p-3 rounded-lg border text-xl hover:bg-gray-50 transition-all ${
                 selectedIcon === icon ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
               }`}
             >
@@ -188,9 +260,9 @@ const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
         <div className="flex gap-4">
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
           >
-            Annuler
+            Fermer
           </button>
         </div>
       </div>
@@ -199,22 +271,42 @@ const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
 };
 
 // Event Modal
-const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
+const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null, clients = [] }) => {
   const [formData, setFormData] = useState({
     description: "",
     client: "",
     day: "monday",
     start_time: "09:00",
     end_time: "10:00",
-    status: "pending"
+    status: "pending",
+    hourly_rate: 50
   });
-  const [clients, setClients] = useState(loadClients());
   const [filteredClients, setFilteredClients] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (event) {
-      setFormData(event);
+    if (event && event.id) {
+      setFormData({
+        description: event.description || "",
+        client: event.client || "",
+        day: event.day || "monday",
+        start_time: event.start_time || "09:00",
+        end_time: event.end_time || "10:00",
+        status: event.status || "pending",
+        hourly_rate: event.hourly_rate || 50
+      });
+    } else if (event) {
+      // New event with pre-filled data (from time slot click)
+      setFormData({
+        description: "",
+        client: "",
+        day: event.day || "monday",
+        start_time: event.start_time || "09:00",
+        end_time: event.end_time || "10:00",
+        status: "pending",
+        hourly_rate: 50
+      });
     } else {
       setFormData({
         description: "",
@@ -222,7 +314,8 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
         day: "monday",
         start_time: "09:00",
         end_time: "10:00",
-        status: "pending"
+        status: "pending",
+        hourly_rate: 50
       });
     }
   }, [event, isOpen]);
@@ -246,22 +339,29 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
     setShowSuggestions(false);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     
-    // Add client to list if new
-    if (formData.client && !clients.includes(formData.client)) {
-      const newClients = [...clients, formData.client];
-      setClients(newClients);
-      saveClients(newClients);
+    try {
+      await onSave(formData);
+    } catch (error) {
+      console.error('Error saving event:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    onSave(formData);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer cet événement ?")) {
-      onDelete(event.id);
+      setLoading(true);
+      try {
+        await onDelete(event.id);
+      } catch (error) {
+        console.error('Error deleting event:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -271,7 +371,7 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
         <h2 className="text-xl font-bold mb-4">
-          {event ? "Modifier l'événement" : "Nouvel événement"}
+          {event && event.id ? "Modifier l'événement" : "Nouvel événement"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -280,10 +380,12 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
               type="text"
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={loading}
             />
           </div>
+          
           <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
             <input
@@ -291,16 +393,17 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
               value={formData.client}
               onChange={(e) => handleClientChange(e.target.value)}
               onFocus={() => formData.client && setShowSuggestions(filteredClients.length > 0)}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               required
+              disabled={loading}
             />
             {showSuggestions && (
-              <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-32 overflow-y-auto">
+              <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-32 overflow-y-auto shadow-lg">
                 {filteredClients.map((client, index) => (
                   <div
                     key={index}
                     onClick={() => selectClient(client)}
-                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
                   >
                     {client}
                   </div>
@@ -308,27 +411,31 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
               </div>
             )}
           </div>
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Jour</label>
             <select
               value={formData.day}
               onChange={(e) => setFormData({...formData, day: e.target.value})}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading}
             >
               {dayKeys.map((key, index) => (
                 <option key={key} value={key}>{dayNames[index]}</option>
               ))}
             </select>
           </div>
+          
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Début</label>
               <select
                 value={formData.start_time}
                 onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
               >
-                {timeSlots.map(time => (
+                {timeSlots.slice(0, -1).map(time => (
                   <option key={time} value={time}>{time}</option>
                 ))}
               </select>
@@ -338,49 +445,69 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
               <select
                 value={formData.end_time}
                 onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
               >
-                {timeSlots.map(time => (
+                {timeSlots.slice(1).map(time => (
                   <option key={time} value={time}>{time}</option>
                 ))}
               </select>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({...formData, status: e.target.value})}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="pending">En attente</option>
-              <option value="paid">Payé</option>
-              <option value="unpaid">Non payé</option>
-              <option value="not_worked">Pas travaillé</option>
-            </select>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({...formData, status: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+              >
+                {Object.entries(statusLabels).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Taux horaire (€)</label>
+              <input
+                type="number"
+                value={formData.hourly_rate}
+                onChange={(e) => setFormData({...formData, hourly_rate: parseFloat(e.target.value) || 0})}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+            </div>
           </div>
+          
           <div className="flex gap-4 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+              disabled={loading}
             >
               Annuler
             </button>
-            {event && (
+            {event && event.id && (
               <button
                 type="button"
                 onClick={handleDelete}
-                className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50"
+                disabled={loading}
               >
-                Supprimer
+                {loading ? "..." : "Supprimer"}
               </button>
             )}
             <button
               type="submit"
-              className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+              disabled={loading}
             >
-              {event ? "Modifier" : "Créer"}
+              {loading ? "..." : (event && event.id ? "Modifier" : "Créer")}
             </button>
           </div>
         </form>
@@ -390,7 +517,7 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
 };
 
 // Task Modal
-const TaskModal = ({ isOpen, onClose, onSave }) => {
+const TaskModal = ({ isOpen, onClose, onSave, onDelete, task = null }) => {
   const [formData, setFormData] = useState({
     name: "",
     price: 0,
@@ -399,10 +526,39 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
     time_slots: []
   });
   const [iconModalOpen, setIconModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (task && task.id) {
+      setFormData({
+        name: task.name || "",
+        price: task.price || 0,
+        color: task.color || pastelloColors[0],
+        icon: task.icon || allIcons[0],
+        time_slots: task.time_slots || []
+      });
+    } else {
+      setFormData({
+        name: "",
+        price: 0,
+        color: pastelloColors[0],
+        icon: allIcons[0],
+        time_slots: []
+      });
+    }
+  }, [task, isOpen]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onSave(formData);
+    setLoading(true);
+    
+    try {
+      await onSave(formData);
+    } catch (error) {
+      console.error('Error saving task:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleIconSelect = (icon) => {
@@ -410,13 +566,35 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
     setIconModalOpen(false);
   };
 
+  const addTimeSlot = () => {
+    const newSlot = { day: "monday", start: "09:00", end: "10:00" };
+    setFormData({
+      ...formData,
+      time_slots: [...formData.time_slots, newSlot]
+    });
+  };
+
+  const removeTimeSlot = (index) => {
+    const newSlots = formData.time_slots.filter((_, i) => i !== index);
+    setFormData({...formData, time_slots: newSlots});
+  };
+
+  const updateTimeSlot = (index, field, value) => {
+    const newSlots = [...formData.time_slots];
+    newSlots[index][field] = value;
+    setFormData({...formData, time_slots: newSlots});
+  };
+
   if (!isOpen) return null;
 
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
-          <h2 className="text-xl font-bold mb-4">Nouvelle tâche hebdomadaire</h2>
+        <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+          <h2 className="text-xl font-bold mb-4">
+            {task && task.id ? "Modifier la tâche" : "Nouvelle tâche hebdomadaire"}
+          </h2>
+          
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
@@ -424,20 +602,26 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
+                disabled={loading}
               />
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€)</label>
               <input
                 type="number"
                 value={formData.price}
                 onChange={(e) => setFormData({...formData, price: parseFloat(e.target.value) || 0})}
-                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
+                min="0"
+                step="0.01"
+                disabled={loading}
               />
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
               <div className="flex flex-wrap gap-2">
@@ -446,38 +630,112 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
                     key={color}
                     type="button"
                     onClick={() => setFormData({...formData, color})}
-                    className={`w-8 h-8 rounded-full border-2 ${formData.color === color ? 'border-gray-800' : 'border-gray-300'}`}
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
+                      formData.color === color ? 'border-gray-800 scale-110' : 'border-gray-300 hover:border-gray-500'
+                    }`}
                     style={{ backgroundColor: color }}
+                    disabled={loading}
                   />
                 ))}
               </div>
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Icône</label>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setIconModalOpen(true)}
-                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-2xl"
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-2xl transition-all"
+                  disabled={loading}
                 >
                   {formData.icon}
                 </button>
                 <span className="text-sm text-gray-600">Cliquer pour changer</span>
               </div>
             </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Créneaux horaires</label>
+              <div className="space-y-2">
+                {formData.time_slots.map((slot, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <select
+                      value={slot.day}
+                      onChange={(e) => updateTimeSlot(index, 'day', e.target.value)}
+                      className="flex-1 p-1 border border-gray-300 rounded text-sm"
+                      disabled={loading}
+                    >
+                      {dayKeys.map((key, idx) => (
+                        <option key={key} value={key}>{dayNames[idx]}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={slot.start}
+                      onChange={(e) => updateTimeSlot(index, 'start', e.target.value)}
+                      className="flex-1 p-1 border border-gray-300 rounded text-sm"
+                      disabled={loading}
+                    >
+                      {timeSlots.slice(0, -1).map(time => (
+                        <option key={time} value={time}>{time}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={slot.end}
+                      onChange={(e) => updateTimeSlot(index, 'end', e.target.value)}
+                      className="flex-1 p-1 border border-gray-300 rounded text-sm"
+                      disabled={loading}
+                    >
+                      {timeSlots.slice(1).map(time => (
+                        <option key={time} value={time}>{time}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeTimeSlot(index)}
+                      className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      disabled={loading}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addTimeSlot}
+                  className="w-full p-2 border border-dashed border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-all"
+                  disabled={loading}
+                >
+                  + Ajouter un créneau
+                </button>
+              </div>
+            </div>
+            
             <div className="flex gap-4 pt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                disabled={loading}
               >
                 Annuler
               </button>
+              {task && task.id && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(task.id)}
+                  className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50"
+                  disabled={loading}
+                >
+                  Supprimer
+                </button>
+              )}
               <button
                 type="submit"
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
+                disabled={loading}
               >
-                Créer
+                {loading ? "..." : (task && task.id ? "Modifier" : "Créer")}
               </button>
             </div>
           </form>
@@ -494,24 +752,169 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
+// Team Modal
+const TeamModal = ({ isOpen, onClose }) => {
+  const [mode, setMode] = useState('join'); // 'create' or 'join'
+  const [teamName, setTeamName] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleCreateTeam = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      // TODO: Implement team creation
+      console.log('Creating team:', teamName);
+      onClose();
+    } catch (error) {
+      console.error('Error creating team:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleJoinTeam = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      // TODO: Implement team joining
+      console.log('Joining team with code:', inviteCode);
+      onClose();
+    } catch (error) {
+      console.error('Error joining team:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
+        <h2 className="text-xl font-bold mb-4">Équipe</h2>
+        
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setMode('join')}
+            className={`flex-1 py-2 px-4 rounded-lg transition-all ${
+              mode === 'join' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            Rejoindre
+          </button>
+          <button
+            onClick={() => setMode('create')}
+            className={`flex-1 py-2 px-4 rounded-lg transition-all ${
+              mode === 'create' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            Créer
+          </button>
+        </div>
+
+        {mode === 'create' ? (
+          <form onSubmit={handleCreateTeam} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nom de l'équipe
+              </label>
+              <input
+                type="text"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+                disabled={loading}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? "..." : "Créer"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleJoinTeam} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Code d'invitation
+              </label>
+              <input
+                type="text"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: AB12CD34"
+                required
+                disabled={loading}
+              />
+            </div>
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+                disabled={loading}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? "..." : "Rejoindre"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // Month View Component
-const MonthView = ({ year, month, events, onDayClick, onEventClick }) => {
+const MonthView = ({ year, month, events, tasks, onDayClick, onEventClick }) => {
   const monthDays = getMonthDays(year, month);
   
   const getEventsForDate = (date) => {
     const dayKey = dayKeys[date.getDay() === 0 ? 6 : date.getDay() - 1];
-    const weekNumber = getCurrentWeek(); // Simplified, should calculate proper week for date
+    if (!dayKey || date.getDay() === 0 || date.getDay() === 6) return []; // Skip weekends
+    
     return events.filter(event => {
-      const eventDate = new Date(year, month, date.getDate());
-      return event.day === dayKey && Math.abs(eventDate - date) < 24 * 60 * 60 * 1000;
+      return event.day === dayKey;
     });
+  };
+
+  const getTasksForDate = (date) => {
+    const dayKey = dayKeys[date.getDay() === 0 ? 6 : date.getDay() - 1];
+    if (!dayKey || date.getDay() === 0 || date.getDay() === 6) return [];
+    
+    return tasks.filter(task => 
+      task.time_slots && task.time_slots.some(slot => slot.day === dayKey)
+    );
   };
 
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       {/* Month Header */}
       <div className="grid grid-cols-7 border-b bg-gray-50">
-        {dayNames.map(day => (
+        {fullDayNames.map(day => (
           <div key={day} className="p-4 text-center font-medium text-sm">
             {day.slice(0, 3)}
           </div>
@@ -522,36 +925,50 @@ const MonthView = ({ year, month, events, onDayClick, onEventClick }) => {
       <div className="grid grid-cols-7">
         {monthDays.map((day, index) => {
           const dayEvents = getEventsForDate(day.date);
-          const visibleEvents = dayEvents.slice(0, 2);
-          const remainingCount = dayEvents.length - visibleEvents.length;
+          const dayTasks = getTasksForDate(day.date);
+          const allItems = [...dayEvents, ...dayTasks];
+          const visibleItems = allItems.slice(0, 2);
+          const remainingCount = allItems.length - visibleItems.length;
+          const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
           
           return (
             <div
               key={index}
-              onClick={() => onDayClick(day.date)}
-              className={`min-h-24 p-2 border-b border-r cursor-pointer hover:bg-gray-50 ${
-                !day.isCurrentMonth ? 'bg-gray-100 text-gray-400' : ''
+              onClick={() => !isWeekend && onDayClick(day.date)}
+              className={`min-h-24 p-2 border-b border-r cursor-pointer transition-all ${
+                !day.isCurrentMonth 
+                  ? 'bg-gray-100 text-gray-400' 
+                  : isWeekend 
+                    ? 'bg-gray-50 cursor-not-allowed' 
+                    : 'hover:bg-blue-50'
               }`}
             >
               <div className="font-medium text-sm mb-1">
                 {day.date.getDate()}
               </div>
               
-              {visibleEvents.map(event => (
+              {visibleItems.map((item, idx) => (
                 <div
-                  key={event.id}
+                  key={idx}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onEventClick(event);
+                    if (item.client) { // It's an event
+                      onEventClick(item);
+                    }
                   }}
-                  className={`text-xs p-1 mb-1 rounded cursor-pointer ${statusColors[event.status]}`}
+                  className={`text-xs p-1 mb-1 rounded cursor-pointer transition-all ${
+                    item.client 
+                      ? `${statusColors[item.status]} hover:opacity-80`
+                      : 'border'
+                  }`}
+                  style={!item.client ? { backgroundColor: item.color, opacity: 0.8 } : {}}
                 >
-                  {event.client}
+                  {item.client ? item.client : `${item.icon} ${item.name}`}
                 </div>
               ))}
               
               {remainingCount > 0 && (
-                <div className="text-xs text-gray-500 font-medium">
+                <div className="text-xs text-blue-600 font-medium hover:text-blue-800">
                   +{remainingCount} autres
                 </div>
               )}
@@ -570,50 +987,150 @@ const PlanningScreen = ({ user, sessionToken }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [earnings, setEarnings] = useState({ paid: 0, unpaid: 0, pending: 0, tasks_total: 0 });
+  const [clients, setClients] = useState([]);
+  const [earnings, setEarnings] = useState({ paid: 0, unpaid: 0, pending: 0, not_worked: 0, tasks_total: 0, total: 0 });
   const [view, setView] = useState('week'); // 'week' or 'month'
   const [eventModal, setEventModal] = useState({ isOpen: false, event: null });
-  const [taskModal, setTaskModal] = useState({ isOpen: false });
+  const [taskModal, setTaskModal] = useState({ isOpen: false, task: null });
+  const [teamModal, setTeamModal] = useState({ isOpen: false });
+  const [team, setTeam] = useState(null);
+  const [viewingMember, setViewingMember] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineStorage] = useState(new OfflineStorage());
+
+  useEffect(() => {
+    // Initialize offline storage
+    offlineStorage.init();
+    
+    // Listen for online/offline events
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [offlineStorage]);
 
   const apiCall = async (url, options = {}) => {
-    return await axios({
-      url: `${API}${url}`,
-      headers: {
-        'Authorization': `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
+    try {
+      return await axios({
+        url: `${API}${url}`,
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        ...options
+      });
+    } catch (error) {
+      if (!isOnline) {
+        // Handle offline mode
+        console.log('Offline mode - using local storage');
+        throw new Error('Offline mode');
+      }
+      throw error;
+    }
   };
 
   const loadWeekData = async () => {
     try {
-      const [planningRes, earningsRes] = await Promise.all([
-        apiCall(`/planning/week/${currentYear}/${currentWeek}`),
-        apiCall(`/planning/earnings/${currentYear}/${currentWeek}`)
-      ]);
-      
-      setEvents(planningRes.data.events || []);
-      setTasks(planningRes.data.tasks || []);
-      setEarnings(earningsRes.data);
+      if (viewingMember) {
+        // Load member's planning
+        const planningRes = await apiCall(`/teams/member/${viewingMember.uid}/planning/${currentYear}/${currentWeek}`);
+        setEvents(planningRes.data.events || []);
+        setTasks(planningRes.data.tasks || []);
+        setEarnings({ paid: 0, unpaid: 0, pending: 0, not_worked: 0, tasks_total: 0, total: 0 }); // Don't show earnings for other members
+      } else {
+        // Load own planning
+        const [planningRes, earningsRes] = await Promise.all([
+          apiCall(`/planning/week/${currentYear}/${currentWeek}`),
+          apiCall(`/planning/earnings/${currentYear}/${currentWeek}`)
+        ]);
+        
+        setEvents(planningRes.data.events || []);
+        setTasks(planningRes.data.tasks || []);
+        setEarnings(earningsRes.data);
+      }
     } catch (error) {
       console.error('Error loading week data:', error);
+      if (!isOnline) {
+        // Load from offline storage
+        const offlineEvents = await offlineStorage.getEvents(currentYear, currentWeek);
+        const offlineTasks = await offlineStorage.getTasks(currentYear, currentWeek);
+        setEvents(offlineEvents);
+        setTasks(offlineTasks);
+      }
+    }
+  };
+
+  const loadMonthData = async () => {
+    try {
+      const planningRes = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
+      setEvents(planningRes.data.events || []);
+      setTasks(planningRes.data.tasks || []);
+    } catch (error) {
+      console.error('Error loading month data:', error);
+    }
+  };
+
+  const loadClients = async () => {
+    try {
+      const response = await apiCall('/clients');
+      setClients(response.data);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
+
+  const loadTeam = async () => {
+    try {
+      const response = await apiCall('/teams/my');
+      setTeam(response.data);
+    } catch (error) {
+      console.error('Error loading team:', error);
     }
   };
 
   useEffect(() => {
-    loadWeekData();
-  }, [currentWeek, currentYear]);
+    if (view === 'week') {
+      loadWeekData();
+    } else {
+      loadMonthData();
+    }
+  }, [currentWeek, currentYear, currentMonth, view, viewingMember]);
+
+  useEffect(() => {
+    loadClients();
+    loadTeam();
+  }, []);
 
   const handleCreateEvent = async (eventData) => {
     try {
-      await apiCall('/planning/events', {
+      const response = await apiCall('/planning/events', {
         method: 'POST',
         data: eventData
       });
+      
+      // Save to offline storage
+      if (!isOnline) {
+        await offlineStorage.saveEvent(response.data);
+      }
+      
+      // Add client if new
+      if (eventData.client && !clients.includes(eventData.client)) {
+        await apiCall('/clients', {
+          method: 'POST',
+          data: eventData.client
+        });
+        setClients([...clients, eventData.client]);
+      }
+      
       setEventModal({ isOpen: false, event: null });
-      loadWeekData();
+      view === 'week' ? loadWeekData() : loadMonthData();
     } catch (error) {
       console.error('Error creating event:', error);
     }
@@ -625,8 +1142,18 @@ const PlanningScreen = ({ user, sessionToken }) => {
         method: 'PUT',
         data: eventData
       });
+      
+      // Add client if new
+      if (eventData.client && !clients.includes(eventData.client)) {
+        await apiCall('/clients', {
+          method: 'POST',
+          data: eventData.client
+        });
+        setClients([...clients, eventData.client]);
+      }
+      
       setEventModal({ isOpen: false, event: null });
-      loadWeekData();
+      view === 'week' ? loadWeekData() : loadMonthData();
     } catch (error) {
       console.error('Error updating event:', error);
     }
@@ -638,7 +1165,7 @@ const PlanningScreen = ({ user, sessionToken }) => {
         method: 'DELETE'
       });
       setEventModal({ isOpen: false, event: null });
-      loadWeekData();
+      view === 'week' ? loadWeekData() : loadMonthData();
     } catch (error) {
       console.error('Error deleting event:', error);
     }
@@ -647,9 +1174,9 @@ const PlanningScreen = ({ user, sessionToken }) => {
   const handleDeleteAllWeekEvents = async () => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?")) {
       try {
-        await Promise.all(
-          events.map(event => apiCall(`/planning/events/${event.id}`, { method: 'DELETE' }))
-        );
+        await apiCall(`/planning/events/week/${currentYear}/${currentWeek}`, {
+          method: 'DELETE'
+        });
         loadWeekData();
       } catch (error) {
         console.error('Error deleting all events:', error);
@@ -659,14 +1186,45 @@ const PlanningScreen = ({ user, sessionToken }) => {
 
   const handleCreateTask = async (taskData) => {
     try {
-      await apiCall('/planning/tasks', {
+      const response = await apiCall('/planning/tasks', {
         method: 'POST',
         data: taskData
       });
-      setTaskModal({ isOpen: false });
-      loadWeekData();
+      
+      // Save to offline storage
+      if (!isOnline) {
+        await offlineStorage.saveTask(response.data);
+      }
+      
+      setTaskModal({ isOpen: false, task: null });
+      view === 'week' ? loadWeekData() : loadMonthData();
     } catch (error) {
       console.error('Error creating task:', error);
+    }
+  };
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      await apiCall(`/planning/tasks/${taskModal.task.id}`, {
+        method: 'PUT',
+        data: taskData
+      });
+      setTaskModal({ isOpen: false, task: null });
+      view === 'week' ? loadWeekData() : loadMonthData();
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await apiCall(`/planning/tasks/${taskId}`, {
+        method: 'DELETE'
+      });
+      setTaskModal({ isOpen: false, task: null });
+      view === 'week' ? loadWeekData() : loadMonthData();
+    } catch (error) {
+      console.error('Error deleting task:', error);
     }
   };
 
@@ -709,14 +1267,31 @@ const PlanningScreen = ({ user, sessionToken }) => {
   };
 
   const handleEventClick = (event) => {
-    setEventModal({ isOpen: true, event });
+    if (!viewingMember) { // Only allow editing own events
+      setEventModal({ isOpen: true, event });
+    }
+  };
+
+  const handleTaskClick = (task) => {
+    if (!viewingMember) { // Only allow editing own tasks
+      setTaskModal({ isOpen: true, task });
+    }
   };
 
   const handleDayClick = (date) => {
     // Switch to week view for the selected date
-    const week = getCurrentWeek(); // Simplified
-    setCurrentWeek(week);
+    const targetWeek = getCurrentWeek(); // Simplified - should calculate proper week for date
+    setCurrentWeek(targetWeek);
     setView('week');
+  };
+
+  const switchToMemberView = (member) => {
+    setViewingMember(member);
+    setView('week'); // Switch to week view when viewing member
+  };
+
+  const switchToPersonalView = () => {
+    setViewingMember(null);
   };
 
   return (
@@ -727,42 +1302,98 @@ const PlanningScreen = ({ user, sessionToken }) => {
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-bold text-gray-800">📅 Fleemy</h1>
+              
+              {/* Online/Offline indicator */}
+              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {isOnline ? '🟢 En ligne' : '🔴 Hors ligne'}
+              </div>
+              
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setView('week')}
-                  className={`px-3 py-1 rounded-lg ${view === 'week' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
+                  className={`px-3 py-1 rounded-lg transition-all ${view === 'week' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                   Semaine
                 </button>
                 <button
                   onClick={() => setView('month')}
-                  className={`px-3 py-1 rounded-lg ${view === 'month' ? 'bg-blue-100 text-blue-700' : 'text-gray-600'}`}
+                  className={`px-3 py-1 rounded-lg transition-all ${view === 'month' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
                 >
                   Mois
                 </button>
               </div>
             </div>
+            
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">Bonjour, {user.name}</span>
-              <button
-                onClick={() => setTaskModal({ isOpen: true })}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg"
-              >
-                + Tâche
-              </button>
-              <button
-                onClick={() => setEventModal({ isOpen: true, event: null })}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-              >
-                + Événement
-              </button>
-              {view === 'week' && events.length > 0 && (
-                <button
-                  onClick={handleDeleteAllWeekEvents}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-                >
-                  Vider semaine
-                </button>
+              {/* Team section */}
+              {team && (
+                <div className="flex items-center space-x-2">
+                  <div className="text-sm text-gray-600">Équipe: {team.name}</div>
+                  <div className="flex -space-x-1">
+                    {team.members.slice(0, 3).map((member) => (
+                      <button
+                        key={member.uid}
+                        onClick={() => switchToMemberView(member)}
+                        className={`w-8 h-8 rounded-full border-2 border-white bg-blue-500 text-white text-xs font-medium hover:z-10 transition-all ${
+                          viewingMember?.uid === member.uid ? 'ring-2 ring-blue-400' : ''
+                        }`}
+                        title={member.name}
+                      >
+                        {member.name.charAt(0).toUpperCase()}
+                      </button>
+                    ))}
+                    {team.members.length > 3 && (
+                      <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-400 text-white text-xs font-medium flex items-center justify-center">
+                        +{team.members.length - 3}
+                      </div>
+                    )}
+                  </div>
+                  {viewingMember && (
+                    <button
+                      onClick={switchToPersonalView}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      Mon planning
+                    </button>
+                  )}
+                </div>
+              )}
+              
+              <span className="text-sm text-gray-600">
+                Bonjour, {viewingMember ? `Planning de ${viewingMember.name}` : user.name}
+              </span>
+              
+              {!viewingMember && (
+                <>
+                  <button
+                    onClick={() => setTeamModal({ isOpen: true })}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all"
+                  >
+                    {team ? 'Gérer équipe' : '+ Équipe'}
+                  </button>
+                  <button
+                    onClick={() => setTaskModal({ isOpen: true, task: null })}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-all"
+                  >
+                    + Tâche
+                  </button>
+                  <button
+                    onClick={() => setEventModal({ isOpen: true, event: null })}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all"
+                  >
+                    + Événement
+                  </button>
+                  {view === 'week' && events.length > 0 && (
+                    <button
+                      onClick={handleDeleteAllWeekEvents}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-all"
+                    >
+                      Vider semaine
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -775,7 +1406,7 @@ const PlanningScreen = ({ user, sessionToken }) => {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
-              className="p-2 hover:bg-gray-200 rounded-lg"
+              className="p-2 hover:bg-gray-200 rounded-lg transition-all"
             >
               ◀
             </button>
@@ -787,43 +1418,49 @@ const PlanningScreen = ({ user, sessionToken }) => {
             </h2>
             <button
               onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
-              className="p-2 hover:bg-gray-200 rounded-lg"
+              className="p-2 hover:bg-gray-200 rounded-lg transition-all"
             >
               ▶
             </button>
           </div>
         </div>
 
-        {/* Earnings Summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-green-100 p-4 rounded-lg">
-            <div className="text-green-800 font-semibold">Payé</div>
-            <div className="text-2xl font-bold text-green-900">{earnings.paid}€</div>
+        {/* Earnings Summary - Only show for personal view */}
+        {!viewingMember && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div className="bg-green-100 p-4 rounded-lg border border-green-200">
+              <div className="text-green-800 font-semibold text-sm">Payé</div>
+              <div className="text-2xl font-bold text-green-900">{earnings.paid.toFixed(2)}€</div>
+            </div>
+            <div className="bg-red-100 p-4 rounded-lg border border-red-200">
+              <div className="text-red-800 font-semibold text-sm">Non payé</div>
+              <div className="text-2xl font-bold text-red-900">{earnings.unpaid.toFixed(2)}€</div>
+            </div>
+            <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-200">
+              <div className="text-yellow-800 font-semibold text-sm">En attente</div>
+              <div className="text-2xl font-bold text-yellow-900">{earnings.pending.toFixed(2)}€</div>
+            </div>
+            <div className="bg-blue-100 p-4 rounded-lg border border-blue-200">
+              <div className="text-blue-800 font-semibold text-sm">Tâches</div>
+              <div className="text-2xl font-bold text-blue-900">{earnings.tasks_total.toFixed(2)}€</div>
+            </div>
+            <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
+              <div className="text-gray-800 font-semibold text-sm">Total</div>
+              <div className="text-2xl font-bold text-gray-900">{earnings.total.toFixed(2)}€</div>
+            </div>
           </div>
-          <div className="bg-red-100 p-4 rounded-lg">
-            <div className="text-red-800 font-semibold">Non payé</div>
-            <div className="text-2xl font-bold text-red-900">{earnings.unpaid}€</div>
-          </div>
-          <div className="bg-yellow-100 p-4 rounded-lg">
-            <div className="text-yellow-800 font-semibold">En attente</div>
-            <div className="text-2xl font-bold text-yellow-900">{earnings.pending}€</div>
-          </div>
-          <div className="bg-blue-100 p-4 rounded-lg">
-            <div className="text-blue-800 font-semibold">Tâches</div>
-            <div className="text-2xl font-bold text-blue-900">{earnings.tasks_total}€</div>
-          </div>
-        </div>
+        )}
 
         {/* Calendar Views */}
         {view === 'week' ? (
           /* Weekly Calendar */
           <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="grid grid-cols-8 border-b">
-              <div className="p-4 bg-gray-50 font-medium">Heure</div>
+            <div className="grid grid-cols-6 border-b">
+              <div className="p-4 bg-gray-50 font-medium text-sm">Heure</div>
               {weekDays.map((date, index) => (
                 <div key={index} className="p-4 bg-gray-50 text-center">
-                  <div className="font-medium">{dayNames[index]}</div>
-                  <div className="text-sm text-gray-600">
+                  <div className="font-medium text-sm">{dayNames[index]}</div>
+                  <div className="text-xs text-gray-600">
                     {date.getDate()}/{date.getMonth() + 1}
                   </div>
                 </div>
@@ -832,8 +1469,10 @@ const PlanningScreen = ({ user, sessionToken }) => {
 
             {/* Time slots */}
             {timeSlots.slice(0, -1).map((time, timeIndex) => (
-              <div key={time} className="grid grid-cols-8 border-b">
-                <div className="p-4 bg-gray-50 text-sm font-medium">{time}</div>
+              <div key={time} className="grid grid-cols-6 border-b hover:bg-gray-50">
+                <div className="p-4 bg-gray-50 text-sm font-medium border-r">
+                  {time}
+                </div>
                 {dayKeys.map((dayKey, dayIndex) => {
                   const dayEvents = getEventsForDay(dayKey);
                   const dayTasks = getTasksForDay(dayKey);
@@ -842,11 +1481,13 @@ const PlanningScreen = ({ user, sessionToken }) => {
                     task.time_slots && task.time_slots.some(slot => slot.day === dayKey && slot.start === time)
                   );
 
+                  const hasOverlap = slotEvents.length > 0 && slotTasks.length > 0;
+
                   return (
                     <div 
                       key={dayKey}
-                      className="p-2 min-h-16 border-r hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setEventModal({ 
+                      className="p-2 min-h-16 border-r cursor-pointer transition-all hover:bg-blue-50"
+                      onClick={() => !viewingMember && setEventModal({ 
                         isOpen: true, 
                         event: { day: dayKey, start_time: time, end_time: timeSlots[timeIndex + 1] }
                       })}
@@ -858,23 +1499,30 @@ const PlanningScreen = ({ user, sessionToken }) => {
                             e.stopPropagation();
                             handleEventClick(event);
                           }}
-                          className={`text-xs p-1 mb-1 rounded border cursor-pointer hover:opacity-80 ${statusColors[event.status]}`}
+                          className={`text-xs p-2 mb-1 rounded border cursor-pointer transition-all hover:shadow-md ${statusColors[event.status]}`}
                         >
-                          <div className="font-medium">{event.client}</div>
-                          <div>{event.description}</div>
+                          <div className="font-semibold">{event.client}</div>
+                          <div className="truncate">{event.description}</div>
                         </div>
                       ))}
+                      
                       {slotTasks.map(task => (
                         <div
                           key={task.id}
-                          className="text-xs p-1 mb-1 rounded border"
-                          style={{ backgroundColor: task.color, opacity: 0.8 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTaskClick(task);
+                          }}
+                          className={`text-xs p-2 mb-1 rounded border cursor-pointer transition-all hover:shadow-md ${
+                            hasOverlap ? 'opacity-60' : ''
+                          }`}
+                          style={{ backgroundColor: task.color }}
                         >
                           <div className="flex items-center">
-                            <span className="mr-1">{task.icon}</span>
-                            <span className="font-medium">{task.name}</span>
+                            <span className="mr-1 text-sm">{hasOverlap ? task.icon : task.icon}</span>
+                            <span className="font-semibold truncate">{task.name}</span>
                           </div>
-                          <div>{task.price}€</div>
+                          <div className="font-medium">{task.price.toFixed(2)}€</div>
                         </div>
                       ))}
                     </div>
@@ -889,6 +1537,7 @@ const PlanningScreen = ({ user, sessionToken }) => {
             year={currentYear}
             month={currentMonth}
             events={events}
+            tasks={tasks}
             onDayClick={handleDayClick}
             onEventClick={handleEventClick}
           />
@@ -902,11 +1551,20 @@ const PlanningScreen = ({ user, sessionToken }) => {
         onSave={eventModal.event && eventModal.event.id ? handleUpdateEvent : handleCreateEvent}
         onDelete={handleDeleteEvent}
         event={eventModal.event}
+        clients={clients}
       />
+      
       <TaskModal
         isOpen={taskModal.isOpen}
-        onClose={() => setTaskModal({ isOpen: false })}
-        onSave={handleCreateTask}
+        onClose={() => setTaskModal({ isOpen: false, task: null })}
+        onSave={taskModal.task && taskModal.task.id ? handleUpdateTask : handleCreateTask}
+        onDelete={handleDeleteTask}
+        task={taskModal.task}
+      />
+      
+      <TeamModal
+        isOpen={teamModal.isOpen}
+        onClose={() => setTeamModal({ isOpen: false })}
       />
     </div>
   );
@@ -959,7 +1617,8 @@ function App() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">📅</div>
-          <div className="text-xl">Chargement...</div>
+          <div className="text-xl font-semibold text-gray-700">Chargement de Fleemy...</div>
+          <div className="text-sm text-gray-500 mt-2">Votre outil de planning professionnel</div>
         </div>
       </div>
     );
