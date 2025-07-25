@@ -566,7 +566,7 @@ async def toggle_todo(todo_id: str, current_user: User = Depends(get_current_use
         {"$set": {"completed": not todo["completed"], "updated_at": datetime.utcnow()}}
     )
     
-    updated_todo = await db.todos.find_one({"id": todo_id})
+    updated_todo = await db.todos.find_one({"id": todo_id}, {"_id": 0})
     return updated_todo
 
 @api_router.delete("/todos/{todo_id}")
