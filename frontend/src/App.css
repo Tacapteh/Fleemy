@@ -709,20 +709,36 @@ button:active {
   display: flex;
   flex-direction: column;
   padding-right: 8px;
+  position: relative;
 }
 
 .planning-hour-cell {
   height: 96px;
   min-height: 96px;
-  padding: 8px;
+  padding: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   font-size: 12px;
   color: #6b7280;
   font-weight: 500;
   border: none;
   background: #ffffff;
+  position: relative;
+  padding-top: -8px; /* Align with line separator */
+}
+
+.planning-hour-cell:first-child {
+  padding-top: 0; /* First hour (9h) aligns with top of grid */
+}
+
+.planning-hour-cell:last-child {
+  height: 0; /* Last hour (18h) has no height, just marks the end */
+  min-height: 0;
+  padding-top: 0;
+  position: absolute;
+  bottom: 0;
+  right: 8px;
 }
 
 .planning-grid-body {
