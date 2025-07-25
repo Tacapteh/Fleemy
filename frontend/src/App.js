@@ -30,12 +30,50 @@ const getWeekDays = (year, week) => {
   return days;
 };
 
+const getMonthDays = (year, month) => {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startDay = firstDay.getDay();
+  
+  const days = [];
+  
+  // Previous month days
+  const prevMonth = new Date(year, month - 1, 0);
+  for (let i = startDay - 1; i >= 0; i--) {
+    days.push({
+      date: new Date(year, month - 1, prevMonth.getDate() - i),
+      isCurrentMonth: false
+    });
+  }
+  
+  // Current month days
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push({
+      date: new Date(year, month, i),
+      isCurrentMonth: true
+    });
+  }
+  
+  // Next month days to fill the grid
+  const remaining = 42 - days.length;
+  for (let i = 1; i <= remaining; i++) {
+    days.push({
+      date: new Date(year, month + 1, i),
+      isCurrentMonth: false
+    });
+  }
+  
+  return days;
+};
+
 const timeSlots = [
   "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"
 ];
 
 const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
 const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
 const statusColors = {
   paid: "bg-green-100 border-green-300 text-green-800",
@@ -46,13 +84,30 @@ const statusColors = {
 
 const pastelloColors = [
   "#FFB3E6", "#FFE5B3", "#B3FFB3", "#B3E5FF", "#E5B3FF", 
-  "#FFB3B3", "#B3FFFF", "#FFE5FF", "#E5FFB3", "#B3B3FF"
+  "#FFB3B3", "#B3FFFF", "#FFE5FF", "#E5FFB3", "#B3B3FF",
+  "#FFD4E5", "#E5CCFF", "#CCFFE5", "#CCE5FF", "#FFCCDD"
 ];
 
-const icons = [
-  "💼", "📝", "📞", "💻", "📊", "🎯", "📈", "⚙️", "🔧", "📅",
-  "✅", "📋", "💡", "🚀", "⭐", "🎨", "📖", "🔍", "💰", "🎵"
-];
+// 50 icônes par catégories
+const iconCategories = {
+  "Travail": ["💼", "📊", "📈", "📉", "💻", "⌨️", "🖥️", "📱", "📞", "☎️"],
+  "Documents": ["📝", "📋", "📄", "📑", "📊", "📈", "📉", "🗂️", "📁", "🗃️"],
+  "Communication": ["📧", "💬", "📞", "☎️", "📱", "📲", "💌", "📩", "📨", "📮"],
+  "Outils": ["🔧", "⚙️", "🔨", "🪛", "⚡", "🔋", "🔌", "💡", "🔍", "🔎"],
+  "Général": ["⭐", "🎯", "🚀", "💰", "💎", "🎨", "🎵", "🎪", "🎭", "🎨"]
+};
+
+const allIcons = Object.values(iconCategories).flat();
+
+// Load clients from localStorage
+const loadClients = () => {
+  const saved = localStorage.getItem('fleemy_clients');
+  return saved ? JSON.parse(saved) : [];
+};
+
+const saveClients = (clients) => {
+  localStorage.setItem('fleemy_clients', JSON.stringify(clients));
+};
 
 // Authentication component
 const AuthScreen = ({ onLogin }) => {
@@ -87,8 +142,64 @@ const AuthScreen = ({ onLogin }) => {
   );
 };
 
+// Icon Selection Modal
+const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
+  const [activeCategory, setActiveCategory] = useState("Travail");
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-lg w-full mx-4">
+        <h2 className="text-xl font-bold mb-4">Choisir une icône</h2>
+        
+        {/* Categories */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {Object.keys(iconCategories).map(category => (
+            <button
+              key={category}
+              onClick={() => setActiveCategory(category)}
+              className={`px-3 py-1 rounded-lg text-sm ${
+                activeCategory === category 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {category}
+            </button>
+          ))}
+        </div>
+        
+        {/* Icons Grid */}
+        <div className="grid grid-cols-10 gap-2 mb-6 max-h-48 overflow-y-auto">
+          {iconCategories[activeCategory].map(icon => (
+            <button
+              key={icon}
+              onClick={() => onSelect(icon)}
+              className={`p-2 rounded-lg border text-lg hover:bg-gray-50 ${
+                selectedIcon === icon ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
+              }`}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+        
+        <div className="flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Event Modal
-const EventModal = ({ isOpen, onClose, onSave, event = null }) => {
+const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null }) => {
   const [formData, setFormData] = useState({
     description: "",
     client: "",
@@ -97,6 +208,9 @@ const EventModal = ({ isOpen, onClose, onSave, event = null }) => {
     end_time: "10:00",
     status: "pending"
   });
+  const [clients, setClients] = useState(loadClients());
+  const [filteredClients, setFilteredClients] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (event) {
@@ -113,9 +227,42 @@ const EventModal = ({ isOpen, onClose, onSave, event = null }) => {
     }
   }, [event, isOpen]);
 
+  const handleClientChange = (value) => {
+    setFormData({...formData, client: value});
+    
+    if (value.length > 0) {
+      const filtered = clients.filter(client => 
+        client.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredClients(filtered);
+      setShowSuggestions(filtered.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const selectClient = (client) => {
+    setFormData({...formData, client});
+    setShowSuggestions(false);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Add client to list if new
+    if (formData.client && !clients.includes(formData.client)) {
+      const newClients = [...clients, formData.client];
+      setClients(newClients);
+      saveClients(newClients);
+    }
+    
     onSave(formData);
+  };
+
+  const handleDelete = () => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer cet événement ?")) {
+      onDelete(event.id);
+    }
   };
 
   if (!isOpen) return null;
@@ -137,15 +284,29 @@ const EventModal = ({ isOpen, onClose, onSave, event = null }) => {
               required
             />
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
             <input
               type="text"
               value={formData.client}
-              onChange={(e) => setFormData({...formData, client: e.target.value})}
+              onChange={(e) => handleClientChange(e.target.value)}
+              onFocus={() => formData.client && setShowSuggestions(filteredClients.length > 0)}
               className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             />
+            {showSuggestions && (
+              <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-32 overflow-y-auto">
+                {filteredClients.map((client, index) => (
+                  <div
+                    key={index}
+                    onClick={() => selectClient(client)}
+                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                  >
+                    {client}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Jour</label>
@@ -206,6 +367,15 @@ const EventModal = ({ isOpen, onClose, onSave, event = null }) => {
             >
               Annuler
             </button>
+            {event && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Supprimer
+              </button>
+            )}
             <button
               type="submit"
               className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -225,87 +395,169 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
     name: "",
     price: 0,
     color: pastelloColors[0],
-    icon: icons[0],
+    icon: allIcons[0],
     time_slots: []
   });
+  const [iconModalOpen, setIconModalOpen] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave(formData);
   };
 
+  const handleIconSelect = (icon) => {
+    setFormData({...formData, icon});
+    setIconModalOpen(false);
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold mb-4">Nouvelle tâche hebdomadaire</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€)</label>
-            <input
-              type="number"
-              value={formData.price}
-              onChange={(e) => setFormData({...formData, price: parseFloat(e.target.value) || 0})}
-              className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
-            <div className="flex flex-wrap gap-2">
-              {pastelloColors.map(color => (
-                <button
-                  key={color}
-                  type="button"
-                  onClick={() => setFormData({...formData, color})}
-                  className={`w-8 h-8 rounded-full border-2 ${formData.color === color ? 'border-gray-800' : 'border-gray-300'}`}
-                  style={{ backgroundColor: color }}
-                />
-              ))}
+    <>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
+          <h2 className="text-xl font-bold mb-4">Nouvelle tâche hebdomadaire</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Icône</label>
-            <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-              {icons.map(icon => (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€)</label>
+              <input
+                type="number"
+                value={formData.price}
+                onChange={(e) => setFormData({...formData, price: parseFloat(e.target.value) || 0})}
+                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
+              <div className="flex flex-wrap gap-2">
+                {pastelloColors.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setFormData({...formData, color})}
+                    className={`w-8 h-8 rounded-full border-2 ${formData.color === color ? 'border-gray-800' : 'border-gray-300'}`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Icône</label>
+              <div className="flex items-center gap-2">
                 <button
-                  key={icon}
                   type="button"
-                  onClick={() => setFormData({...formData, icon})}
-                  className={`p-2 rounded-lg border ${formData.icon === icon ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}`}
+                  onClick={() => setIconModalOpen(true)}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-2xl"
                 >
-                  {icon}
+                  {formData.icon}
                 </button>
-              ))}
+                <span className="text-sm text-gray-600">Cliquer pour changer</span>
+              </div>
             </div>
+            <div className="flex gap-4 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Créer
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <IconModal
+        isOpen={iconModalOpen}
+        onClose={() => setIconModalOpen(false)}
+        onSelect={handleIconSelect}
+        selectedIcon={formData.icon}
+      />
+    </>
+  );
+};
+
+// Month View Component
+const MonthView = ({ year, month, events, onDayClick, onEventClick }) => {
+  const monthDays = getMonthDays(year, month);
+  
+  const getEventsForDate = (date) => {
+    const dayKey = dayKeys[date.getDay() === 0 ? 6 : date.getDay() - 1];
+    const weekNumber = getCurrentWeek(); // Simplified, should calculate proper week for date
+    return events.filter(event => {
+      const eventDate = new Date(year, month, date.getDate());
+      return event.day === dayKey && Math.abs(eventDate - date) < 24 * 60 * 60 * 1000;
+    });
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Month Header */}
+      <div className="grid grid-cols-7 border-b bg-gray-50">
+        {dayNames.map(day => (
+          <div key={day} className="p-4 text-center font-medium text-sm">
+            {day.slice(0, 3)}
           </div>
-          <div className="flex gap-4 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
+        ))}
+      </div>
+      
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7">
+        {monthDays.map((day, index) => {
+          const dayEvents = getEventsForDate(day.date);
+          const visibleEvents = dayEvents.slice(0, 2);
+          const remainingCount = dayEvents.length - visibleEvents.length;
+          
+          return (
+            <div
+              key={index}
+              onClick={() => onDayClick(day.date)}
+              className={`min-h-24 p-2 border-b border-r cursor-pointer hover:bg-gray-50 ${
+                !day.isCurrentMonth ? 'bg-gray-100 text-gray-400' : ''
+              }`}
             >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Créer
-            </button>
-          </div>
-        </form>
+              <div className="font-medium text-sm mb-1">
+                {day.date.getDate()}
+              </div>
+              
+              {visibleEvents.map(event => (
+                <div
+                  key={event.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEventClick(event);
+                  }}
+                  className={`text-xs p-1 mb-1 rounded cursor-pointer ${statusColors[event.status]}`}
+                >
+                  {event.client}
+                </div>
+              ))}
+              
+              {remainingCount > 0 && (
+                <div className="text-xs text-gray-500 font-medium">
+                  +{remainingCount} autres
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -315,6 +567,7 @@ const TaskModal = ({ isOpen, onClose, onSave }) => {
 const PlanningScreen = ({ user, sessionToken }) => {
   const [currentWeek, setCurrentWeek] = useState(getCurrentWeek());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [earnings, setEarnings] = useState({ paid: 0, unpaid: 0, pending: 0, tasks_total: 0 });
@@ -366,6 +619,44 @@ const PlanningScreen = ({ user, sessionToken }) => {
     }
   };
 
+  const handleUpdateEvent = async (eventData) => {
+    try {
+      await apiCall(`/planning/events/${eventModal.event.id}`, {
+        method: 'PUT',
+        data: eventData
+      });
+      setEventModal({ isOpen: false, event: null });
+      loadWeekData();
+    } catch (error) {
+      console.error('Error updating event:', error);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId) => {
+    try {
+      await apiCall(`/planning/events/${eventId}`, {
+        method: 'DELETE'
+      });
+      setEventModal({ isOpen: false, event: null });
+      loadWeekData();
+    } catch (error) {
+      console.error('Error deleting event:', error);
+    }
+  };
+
+  const handleDeleteAllWeekEvents = async () => {
+    if (window.confirm("Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?")) {
+      try {
+        await Promise.all(
+          events.map(event => apiCall(`/planning/events/${event.id}`, { method: 'DELETE' }))
+        );
+        loadWeekData();
+      } catch (error) {
+        console.error('Error deleting all events:', error);
+      }
+    }
+  };
+
   const handleCreateTask = async (taskData) => {
     try {
       await apiCall('/planning/tasks', {
@@ -392,6 +683,19 @@ const PlanningScreen = ({ user, sessionToken }) => {
     }
   };
 
+  const navigateMonth = (direction) => {
+    const newMonth = currentMonth + direction;
+    if (newMonth < 0) {
+      setCurrentMonth(11);
+      setCurrentYear(currentYear - 1);
+    } else if (newMonth > 11) {
+      setCurrentMonth(0);
+      setCurrentYear(currentYear + 1);
+    } else {
+      setCurrentMonth(newMonth);
+    }
+  };
+
   const weekDays = getWeekDays(currentYear, currentWeek);
 
   const getEventsForDay = (dayKey) => {
@@ -402,6 +706,17 @@ const PlanningScreen = ({ user, sessionToken }) => {
     return tasks.filter(task => 
       task.time_slots && task.time_slots.some(slot => slot.day === dayKey)
     );
+  };
+
+  const handleEventClick = (event) => {
+    setEventModal({ isOpen: true, event });
+  };
+
+  const handleDayClick = (date) => {
+    // Switch to week view for the selected date
+    const week = getCurrentWeek(); // Simplified
+    setCurrentWeek(week);
+    setView('week');
   };
 
   return (
@@ -441,26 +756,37 @@ const PlanningScreen = ({ user, sessionToken }) => {
               >
                 + Événement
               </button>
+              {view === 'week' && events.length > 0 && (
+                <button
+                  onClick={handleDeleteAllWeekEvents}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                >
+                  Vider semaine
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Week Navigation */}
+        {/* Navigation */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => navigateWeek(-1)}
+              onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
               className="p-2 hover:bg-gray-200 rounded-lg"
             >
               ◀
             </button>
             <h2 className="text-xl font-semibold">
-              Semaine {currentWeek}, {currentYear}
+              {view === 'week' 
+                ? `Semaine ${currentWeek}, ${currentYear}`
+                : `${monthNames[currentMonth]} ${currentYear}`
+              }
             </h2>
             <button
-              onClick={() => navigateWeek(1)}
+              onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
               className="p-2 hover:bg-gray-200 rounded-lg"
             >
               ▶
@@ -488,76 +814,93 @@ const PlanningScreen = ({ user, sessionToken }) => {
           </div>
         </div>
 
-        {/* Weekly Calendar */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="grid grid-cols-8 border-b">
-            <div className="p-4 bg-gray-50 font-medium">Heure</div>
-            {weekDays.map((date, index) => (
-              <div key={index} className="p-4 bg-gray-50 text-center">
-                <div className="font-medium">{dayNames[index]}</div>
-                <div className="text-sm text-gray-600">
-                  {date.getDate()}/{date.getMonth() + 1}
+        {/* Calendar Views */}
+        {view === 'week' ? (
+          /* Weekly Calendar */
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="grid grid-cols-8 border-b">
+              <div className="p-4 bg-gray-50 font-medium">Heure</div>
+              {weekDays.map((date, index) => (
+                <div key={index} className="p-4 bg-gray-50 text-center">
+                  <div className="font-medium">{dayNames[index]}</div>
+                  <div className="text-sm text-gray-600">
+                    {date.getDate()}/{date.getMonth() + 1}
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Time slots */}
+            {timeSlots.slice(0, -1).map((time, timeIndex) => (
+              <div key={time} className="grid grid-cols-8 border-b">
+                <div className="p-4 bg-gray-50 text-sm font-medium">{time}</div>
+                {dayKeys.map((dayKey, dayIndex) => {
+                  const dayEvents = getEventsForDay(dayKey);
+                  const dayTasks = getTasksForDay(dayKey);
+                  const slotEvents = dayEvents.filter(event => event.start_time === time);
+                  const slotTasks = dayTasks.filter(task => 
+                    task.time_slots && task.time_slots.some(slot => slot.day === dayKey && slot.start === time)
+                  );
+
+                  return (
+                    <div 
+                      key={dayKey}
+                      className="p-2 min-h-16 border-r hover:bg-gray-50 cursor-pointer"
+                      onClick={() => setEventModal({ 
+                        isOpen: true, 
+                        event: { day: dayKey, start_time: time, end_time: timeSlots[timeIndex + 1] }
+                      })}
+                    >
+                      {slotEvents.map(event => (
+                        <div
+                          key={event.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEventClick(event);
+                          }}
+                          className={`text-xs p-1 mb-1 rounded border cursor-pointer hover:opacity-80 ${statusColors[event.status]}`}
+                        >
+                          <div className="font-medium">{event.client}</div>
+                          <div>{event.description}</div>
+                        </div>
+                      ))}
+                      {slotTasks.map(task => (
+                        <div
+                          key={task.id}
+                          className="text-xs p-1 mb-1 rounded border"
+                          style={{ backgroundColor: task.color, opacity: 0.8 }}
+                        >
+                          <div className="flex items-center">
+                            <span className="mr-1">{task.icon}</span>
+                            <span className="font-medium">{task.name}</span>
+                          </div>
+                          <div>{task.price}€</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>
-
-          {/* Time slots */}
-          {timeSlots.slice(0, -1).map((time, timeIndex) => (
-            <div key={time} className="grid grid-cols-8 border-b">
-              <div className="p-4 bg-gray-50 text-sm font-medium">{time}</div>
-              {dayKeys.map((dayKey, dayIndex) => {
-                const dayEvents = getEventsForDay(dayKey);
-                const dayTasks = getTasksForDay(dayKey);
-                const slotEvents = dayEvents.filter(event => event.start_time === time);
-                const slotTasks = dayTasks.filter(task => 
-                  task.time_slots && task.time_slots.some(slot => slot.day === dayKey && slot.start === time)
-                );
-
-                return (
-                  <div 
-                    key={dayKey}
-                    className="p-2 min-h-16 border-r hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setEventModal({ 
-                      isOpen: true, 
-                      event: { day: dayKey, start_time: time, end_time: timeSlots[timeIndex + 1] }
-                    })}
-                  >
-                    {slotEvents.map(event => (
-                      <div
-                        key={event.id}
-                        className={`text-xs p-1 mb-1 rounded border ${statusColors[event.status]}`}
-                      >
-                        <div className="font-medium">{event.client}</div>
-                        <div>{event.description}</div>
-                      </div>
-                    ))}
-                    {slotTasks.map(task => (
-                      <div
-                        key={task.id}
-                        className="text-xs p-1 mb-1 rounded border"
-                        style={{ backgroundColor: task.color, opacity: 0.8 }}
-                      >
-                        <div className="flex items-center">
-                          <span className="mr-1">{task.icon}</span>
-                          <span className="font-medium">{task.name}</span>
-                        </div>
-                        <div>{task.price}€</div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
+        ) : (
+          /* Monthly Calendar */
+          <MonthView
+            year={currentYear}
+            month={currentMonth}
+            events={events}
+            onDayClick={handleDayClick}
+            onEventClick={handleEventClick}
+          />
+        )}
       </div>
 
       {/* Modals */}
       <EventModal
         isOpen={eventModal.isOpen}
         onClose={() => setEventModal({ isOpen: false, event: null })}
-        onSave={handleCreateEvent}
+        onSave={eventModal.event && eventModal.event.id ? handleUpdateEvent : handleCreateEvent}
+        onDelete={handleDeleteEvent}
         event={eventModal.event}
       />
       <TaskModal
