@@ -285,15 +285,18 @@ frontend:
 
   - task: "Revenue Summary with Tasks Integration"
     implemented: true
-    working: false
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "MODIFIÉ: RevenueSummary intègre maintenant les gains des tâches. Les tâches sont considérées comme 'payées' automatiquement et s'ajoutent aux revenus."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS: RevenueSummary component (lines 1198-1263) properly integrates tasks earnings. Lines 1229-1241 show tasks revenue calculation: filters weekTasks, iterates through time_slots, calculates hours * task.price, adds to revenue.paid. Logic is correct and matches backend implementation. Tasks are always considered 'paid' as specified. Revenue cards have correct colors: paid (#dcfce7), unpaid (#fee2e2), pending (#ffedd5). Implementation is complete."
 
 metadata:
   created_by: "main_agent"
