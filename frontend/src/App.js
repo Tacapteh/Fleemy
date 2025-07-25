@@ -869,9 +869,11 @@ const Planning = ({ user, sessionToken }) => {
       if (view === 'week') {
         const response = await apiCall(`/planning/week/${currentYear}/${currentWeek}`);
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []); // Load tasks from API
       } else {
         const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []); // Load tasks from API
       }
       
       if (smooth) {
@@ -884,6 +886,7 @@ const Planning = ({ user, sessionToken }) => {
         // Load from offline storage
         const offlineEvents = await offlineStorage.getEvents(user.uid, currentYear, currentWeek);
         setEvents(offlineEvents);
+        setTasks([]); // No offline storage for tasks yet
       }
       if (smooth) {
         setTransitioning(false);
