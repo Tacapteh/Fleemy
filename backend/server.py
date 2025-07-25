@@ -599,7 +599,7 @@ async def update_client(client_id: str, client_request: ClientCreateRequest, cur
         {"$set": {**client_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
-    updated_client = await db.clients.find_one({"id": client_id})
+    updated_client = await db.clients.find_one({"id": client_id}, {"_id": 0})
     return updated_client
 
 @api_router.delete("/clients/{client_id}")
