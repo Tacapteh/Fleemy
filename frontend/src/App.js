@@ -953,7 +953,7 @@ const Planning = ({ user, sessionToken }) => {
 
       await offlineStorage.deleteEvent(eventId);
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents();
+      loadEvents(true);
     } catch (error) {
       console.error('Error deleting event:', error);
     }
