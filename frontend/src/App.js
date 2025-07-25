@@ -1748,10 +1748,12 @@ const GridBody = ({
                 timeSlots={timeSlots}
                 dayNames={dayNames}
                 events={events}
+                tasks={tasks}
                 currentWeek={currentWeek}
                 currentYear={currentYear}
                 onTimeSlotClick={handleTimeSlotClick}
                 onEventClick={handleEventClick}
+                onTaskClick={handleTaskClick}
                 viewingMember={viewingMember}
                 transitioning={transitioning}
               />
