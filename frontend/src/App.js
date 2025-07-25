@@ -909,7 +909,9 @@ const Planning = ({ user, sessionToken }) => {
       await offlineStorage.saveEvent(response.data);
 
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents();
+      
+      // Smooth reload after event creation
+      loadEvents(true);
     } catch (error) {
       console.error('Error creating event:', error);
       // If offline, save locally only
@@ -924,7 +926,7 @@ const Planning = ({ user, sessionToken }) => {
         };
         await offlineStorage.saveEvent(eventToCreateLocal);
         setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-        loadEvents();
+        loadEvents(true);
       }
     }
   };
