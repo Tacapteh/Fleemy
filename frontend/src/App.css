@@ -873,7 +873,7 @@ button:active {
   color: #721c24;
 }
 
-/* Smooth and Fluid Transitions */
+/* Smooth and Fluid Transitions for Modular Components */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -905,6 +905,10 @@ button:active {
   transition: opacity 0.15s ease;
 }
 
+.planning-content.transitioning .planning-layout {
+  opacity: 0.7;
+}
+
 /* Smooth week header transition */
 .week-title.updating {
   opacity: 0.4;
@@ -912,7 +916,7 @@ button:active {
 }
 
 /* Smooth event appearance */
-.event.new-event {
+.planning-event.new-event {
   animation: slideIn 0.25s ease-out;
 }
 
