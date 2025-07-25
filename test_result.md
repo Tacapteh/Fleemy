@@ -199,17 +199,17 @@ frontend:
         agent: "main"
         comment: "Vue mois complètement reconstruite : MonthHeader (entêtes jours), MonthGrid (grille 7x6), MonthEvent (événements), style épuré avec bordures fines, fond blanc, gestion événements multiples, '+X autres' fonctionnel"
 
-  - task: "Event Modals - CRUD Operations"
+  - task: "Month View - Navigation & Events Management"
     implemented: true
     working: true
     file: "App.js"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Modales de création/édition/suppression d'événements fonctionnelles"
+        comment: "Navigation mois fluide, gestion événements multiples par cellule (2 visibles + '+X autres'), couleurs cohérentes avec vue semaine, clic jour pour détails/basculer semaine, responsive optimisé"
 
   - task: "Revenue Calculation Display"
     implemented: true
