@@ -1494,6 +1494,10 @@ body {
     min-height: 90px;
   }
   
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -45px; /* Adjust for 90px height */
+  }
+  
   .planning-hour-cell:last-child {
     height: 0;
     min-height: 0;
@@ -1522,6 +1526,10 @@ body {
     min-height: 80px;
     font-size: 11px;
     padding-right: 4px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -40px; /* Adjust for 80px height */
   }
   
   .planning-hour-cell:last-child {
@@ -1596,6 +1604,10 @@ body {
     min-height: 70px;
     font-size: 10px;
     padding-right: 2px;
+  }
+  
+  .planning-hour-cell:not(:first-child):not(:last-child) {
+    margin-top: -35px; /* Adjust for 70px height */
   }
   
   .planning-hour-cell:last-child {
