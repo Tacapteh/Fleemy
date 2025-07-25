@@ -1296,43 +1296,6 @@ const Planning = ({ user, sessionToken }) => {
             </table>
           </div>
         </div>
-                    
-                    return (
-                      <td
-                        key={dayIndex}
-                        onClick={() => handleTimeSlotClick(dayIndex, time)}
-                      >
-                        {slotEvents.map(event => {
-                          const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
-                                              event.type === 'unpaid' ? 'task' : 
-                                              event.type === 'pending' ? 'break' : 'notworked'}`;
-                          
-                          return (
-                            <div
-                              key={event.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEventClick(event);
-                              }}
-                              className={`event ${eventClass}`}
-                            >
-                              <div className="event-description">
-                                {event.description}
-                              </div>
-                              <div className="event-time">
-                                {event.start} - {event.end}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       ) : (
         /* Month View - Using same style as before but with original styling */
         <div className="planning-container">
