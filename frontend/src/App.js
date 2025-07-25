@@ -718,6 +718,302 @@ const DayEventsModal = ({ isOpen, onClose, events, date, onEventClick, onCreateE
   );
 };
 
+// Task Modal Component
+const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    price: 0,
+    color: '#3b82f6',
+    icon: '📝',
+    time_slots: []
+  });
+
+  const [timeSlotInput, setTimeSlotInput] = useState({
+    day: 'monday',
+    start: '09:00',
+    end: '10:00'
+  });
+
+  const [errors, setErrors] = useState({});
+
+  // Available icons for tasks
+  const availableIcons = [
+    '📝', '💻', '📱', '🎨', '📊', '🔧', '📞', '📧', '📋', '💡',
+    '🎯', '🔍', '📈', '📉', '💰', '🏆', '⚡', '🔥', '💎', '🚀',
+    '📸', '🎬', '🎵', '📚', '✏️', '📐', '🖥️', '⌨️', '🖱️', '💾',
+    '📺', '📻', '☎️', '📠', '🔔', '📢', '📯', '🎺', '🎸', '🎹',
+    '🎤', '🎧', '📷', '📹', '💿', '💽', '💻', '🖨️', '⌚', '📱'
+  ];
+
+  // Available colors for tasks (pastel palette)
+  const availableColors = [
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+    '#14b8a6', '#f43f5e', '#8b5a2b', '#6b7280', '#64748b'
+  ];
+
+  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const dayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+  useEffect(() => {
+    if (task) {
+      setFormData({
+        name: task.name || '',
+        price: task.price || 0,
+        color: task.color || '#3b82f6',
+        icon: task.icon || '📝',
+        time_slots: task.time_slots || []
+      });
+    } else {
+      setFormData({
+        name: '',
+        price: 0,
+        color: '#3b82f6',
+        icon: '📝',
+        time_slots: []
+      });
+    }
+    setErrors({});
+  }, [task, isOpen]);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+
+  const addTimeSlot = () => {
+    if (timeSlotInput.start >= timeSlotInput.end) {
+      alert('L\'heure de fin doit être après l\'heure de début');
+      return;
+    }
+
+    const newSlot = { ...timeSlotInput };
+    setFormData(prev => ({
+      ...prev,
+      time_slots: [...prev.time_slots, newSlot]
+    }));
+
+    // Reset time slot input
+    setTimeSlotInput({
+      day: 'monday',
+      start: '09:00',
+      end: '10:00'
+    });
+  };
+
+  const removeTimeSlot = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      time_slots: prev.time_slots.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Le nom est obligatoire';
+    }
+    
+    if (formData.price < 0) {
+      newErrors.price = 'Le prix doit être positif';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    onSave(formData);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '600px' }}>
+        <h2 className="modal-header">
+          {task ? '✏️ Modifier la tâche' : '➕ Nouvelle tâche'}
+        </h2>
+        
+        <div className="form-group">
+          <label className="form-label">Nom de la tâche *</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleInputChange('name', e.target.value)}
+            className={`form-input ${errors.name ? 'error' : ''}`}
+            placeholder="Nom de la tâche"
+            style={{ borderColor: errors.name ? '#dc3545' : '' }}
+          />
+          {errors.name && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.name}</div>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Prix par heure (€)</label>
+          <input
+            type="number"
+            value={formData.price}
+            onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
+            className={`form-input ${errors.price ? 'error' : ''}`}
+            min="0"
+            step="0.01"
+            style={{ borderColor: errors.price ? '#dc3545' : '' }}
+          />
+          {errors.price && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.price}</div>}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Couleur</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
+              {availableColors.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => handleInputChange('color', color)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    backgroundColor: color,
+                    border: formData.color === color ? '3px solid #000' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Icône</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto' }}>
+              {availableIcons.map(icon => (
+                <button
+                  key={icon}
+                  type="button"
+                  onClick={() => handleInputChange('icon', icon)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    fontSize: '16px',
+                    border: formData.icon === icon ? '2px solid #007bff' : '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: formData.icon === icon ? '#e7f3ff' : '#fff'
+                  }}
+                >
+                  {icon}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Créneaux horaires</label>
+          
+          {/* Time slot input */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'end', marginBottom: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <select
+                value={timeSlotInput.day}
+                onChange={(e) => setTimeSlotInput(prev => ({ ...prev, day: e.target.value }))}
+                className="form-input"
+                style={{ marginBottom: '4px' }}
+              >
+                {dayNames.map((day, index) => (
+                  <option key={day} value={day}>{dayLabels[index]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <input
+                type="time"
+                value={timeSlotInput.start}
+                onChange={(e) => setTimeSlotInput(prev => ({ ...prev, start: e.target.value }))}
+                className="form-input"
+                style={{ width: '100px', marginBottom: '4px' }}
+              />
+            </div>
+            <div style={{ margin: '0 4px', paddingBottom: '4px' }}>-</div>
+            <div>
+              <input
+                type="time"
+                value={timeSlotInput.end}
+                onChange={(e) => setTimeSlotInput(prev => ({ ...prev, end: e.target.value }))}
+                className="form-input"
+                style={{ width: '100px', marginBottom: '4px' }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={addTimeSlot}
+              className="btn btn-primary"
+              style={{ height: '44px' }}
+            >
+              +
+            </button>
+          </div>
+
+          {/* Time slots list */}
+          {formData.time_slots.length > 0 && (
+            <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px', padding: '8px' }}>
+              {formData.time_slots.map((slot, index) => (
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #eee' }}>
+                  <span>
+                    {dayLabels[dayNames.indexOf(slot.day)]} {slot.start} - {slot.end}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeTimeSlot(index)}
+                    style={{ color: '#dc3545', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+          >
+            Annuler
+          </button>
+          {task && (
+            <button
+              onClick={() => onDelete(task.id)}
+              className="btn btn-danger"
+            >
+              Supprimer
+            </button>
+          )}
+          <button
+            onClick={handleSubmit}
+            className="btn btn-primary"
+          >
+            {task ? 'Modifier' : 'Créer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Offline Storage Class
 class PlanningOfflineStorage {
   constructor() {
