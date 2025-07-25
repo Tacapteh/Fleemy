@@ -1106,9 +1106,12 @@ const DayHeader = ({ weekDates, dayNames }) => {
 };
 
 const HourLabels = ({ timeSlots }) => {
+  // Add 18h to the end for final alignment
+  const allTimeSlots = [...timeSlots]; // This includes 18:00 already
+  
   return (
     <div className="planning-hours-sidebar">
-      {timeSlots.slice(0, -1).map((time, index) => (
+      {allTimeSlots.map((time, index) => (
         <div key={index} className="planning-hour-cell">
           {time}
         </div>
