@@ -832,19 +832,25 @@ button:active {
   border: none;
   background: #ffffff;
   position: relative;
+  padding-top: 0;
   margin-top: 0;
 }
 
-.planning-hour-cell:not(:first-child) {
-  margin-top: -48px; /* Align with grid line separators */
+/* Perfect alignment with grid lines */
+.planning-hour-cell:first-child {
+  /* 9h aligns with top of grid */
+  margin-top: 0;
+  padding-top: 0;
 }
 
-.planning-hour-cell:first-child {
-  margin-top: 0; /* 9h aligns with top */
+.planning-hour-cell:not(:first-child):not(:last-child) {
+  /* All intermediate hours align with grid separators */
+  margin-top: -48px;
   padding-top: 0;
 }
 
 .planning-hour-cell:last-child {
+  /* 18h aligns with bottom of grid */
   position: absolute;
   bottom: 0;
   right: 8px;
