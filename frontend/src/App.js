@@ -899,11 +899,13 @@ const Planning = ({ user, sessionToken }) => {
   };
 
 // Revenue Summary Component - Colorized Cards
-const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
+const RevenueSummary = ({ events, tasks, currentWeek, currentYear, hourlyRate }) => {
   const calculateRevenue = () => {
     const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
+    const weekTasks = tasks.filter(t => t.week === currentWeek && t.year === currentYear);
     const revenue = { paid: 0, unpaid: 0, pending: 0 };
 
+    // Calculate revenue from events
     weekEvents.forEach(event => {
       if ((event.status || event.type) !== 'not_worked') {
         const startTime = event.start_time || event.start || '09:00';
@@ -925,6 +927,19 @@ const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
             revenue.pending += amount;
             break;
         }
+      }
+    });
+
+    // Calculate revenue from tasks (always considered as paid)
+    weekTasks.forEach(task => {
+      if (task.time_slots) {
+        task.time_slots.forEach(slot => {
+          const startHour = parseInt(slot.start.split(':')[0]);
+          const endHour = parseInt(slot.end.split(':')[0]);
+          const hours = endHour - startHour;
+          const amount = hours * (task.price || 0);
+          revenue.paid += amount;
+        });
       }
     });
 
