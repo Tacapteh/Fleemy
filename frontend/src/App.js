@@ -1271,9 +1271,9 @@ const Planning = ({ user, sessionToken }) => {
                                 handleEventClick(event);
                               }}
                               className={`event ${
-                                event.type === 'paid' ? 'event-meeting' : 
-                                event.type === 'unpaid' ? 'event-task' : 
-                                event.type === 'pending' ? 'event-break' : 
+                                (event.status || event.type) === 'paid' ? 'event-meeting' : 
+                                (event.status || event.type) === 'unpaid' ? 'event-task' : 
+                                (event.status || event.type) === 'pending' ? 'event-break' : 
                                 'event-notworked'
                               } ${transitioning ? '' : 'new-event'}`}
                             >
