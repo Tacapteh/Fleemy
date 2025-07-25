@@ -1061,7 +1061,7 @@ button:active {
   letter-spacing: -0.025em;
 }
 
-/* Colorized Revenue Cards */
+/* Colorized Revenue Cards - Full Background Colors */
 .revenue-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1077,6 +1077,8 @@ button:active {
   text-align: center;
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
 }
 
 .revenue-card:hover {
@@ -1085,18 +1087,18 @@ button:active {
 }
 
 .revenue-card-paid {
-  background: #dcfce7;
-  border-color: #bbf7d0;
+  background: #dcfce7 !important;
+  border-color: #bbf7d0 !important;
 }
 
 .revenue-card-unpaid {
-  background: #fee2e2;
-  border-color: #fecaca;
+  background: #fee2e2 !important;
+  border-color: #fecaca !important;
 }
 
 .revenue-card-pending {
-  background: #ffedd5;
-  border-color: #fed7aa;
+  background: #ffedd5 !important;
+  border-color: #fed7aa !important;
 }
 
 .revenue-amount {
@@ -1104,37 +1106,42 @@ button:active {
   font-weight: 700;
   margin-bottom: 8px;
   letter-spacing: -0.025em;
-  line-height: 1;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
 }
 
 .revenue-card-paid .revenue-amount {
-  color: #15803d;
+  color: #15803d !important;
 }
 
 .revenue-card-unpaid .revenue-amount {
-  color: #b91c1c;
+  color: #b91c1c !important;
 }
 
 .revenue-card-pending .revenue-amount {
-  color: #c2410c;
+  color: #c2410c !important;
 }
 
 .revenue-label {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.025em;
+  line-height: 1.4;
 }
 
 .revenue-card-paid .revenue-label {
-  color: #166534;
+  color: #166534 !important;
 }
 
 .revenue-card-unpaid .revenue-label {
-  color: #991b1b;
+  color: #991b1b !important;
 }
 
 .revenue-card-pending .revenue-label {
-  color: #9a3412;
+  color: #9a3412 !important;
 }
 
 /* Modal Styles */
