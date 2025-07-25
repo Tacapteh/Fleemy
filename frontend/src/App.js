@@ -1614,7 +1614,11 @@ const GridBody = ({
 
       {/* Planning Table */}
       {view === 'week' ? (
-        <div className={`planning-content ${transitioning ? 'transitioning' : ''}`}>
+        <div className={`planning-content ${
+          transitioning 
+            ? transitionDirection === 'forward' ? 'transitioning' : 'transitioning-reverse'
+            : transitionDirection === 'backward' ? 'entering-reverse' : ''
+        }`}>
           <div className="planning-layout">
             <DayHeader weekDates={weekDates} dayNames={dayNames} />
             <div className="planning-grid-container">
@@ -1635,7 +1639,11 @@ const GridBody = ({
         </div>
       ) : (
         /* Month View - Ultra Clean Design */
-        <div className={`planning-content ${transitioning ? 'transitioning' : ''}`}>
+        <div className={`planning-content ${
+          transitioning 
+            ? transitionDirection === 'forward' ? 'transitioning' : 'transitioning-reverse'
+            : transitionDirection === 'backward' ? 'entering-reverse' : ''
+        }`}>
           <div className="planning-layout">
             <MonthHeader dayLabels={['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']} />
             <MonthGrid
