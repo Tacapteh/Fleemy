@@ -1236,9 +1236,9 @@ const GridBody = ({
   const handleCreateEvent = async (eventData) => {
     try {
       const eventToCreate = {
-        description: eventData.description,
+        description: eventData.description || '', // Description facultative
         client_id: eventData.client_id || '',
-        client_name: eventData.client_name || '',
+        client_name: eventData.client_name || '', // Client obligatoire (validé dans la modal)
         day: dayNames[eventData.day].toLowerCase(),
         start_time: eventData.start,
         end_time: eventData.end,
@@ -1278,6 +1278,7 @@ const GridBody = ({
       if (!isOnline) {
         const eventToCreateLocal = {
           ...eventData,
+          description: eventData.description || '',
           uid: user.uid,
           week: currentWeek,
           year: currentYear,
