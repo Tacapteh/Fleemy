@@ -937,9 +937,19 @@ const Planning = ({ user, sessionToken }) => {
 
   const handleUpdateEvent = async (eventData) => {
     try {
+      const updateData = {
+        description: eventData.description,
+        client_id: eventData.client_id || '',
+        client_name: eventData.client_name || '',
+        day: dayNames[eventData.day].toLowerCase(),
+        start_time: eventData.start,
+        end_time: eventData.end,
+        status: eventData.type
+      };
+
       await apiCall(`/planning/events/${eventModal.event.id}`, {
         method: 'PUT',
-        data: eventData
+        data: updateData
       });
 
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
