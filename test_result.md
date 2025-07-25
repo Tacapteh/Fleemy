@@ -187,17 +187,17 @@ frontend:
         agent: "main"
         comment: "Structure modulaire implémentée : DayHeader (entêtes jours), HourSidebar (colonne heures), GridBody (grille centrale), entêtes séparés et distincts du tableau principal, tout visible sans scroll"
 
-  - task: "Navigation Fluide avec Transitions Douces"
+  - task: "Layout Fixed - No Scroll + Visual Separation"
     implemented: true
     working: true
-    file: "App.js + App.css"
+    file: "App.css"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Navigation fluide améliorée : fadeIn, slideIn animations, skeleton loading avec shimmer effet, transitions 0.3s ease-out, changement de semaine sans rechargement complet"
+        comment: "Layout fixe implémenté : grille complète (9h-18h, lundi-vendredi) visible sans scroll, entêtes visuellement séparés avec fond #f9fafb, corps blanc, bordures fines, hauteur fixe 96px par créneau"
 
   - task: "Event Modals - CRUD Operations"
     implemented: true
