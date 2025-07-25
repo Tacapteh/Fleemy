@@ -1169,16 +1169,27 @@ const Planning = ({ user, sessionToken }) => {
         setLoading(true);
       }
       
-      const targetUid = viewingMember ? viewingMember.uid : user.uid;
-      
+      const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : '';
       if (view === 'week') {
-        const response = await apiCall(`/planning/week/${currentYear}/${currentWeek}`);
-        setEvents(response.data.events || []);
-        setTasks(response.data.tasks || []); // Load tasks from API
+        const response = await apiCall(`/planning/week/${currentYear}/${currentWeek}${teamParam}`);
+        let eventsData = response.data.events || [];
+        let tasksData = response.data.tasks || [];
+        if (viewingMember) {
+          eventsData = eventsData.filter(e => e.uid === viewingMember.uid);
+          tasksData = tasksData.filter(t => t.uid === viewingMember.uid);
+        }
+        setEvents(eventsData);
+        setTasks(tasksData);
       } else {
-        const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
-        setEvents(response.data.events || []);
-        setTasks(response.data.tasks || []); // Load tasks from API
+        const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}${teamParam}`);
+        let eventsData = response.data.events || [];
+        let tasksData = response.data.tasks || [];
+        if (viewingMember) {
+          eventsData = eventsData.filter(e => e.uid === viewingMember.uid);
+          tasksData = tasksData.filter(t => t.uid === viewingMember.uid);
+        }
+        setEvents(eventsData);
+        setTasks(tasksData);
       }
       
       if (smooth) {
@@ -1863,13 +1874,19 @@ const GridBody = ({
     const newYear = newDate.getFullYear();
     
     try {
-      const targetUid = viewingMember ? viewingMember.uid : user.uid;
-      const response = await apiCall(`/planning/week/${newYear}/${newWeek}`);
-      
+      const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : '';
+      const response = await apiCall(`/planning/week/${newYear}/${newWeek}${teamParam}`);
+      let eventsData = response.data.events || [];
+      let tasksData = response.data.tasks || [];
+      if (viewingMember) {
+        eventsData = eventsData.filter(e => e.uid === viewingMember.uid);
+        tasksData = tasksData.filter(t => t.uid === viewingMember.uid);
+      }
+
       // Longer delay for smoother animation
       setTimeout(() => {
-        setEvents(response.data.events || []);
-        setTasks(response.data.tasks || []);
+        setEvents(eventsData);
+        setTasks(tasksData);
         setTransitioning(false);
       }, 300);
     } catch (error) {
@@ -1893,13 +1910,19 @@ const GridBody = ({
     const newYear = newDate.getFullYear();
     
     try {
-      const targetUid = viewingMember ? viewingMember.uid : user.uid;
-      const response = await apiCall(`/planning/month/${newYear}/${newMonth}`);
+      const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : '';
+      const response = await apiCall(`/planning/month/${newYear}/${newMonth}${teamParam}`);
+      let eventsData = response.data.events || [];
+      let tasksData = response.data.tasks || [];
+      if (viewingMember) {
+        eventsData = eventsData.filter(e => e.uid === viewingMember.uid);
+        tasksData = tasksData.filter(t => t.uid === viewingMember.uid);
+      }
       
       // Longer delay for smoother animation
       setTimeout(() => {
-        setEvents(response.data.events || []);
-        setTasks(response.data.tasks || []);
+        setEvents(eventsData);
+        setTasks(tasksData);
         setTransitioning(false);
       }, 300);
     } catch (error) {
