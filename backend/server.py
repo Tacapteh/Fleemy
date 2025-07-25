@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -9,8 +9,11 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timedelta
-import requests
+import asyncio
+import httpx
 import json
+import calendar
+from .pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -69,8 +72,9 @@ class WeeklyTask(BaseModel):
     price: float
     color: str
     icon: str
-    time_slots: List[Dict[str, str]] = []  # [{"day": "monday", "start": "09:00", "end": "10:00"}]
+    time_slots: List[Dict[str, str]] = []  # {"day": "monday", "start": "09:00", "end": "10:00"}
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Todo(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -222,16 +226,16 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 @api_router.post("/auth/login")
 async def login(auth_request: AuthRequest):
     try:
-        # Call Emergent auth API
         headers = {"X-Session-ID": auth_request.session_id}
-        response = requests.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers=headers
-        )
-        
+        async with httpx.AsyncClient() as client_http:
+            response = await client_http.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers=headers,
+            )
+
         if response.status_code != 200:
             raise HTTPException(status_code=401, detail="Invalid session")
-        
+
         auth_data = response.json()
         
         # Check if user exists
@@ -378,19 +382,25 @@ async def get_week_planning(year: int, week: int, current_user: User = Depends(g
 
 @api_router.get("/planning/month/{year}/{month}")
 async def get_month_planning(year: int, month: int, current_user: User = Depends(get_current_user)):
-    events = await db.planning_events.find(
-        {"uid": current_user.uid, "year": year},
-        {"_id": 0}  # Exclude MongoDB ObjectId
-    ).to_list(1000)
-    tasks = await db.weekly_tasks.find(
-        {"uid": current_user.uid, "year": year},
-        {"_id": 0}  # Exclude MongoDB ObjectId
-    ).to_list(1000)
-    
-    return {
-        "events": events,
-        "tasks": tasks
+    last_day = calendar.monthrange(year, month)[1]
+    pairs = {
+        (datetime(year, month, day).isocalendar().year,
+         datetime(year, month, day).isocalendar().week)
+        for day in range(1, last_day + 1)
     }
+    or_filters = [{"year": y, "week": w} for y, w in pairs]
+
+    events_cursor = db.planning_events.find(
+        {"uid": current_user.uid, "$or": or_filters},
+        {"_id": 0}
+    )
+    tasks_cursor = db.weekly_tasks.find(
+        {"uid": current_user.uid, "$or": or_filters},
+        {"_id": 0}
+    )
+    events, tasks = await asyncio.gather(events_cursor.to_list(1000), tasks_cursor.to_list(1000))
+
+    return {"events": events, "tasks": tasks}
 
 @api_router.post("/planning/events")
 async def create_event(event_request: EventCreateRequest, current_user: User = Depends(get_current_user)):
@@ -669,6 +679,21 @@ async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, current
     updated_quote = await db.quotes.find_one({"id": quote_id})
     return updated_quote
 
+@api_router.delete("/quotes/{quote_id}")
+async def delete_quote(quote_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.quotes.delete_one({"id": quote_id, "uid": current_user.uid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return {"message": "Quote deleted"}
+
+@api_router.get("/quotes/{quote_id}/pdf")
+async def get_quote_pdf(quote_id: str, current_user: User = Depends(get_current_user)):
+    quote = await db.quotes.find_one({"id": quote_id, "uid": current_user.uid}, {"_id": 0})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    pdf_bytes = await quote_pdf_bytes(quote)
+    return Response(content=pdf_bytes, media_type="application/pdf")
+
 @api_router.put("/quotes/{quote_id}/status")
 async def update_quote_status(quote_id: str, status: str, current_user: User = Depends(get_current_user)):
     await db.quotes.update_one(
@@ -713,6 +738,45 @@ async def create_invoice(invoice_request: InvoiceCreateRequest, current_user: Us
     
     await db.invoices.insert_one(invoice.dict())
     return invoice
+
+@api_router.put("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest, current_user: User = Depends(get_current_user)):
+    invoice_data = invoice_request.dict()
+    invoice_data["due_date"] = datetime.fromisoformat(invoice_data["due_date"].replace("Z", "+00:00"))
+
+    subtotal = sum(item["quantity"] * item["unit_price"] for item in invoice_data["items"])
+    tax_amount = subtotal * (invoice_data["tax_rate"] / 100)
+    total = subtotal + tax_amount
+
+    invoice_data.update({
+        "subtotal": subtotal,
+        "tax_amount": tax_amount,
+        "total": total,
+        "updated_at": datetime.utcnow(),
+    })
+
+    await db.invoices.update_one(
+        {"id": invoice_id, "uid": current_user.uid},
+        {"$set": invoice_data},
+    )
+
+    updated_invoice = await db.invoices.find_one({"id": invoice_id})
+    return updated_invoice
+
+@api_router.get("/invoices/{invoice_id}/pdf")
+async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
+    invoice = await db.invoices.find_one({"id": invoice_id, "uid": current_user.uid}, {"_id": 0})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    pdf_bytes = await invoice_pdf_bytes(invoice)
+    return Response(content=pdf_bytes, media_type="application/pdf")
+
+@api_router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.invoices.delete_one({"id": invoice_id, "uid": current_user.uid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return {"message": "Invoice deleted"}
 
 @api_router.put("/invoices/{invoice_id}/status")
 async def update_invoice_status(invoice_id: str, status: str, current_user: User = Depends(get_current_user)):
