@@ -888,6 +888,59 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
+// Revenue Summary Component
+const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
+  const calculateRevenue = () => {
+    const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
+    const revenue = { paid: 0, unpaid: 0, pending: 0 };
+
+    weekEvents.forEach(event => {
+      if ((event.status || event.type) !== 'not_worked') {
+        const startTime = event.start_time || event.start || '09:00';
+        const endTime = event.end_time || event.end || '10:00';
+        const startHour = parseInt(startTime.split(':')[0]);
+        const endHour = parseInt(endTime.split(':')[0]);
+        const hours = endHour - startHour;
+        const amount = hours * hourlyRate;
+
+        const eventType = event.status || event.type;
+        switch (eventType) {
+          case 'paid':
+            revenue.paid += amount;
+            break;
+          case 'unpaid':
+            revenue.unpaid += amount;
+            break;
+          case 'pending':
+            revenue.pending += amount;
+            break;
+        }
+      }
+    });
+
+    return revenue;
+  };
+
+  const revenue = calculateRevenue();
+
+  return (
+    <div className="revenue-cards">
+      <div className="revenue-card paid">
+        <div className="revenue-amount">{revenue.paid}€</div>
+        <div className="revenue-label">Revenus payés</div>
+      </div>
+      <div className="revenue-card unpaid">
+        <div className="revenue-amount">{revenue.unpaid}€</div>
+        <div className="revenue-label">Revenus impayés</div>
+      </div>
+      <div className="revenue-card pending">
+        <div className="revenue-amount">{revenue.pending}€</div>
+        <div className="revenue-label">Revenus en attente</div>
+      </div>
+    </div>
+  );
+};
+
 // Navigation Header Components - Smooth Transitions
 const WeekNavigationHeader = ({ currentDate, currentWeek, currentYear, monthNames, onNavigate, transitioning }) => {
   const weekDates = getWeekDates(currentYear, currentWeek);
