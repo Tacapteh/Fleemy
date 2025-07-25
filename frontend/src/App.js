@@ -2530,19 +2530,574 @@ const Clients = () => (
   </div>
 );
 
+
 // Quote Modal Component - Modular Quote Creation/Edition
 const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
+
+const Quotes = ({ user, sessionToken }) => {
+  const [quotes, setQuotes] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingQuote, setEditingQuote] = useState(null);
+
   const [formData, setFormData] = useState({
     client_id: '',
     client_name: '',
     title: '',
     items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+
     tax_rate: 20.0,
     valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
     subtotal: 0,
     tax_amount: 0,
     total: 0
   });
+
+
+  const apiCall = async (url, options = {}) => {
+    return await axios({
+      url: `${API}${url}`,
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+  };
+
+  const loadQuotes = async () => {
+    try {
+      const response = await apiCall('/quotes');
+      setQuotes(response.data);
+    } catch (error) {
+      console.error('Error loading quotes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadClients = async () => {
+    try {
+      const response = await apiCall('/clients');
+      setClients(response.data);
+    } catch (error) {
+      console.error('Error loading clients:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadQuotes();
+    loadClients();
+  }, []);
+
+  const calculateTotals = (items, taxRate) => {
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    const tax_amount = subtotal * (taxRate / 100);
+    const total = subtotal + tax_amount;
+    return { subtotal, tax_amount, total };
+  };
+
+  const updateItemTotal = (index, field, value) => {
+    const newItems = [...formData.items];
+    newItems[index][field] = field === 'quantity' || field === 'unit_price' ? parseFloat(value) || 0 : value;
+    newItems[index].total = newItems[index].quantity * newItems[index].unit_price;
+    
+    const totals = calculateTotals(newItems, formData.tax_rate);
+    setFormData({
+      ...formData,
+      items: newItems,
+      ...totals
+    });
+  };
+
+  const addItem = () => {
+    const newItems = [...formData.items, { description: '', quantity: 1, unit_price: 0, total: 0 }];
+    const totals = calculateTotals(newItems, formData.tax_rate);
+    setFormData({
+      ...formData,
+      items: newItems,
+      ...totals
+    });
+  };
+
+  const removeItem = (index) => {
+    const newItems = formData.items.filter((_, i) => i !== index);
+    const totals = calculateTotals(newItems, formData.tax_rate);
+    setFormData({
+      ...formData,
+      items: newItems,
+      ...totals
+    });
+  };
+
+  const handleClientChange = (e) => {
+    const selectedClient = clients.find(c => c.id === e.target.value);
+    setFormData({
+      ...formData,
+      client_id: e.target.value,
+      client_name: selectedClient ? selectedClient.name : ''
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const submitData = {
+        ...formData,
+        valid_until: new Date(formData.valid_until).toISOString()
+      };
+
+      if (editingQuote) {
+        await apiCall(`/quotes/${editingQuote.id}`, {
+          method: 'PUT',
+          data: submitData
+        });
+      } else {
+        await apiCall('/quotes', {
+          method: 'POST',
+          data: submitData
+        });
+      }
+
+      setShowModal(false);
+      setEditingQuote(null);
+      resetForm();
+      loadQuotes();
+    } catch (error) {
+      console.error('Error saving quote:', error);
+    }
+  };
+
+  const resetForm = () => {
+    const defaultValidDate = new Date();
+    defaultValidDate.setMonth(defaultValidDate.getMonth() + 1);
+    
+    setFormData({
+      client_id: '',
+      client_name: '',
+      title: '',
+      items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+      tax_rate: 20,
+      valid_until: defaultValidDate.toISOString().split('T')[0],
+      subtotal: 0,
+      tax_amount: 0,
+      total: 0
+    });
+  };
+
+  const handleEdit = (quote) => {
+    setEditingQuote(quote);
+    setFormData({
+      client_id: quote.client_id,
+      client_name: quote.client_name,
+      title: quote.title,
+      items: quote.items,
+      tax_rate: quote.tax_rate,
+      valid_until: new Date(quote.valid_until).toISOString().split('T')[0],
+      subtotal: quote.subtotal,
+      tax_amount: quote.tax_amount,
+      total: quote.total
+    });
+    setShowModal(true);
+  };
+
+  const updateStatus = async (quoteId, status) => {
+    try {
+      await apiCall(`/quotes/${quoteId}/status?status=${status}`, {
+        method: 'PUT'
+      });
+      loadQuotes();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
+  const convertToInvoice = async (quote) => {
+    try {
+      const invoiceData = {
+        quote_id: quote.id,
+        client_id: quote.client_id,
+        client_name: quote.client_name,
+        title: quote.title,
+        items: quote.items,
+        tax_rate: quote.tax_rate,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 jours
+      };
+
+      await apiCall('/invoices', {
+        method: 'POST',
+        data: invoiceData
+      });
+
+      // Update quote status to accepted
+      await updateStatus(quote.id, 'accepted');
+      
+      alert('Facture créée avec succès !');
+    } catch (error) {
+      console.error('Error converting to invoice:', error);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      draft: 'bg-gray-100 text-gray-700',
+      sent: 'bg-blue-100 text-blue-700',
+      accepted: 'bg-green-100 text-green-700',
+      rejected: 'bg-red-100 text-red-700'
+    };
+    return colors[status] || colors.draft;
+  };
+
+  const getStatusLabel = (status) => {
+    const labels = {
+      draft: 'Brouillon',
+      sent: 'Envoyé',
+      accepted: 'Accepté',
+      rejected: 'Rejeté'
+    };
+    return labels[status] || status;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">📋 Devis</h1>
+        <button
+          onClick={() => {
+            setEditingQuote(null);
+            resetForm();
+            setShowModal(true);
+          }}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
+        >
+          + Nouveau devis
+        </button>
+      </div>
+
+      {/* Quotes List */}
+      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+        {quotes.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-6xl mb-4">📋</div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Aucun devis</h3>
+            <p className="text-gray-500 mb-6">Commencez par créer votre premier devis !</p>
+            <button
+              onClick={() => {
+                setEditingQuote(null);
+                resetForm();
+                setShowModal(true);
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all"
+            >
+              + Créer un devis
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Numéro
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Client
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Titre
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Montant
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Statut
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Valide jusqu'au
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {quotes.map((quote) => (
+                  <tr key={quote.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {quote.quote_number}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {quote.client_name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {quote.title}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {formatCurrency(quote.total)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(quote.status)}`}>
+                        {getStatusLabel(quote.status)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(quote.valid_until)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => handleEdit(quote)}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          Modifier
+                        </button>
+                        {quote.status === 'draft' && (
+                          <button
+                            onClick={() => updateStatus(quote.id, 'sent')}
+                            className="text-green-600 hover:text-green-900"
+                          >
+                            Envoyer
+                          </button>
+                        )}
+                        {quote.status === 'accepted' && (
+                          <button
+                            onClick={() => convertToInvoice(quote)}
+                            className="text-purple-600 hover:text-purple-900"
+                          >
+                            → Facture
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Quote Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-6">
+                {editingQuote ? 'Modifier le devis' : 'Nouveau devis'}
+              </h2>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Client and Title */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Client *
+                    </label>
+                    <select
+                      value={formData.client_id}
+                      onChange={handleClientChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                    >
+                      <option value="">Sélectionner un client</option>
+                      {clients.map(client => (
+                        <option key={client.id} value={client.id}>
+                          {client.name} {client.company && `(${client.company})`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Titre du devis *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={(e) => setFormData({...formData, title: e.target.value})}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                      placeholder="Ex: Développement site web"
+                    />
+                  </div>
+                </div>
+
+                {/* Items */}
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Éléments du devis
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm font-medium transition-all"
+                    >
+                      + Ajouter
+                    </button>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
+                      <div className="col-span-5">Description</div>
+                      <div className="col-span-2">Quantité</div>
+                      <div className="col-span-2">Prix unitaire</div>
+                      <div className="col-span-2">Total</div>
+                      <div className="col-span-1">Actions</div>
+                    </div>
+
+                    {formData.items.map((item, index) => (
+                      <div key={index} className="px-4 py-3 border-t border-gray-200 grid grid-cols-12 gap-4 items-center">
+                        <div className="col-span-5">
+                          <input
+                            type="text"
+                            value={item.description}
+                            onChange={(e) => updateItemTotal(index, 'description', e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            placeholder="Description du service/produit"
+                            required
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItemTotal(index, 'quantity', e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            min="0"
+                            step="0.01"
+                            required
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <input
+                            type="number"
+                            value={item.unit_price}
+                            onChange={(e) => updateItemTotal(index, 'unit_price', e.target.value)}
+                            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            min="0"
+                            step="0.01"
+                            required
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <div className="p-2 bg-gray-50 rounded text-right font-medium">
+                            {formatCurrency(item.total)}
+                          </div>
+                        </div>
+                        <div className="col-span-1">
+                          {formData.items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="text-red-600 hover:text-red-800 p-1"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Summary and Settings */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Settings */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Taux de TVA (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={formData.tax_rate}
+                        onChange={(e) => {
+                          const newTaxRate = parseFloat(e.target.value) || 0;
+                          const totals = calculateTotals(formData.items, newTaxRate);
+                          setFormData({
+                            ...formData,
+                            tax_rate: newTaxRate,
+                            ...totals
+                          });
+                        }}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Valable jusqu'au *
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.valid_until}
+                        onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
+                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-800 mb-4">Récapitulatif</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>Sous-total HT:</span>
+                        <span className="font-medium">{formatCurrency(formData.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>TVA ({formData.tax_rate}%):</span>
+                        <span className="font-medium">{formatCurrency(formData.tax_amount)}</span>
+                      </div>
+                      <div className="border-t border-gray-300 pt-2 flex justify-between text-lg font-bold">
+                        <span>Total TTC:</span>
+                        <span>{formatCurrency(formData.total)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-4 pt-6 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all"
+                  >
+                    {editingQuote ? 'Modifier' : 'Créer'} le devis
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
   const [errors, setErrors] = useState({});
 
