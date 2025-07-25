@@ -137,11 +137,11 @@ backend:
 
   - task: "API Earnings Calculation with Tasks Integration"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: true
         agent: "main"
@@ -152,6 +152,9 @@ backend:
       - working: false
         agent: "main"
         comment: "MODIFIÉ: Ajout du calcul des gains des tâches dans l'endpoint earnings. Les tâches sont considérées comme 'paid' automatiquement et leurs gains s'ajoutent aux revenus."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS: Tasks earnings integration properly implemented. Lines 473-485 in server.py show tasks are loaded and their earnings calculated based on time_slots (hours * task.price). Tasks earnings are added to 'paid' category. Logic is correct: for each time_slot, calculates hours (end_hour - start_hour) * task.price and adds to earnings.paid. Implementation is complete."
 
   - task: "API CRUD Tasks - Integrated in Planning"
     implemented: true
