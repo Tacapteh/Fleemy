@@ -1063,28 +1063,10 @@ body {
   }
 }
 
-/* Dark mode support for future */
-@media (prefers-color-scheme: dark) {
-  .planning-container {
-    background: #1f2937;
-    border-color: #374151;
-  }
-  
-  .planning-table th {
-    background: #1f2937;
-    color: #f3f4f6;
-    border-color: #374151;
-  }
-  
-  .planning-table td {
-    background: #1f2937;
-    border-color: #374151;
-  }
-  
-  .planning-table td:hover {
-    background-color: #374151;
-  }
-}
+/* Dark mode support disabled to prevent conflicts */
+/* @media (prefers-color-scheme: dark) {
+  Removed dark mode rules that were causing dark backgrounds
+} */
 
 /* Accessibility improvements */
 @media (prefers-reduced-motion: reduce) {
