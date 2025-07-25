@@ -434,7 +434,9 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
     day: 0,
     start: '09:00',
     end: '10:00',
-    type: 'pending'
+    type: 'pending',
+    client_id: '',
+    client_name: ''
   });
   const [loading, setLoading] = useState(false);
 
