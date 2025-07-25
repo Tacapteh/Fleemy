@@ -187,7 +187,7 @@ frontend:
         agent: "main"
         comment: "Structure ultra-épurée finale : DayHeader + HourLabels + GridBody, jours et heures comme simples labels sans bordures ni fond, seule la grille centrale avec bordures #e5e7eb, alignement parfait"
 
-  - task: "Layout Fixed - No Scroll + Visual Separation"
+  - task: "Layout Ultra-Clean - Texte Simple Sans Encadrements"
     implemented: true
     working: true
     file: "App.css"
@@ -197,7 +197,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Layout fixe implémenté : grille complète (9h-18h, lundi-vendredi) visible sans scroll, entêtes visuellement séparés avec fond #f9fafb, corps blanc, bordures fines, hauteur fixe 96px par créneau"
+        comment: "Layout ultra-épuré : jours et heures comme simples textes sans bordures/fond, seule la grille centrale avec bordures fines, alignement parfait jours au-dessus des colonnes et heures à gauche des lignes"
 
   - task: "Event Modals - CRUD Operations"
     implemented: true
