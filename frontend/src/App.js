@@ -10,6 +10,14 @@ const formatDate = (date) => {
   return new Date(date).toLocaleDateString('fr-FR');
 };
 
+const getWeekNumber = (date) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+};
+
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('fr-FR', { 
     style: 'currency', 
@@ -63,7 +71,6 @@ const Sidebar = ({ currentPage, setCurrentPage, user, onLogout, isMobile, setIsM
   const menuItems = [
     { id: 'dashboard', name: 'Dashboard', icon: '📊' },
     { id: 'planning', name: 'Planning', icon: '📅' },
-    { id: 'tasks', name: 'Tâches', icon: '✅' },
     { id: 'todos', name: 'To-do List', icon: '📝' },
     { id: 'clients', name: 'Clients', icon: '👥' },
     { id: 'quotes', name: 'Devis', icon: '📋' },
@@ -719,6 +726,302 @@ const DayEventsModal = ({ isOpen, onClose, events, date, onEventClick, onCreateE
   );
 };
 
+// Task Modal Component
+const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    price: 0,
+    color: '#3b82f6',
+    icon: '📝',
+    time_slots: []
+  });
+
+  const [timeSlotInput, setTimeSlotInput] = useState({
+    day: 'monday',
+    start: '09:00',
+    end: '10:00'
+  });
+
+  const [errors, setErrors] = useState({});
+
+  // Available icons for tasks
+  const availableIcons = [
+    '📝', '💻', '📱', '🎨', '📊', '🔧', '📞', '📧', '📋', '💡',
+    '🎯', '🔍', '📈', '📉', '💰', '🏆', '⚡', '🔥', '💎', '🚀',
+    '📸', '🎬', '🎵', '📚', '✏️', '📐', '🖥️', '⌨️', '🖱️', '💾',
+    '📺', '📻', '☎️', '📠', '🔔', '📢', '📯', '🎺', '🎸', '🎹',
+    '🎤', '🎧', '📷', '📹', '💿', '💽', '💻', '🖨️', '⌚', '📱'
+  ];
+
+  // Available colors for tasks (pastel palette)
+  const availableColors = [
+    '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+    '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+    '#14b8a6', '#f43f5e', '#8b5a2b', '#6b7280', '#64748b'
+  ];
+
+  const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  const dayLabels = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+
+  useEffect(() => {
+    if (task) {
+      setFormData({
+        name: task.name || '',
+        price: task.price || 0,
+        color: task.color || '#3b82f6',
+        icon: task.icon || '📝',
+        time_slots: task.time_slots || []
+      });
+    } else {
+      setFormData({
+        name: '',
+        price: 0,
+        color: '#3b82f6',
+        icon: '📝',
+        time_slots: []
+      });
+    }
+    setErrors({});
+  }, [task, isOpen]);
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+
+  const addTimeSlot = () => {
+    if (timeSlotInput.start >= timeSlotInput.end) {
+      alert('L\'heure de fin doit être après l\'heure de début');
+      return;
+    }
+
+    const newSlot = { ...timeSlotInput };
+    setFormData(prev => ({
+      ...prev,
+      time_slots: [...prev.time_slots, newSlot]
+    }));
+
+    // Reset time slot input
+    setTimeSlotInput({
+      day: 'monday',
+      start: '09:00',
+      end: '10:00'
+    });
+  };
+
+  const removeTimeSlot = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      time_slots: prev.time_slots.filter((_, i) => i !== index)
+    }));
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Le nom est obligatoire';
+    }
+    
+    if (formData.price < 0) {
+      newErrors.price = 'Le prix doit être positif';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    onSave(formData);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '600px' }}>
+        <h2 className="modal-header">
+          {task ? '✏️ Modifier la tâche' : '➕ Nouvelle tâche'}
+        </h2>
+        
+        <div className="form-group">
+          <label className="form-label">Nom de la tâche *</label>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleInputChange('name', e.target.value)}
+            className={`form-input ${errors.name ? 'error' : ''}`}
+            placeholder="Nom de la tâche"
+            style={{ borderColor: errors.name ? '#dc3545' : '' }}
+          />
+          {errors.name && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.name}</div>}
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Prix par heure (€)</label>
+          <input
+            type="number"
+            value={formData.price}
+            onChange={(e) => handleInputChange('price', parseFloat(e.target.value) || 0)}
+            className={`form-input ${errors.price ? 'error' : ''}`}
+            min="0"
+            step="0.01"
+            style={{ borderColor: errors.price ? '#dc3545' : '' }}
+          />
+          {errors.price && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.price}</div>}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Couleur</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
+              {availableColors.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => handleInputChange('color', color)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    backgroundColor: color,
+                    border: formData.color === color ? '3px solid #000' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Icône</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px', maxHeight: '120px', overflowY: 'auto' }}>
+              {availableIcons.map(icon => (
+                <button
+                  key={icon}
+                  type="button"
+                  onClick={() => handleInputChange('icon', icon)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    fontSize: '16px',
+                    border: formData.icon === icon ? '2px solid #007bff' : '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    backgroundColor: formData.icon === icon ? '#e7f3ff' : '#fff'
+                  }}
+                >
+                  {icon}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Créneaux horaires</label>
+          
+          {/* Time slot input */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'end', marginBottom: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <select
+                value={timeSlotInput.day}
+                onChange={(e) => setTimeSlotInput(prev => ({ ...prev, day: e.target.value }))}
+                className="form-input"
+                style={{ marginBottom: '4px' }}
+              >
+                {dayNames.map((day, index) => (
+                  <option key={day} value={day}>{dayLabels[index]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <input
+                type="time"
+                value={timeSlotInput.start}
+                onChange={(e) => setTimeSlotInput(prev => ({ ...prev, start: e.target.value }))}
+                className="form-input"
+                style={{ width: '100px', marginBottom: '4px' }}
+              />
+            </div>
+            <div style={{ margin: '0 4px', paddingBottom: '4px' }}>-</div>
+            <div>
+              <input
+                type="time"
+                value={timeSlotInput.end}
+                onChange={(e) => setTimeSlotInput(prev => ({ ...prev, end: e.target.value }))}
+                className="form-input"
+                style={{ width: '100px', marginBottom: '4px' }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={addTimeSlot}
+              className="btn btn-primary"
+              style={{ height: '44px' }}
+            >
+              +
+            </button>
+          </div>
+
+          {/* Time slots list */}
+          {formData.time_slots.length > 0 && (
+            <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px', padding: '8px' }}>
+              {formData.time_slots.map((slot, index) => (
+                <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid #eee' }}>
+                  <span>
+                    {dayLabels[dayNames.indexOf(slot.day)]} {slot.start} - {slot.end}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeTimeSlot(index)}
+                    style={{ color: '#dc3545', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+          >
+            Annuler
+          </button>
+          {task && (
+            <button
+              onClick={() => onDelete(task.id)}
+              className="btn btn-danger"
+            >
+              Supprimer
+            </button>
+          )}
+          <button
+            onClick={handleSubmit}
+            className="btn btn-primary"
+          >
+            {task ? 'Modifier' : 'Créer'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Offline Storage Class
 class PlanningOfflineStorage {
   constructor() {
@@ -802,9 +1105,11 @@ const Planning = ({ user, sessionToken }) => {
   const [view, setView] = useState('week'); // 'week' or 'month'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
+  const [tasks, setTasks] = useState([]); // Add tasks state
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [eventModal, setEventModal] = useState({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+  const [taskModal, setTaskModal] = useState({ isOpen: false, task: null }); // Add task modal state
   const [dayEventsModal, setDayEventsModal] = useState({ isOpen: false, events: [], date: null });
   const [team, setTeam] = useState(null);
   const [viewingMember, setViewingMember] = useState(null);
@@ -868,9 +1173,11 @@ const Planning = ({ user, sessionToken }) => {
       if (view === 'week') {
         const response = await apiCall(`/planning/week/${currentYear}/${currentWeek}`);
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []); // Load tasks from API
       } else {
         const response = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []); // Load tasks from API
       }
       
       if (smooth) {
@@ -883,6 +1190,7 @@ const Planning = ({ user, sessionToken }) => {
         // Load from offline storage
         const offlineEvents = await offlineStorage.getEvents(user.uid, currentYear, currentWeek);
         setEvents(offlineEvents);
+        setTasks([]); // No offline storage for tasks yet
       }
       if (smooth) {
         setTransitioning(false);
@@ -895,11 +1203,13 @@ const Planning = ({ user, sessionToken }) => {
   };
 
 // Revenue Summary Component - Colorized Cards
-const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
+const RevenueSummary = ({ events, tasks, currentWeek, currentYear, hourlyRate }) => {
   const calculateRevenue = () => {
     const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
+    const weekTasks = tasks.filter(t => t.week === currentWeek && t.year === currentYear);
     const revenue = { paid: 0, unpaid: 0, pending: 0 };
 
+    // Calculate revenue from events
     weekEvents.forEach(event => {
       if ((event.status || event.type) !== 'not_worked') {
         const startTime = event.start_time || event.start || '09:00';
@@ -921,6 +1231,19 @@ const RevenueSummary = ({ events, currentWeek, currentYear, hourlyRate }) => {
             revenue.pending += amount;
             break;
         }
+      }
+    });
+
+    // Calculate revenue from tasks (always considered as paid)
+    weekTasks.forEach(task => {
+      if (task.time_slots) {
+        task.time_slots.forEach(slot => {
+          const startHour = parseInt(slot.start.split(':')[0]);
+          const endHour = parseInt(slot.end.split(':')[0]);
+          const hours = endHour - startHour;
+          const amount = hours * (task.price || 0);
+          revenue.paid += amount;
+        });
       }
     });
 
@@ -1130,10 +1453,12 @@ const GridBody = ({
   timeSlots, 
   dayNames, 
   events, 
+  tasks = [],
   currentWeek, 
   currentYear, 
   onTimeSlotClick, 
-  onEventClick, 
+  onEventClick,
+  onTaskClick,
   viewingMember, 
   transitioning 
 }) => {
@@ -1146,12 +1471,29 @@ const GridBody = ({
     );
   };
 
+  const getTasksForTimeSlot = (day, time) => {
+    const dayName = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][day];
+    return tasks.filter(task => 
+      task.week === currentWeek &&
+      task.year === currentYear &&
+      task.time_slots?.some(slot => 
+        slot.day === dayName && slot.start === time
+      )
+    );
+  };
+
+  const hasEventInTimeSlot = (day, time) => {
+    return getEventsForTimeSlot(day, time).length > 0;
+  };
+
   return (
     <div className="planning-grid-body">
       {timeSlots.slice(0, -1).map((time, timeIndex) => (
         <div key={time} className="planning-grid-row">
           {dayNames.map((dayName, dayIndex) => {
             const slotEvents = getEventsForTimeSlot(dayIndex, time);
+            const slotTasks = getTasksForTimeSlot(dayIndex, time);
+            const hasEvent = hasEventInTimeSlot(dayIndex, time);
             
             return (
               <div
@@ -1159,6 +1501,7 @@ const GridBody = ({
                 className={`planning-grid-cell ${viewingMember ? 'readonly' : ''}`}
                 onClick={() => !viewingMember && onTimeSlotClick(dayIndex, time)}
               >
+                {/* Display events */}
                 {slotEvents.map(event => (
                   <div
                     key={event.id}
@@ -1182,6 +1525,74 @@ const GridBody = ({
                     )}
                   </div>
                 ))}
+
+                {/* Display tasks - conditional rendering based on event presence */}
+                {slotTasks.map(task => {
+                  if (hasEvent) {
+                    // If there's an event, show task as icon in corner
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTaskClick && onTaskClick(task);
+                        }}
+                        className="planning-task-icon"
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          width: '16px',
+                          height: '16px',
+                          backgroundColor: task.color,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          cursor: 'pointer',
+                          zIndex: 20
+                        }}
+                        title={task.name}
+                      >
+                        {task.icon}
+                      </div>
+                    );
+                  } else {
+                    // If no event, show task as colored block
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTaskClick && onTaskClick(task);
+                        }}
+                        className="planning-task-block"
+                        style={{
+                          position: 'absolute',
+                          top: '2px',
+                          left: '2px',
+                          right: '2px',
+                          bottom: '2px',
+                          backgroundColor: task.color,
+                          borderRadius: '4px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          opacity: 0.8,
+                          fontSize: '12px',
+                          color: '#fff',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                        }}
+                      >
+                        <div style={{ fontSize: '16px', marginBottom: '2px' }}>{task.icon}</div>
+                        <div style={{ fontSize: '10px', fontWeight: 500 }}>{task.name}</div>
+                      </div>
+                    );
+                  }
+                })}
                 
                 {/* Smooth loading skeleton during transition */}
                 {transitioning && (
@@ -1346,6 +1757,73 @@ const GridBody = ({
     }
   };
 
+  const handleTaskClick = (task) => {
+    setTaskModal({ isOpen: true, task });
+  };
+
+  const handleCreateTask = async (taskData) => {
+    try {
+      const response = await apiCall('/planning/tasks', {
+        method: 'POST',
+        data: {
+          name: taskData.name,
+          price: parseFloat(taskData.price) || 0,
+          color: taskData.color,
+          icon: taskData.icon,
+          time_slots: taskData.time_slots || []
+        }
+      });
+
+      // Update local state immediately
+      setTasks(prevTasks => [...prevTasks, response.data]);
+      setTaskModal({ isOpen: false, task: null });
+    } catch (error) {
+      console.error('Error creating task:', error);
+    }
+  };
+
+  const handleUpdateTask = async (taskData) => {
+    try {
+      await apiCall(`/planning/tasks/${taskModal.task.id}`, {
+        method: 'PUT',
+        data: {
+          name: taskData.name,
+          price: parseFloat(taskData.price) || 0,
+          color: taskData.color,
+          icon: taskData.icon,
+          time_slots: taskData.time_slots || []
+        }
+      });
+
+      // Update local state immediately
+      setTasks(prevTasks => 
+        prevTasks.map(task => 
+          task.id === taskModal.task.id 
+            ? { ...task, ...taskData }
+            : task
+        )
+      );
+
+      setTaskModal({ isOpen: false, task: null });
+    } catch (error) {
+      console.error('Error updating task:', error);
+    }
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    try {
+      await apiCall(`/planning/tasks/${taskId}`, {
+        method: 'DELETE'
+      });
+
+      // Update local state immediately
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+      setTaskModal({ isOpen: false, task: null });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+    }
+  };
+
   const handleClearWeek = async () => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?')) {
       try {
@@ -1379,7 +1857,7 @@ const GridBody = ({
     newDate.setDate(newDate.getDate() + (direction * 7));
     setCurrentDate(newDate);
     
-    // Load events for the new week smoothly
+    // Load events and tasks for the new week smoothly
     const newWeek = getWeekNumber(newDate);
     const newYear = newDate.getFullYear();
     
@@ -1390,6 +1868,7 @@ const GridBody = ({
       // Longer delay for smoother animation
       setTimeout(() => {
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []);
         setTransitioning(false);
       }, 300);
     } catch (error) {
@@ -1408,7 +1887,7 @@ const GridBody = ({
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
     
-    // Load events for the new month smoothly
+    // Load events and tasks for the new month smoothly
     const newMonth = newDate.getMonth();
     const newYear = newDate.getFullYear();
     
@@ -1419,6 +1898,7 @@ const GridBody = ({
       // Longer delay for smoother animation
       setTimeout(() => {
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []);
         setTransitioning(false);
       }, 300);
     } catch (error) {
@@ -1583,6 +2063,12 @@ const GridBody = ({
               >
                 + Événement
               </button>
+              <button
+                onClick={() => setTaskModal({ isOpen: true, task: null })}
+                className="btn btn-secondary"
+              >
+                + Tâche
+              </button>
             </>
           )}
         </div>
@@ -1613,6 +2099,7 @@ const GridBody = ({
       {view === 'week' && !viewingMember && (
         <RevenueSummary
           events={events}
+          tasks={tasks}
           currentWeek={currentWeek}
           currentYear={currentYear}
           hourlyRate={hourlyRate}
@@ -1634,10 +2121,12 @@ const GridBody = ({
                 timeSlots={timeSlots}
                 dayNames={dayNames}
                 events={events}
+                tasks={tasks}
                 currentWeek={currentWeek}
                 currentYear={currentYear}
                 onTimeSlotClick={handleTimeSlotClick}
                 onEventClick={handleEventClick}
+                onTaskClick={handleTaskClick}
                 viewingMember={viewingMember}
                 transitioning={transitioning}
               />
@@ -1682,6 +2171,14 @@ const GridBody = ({
         date={dayEventsModal.date}
         onEventClick={handleEventClick}
         onCreateEvent={handleCreateFromDay}
+      />
+
+      <TaskModal
+        isOpen={taskModal.isOpen}
+        onClose={() => setTaskModal({ isOpen: false, task: null })}
+        onSave={taskModal.task ? handleUpdateTask : handleCreateTask}
+        onDelete={handleDeleteTask}
+        task={taskModal.task}
       />
 
       {/* Hourly Rate Modal */}
@@ -2033,23 +2530,31 @@ const Clients = () => (
   </div>
 );
 
+
+// Quote Modal Component - Modular Quote Creation/Edition
+const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
+
 const Quotes = ({ user, sessionToken }) => {
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
+
   const [formData, setFormData] = useState({
     client_id: '',
     client_name: '',
     title: '',
     items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
-    tax_rate: 20,
-    valid_until: '',
+
+    tax_rate: 20.0,
+    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+
     subtotal: 0,
     tax_amount: 0,
     total: 0
   });
+
 
   const apiCall = async (url, options = {}) => {
     return await axios({
@@ -2594,12 +3099,1257 @@ const Quotes = ({ user, sessionToken }) => {
   );
 };
 
-const Invoices = () => (
-  <div className="bg-white p-6 rounded-xl shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-4">🧾 Factures</h1>
-    <p className="text-gray-600">Module de facturation en développement...</p>
-  </div>
-);
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (quote) {
+      setFormData({
+        client_id: quote.client_id || '',
+        client_name: quote.client_name || '',
+        title: quote.title || '',
+        items: quote.items || [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: quote.tax_rate || 20.0,
+        valid_until: quote.valid_until ? quote.valid_until.split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: quote.subtotal || 0,
+        tax_amount: quote.tax_amount || 0,
+        total: quote.total || 0
+      });
+    } else {
+      setFormData({
+        client_id: '',
+        client_name: '',
+        title: '',
+        items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: 20.0,
+        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: 0,
+        tax_amount: 0,
+        total: 0
+      });
+    }
+    setErrors({});
+  }, [quote, isOpen]);
+
+  const handleClientChange = (clientId) => {
+    const selectedClient = clients.find(c => c.id === clientId);
+    setFormData(prev => ({
+      ...prev,
+      client_id: clientId,
+      client_name: selectedClient ? selectedClient.name : ''
+    }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...formData.items];
+    newItems[index][field] = value;
+    
+    if (field === 'quantity' || field === 'unit_price') {
+      newItems[index].total = (parseFloat(newItems[index].quantity) || 0) * (parseFloat(newItems[index].unit_price) || 0);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      items: newItems
+    }));
+    
+    calculateTotals(newItems);
+  };
+
+  const calculateTotals = (items) => {
+    const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax_amount = subtotal * (formData.tax_rate / 100);
+    const total = subtotal + tax_amount;
+    
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      tax_amount,
+      total
+    }));
+  };
+
+  const addItem = () => {
+    const newItems = [...formData.items, { description: '', quantity: 1, unit_price: 0, total: 0 }];
+    setFormData(prev => ({
+      ...prev,
+      items: newItems
+    }));
+  };
+
+  const removeItem = (index) => {
+    if (formData.items.length > 1) {
+      const newItems = formData.items.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        items: newItems
+      }));
+      calculateTotals(newItems);
+    }
+  };
+
+  const handleTaxRateChange = (taxRate) => {
+    setFormData(prev => ({
+      ...prev,
+      tax_rate: taxRate
+    }));
+    calculateTotals(formData.items);
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+    
+    if (!formData.client_name.trim()) {
+      newErrors.client_name = 'Le client est obligatoire';
+    }
+    
+    if (!formData.title.trim()) {
+      newErrors.title = 'Le titre est obligatoire';
+    }
+    
+    if (formData.items.length === 0 || !formData.items[0].description.trim()) {
+      newErrors.items = 'Au moins un élément est obligatoire';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    onSave({
+      ...formData,
+      valid_until: formData.valid_until + 'T23:59:59.999Z'
+    });
+  };
+
+  // Template presets for quick quote creation
+  const quoteTemplates = [
+    {
+      name: "Développement Web",
+      items: [
+        { description: "Conception et développement", quantity: 40, unit_price: 75, total: 3000 },
+        { description: "Tests et débogage", quantity: 8, unit_price: 65, total: 520 }
+      ]
+    },
+    {
+      name: "Consultation",
+      items: [
+        { description: "Audit technique", quantity: 4, unit_price: 120, total: 480 },
+        { description: "Recommandations et rapport", quantity: 2, unit_price: 100, total: 200 }
+      ]
+    }
+  ];
+
+  const applyTemplate = (template) => {
+    setFormData(prev => ({
+      ...prev,
+      items: template.items.map(item => ({ ...item })),
+      title: template.name
+    }));
+    calculateTotals(template.items);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 className="modal-header">
+          {quote ? '✏️ Modifier le devis' : '➕ Nouveau devis'}
+        </h2>
+
+        {/* Template Selection */}
+        {!quote && (
+          <div className="form-group">
+            <label className="form-label">Templates rapides</label>
+            <div className="flex gap-2">
+              {quoteTemplates.map((template, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => applyTemplate(template)}
+                  className="btn btn-outline btn-sm"
+                >
+                  {template.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Client *</label>
+            <select
+              value={formData.client_id}
+              onChange={(e) => handleClientChange(e.target.value)}
+              className={`form-input ${errors.client_name ? 'error' : ''}`}
+              style={{ borderColor: errors.client_name ? '#dc3545' : '' }}
+            >
+              <option value="">Sélectionner un client</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+            {errors.client_name && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.client_name}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Titre du devis *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              className={`form-input ${errors.title ? 'error' : ''}`}
+              placeholder="Ex: Développement site web"
+              style={{ borderColor: errors.title ? '#dc3545' : '' }}
+            />
+            {errors.title && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.title}</div>}
+          </div>
+        </div>
+
+        {/* Items Section */}
+        <div className="form-group">
+          <div className="flex justify-between items-center mb-3">
+            <label className="form-label">Éléments du devis</label>
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn btn-outline btn-sm"
+            >
+              + Ajouter une ligne
+            </button>
+          </div>
+          
+          <div className="space-y-3">
+            {formData.items.map((item, index) => (
+              <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-5">
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Qté"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      min="0"
+                      step="0.25"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Prix unitaire"
+                      value={item.unit_price}
+                      onChange={(e) => handleItemChange(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={`${item.total.toFixed(2)}€`}
+                      readOnly
+                      className="form-input bg-gray-100"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                      disabled={formData.items.length === 1}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {errors.items && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.items}</div>}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Taux TVA (%)</label>
+            <select
+              value={formData.tax_rate}
+              onChange={(e) => handleTaxRateChange(parseFloat(e.target.value))}
+              className="form-input"
+            >
+              <option value={0}>0% (Exonéré)</option>
+              <option value={5.5}>5.5% (Réduit)</option>
+              <option value={10}>10% (Intermédiaire)</option>
+              <option value={20}>20% (Normal)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Valide jusqu'au</label>
+            <input
+              type="date"
+              value={formData.valid_until}
+              onChange={(e) => setFormData(prev => ({ ...prev, valid_until: e.target.value }))}
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        {/* Totals */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="space-y-2 text-right">
+            <div className="flex justify-between">
+              <span>Sous-total:</span>
+              <span>{formData.subtotal.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between">
+              <span>TVA ({formData.tax_rate}%):</span>
+              <span>{formData.tax_amount.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
+              <span>Total:</span>
+              <span>{formData.total.toFixed(2)}€</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="btn btn-primary"
+          >
+            {quote ? 'Modifier' : 'Créer le devis'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Quotes Module - Complete Implementation
+const Quotes = ({ user, sessionToken }) => {
+  const [quotes, setQuotes] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [editingQuote, setEditingQuote] = useState(null);
+  const [quoteTemplates, setQuoteTemplates] = useState([]);
+
+  const apiCall = async (url, options = {}) => {
+    return await axios({
+      url: `${API}${url}`,
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+  };
+
+  const loadQuotes = async () => {
+    try {
+      const [quotesResponse, clientsResponse] = await Promise.all([
+        apiCall('/quotes'),
+        apiCall('/clients')
+      ]);
+      setQuotes(quotesResponse.data);
+      setClients(clientsResponse.data);
+    } catch (error) {
+      console.error('Error loading quotes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateQuote = () => {
+    setEditingQuote(null);
+    setShowQuoteModal(true);
+  };
+
+  const handleEditQuote = (quote) => {
+    setEditingQuote(quote);
+    setShowQuoteModal(true);
+  };
+
+  const handleSaveQuote = async (quoteData) => {
+    try {
+      if (editingQuote) {
+        await apiCall(`/quotes/${editingQuote.id}`, {
+          method: 'PUT',
+          data: quoteData
+        });
+        setQuotes(prevQuotes =>
+          prevQuotes.map(q => q.id === editingQuote.id ? { ...q, ...quoteData } : q)
+        );
+      } else {
+        const response = await apiCall('/quotes', {
+          method: 'POST',
+          data: quoteData
+        });
+        setQuotes(prevQuotes => [response.data, ...prevQuotes]);
+      }
+      setShowQuoteModal(false);
+    } catch (error) {
+      console.error('Error saving quote:', error);
+    }
+  };
+
+  const updateQuoteStatus = async (quoteId, status) => {
+    try {
+      await apiCall(`/quotes/${quoteId}/status`, {
+        method: 'PUT',
+        data: { status }
+      });
+      setQuotes(prevQuotes =>
+        prevQuotes.map(q => q.id === quoteId ? { ...q, status } : q)
+      );
+    } catch (error) {
+      console.error('Error updating quote status:', error);
+    }
+  };
+
+  const convertToInvoice = async (quote) => {
+    try {
+      const invoiceData = {
+        quote_id: quote.id,
+        client_id: quote.client_id,
+        client_name: quote.client_name,
+        title: quote.title,
+        items: quote.items,
+        tax_rate: quote.tax_rate,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      };
+
+      await apiCall('/invoices', {
+        method: 'POST',
+        data: invoiceData
+      });
+
+      // Update quote status to accepted
+      await updateQuoteStatus(quote.id, 'accepted');
+      
+      alert('Facture créée avec succès !');
+    } catch (error) {
+      console.error('Error converting to invoice:', error);
+      alert('Erreur lors de la création de la facture');
+    }
+  };
+
+  useEffect(() => {
+    loadQuotes();
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-700';
+      case 'sent': return 'bg-blue-100 text-blue-700';
+      case 'accepted': return 'bg-green-100 text-green-700';
+      case 'rejected': return 'bg-red-100 text-red-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'draft': return 'Brouillon';
+      case 'sent': return 'Envoyé';
+      case 'accepted': return 'Accepté';
+      case 'rejected': return 'Refusé';
+      default: return status;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des devis...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">📋 Devis</h1>
+          <p className="text-gray-600 mt-1">Gérez vos devis et propositions commerciales</p>
+        </div>
+        <button
+          onClick={handleCreateQuote}
+          className="btn btn-primary"
+        >
+          + Nouveau devis
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-gray-700">{quotes.filter(q => q.status === 'draft').length}</div>
+          <div className="text-sm text-gray-500">Brouillons</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-blue-600">{quotes.filter(q => q.status === 'sent').length}</div>
+          <div className="text-sm text-gray-500">Envoyés</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-green-600">{quotes.filter(q => q.status === 'accepted').length}</div>
+          <div className="text-sm text-gray-500">Acceptés</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-red-600">{quotes.filter(q => q.status === 'rejected').length}</div>
+          <div className="text-sm text-gray-500">Refusés</div>
+        </div>
+      </div>
+
+      {/* Quotes List */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        {quotes.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-6xl mb-4">📋</div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Aucun devis</h3>
+            <p className="text-gray-500 mb-4">Commencez par créer votre premier devis !</p>
+            <button
+              onClick={handleCreateQuote}
+              className="btn btn-primary"
+            >
+              Créer un devis
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {quotes.map(quote => (
+              <div key={quote.id} className="p-6 hover:bg-gray-50 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h3 className="font-semibold text-gray-800">{quote.quote_number}</h3>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(quote.status)}`}>
+                        {getStatusText(quote.status)}
+                      </span>
+                    </div>
+                    <p className="text-gray-900 font-medium">{quote.title}</p>
+                    <p className="text-gray-600 text-sm">Client: {quote.client_name}</p>
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                      <span>💰 {formatCurrency(quote.total)}</span>
+                      <span>📅 {formatDate(quote.created_at)}</span>
+                      <span>⏰ Valide jusqu'au {formatDate(quote.valid_until)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleEditQuote(quote)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="Modifier"
+                    >
+                      ✏️
+                    </button>
+                    {quote.status === 'sent' && (
+                      <>
+                        <button
+                          onClick={() => updateQuoteStatus(quote.id, 'accepted')}
+                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                          title="Marquer comme accepté"
+                        >
+                          ✅
+                        </button>
+                        <button
+                          onClick={() => updateQuoteStatus(quote.id, 'rejected')}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          title="Marquer comme refusé"
+                        >
+                          ❌
+                        </button>
+                      </>
+                    )}
+                    {quote.status === 'accepted' && (
+                      <button
+                        onClick={() => convertToInvoice(quote)}
+                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+                        title="Convertir en facture"
+                      >
+                        🧾
+                      </button>
+                    )}
+                    {(quote.status === 'draft' || quote.status === 'sent') && (
+                      <button
+                        onClick={() => updateQuoteStatus(quote.id, 'sent')}
+                        className="btn btn-outline btn-sm"
+                        disabled={quote.status === 'sent'}
+                      >
+                        {quote.status === 'sent' ? 'Envoyé' : 'Envoyer'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quote Modal */}
+      {showQuoteModal && (
+        <QuoteModal
+          isOpen={showQuoteModal}
+          onClose={() => setShowQuoteModal(false)}
+          onSave={handleSaveQuote}
+          quote={editingQuote}
+          clients={clients}
+        />
+      )}
+    </div>
+  );
+};
+
+// Invoice Modal Component - Modular Invoice Creation/Edition
+const InvoiceModal = ({ isOpen, onClose, onSave, invoice, clients, quotes }) => {
+  const [formData, setFormData] = useState({
+    quote_id: '',
+    client_id: '',
+    client_name: '',
+    title: '',
+    items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+    tax_rate: 20.0,
+    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    subtotal: 0,
+    tax_amount: 0,
+    total: 0
+  });
+
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (invoice) {
+      setFormData({
+        quote_id: invoice.quote_id || '',
+        client_id: invoice.client_id || '',
+        client_name: invoice.client_name || '',
+        title: invoice.title || '',
+        items: invoice.items || [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: invoice.tax_rate || 20.0,
+        due_date: invoice.due_date ? invoice.due_date.split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: invoice.subtotal || 0,
+        tax_amount: invoice.tax_amount || 0,
+        total: invoice.total || 0
+      });
+    } else {
+      setFormData({
+        quote_id: '',
+        client_id: '',
+        client_name: '',
+        title: '',
+        items: [{ description: '', quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: 20.0,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        subtotal: 0,
+        tax_amount: 0,
+        total: 0
+      });
+    }
+    setErrors({});
+  }, [invoice, isOpen]);
+
+  const handleQuoteSelection = (quoteId) => {
+    const selectedQuote = quotes.find(q => q.id === quoteId);
+    if (selectedQuote) {
+      setFormData(prev => ({
+        ...prev,
+        quote_id: quoteId,
+        client_id: selectedQuote.client_id,
+        client_name: selectedQuote.client_name,
+        title: selectedQuote.title,
+        items: selectedQuote.items,
+        tax_rate: selectedQuote.tax_rate,
+        subtotal: selectedQuote.subtotal,
+        tax_amount: selectedQuote.tax_amount,
+        total: selectedQuote.total
+      }));
+    }
+  };
+
+  const handleClientChange = (clientId) => {
+    const selectedClient = clients.find(c => c.id === clientId);
+    setFormData(prev => ({
+      ...prev,
+      client_id: clientId,
+      client_name: selectedClient ? selectedClient.name : ''
+    }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...formData.items];
+    newItems[index][field] = value;
+    
+    if (field === 'quantity' || field === 'unit_price') {
+      newItems[index].total = (parseFloat(newItems[index].quantity) || 0) * (parseFloat(newItems[index].unit_price) || 0);
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      items: newItems
+    }));
+    
+    calculateTotals(newItems);
+  };
+
+  const calculateTotals = (items) => {
+    const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax_amount = subtotal * (formData.tax_rate / 100);
+    const total = subtotal + tax_amount;
+    
+    setFormData(prev => ({
+      ...prev,
+      subtotal,
+      tax_amount,
+      total
+    }));
+  };
+
+  const addItem = () => {
+    const newItems = [...formData.items, { description: '', quantity: 1, unit_price: 0, total: 0 }];
+    setFormData(prev => ({
+      ...prev,
+      items: newItems
+    }));
+  };
+
+  const removeItem = (index) => {
+    if (formData.items.length > 1) {
+      const newItems = formData.items.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        items: newItems
+      }));
+      calculateTotals(newItems);
+    }
+  };
+
+  const handleTaxRateChange = (taxRate) => {
+    setFormData(prev => ({
+      ...prev,
+      tax_rate: taxRate
+    }));
+    calculateTotals(formData.items);
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+    
+    if (!formData.client_name.trim()) {
+      newErrors.client_name = 'Le client est obligatoire';
+    }
+    
+    if (!formData.title.trim()) {
+      newErrors.title = 'Le titre est obligatoire';
+    }
+    
+    if (formData.items.length === 0 || !formData.items[0].description.trim()) {
+      newErrors.items = 'Au moins un élément est obligatoire';
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    onSave({
+      ...formData,
+      due_date: formData.due_date + 'T23:59:59.999Z'
+    });
+  };
+
+  const acceptedQuotes = quotes.filter(q => q.status === 'accepted');
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 className="modal-header">
+          {invoice ? '✏️ Modifier la facture' : '➕ Nouvelle facture'}
+        </h2>
+
+        {/* Quote to Invoice Conversion */}
+        {!invoice && acceptedQuotes.length > 0 && (
+          <div className="form-group">
+            <label className="form-label">Convertir depuis un devis</label>
+            <select
+              value={formData.quote_id}
+              onChange={(e) => handleQuoteSelection(e.target.value)}
+              className="form-input"
+            >
+              <option value="">Créer une nouvelle facture</option>
+              {acceptedQuotes.map(quote => (
+                <option key={quote.id} value={quote.id}>
+                  {quote.quote_number} - {quote.client_name} - {formatCurrency(quote.total)}
+                </option>
+              ))}
+            </select>
+            <div className="text-sm text-gray-500 mt-1">
+              Sélectionnez un devis accepté pour créer automatiquement une facture
+            </div>
+          </div>
+        )}
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Client *</label>
+            <select
+              value={formData.client_id}
+              onChange={(e) => handleClientChange(e.target.value)}
+              className={`form-input ${errors.client_name ? 'error' : ''}`}
+              disabled={!!formData.quote_id}
+              style={{ borderColor: errors.client_name ? '#dc3545' : '' }}
+            >
+              <option value="">Sélectionner un client</option>
+              {clients.map(client => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+            {errors.client_name && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.client_name}</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Titre de la facture *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              className={`form-input ${errors.title ? 'error' : ''}`}
+              placeholder="Ex: Prestation développement web"
+              style={{ borderColor: errors.title ? '#dc3545' : '' }}
+            />
+            {errors.title && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.title}</div>}
+          </div>
+        </div>
+
+        {/* Items Section */}
+        <div className="form-group">
+          <div className="flex justify-between items-center mb-3">
+            <label className="form-label">Éléments de la facture</label>
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn btn-outline btn-sm"
+            >
+              + Ajouter une ligne
+            </button>
+          </div>
+          
+          <div className="space-y-3">
+            {formData.items.map((item, index) => (
+              <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-5">
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      className="form-input"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Qté"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      min="0"
+                      step="0.25"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Prix unitaire"
+                      value={item.unit_price}
+                      onChange={(e) => handleItemChange(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                      className="form-input"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={`${item.total.toFixed(2)}€`}
+                      readOnly
+                      className="form-input bg-gray-100"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                      disabled={formData.items.length === 1}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {errors.items && <div style={{ color: '#dc3545', fontSize: '12px', marginTop: '4px' }}>{errors.items}</div>}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Taux TVA (%)</label>
+            <select
+              value={formData.tax_rate}
+              onChange={(e) => handleTaxRateChange(parseFloat(e.target.value))}
+              className="form-input"
+            >
+              <option value={0}>0% (Exonéré)</option>
+              <option value={5.5}>5.5% (Réduit)</option>
+              <option value={10}>10% (Intermédiaire)</option>
+              <option value={20}>20% (Normal)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Date d'échéance</label>
+            <input
+              type="date"
+              value={formData.due_date}
+              onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        {/* Totals */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="space-y-2 text-right">
+            <div className="flex justify-between">
+              <span>Sous-total:</span>
+              <span>{formData.subtotal.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between">
+              <span>TVA ({formData.tax_rate}%):</span>
+              <span>{formData.tax_amount.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
+              <span>Total:</span>
+              <span>{formData.total.toFixed(2)}€</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="btn btn-primary"
+          >
+            {invoice ? 'Modifier' : 'Créer la facture'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Invoices Module - Complete Implementation  
+const Invoices = ({ user, sessionToken }) => {
+  const [invoices, setInvoices] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+
+  const apiCall = async (url, options = {}) => {
+    return await axios({
+      url: `${API}${url}`,
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+  };
+
+  const loadInvoices = async () => {
+    try {
+      const [invoicesResponse, clientsResponse, quotesResponse] = await Promise.all([
+        apiCall('/invoices'),
+        apiCall('/clients'),
+        apiCall('/quotes')
+      ]);
+      setInvoices(invoicesResponse.data);
+      setClients(clientsResponse.data);
+      setQuotes(quotesResponse.data);
+    } catch (error) {
+      console.error('Error loading invoices:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateInvoice = () => {
+    setEditingInvoice(null);
+    setShowInvoiceModal(true);
+  };
+
+  const handleEditInvoice = (invoice) => {
+    setEditingInvoice(invoice);
+    setShowInvoiceModal(true);
+  };
+
+  const handleSaveInvoice = async (invoiceData) => {
+    try {
+      if (editingInvoice) {
+        await apiCall(`/invoices/${editingInvoice.id}`, {
+          method: 'PUT',
+          data: invoiceData
+        });
+        setInvoices(prevInvoices =>
+          prevInvoices.map(i => i.id === editingInvoice.id ? { ...i, ...invoiceData } : i)
+        );
+      } else {
+        const response = await apiCall('/invoices', {
+          method: 'POST',
+          data: invoiceData
+        });
+        setInvoices(prevInvoices => [response.data, ...prevInvoices]);
+      }
+      setShowInvoiceModal(false);
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+    }
+  };
+
+  const updateInvoiceStatus = async (invoiceId, status) => {
+    try {
+      await apiCall(`/invoices/${invoiceId}/status`, {
+        method: 'PUT',
+        data: { status }
+      });
+      setInvoices(prevInvoices =>
+        prevInvoices.map(i => i.id === invoiceId ? { ...i, status } : i)
+      );
+    } catch (error) {
+      console.error('Error updating invoice status:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadInvoices();
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'sent': return 'bg-blue-100 text-blue-700';
+      case 'paid': return 'bg-green-100 text-green-700';
+      case 'overdue': return 'bg-red-100 text-red-700';
+      case 'cancelled': return 'bg-gray-100 text-gray-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'sent': return 'Envoyée';
+      case 'paid': return 'Payée';
+      case 'overdue': return 'En retard';
+      case 'cancelled': return 'Annulée';
+      default: return status;
+    }
+  };
+
+  const isOverdue = (invoice) => {
+    return new Date(invoice.due_date) < new Date() && invoice.status !== 'paid';
+  };
+
+  const getTotalPaid = () => {
+    return invoices
+      .filter(i => i.status === 'paid')
+      .reduce((sum, i) => sum + i.total, 0);
+  };
+
+  const getTotalUnpaid = () => {
+    return invoices
+      .filter(i => i.status === 'sent' || i.status === 'overdue')
+      .reduce((sum, i) => sum + i.total, 0);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des factures...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">🧾 Factures</h1>
+          <p className="text-gray-600 mt-1">Gérez vos factures et suivez les paiements</p>
+        </div>
+        <button
+          onClick={handleCreateInvoice}
+          className="btn btn-primary"
+        >
+          + Nouvelle facture
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-green-600">{formatCurrency(getTotalPaid())}</div>
+          <div className="text-sm text-gray-500">Total payé</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-red-600">{formatCurrency(getTotalUnpaid())}</div>
+          <div className="text-sm text-gray-500">En attente de paiement</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-orange-600">{invoices.filter(i => isOverdue(i)).length}</div>
+          <div className="text-sm text-gray-500">En retard</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-gray-700">{invoices.length}</div>
+          <div className="text-sm text-gray-500">Total factures</div>
+        </div>
+      </div>
+
+      {/* Invoices List */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        {invoices.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-6xl mb-4">🧾</div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Aucune facture</h3>
+            <p className="text-gray-500 mb-4">Commencez par créer votre première facture !</p>
+            <button
+              onClick={handleCreateInvoice}
+              className="btn btn-primary"
+            >
+              Créer une facture
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {invoices.map(invoice => (
+              <div key={invoice.id} className={`p-6 transition-all ${isOverdue(invoice) ? 'bg-red-50 border-l-4 border-red-400' : 'hover:bg-gray-50'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h3 className="font-semibold text-gray-800">{invoice.invoice_number}</h3>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}>
+                        {getStatusText(invoice.status)}
+                      </span>
+                      {isOverdue(invoice) && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                          ⏰ En retard
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-900 font-medium">{invoice.title}</p>
+                    <p className="text-gray-600 text-sm">Client: {invoice.client_name}</p>
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                      <span>💰 {formatCurrency(invoice.total)}</span>
+                      <span>📅 Créée le {formatDate(invoice.created_at)}</span>
+                      <span>📋 Échéance: {formatDate(invoice.due_date)}</span>
+                      {invoice.paid_date && (
+                        <span>✅ Payée le {formatDate(invoice.paid_date)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleEditInvoice(invoice)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="Voir/Modifier"
+                    >
+                      ✏️
+                    </button>
+                    {invoice.status === 'sent' && (
+                      <button
+                        onClick={() => updateInvoiceStatus(invoice.id, 'paid')}
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                        title="Marquer comme payée"
+                      >
+                        ✅
+                      </button>
+                    )}
+                    {invoice.status !== 'paid' && (
+                      <button
+                        onClick={() => updateInvoiceStatus(invoice.id, 'cancelled')}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Annuler"
+                      >
+                        ❌
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {/* TODO: Generate PDF */}}
+                      className="btn btn-outline btn-sm"
+                    >
+                      📄 PDF
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Invoice Modal */}
+      {showInvoiceModal && (
+        <InvoiceModal
+          isOpen={showInvoiceModal}
+          onClose={() => setShowInvoiceModal(false)}
+          onSave={handleSaveInvoice}
+          invoice={editingInvoice}
+          clients={clients}
+          quotes={quotes}
+        />
+      )}
+    </div>
+  );
+};
 
 const Settings = () => (
   <div className="bg-white p-6 rounded-xl shadow-sm">

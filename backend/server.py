@@ -303,37 +303,37 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
         "uid": current_user.uid,
         "year": current_year,
         "week": {"$in": [current_week, current_week + 1]}
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Get pending todos
     pending_todos = await db.todos.find({
         "uid": current_user.uid,
         "completed": False
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Get recent clients
     recent_clients = await db.clients.find({
         "uid": current_user.uid
-    }).sort("created_at", -1).limit(5).to_list(5)
+    }, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
     
     # Get pending quotes
     pending_quotes = await db.quotes.find({
         "uid": current_user.uid,
         "status": {"$in": ["draft", "sent"]}
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Get unpaid invoices
     unpaid_invoices = await db.invoices.find({
         "uid": current_user.uid,
         "status": {"$in": ["sent", "overdue"]}
-    }).limit(5).to_list(5)
+    }, {"_id": 0}).limit(5).to_list(5)
     
     # Calculate revenue stats
     paid_events = await db.planning_events.find({
         "uid": current_user.uid,
         "status": "paid",
         "year": current_year
-    }).to_list(1000)
+    }, {"_id": 0}).to_list(1000)
     
     monthly_revenue = 0
     for event in paid_events:
@@ -362,8 +362,14 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
 async def get_week_planning(year: int, week: int, current_user: User = Depends(get_current_user)):
-    events = await db.planning_events.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
-    tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
+    events = await db.planning_events.find(
+        {"uid": current_user.uid, "year": year, "week": week},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
+    tasks = await db.weekly_tasks.find(
+        {"uid": current_user.uid, "year": year, "week": week},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
     
     return {
         "events": events,
@@ -372,8 +378,14 @@ async def get_week_planning(year: int, week: int, current_user: User = Depends(g
 
 @api_router.get("/planning/month/{year}/{month}")
 async def get_month_planning(year: int, month: int, current_user: User = Depends(get_current_user)):
-    events = await db.planning_events.find({"uid": current_user.uid, "year": year}).to_list(1000)
-    tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year}).to_list(1000)
+    events = await db.planning_events.find(
+        {"uid": current_user.uid, "year": year},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
+    tasks = await db.weekly_tasks.find(
+        {"uid": current_user.uid, "year": year},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
     
     return {
         "events": events,
@@ -403,7 +415,7 @@ async def update_event(event_id: str, event_request: EventCreateRequest, current
         {"$set": {**event_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
-    updated_event = await db.planning_events.find_one({"id": event_id})
+    updated_event = await db.planning_events.find_one({"id": event_id}, {"_id": 0})
     return updated_event
 
 @api_router.delete("/planning/events/{event_id}")
@@ -415,7 +427,14 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
 
 @api_router.get("/planning/earnings/{year}/{week}")
 async def get_earnings(year: int, week: int, current_user: User = Depends(get_current_user)):
-    events = await db.planning_events.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
+    events = await db.planning_events.find(
+        {"uid": current_user.uid, "year": year, "week": week},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
+    tasks = await db.weekly_tasks.find(
+        {"uid": current_user.uid, "year": year, "week": week},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
     
     earnings = {
         "paid": 0,
@@ -451,10 +470,24 @@ async def get_earnings(year: int, week: int, current_user: User = Depends(get_cu
             elif event["status"] == "pending":
                 earnings["pending"] += amount
     
+    # Add earnings from tasks - tasks are always considered as "paid"
+    for task in tasks:
+        for time_slot in task.get("time_slots", []):
+            try:
+                start_hour = int(time_slot["start"].split(":")[0])
+                end_hour = int(time_slot["end"].split(":")[0])
+                hours = end_hour - start_hour
+                amount = hours * task.get("price", 0)  # task price is per hour
+                earnings["paid"] += amount
+            except:
+                # Fallback: add base task price
+                earnings["paid"] += task.get("price", 0)
+    
     earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"]
     
     return earnings
 
+# Tasks endpoints
 # Tasks endpoints
 @api_router.post("/planning/tasks")
 async def create_task(task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
@@ -472,9 +505,26 @@ async def create_task(task_request: TaskCreateRequest, current_user: User = Depe
     await db.weekly_tasks.insert_one(task.dict())
     return task
 
+@api_router.put("/planning/tasks/{task_id}")
+async def update_task(task_id: str, task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
+    await db.weekly_tasks.update_one(
+        {"id": task_id, "uid": current_user.uid},
+        {"$set": {**task_request.dict(), "updated_at": datetime.utcnow()}}
+    )
+    
+    updated_task = await db.weekly_tasks.find_one({"id": task_id}, {"_id": 0})
+    return updated_task
+
+@api_router.delete("/planning/tasks/{task_id}")
+async def delete_task(task_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.weekly_tasks.delete_one({"id": task_id, "uid": current_user.uid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted"}
+
 @api_router.get("/todos")
 async def get_todos(current_user: User = Depends(get_current_user)):
-    todos = await db.todos.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    todos = await db.todos.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return todos
 
 @api_router.post("/todos")
@@ -502,7 +552,7 @@ async def update_todo(todo_id: str, todo_request: TodoCreateRequest, current_use
         {"$set": {**todo_data, "updated_at": datetime.utcnow()}}
     )
     
-    updated_todo = await db.todos.find_one({"id": todo_id})
+    updated_todo = await db.todos.find_one({"id": todo_id}, {"_id": 0})
     return updated_todo
 
 @api_router.put("/todos/{todo_id}/toggle")
@@ -516,7 +566,7 @@ async def toggle_todo(todo_id: str, current_user: User = Depends(get_current_use
         {"$set": {"completed": not todo["completed"], "updated_at": datetime.utcnow()}}
     )
     
-    updated_todo = await db.todos.find_one({"id": todo_id})
+    updated_todo = await db.todos.find_one({"id": todo_id}, {"_id": 0})
     return updated_todo
 
 @api_router.delete("/todos/{todo_id}")
@@ -529,7 +579,7 @@ async def delete_todo(todo_id: str, current_user: User = Depends(get_current_use
 # Clients endpoints
 @api_router.get("/clients")
 async def get_clients(current_user: User = Depends(get_current_user)):
-    clients = await db.clients.find({"uid": current_user.uid}).sort("name", 1).to_list(1000)
+    clients = await db.clients.find({"uid": current_user.uid}, {"_id": 0}).sort("name", 1).to_list(1000)
     return clients
 
 @api_router.post("/clients")
@@ -549,7 +599,7 @@ async def update_client(client_id: str, client_request: ClientCreateRequest, cur
         {"$set": {**client_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
-    updated_client = await db.clients.find_one({"id": client_id})
+    updated_client = await db.clients.find_one({"id": client_id}, {"_id": 0})
     return updated_client
 
 @api_router.delete("/clients/{client_id}")
@@ -562,7 +612,7 @@ async def delete_client(client_id: str, current_user: User = Depends(get_current
 # Quotes endpoints
 @api_router.get("/quotes")
 async def get_quotes(current_user: User = Depends(get_current_user)):
-    quotes = await db.quotes.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    quotes = await db.quotes.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return quotes
 
 @api_router.post("/quotes")
@@ -632,7 +682,7 @@ async def update_quote_status(quote_id: str, status: str, current_user: User = D
 # Invoices endpoints
 @api_router.get("/invoices")
 async def get_invoices(current_user: User = Depends(get_current_user)):
-    invoices = await db.invoices.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    invoices = await db.invoices.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return invoices
 
 @api_router.post("/invoices")
