@@ -187,7 +187,7 @@ frontend:
         agent: "main"
         comment: "Style simple et épuré appliqué comme demandé : fond blanc pur, bordures fines #e5e7eb, police simple, pas d'ombres, design minimaliste identique à l'image de référence"
 
-  - task: "Navigation Fluide Entre Semaines"
+  - task: "Navigation Simple et Discrète"
     implemented: true
     working: true
     file: "App.js"
@@ -197,7 +197,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Transitions douces ajoutées : animations CSS, loadEvents(true) pour rechargement fluide, états de transition"
+        comment: "Animations simplifiées pour style épuré : fadeIn simple, transitions discrètes, pas d'effets complexes"
 
   - task: "Event Modals - CRUD Operations"
     implemented: true
