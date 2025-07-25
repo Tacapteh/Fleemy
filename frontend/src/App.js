@@ -1227,27 +1227,75 @@ const Planning = ({ user, sessionToken }) => {
 
       {/* Planning Table */}
       {view === 'week' ? (
-        <div className="planning-container">
-          <table className="planning-table">
-            <thead>
-              <tr>
-                <th className="time-header">Heure</th>
-                {weekDates.map((date, index) => (
-                  <th key={index} className="day-header">
-                    {dayNames[index]}
-                    <div className="day-date">
-                      {date.getDate()}/{date.getMonth() + 1}
-                    </div>
-                  </th>
+        <div className={`planning-content ${transitioning ? 'transitioning' : ''}`}>
+          <div className="planning-container">
+            <table className="planning-table">
+              <thead>
+                <tr>
+                  <th className="time-header">Heure</th>
+                  {weekDates.map((date, index) => (
+                    <th key={index} className="day-header">
+                      {dayNames[index]}
+                      <div className="day-date">
+                        {date.getDate()}/{date.getMonth() + 1}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {timeSlots.slice(0, -1).map((time, timeIndex) => (
+                  <tr key={time}>
+                    <td className="time-header">{time}</td>
+                    {dayNames.map((dayName, dayIndex) => {
+                      const slotEvents = getEventsForTimeSlot(dayIndex, time);
+                      
+                      return (
+                        <td
+                          key={dayIndex}
+                          onClick={() => handleTimeSlotClick(dayIndex, time)}
+                          style={{ cursor: viewingMember ? 'default' : 'pointer' }}
+                        >
+                          {slotEvents.map(event => (
+                            <div
+                              key={event.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEventClick(event);
+                              }}
+                              className={`event ${
+                                event.type === 'paid' ? 'event-meeting' : 
+                                event.type === 'unpaid' ? 'event-task' : 
+                                event.type === 'pending' ? 'event-break' : 
+                                'event-notworked'
+                              } ${transitioning ? '' : 'new-event'}`}
+                            >
+                              <div className="event-description">{event.description}</div>
+                              <div className="event-time">{event.start} - {event.end}</div>
+                              {event.client_name && (
+                                <div className="event-client">{event.client_name}</div>
+                              )}
+                            </div>
+                          ))}
+                          
+                          {/* Loading skeleton during transition */}
+                          {transitioning && (
+                            <div className="planning-skeleton" style={{
+                              width: '100%',
+                              height: '20px',
+                              borderRadius: '4px',
+                              marginTop: '4px'
+                            }}></div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {timeSlots.slice(0, -1).map((time, timeIndex) => (
-                <tr key={time}>
-                  <td className="time-header">{time}</td>
-                  {dayNames.map((dayName, dayIndex) => {
-                    const slotEvents = getEventsForTimeSlot(dayIndex, time);
+              </tbody>
+            </table>
+          </div>
+        </div>
                     
                     return (
                       <td
