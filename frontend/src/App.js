@@ -1149,10 +1149,12 @@ const GridBody = ({
   timeSlots, 
   dayNames, 
   events, 
+  tasks = [],
   currentWeek, 
   currentYear, 
   onTimeSlotClick, 
-  onEventClick, 
+  onEventClick,
+  onTaskClick,
   viewingMember, 
   transitioning 
 }) => {
@@ -1165,12 +1167,29 @@ const GridBody = ({
     );
   };
 
+  const getTasksForTimeSlot = (day, time) => {
+    const dayName = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][day];
+    return tasks.filter(task => 
+      task.week === currentWeek &&
+      task.year === currentYear &&
+      task.time_slots?.some(slot => 
+        slot.day === dayName && slot.start === time
+      )
+    );
+  };
+
+  const hasEventInTimeSlot = (day, time) => {
+    return getEventsForTimeSlot(day, time).length > 0;
+  };
+
   return (
     <div className="planning-grid-body">
       {timeSlots.slice(0, -1).map((time, timeIndex) => (
         <div key={time} className="planning-grid-row">
           {dayNames.map((dayName, dayIndex) => {
             const slotEvents = getEventsForTimeSlot(dayIndex, time);
+            const slotTasks = getTasksForTimeSlot(dayIndex, time);
+            const hasEvent = hasEventInTimeSlot(dayIndex, time);
             
             return (
               <div
@@ -1178,6 +1197,7 @@ const GridBody = ({
                 className={`planning-grid-cell ${viewingMember ? 'readonly' : ''}`}
                 onClick={() => !viewingMember && onTimeSlotClick(dayIndex, time)}
               >
+                {/* Display events */}
                 {slotEvents.map(event => (
                   <div
                     key={event.id}
@@ -1201,6 +1221,74 @@ const GridBody = ({
                     )}
                   </div>
                 ))}
+
+                {/* Display tasks - conditional rendering based on event presence */}
+                {slotTasks.map(task => {
+                  if (hasEvent) {
+                    // If there's an event, show task as icon in corner
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTaskClick && onTaskClick(task);
+                        }}
+                        className="planning-task-icon"
+                        style={{
+                          position: 'absolute',
+                          top: '4px',
+                          right: '4px',
+                          width: '16px',
+                          height: '16px',
+                          backgroundColor: task.color,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '10px',
+                          cursor: 'pointer',
+                          zIndex: 20
+                        }}
+                        title={task.name}
+                      >
+                        {task.icon}
+                      </div>
+                    );
+                  } else {
+                    // If no event, show task as colored block
+                    return (
+                      <div
+                        key={task.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTaskClick && onTaskClick(task);
+                        }}
+                        className="planning-task-block"
+                        style={{
+                          position: 'absolute',
+                          top: '2px',
+                          left: '2px',
+                          right: '2px',
+                          bottom: '2px',
+                          backgroundColor: task.color,
+                          borderRadius: '4px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          opacity: 0.8,
+                          fontSize: '12px',
+                          color: '#fff',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                        }}
+                      >
+                        <div style={{ fontSize: '16px', marginBottom: '2px' }}>{task.icon}</div>
+                        <div style={{ fontSize: '10px', fontWeight: 500 }}>{task.name}</div>
+                      </div>
+                    );
+                  }
+                })}
                 
                 {/* Smooth loading skeleton during transition */}
                 {transitioning && (
