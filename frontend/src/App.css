@@ -1061,7 +1061,7 @@ button:active {
   letter-spacing: -0.025em;
 }
 
-/* Light Revenue Cards */
+/* Colorized Revenue Cards */
 .revenue-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1071,53 +1071,70 @@ button:active {
 }
 
 .revenue-card {
-  background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 12px;
+  padding: 24px;
   text-align: center;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .revenue-card:hover {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.revenue-card.paid {
-  border-left: 3px solid #16a34a;
+.revenue-card-paid {
+  background: #dcfce7;
+  border-color: #bbf7d0;
 }
 
-.revenue-card.unpaid {
-  border-left: 3px solid #dc2626;
+.revenue-card-unpaid {
+  background: #fee2e2;
+  border-color: #fecaca;
 }
 
-.revenue-card.pending {
-  border-left: 3px solid #d97706;
+.revenue-card-pending {
+  background: #ffedd5;
+  border-color: #fed7aa;
 }
 
 .revenue-amount {
-  font-size: 28px;
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
   letter-spacing: -0.025em;
+  line-height: 1;
 }
 
-.revenue-card.paid .revenue-amount {
-  color: #16a34a;
+.revenue-card-paid .revenue-amount {
+  color: #15803d;
 }
 
-.revenue-card.unpaid .revenue-amount {
-  color: #dc2626;
+.revenue-card-unpaid .revenue-amount {
+  color: #b91c1c;
 }
 
-.revenue-card.pending .revenue-amount {
-  color: #d97706;
+.revenue-card-pending .revenue-amount {
+  color: #c2410c;
 }
 
 .revenue-label {
   font-size: 14px;
-  color: #6b7280;
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+}
+
+.revenue-card-paid .revenue-label {
+  color: #166534;
+}
+
+.revenue-card-unpaid .revenue-label {
+  color: #991b1b;
+}
+
+.revenue-card-pending .revenue-label {
+  color: #9a3412;
 }
 
 /* Modal Styles */
