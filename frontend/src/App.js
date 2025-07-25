@@ -495,8 +495,14 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     
+    // Validation : client obligatoire, description facultative
+    if (!formData.client_name.trim()) {
+      alert('Le nom du client est obligatoire.');
+      return;
+    }
+    
+    setLoading(true);
     try {
       await onSave(formData);
     } catch (error) {
