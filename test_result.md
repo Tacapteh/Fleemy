@@ -155,15 +155,18 @@ backend:
 
   - task: "API CRUD Tasks - Integrated in Planning"
     implemented: true
-    working: false
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: false
         agent: "main"
         comment: "NOUVEAU: Endpoints CRUD pour tâches intégrées au planning : POST /api/planning/tasks, PUT /api/planning/tasks/{id}, DELETE /api/planning/tasks/{id}. Modèle WeeklyTask avec nom, prix, couleur, icône, time_slots."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS: All CRUD endpoints properly implemented. POST /api/planning/tasks creates tasks with WeeklyTask model (name, price, color, icon, time_slots). PUT /api/planning/tasks/{task_id} updates tasks. DELETE /api/planning/tasks/{task_id} deletes tasks. Tasks are loaded in week/month endpoints and included in earnings calculation. Implementation is complete and correct."
 
   - task: "Authentication endpoints"
     implemented: true
