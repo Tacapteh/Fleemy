@@ -362,8 +362,14 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
 async def get_week_planning(year: int, week: int, current_user: User = Depends(get_current_user)):
-    events = await db.planning_events.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
-    tasks = await db.weekly_tasks.find({"uid": current_user.uid, "year": year, "week": week}).to_list(1000)
+    events = await db.planning_events.find(
+        {"uid": current_user.uid, "year": year, "week": week},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
+    tasks = await db.weekly_tasks.find(
+        {"uid": current_user.uid, "year": year, "week": week},
+        {"_id": 0}  # Exclude MongoDB ObjectId
+    ).to_list(1000)
     
     return {
         "events": events,
