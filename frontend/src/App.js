@@ -1360,8 +1360,11 @@ const GridBody = ({
     }
   };
 
+  const [transitionDirection, setTransitionDirection] = useState('forward'); // 'forward' or 'backward'
+
   const navigateWeek = async (direction) => {
-    // Start transition immediately
+    // Set transition direction for animations
+    setTransitionDirection(direction > 0 ? 'forward' : 'backward');
     setTransitioning(true);
     
     // Update date
@@ -1377,11 +1380,11 @@ const GridBody = ({
       const targetUid = viewingMember ? viewingMember.uid : user.uid;
       const response = await apiCall(`/planning/week/${newYear}/${newWeek}`);
       
-      // Small delay for smooth transition
+      // Longer delay for smoother animation
       setTimeout(() => {
         setEvents(response.data.events || []);
         setTransitioning(false);
-      }, 200);
+      }, 300);
     } catch (error) {
       console.error('Error loading week events:', error);
       setTransitioning(false);
@@ -1389,7 +1392,8 @@ const GridBody = ({
   };
 
   const navigateMonth = async (direction) => {
-    // Start transition immediately
+    // Set transition direction for animations
+    setTransitionDirection(direction > 0 ? 'forward' : 'backward');
     setTransitioning(true);
     
     // Update date
@@ -1405,11 +1409,11 @@ const GridBody = ({
       const targetUid = viewingMember ? viewingMember.uid : user.uid;
       const response = await apiCall(`/planning/month/${newYear}/${newMonth}`);
       
-      // Small delay for smooth transition
+      // Longer delay for smoother animation
       setTimeout(() => {
         setEvents(response.data.events || []);
         setTransitioning(false);
-      }, 200);
+      }, 300);
     } catch (error) {
       console.error('Error loading month events:', error);
       setTransitioning(false);
