@@ -893,13 +893,13 @@ const WeekNavigationHeader = ({ currentDate, currentWeek, currentYear, monthName
   const weekDates = getWeekDates(currentYear, currentWeek);
   
   return (
-    <div className="week-navigation">
+    <div className={`week-navigation ${transitioning ? 'transitioning' : ''}`}>
       <button
         onClick={() => onNavigate('week', -1)}
-        className="week-nav-btn"
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
         disabled={transitioning}
       >
-        ◀
+        {!transitioning && '◀'}
       </button>
       
       <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
@@ -908,10 +908,10 @@ const WeekNavigationHeader = ({ currentDate, currentWeek, currentYear, monthName
       
       <button
         onClick={() => onNavigate('week', 1)}
-        className="week-nav-btn"
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
         disabled={transitioning}
       >
-        ▶
+        {!transitioning && '▶'}
       </button>
     </div>
   );
@@ -919,13 +919,13 @@ const WeekNavigationHeader = ({ currentDate, currentWeek, currentYear, monthName
 
 const MonthNavigationHeader = ({ currentDate, currentMonth, currentYear, monthNames, onNavigate, transitioning }) => {
   return (
-    <div className="week-navigation">
+    <div className={`week-navigation ${transitioning ? 'transitioning' : ''}`}>
       <button
         onClick={() => onNavigate('month', -1)}
-        className="week-nav-btn"
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
         disabled={transitioning}
       >
-        ◀
+        {!transitioning && '◀'}
       </button>
       
       <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
@@ -934,10 +934,10 @@ const MonthNavigationHeader = ({ currentDate, currentMonth, currentYear, monthNa
       
       <button
         onClick={() => onNavigate('month', 1)}
-        className="week-nav-btn"
+        className={`week-nav-btn ${transitioning ? 'loading' : ''}`}
         disabled={transitioning}
       >
-        ▶
+        {!transitioning && '▶'}
       </button>
     </div>
   );
