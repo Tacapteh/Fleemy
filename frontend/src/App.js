@@ -2522,12 +2522,286 @@ const Clients = () => (
   </div>
 );
 
-const Quotes = () => (
-  <div className="bg-white p-6 rounded-xl shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-4">📋 Devis</h1>
-    <p className="text-gray-600">Module de devis en développement...</p>
-  </div>
-);
+// Quotes Module - Complete Implementation
+const Quotes = ({ user, sessionToken }) => {
+  const [quotes, setQuotes] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [editingQuote, setEditingQuote] = useState(null);
+  const [quoteTemplates, setQuoteTemplates] = useState([]);
+
+  const apiCall = async (url, options = {}) => {
+    return await axios({
+      url: `${API}${url}`,
+      headers: {
+        'Authorization': `Bearer ${sessionToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+  };
+
+  const loadQuotes = async () => {
+    try {
+      const [quotesResponse, clientsResponse] = await Promise.all([
+        apiCall('/quotes'),
+        apiCall('/clients')
+      ]);
+      setQuotes(quotesResponse.data);
+      setClients(clientsResponse.data);
+    } catch (error) {
+      console.error('Error loading quotes:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateQuote = () => {
+    setEditingQuote(null);
+    setShowQuoteModal(true);
+  };
+
+  const handleEditQuote = (quote) => {
+    setEditingQuote(quote);
+    setShowQuoteModal(true);
+  };
+
+  const handleSaveQuote = async (quoteData) => {
+    try {
+      if (editingQuote) {
+        await apiCall(`/quotes/${editingQuote.id}`, {
+          method: 'PUT',
+          data: quoteData
+        });
+        setQuotes(prevQuotes =>
+          prevQuotes.map(q => q.id === editingQuote.id ? { ...q, ...quoteData } : q)
+        );
+      } else {
+        const response = await apiCall('/quotes', {
+          method: 'POST',
+          data: quoteData
+        });
+        setQuotes(prevQuotes => [response.data, ...prevQuotes]);
+      }
+      setShowQuoteModal(false);
+    } catch (error) {
+      console.error('Error saving quote:', error);
+    }
+  };
+
+  const updateQuoteStatus = async (quoteId, status) => {
+    try {
+      await apiCall(`/quotes/${quoteId}/status`, {
+        method: 'PUT',
+        data: { status }
+      });
+      setQuotes(prevQuotes =>
+        prevQuotes.map(q => q.id === quoteId ? { ...q, status } : q)
+      );
+    } catch (error) {
+      console.error('Error updating quote status:', error);
+    }
+  };
+
+  const convertToInvoice = async (quote) => {
+    try {
+      const invoiceData = {
+        quote_id: quote.id,
+        client_id: quote.client_id,
+        client_name: quote.client_name,
+        title: quote.title,
+        items: quote.items,
+        tax_rate: quote.tax_rate,
+        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      };
+
+      await apiCall('/invoices', {
+        method: 'POST',
+        data: invoiceData
+      });
+
+      // Update quote status to accepted
+      await updateQuoteStatus(quote.id, 'accepted');
+      
+      alert('Facture créée avec succès !');
+    } catch (error) {
+      console.error('Error converting to invoice:', error);
+      alert('Erreur lors de la création de la facture');
+    }
+  };
+
+  useEffect(() => {
+    loadQuotes();
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'draft': return 'bg-gray-100 text-gray-700';
+      case 'sent': return 'bg-blue-100 text-blue-700';
+      case 'accepted': return 'bg-green-100 text-green-700';
+      case 'rejected': return 'bg-red-100 text-red-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'draft': return 'Brouillon';
+      case 'sent': return 'Envoyé';
+      case 'accepted': return 'Accepté';
+      case 'rejected': return 'Refusé';
+      default: return status;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement des devis...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">📋 Devis</h1>
+          <p className="text-gray-600 mt-1">Gérez vos devis et propositions commerciales</p>
+        </div>
+        <button
+          onClick={handleCreateQuote}
+          className="btn btn-primary"
+        >
+          + Nouveau devis
+        </button>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-gray-700">{quotes.filter(q => q.status === 'draft').length}</div>
+          <div className="text-sm text-gray-500">Brouillons</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-blue-600">{quotes.filter(q => q.status === 'sent').length}</div>
+          <div className="text-sm text-gray-500">Envoyés</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-green-600">{quotes.filter(q => q.status === 'accepted').length}</div>
+          <div className="text-sm text-gray-500">Acceptés</div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <div className="text-2xl font-bold text-red-600">{quotes.filter(q => q.status === 'rejected').length}</div>
+          <div className="text-sm text-gray-500">Refusés</div>
+        </div>
+      </div>
+
+      {/* Quotes List */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        {quotes.length === 0 ? (
+          <div className="p-12 text-center">
+            <div className="text-6xl mb-4">📋</div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">Aucun devis</h3>
+            <p className="text-gray-500 mb-4">Commencez par créer votre premier devis !</p>
+            <button
+              onClick={handleCreateQuote}
+              className="btn btn-primary"
+            >
+              Créer un devis
+            </button>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200">
+            {quotes.map(quote => (
+              <div key={quote.id} className="p-6 hover:bg-gray-50 transition-all">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h3 className="font-semibold text-gray-800">{quote.quote_number}</h3>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(quote.status)}`}>
+                        {getStatusText(quote.status)}
+                      </span>
+                    </div>
+                    <p className="text-gray-900 font-medium">{quote.title}</p>
+                    <p className="text-gray-600 text-sm">Client: {quote.client_name}</p>
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                      <span>💰 {formatCurrency(quote.total)}</span>
+                      <span>📅 {formatDate(quote.created_at)}</span>
+                      <span>⏰ Valide jusqu'au {formatDate(quote.valid_until)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleEditQuote(quote)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="Modifier"
+                    >
+                      ✏️
+                    </button>
+                    {quote.status === 'sent' && (
+                      <>
+                        <button
+                          onClick={() => updateQuoteStatus(quote.id, 'accepted')}
+                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                          title="Marquer comme accepté"
+                        >
+                          ✅
+                        </button>
+                        <button
+                          onClick={() => updateQuoteStatus(quote.id, 'rejected')}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          title="Marquer comme refusé"
+                        >
+                          ❌
+                        </button>
+                      </>
+                    )}
+                    {quote.status === 'accepted' && (
+                      <button
+                        onClick={() => convertToInvoice(quote)}
+                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+                        title="Convertir en facture"
+                      >
+                        🧾
+                      </button>
+                    )}
+                    {(quote.status === 'draft' || quote.status === 'sent') && (
+                      <button
+                        onClick={() => updateQuoteStatus(quote.id, 'sent')}
+                        className="btn btn-outline btn-sm"
+                        disabled={quote.status === 'sent'}
+                      >
+                        {quote.status === 'sent' ? 'Envoyé' : 'Envoyer'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Quote Modal */}
+      {showQuoteModal && (
+        <QuoteModal
+          isOpen={showQuoteModal}
+          onClose={() => setShowQuoteModal(false)}
+          onSave={handleSaveQuote}
+          quote={editingQuote}
+          clients={clients}
+        />
+      )}
+    </div>
+  );
+};
 
 const Invoices = () => (
   <div className="bg-white p-6 rounded-xl shadow-sm">
