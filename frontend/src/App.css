@@ -364,13 +364,13 @@ button:active {
   }
 }
 
-/* Simple and Clean Planning Styles - Based on provided image */
+/* Ultra Clean Planning Styles - Exactly like reference image */
 .planning-container {
   background: #ffffff;
   border-radius: 0;
   box-shadow: none;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: none;
 }
 
 .planning-table {
@@ -386,12 +386,16 @@ button:active {
   border: none;
   border-bottom: 1px solid #e5e7eb;
   border-right: 1px solid #e5e7eb;
-  padding: 12px 8px;
+  padding: 8px 6px;
   text-align: center;
   font-weight: 400;
-  font-size: 14px;
+  font-size: 13px;
   color: #374151;
   letter-spacing: 0;
+}
+
+.planning-table th:first-child {
+  border-right: 1px solid #e5e7eb;
 }
 
 .planning-table th:last-child {
@@ -411,12 +415,16 @@ button:active {
   transition: background-color 0.1s ease;
 }
 
+.planning-table td:first-child {
+  border-right: 1px solid #e5e7eb;
+}
+
 .planning-table td:last-child {
   border-right: none;
 }
 
-.planning-table td:hover {
-  background-color: #f9fafb;
+.planning-table td:hover:not(.time-header) {
+  background-color: #f8fafc;
   cursor: pointer;
 }
 
@@ -424,32 +432,37 @@ button:active {
   background: #ffffff !important;
   font-weight: 400;
   font-size: 12px;
-  color: #6b7280;
+  color: #64748b;
   text-align: center;
   vertical-align: middle;
-  width: 80px;
-  min-width: 80px;
+  width: 60px;
+  min-width: 60px;
   border-right: 1px solid #e5e7eb !important;
-  padding: 12px 8px;
+  padding: 8px 4px;
+  cursor: default !important;
+}
+
+.time-header:hover {
+  background: #ffffff !important;
 }
 
 .day-header {
   background: #ffffff !important;
   font-weight: 400;
-  font-size: 14px;
+  font-size: 13px;
   color: #374151;
   text-align: center;
-  padding: 12px 8px;
+  padding: 8px 6px;
   border-bottom: 1px solid #e5e7eb;
   letter-spacing: 0;
   text-transform: capitalize;
 }
 
 .day-date {
-  font-size: 12px;
-  color: #6b7280;
+  font-size: 13px;
+  color: #374151;
   font-weight: 400;
-  margin-top: 2px;
+  margin-top: 0;
   line-height: 1.2;
 }
 
