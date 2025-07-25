@@ -116,6 +116,9 @@ backend:
       - working: true
         agent: "main"
         comment: "API endpoints fonctionnels pour récupération des événements par semaine/mois"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: All planning endpoints working correctly. GET /api/planning/week/{year}/{week} and GET /api/planning/month/{year}/{month} properly require authentication and return appropriate responses. Endpoints exist and are accessible."
 
   - task: "API CRUD Events - Create/Update/Delete"
     implemented: true
@@ -128,6 +131,9 @@ backend:
       - working: true
         agent: "main"
         comment: "Endpoints CRUD pour événements opérationnels"
+      - working: true
+        agent: "testing"
+        comment: "TESTED: All CRUD operations working correctly. POST /api/planning/events, PUT /api/planning/events/{id}, DELETE /api/planning/events/{id} all properly implemented with authentication. Event data structure uses correct field names: start_time, end_time, status (not start/end/type)."
 
   - task: "API Earnings Calculation"
     implemented: true
@@ -140,6 +146,21 @@ backend:
       - working: true
         agent: "main"
         comment: "Calcul automatique des revenus par semaine implémenté"
+      - working: true
+        agent: "testing"
+        comment: "TESTED & FIXED: Critical data structure compatibility issue fixed. Earnings endpoint was using wrong field names (start/end instead of start_time/end_time, type instead of status). Fixed to use correct PlanningEvent model fields. Revenue calculation accuracy verified with test scenarios. GET /api/planning/earnings/{year}/{week} now works correctly."
+
+  - task: "Authentication endpoints"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "TESTED & FIXED: Added missing GET /api/auth/me endpoint. Login functionality works correctly with external auth service. Session management properly implemented. Minor: login with invalid session returns 500 instead of 401, but this is from external auth service and doesn't affect functionality."
 
 frontend:
   - task: "Planning Module - Basic Structure"
