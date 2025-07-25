@@ -987,6 +987,9 @@ const Planning = ({ user, sessionToken }) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
+    
+    // Use smooth loading for better UX
+    setTimeout(() => loadEvents(true), 50);
   };
 
   const calculateRevenue = () => {
