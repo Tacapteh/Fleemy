@@ -262,6 +262,30 @@ frontend:
         agent: "main"
         comment: "Alignement parfait des heures : 9h sur première ligne, 18h sur dernière ligne, toutes les heures alignées avec séparations horizontales via margin-top: -48px"
 
+  - task: "Tasks Integration in Planning Grid - Conditional Display"
+    implemented: true
+    working: false
+    file: "App.js + App.css"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "NOUVEAU: Intégration des tâches dans la grille planning. Menu 'Tâches' supprimé. GridBody modifié pour affichage conditionnel : bloc coloré si libre, icône en coin si occupation. TaskModal avec 50 icônes et couleurs pastels."
+
+  - task: "Revenue Summary with Tasks Integration"
+    implemented: true
+    working: false
+    file: "App.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "MODIFIÉ: RevenueSummary intègre maintenant les gains des tâches. Les tâches sont considérées comme 'payées' automatiquement et s'ajoutent aux revenus."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
