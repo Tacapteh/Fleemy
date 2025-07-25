@@ -869,7 +869,11 @@ const Planning = ({ user, sessionToken }) => {
   const handleCreateEvent = async (eventData) => {
     try {
       const eventToCreate = {
-        ...eventData,
+        description: eventData.description,
+        day: eventData.day,
+        start: eventData.start,
+        end: eventData.end,
+        type: eventData.type,
         uid: user.uid,
         week: currentWeek,
         year: currentYear
@@ -1070,71 +1074,63 @@ const Planning = ({ user, sessionToken }) => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      {/* Planning Header */}
+      <div className="planning-header">
         <div className="flex items-center space-x-4">
-          <h1 className="text-2xl font-bold text-gray-800">📅 Planning</h1>
+          <h1 className="planning-title">📅 Planning</h1>
           
           {/* Online/Offline indicator */}
-          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-            isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
-            {isOnline ? '🟢 En ligne' : '🔴 Hors ligne'}
+          <div className={`status-indicator ${isOnline ? 'online' : 'offline'}`}>
+            <span>{isOnline ? '🟢' : '🔴'}</span>
+            {isOnline ? 'En ligne' : 'Hors ligne'}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="planning-nav">
           {/* Team member selector */}
           {team && (
-            <div className="flex items-center space-x-2">
-              <select
-                value={viewingMember ? viewingMember.uid : 'own'}
-                onChange={(e) => {
-                  if (e.target.value === 'own') {
-                    setViewingMember(null);
-                  } else {
-                    const member = team.members.find(m => m.uid === e.target.value);
-                    setViewingMember(member);
-                  }
-                }}
-                className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="own">Mon planning</option>
-                {team.members.filter(m => m.uid !== user.uid).map(member => (
-                  <option key={member.uid} value={member.uid}>
-                    {member.name} (lecture seule)
-                  </option>
-                ))}
-              </select>
-            </div>
+            <select
+              value={viewingMember ? viewingMember.uid : 'own'}
+              onChange={(e) => {
+                if (e.target.value === 'own') {
+                  setViewingMember(null);
+                } else {
+                  const member = team.members.find(m => m.uid === e.target.value);
+                  setViewingMember(member);
+                }
+              }}
+              className="form-input"
+              style={{ width: 'auto', minWidth: '200px' }}
+            >
+              <option value="own">Mon planning</option>
+              {team.members.filter(m => m.uid !== user.uid).map(member => (
+                <option key={member.uid} value={member.uid}>
+                  {member.name} (lecture seule)
+                </option>
+              ))}
+            </select>
           )}
 
           {/* View toggle */}
-          <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setView('week')}
-              className={`px-3 py-1 rounded-lg text-sm transition-all ${
-                view === 'week' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'
-              }`}
-            >
-              Semaine
-            </button>
-            <button
-              onClick={() => setView('month')}
-              className={`px-3 py-1 rounded-lg text-sm transition-all ${
-                view === 'month' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600'
-              }`}
-            >
-              Mois
-            </button>
-          </div>
+          <button
+            onClick={() => setView('week')}
+            className={view === 'week' ? 'active' : ''}
+          >
+            Semaine
+          </button>
+          <button
+            onClick={() => setView('month')}
+            className={view === 'month' ? 'active' : ''}
+          >
+            Mois
+          </button>
 
           {/* Actions */}
           {!viewingMember && (
             <>
               <button
                 onClick={() => setShowRateModal(true)}
-                className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg transition-all"
+                className="btn btn-outline"
               >
                 {hourlyRate}€/h
               </button>
@@ -1142,7 +1138,7 @@ const Planning = ({ user, sessionToken }) => {
               {view === 'week' && (
                 <button
                   onClick={handleClearWeek}
-                  className="text-sm bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-lg transition-all"
+                  className="btn btn-danger"
                 >
                   Vider semaine
                 </button>
@@ -1150,7 +1146,7 @@ const Planning = ({ user, sessionToken }) => {
               
               <button
                 onClick={() => setEventModal({ isOpen: true, event: null, timeSlot: null, selectedDate: null })}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
+                className="btn btn-primary"
               >
                 + Événement
               </button>
@@ -1159,17 +1155,16 @@ const Planning = ({ user, sessionToken }) => {
         </div>
       </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
+      {/* Week Navigation */}
+      <div className="week-navigation">
         <button
           onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
-          className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-lg transition-all"
+          className="week-nav-btn"
         >
-          <span>←</span>
-          <span className="text-sm">Précédent</span>
+          ◀
         </button>
         
-        <h2 className="text-xl font-semibold text-gray-800">
+        <h2 className="week-title">
           {view === 'week' 
             ? `Semaine ${currentWeek} - ${monthNames[weekDates[0].getMonth()]} ${currentYear}`
             : `${monthNames[currentMonth]} ${currentYear}`
@@ -1178,149 +1173,179 @@ const Planning = ({ user, sessionToken }) => {
         
         <button
           onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
-          className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-lg transition-all"
+          className="week-nav-btn"
         >
-          <span className="text-sm">Suivant</span>
-          <span>→</span>
+          ▶
         </button>
       </div>
 
       {/* Revenue Summary - Only show for personal view */}
       {view === 'week' && !viewingMember && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-green-50 border border-green-200 p-4 rounded-xl">
-            <div className="text-green-700 font-semibold text-sm">Revenus payés</div>
-            <div className="text-2xl font-bold text-green-800">{formatCurrency(revenue.paid)}</div>
+        <div className="revenue-cards">
+          <div className="revenue-card paid">
+            <div className="revenue-amount">{formatCurrency(revenue.paid)}</div>
+            <div className="revenue-label">Revenus payés</div>
           </div>
-          <div className="bg-red-50 border border-red-200 p-4 rounded-xl">
-            <div className="text-red-700 font-semibold text-sm">Revenus impayés</div>
-            <div className="text-2xl font-bold text-red-800">{formatCurrency(revenue.unpaid)}</div>
+          <div className="revenue-card unpaid">
+            <div className="revenue-amount">{formatCurrency(revenue.unpaid)}</div>
+            <div className="revenue-label">Revenus impayés</div>
           </div>
-          <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl">
-            <div className="text-orange-700 font-semibold text-sm">Revenus en attente</div>
-            <div className="text-2xl font-bold text-orange-800">{formatCurrency(revenue.pending)}</div>
+          <div className="revenue-card pending">
+            <div className="revenue-amount">{formatCurrency(revenue.pending)}</div>
+            <div className="revenue-label">Revenus en attente</div>
           </div>
         </div>
       )}
 
-      {/* Calendar Views */}
+      {/* Planning Table */}
       {view === 'week' ? (
-        /* Week View */
-        <div className="bg-white rounded-xl shadow-sm border overflow-x-auto">
-          <div className="min-w-full">
-            {/* Week header */}
-            <div className="grid grid-cols-6 border-b bg-gray-50">
-              <div className="p-4 font-medium text-sm text-gray-600">Heure</div>
-              {weekDates.map((date, index) => (
-                <div key={index} className="p-4 text-center">
-                  <div className="font-medium text-sm">{dayNamesShort[index]}</div>
-                  <div className="text-xs text-gray-600 mt-1">
-                    {date.getDate()}/{date.getMonth() + 1}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Time slots */}
-            {timeSlots.slice(0, -1).map((time, timeIndex) => (
-              <div key={time} className="grid grid-cols-6 border-b min-h-16 hover:bg-gray-50">
-                <div className="p-4 bg-gray-50 text-sm font-medium border-r flex items-center">
-                  {time}
-                </div>
-                {dayNames.map((dayName, dayIndex) => {
-                  const slotEvents = getEventsForTimeSlot(dayIndex, time);
-                  
-                  return (
-                    <div
-                      key={dayIndex}
-                      className="border-r cursor-pointer transition-all hover:bg-blue-50 relative"
-                      onClick={() => handleTimeSlotClick(dayIndex, time)}
-                    >
-                      {slotEvents.map(event => (
-                        <div
-                          key={event.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEventClick(event);
-                          }}
-                          className={`absolute inset-0 m-1 p-2 rounded border-l-4 cursor-pointer hover:shadow-md transition-all ${eventTypes[event.type]?.color}`}
-                          style={{ backgroundColor: eventTypes[event.type]?.bgColor }}
-                        >
-                          <div className="text-xs font-medium truncate">
-                            {event.description}
-                          </div>
-                          <div className="text-xs opacity-75">
-                            {event.start}-{event.end}
-                          </div>
-                        </div>
-                      ))}
+        <div className="planning-container">
+          <table className="planning-table">
+            <thead>
+              <tr>
+                <th className="time-header">Heure</th>
+                {weekDates.map((date, index) => (
+                  <th key={index} className="day-header">
+                    {dayNames[index]}
+                    <div className="day-date">
+                      {date.getDate()}/{date.getMonth() + 1}
                     </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {timeSlots.slice(0, -1).map((time, timeIndex) => (
+                <tr key={time}>
+                  <td className="time-header">{time}</td>
+                  {dayNames.map((dayName, dayIndex) => {
+                    const slotEvents = getEventsForTimeSlot(dayIndex, time);
+                    
+                    return (
+                      <td
+                        key={dayIndex}
+                        onClick={() => handleTimeSlotClick(dayIndex, time)}
+                      >
+                        {slotEvents.map(event => {
+                          const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
+                                              event.type === 'unpaid' ? 'task' : 
+                                              event.type === 'pending' ? 'break' : 'notworked'}`;
+                          
+                          return (
+                            <div
+                              key={event.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEventClick(event);
+                              }}
+                              className={`event ${eventClass}`}
+                            >
+                              <div className="event-description">
+                                {event.description}
+                              </div>
+                              <div className="event-time">
+                                {event.start} - {event.end}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
-        /* Month View */
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          {/* Month header */}
-          <div className="grid grid-cols-7 border-b bg-gray-50">
-            {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
-              <div key={day} className="p-3 text-center text-sm font-medium text-gray-600">
-                {day}
-              </div>
-            ))}
-          </div>
+        /* Month View - Using same style as before but with original styling */
+        <div className="planning-container">
+          <table className="planning-table">
+            <thead>
+              <tr>
+                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
+                  <th key={day} className="day-header">{day}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {getMonthDays(currentYear, currentMonth).reduce((rows, day, index) => {
+                if (index % 7 === 0) rows.push([]);
+                rows[rows.length - 1].push(day);
+                return rows;
+              }, []).map((week, weekIndex) => (
+                <tr key={weekIndex}>
+                  {week.map((day, dayIndex) => {
+                    const dayEvents = getEventsForDate(day.date);
+                    const visibleEvents = dayEvents.slice(0, 2);
+                    const remainingCount = dayEvents.length - visibleEvents.length;
+                    const isToday = day.date.toDateString() === new Date().toDateString();
 
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7">
-            {getMonthDays(currentYear, currentMonth).map((day, index) => {
-              const dayEvents = getEventsForDate(day.date);
-              const visibleEvents = dayEvents.slice(0, 2);
-              const remainingCount = dayEvents.length - visibleEvents.length;
-              const isToday = day.date.toDateString() === new Date().toDateString();
-
-              return (
-                <div
-                  key={index}
-                  onClick={() => handleDayClick(day.date)}
-                  className={`min-h-24 p-2 border-b border-r cursor-pointer hover:bg-gray-50 transition-all ${
-                    !day.isCurrentMonth ? 'bg-gray-100 text-gray-400' : ''
-                  } ${isToday ? 'bg-blue-50 border-blue-200' : ''}`}
-                >
-                  <div className={`text-sm font-medium mb-1 ${
-                    isToday ? 'text-blue-600' : day.isCurrentMonth ? 'text-gray-800' : 'text-gray-400'
-                  }`}>
-                    {day.date.getDate()}
-                  </div>
-                  
-                  <div className="space-y-1">
-                    {visibleEvents.map(event => (
-                      <div
-                        key={event.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEventClick(event);
+                    return (
+                      <td
+                        key={dayIndex}
+                        onClick={() => handleDayClick(day.date)}
+                        style={{
+                          backgroundColor: !day.isCurrentMonth ? '#f8f9fa' : 
+                                          isToday ? '#e3f2fd' : '#fff',
+                          color: !day.isCurrentMonth ? '#6c757d' : '#212529',
+                          height: '100px',
+                          verticalAlign: 'top',
+                          padding: '8px'
                         }}
-                        className={`text-xs p-1 rounded border-l-2 cursor-pointer hover:opacity-80 ${eventTypes[event.type]?.color}`}
-                        style={{ backgroundColor: eventTypes[event.type]?.bgColor }}
                       >
-                        <div className="truncate font-medium">
-                          {event.description}
+                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                          {day.date.getDate()}
                         </div>
-                      </div>
-                    ))}
-                    {remainingCount > 0 && (
-                      <div className="text-xs text-blue-600 font-medium cursor-pointer hover:text-blue-800">
-                        +{remainingCount} autres
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                        
+                        <div style={{ fontSize: '11px' }}>
+                          {visibleEvents.map(event => {
+                            const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
+                                                event.type === 'unpaid' ? 'task' : 
+                                                event.type === 'pending' ? 'break' : 'notworked'}`;
+                            
+                            return (
+                              <div
+                                key={event.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEventClick(event);
+                                }}
+                                className={`${eventClass}`}
+                                style={{
+                                  padding: '2px 4px',
+                                  marginBottom: '2px',
+                                  borderRadius: '3px',
+                                  fontSize: '10px',
+                                  cursor: 'pointer',
+                                  borderLeft: '3px solid',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                {event.description}
+                              </div>
+                            );
+                          })}
+                          {remainingCount > 0 && (
+                            <div style={{ 
+                              fontSize: '10px', 
+                              color: '#007bff', 
+                              fontWeight: '600',
+                              cursor: 'pointer'
+                            }}>
+                              +{remainingCount} autres
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -1346,53 +1371,47 @@ const Planning = ({ user, sessionToken }) => {
 
       {/* Hourly Rate Modal */}
       {showRateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full">
-            <div className="p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">
-                Modifier le taux horaire
-              </h2>
-              
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const newRate = parseFloat(formData.get('rate'));
-                if (newRate > 0) {
-                  updateHourlyRate(newRate);
-                }
-              }}>
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Taux horaire (€)
-                  </label>
-                  <input
-                    type="number"
-                    name="rate"
-                    defaultValue={hourlyRate}
-                    step="0.01"
-                    min="0"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                  />
-                </div>
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2 className="modal-header">Modifier le taux horaire</h2>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              const newRate = parseFloat(formData.get('rate'));
+              if (newRate > 0) {
+                updateHourlyRate(newRate);
+              }
+            }}>
+              <div className="form-group">
+                <label className="form-label">Taux horaire (€)</label>
+                <input
+                  type="number"
+                  name="rate"
+                  defaultValue={hourlyRate}
+                  step="0.01"
+                  min="0"
+                  className="form-input"
+                  required
+                />
+              </div>
 
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowRateModal(false)}
-                    className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all"
-                  >
-                    Modifier
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  onClick={() => setShowRateModal(false)}
+                  className="btn btn-outline"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                >
+                  Modifier
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
