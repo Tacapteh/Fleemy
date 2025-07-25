@@ -543,6 +543,18 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
           </div>
 
           <div className="form-group">
+            <label className="form-label">Client</label>
+            <input
+              type="text"
+              value={formData.client_name}
+              onChange={(e) => setFormData({...formData, client_name: e.target.value})}
+              className="form-input"
+              disabled={loading}
+              placeholder="Nom du client (optionnel)"
+            />
+          </div>
+
+          <div className="form-group">
             <label className="form-label">Jour</label>
             <select
               value={formData.day}
