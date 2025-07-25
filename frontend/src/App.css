@@ -843,69 +843,261 @@ button:active {
   color: #721c24;
 }
 
-/* Responsive Design */
+/* Smooth Animations for Week Navigation */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+}
+
+.planning-content {
+  animation: fadeSlideIn 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.planning-content.transitioning {
+  animation: fadeSlideOut 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Week header animation */
+.week-title.updating {
+  opacity: 0.7;
+  transform: scale(0.98);
+  transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Event appearance animation */
+@keyframes eventAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.event.new-event {
+  animation: eventAppear 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Loading skeleton for smooth transitions */
+.planning-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Enhanced Responsive Design */
+@media (max-width: 1200px) {
+  .planning-table td {
+    height: 90px;
+    min-height: 90px;
+  }
+  
+  .time-header {
+    width: 85px;
+    min-width: 85px;
+  }
+}
+
 @media (max-width: 768px) {
+  .planning-container {
+    border-radius: 8px;
+    margin: 0 -8px;
+  }
+  
   .planning-table td {
     height: 80px;
-    width: 100px;
+    min-height: 80px;
+  }
+  
+  .time-header {
+    width: 70px;
+    min-width: 70px;
+    font-size: 12px;
+  }
+  
+  .day-header {
+    font-size: 14px;
+    padding: 12px 8px;
   }
   
   .event {
     font-size: 11px;
-    padding: 4px 6px;
+    padding: 6px 8px;
+  }
+  
+  .event-description {
+    font-size: 12px;
   }
   
   .planning-header {
     flex-direction: column;
-    gap: 16px;
+    gap: 20px;
     align-items: stretch;
   }
   
   .planning-nav {
     justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .planning-title {
+    font-size: 24px;
+    text-align: center;
+  }
+  
+  .week-title {
+    font-size: 18px;
+    min-width: 180px;
   }
   
   .revenue-cards {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
   }
   
-  .modal-content {
-    margin: 20px;
-    padding: 20px;
+  .revenue-card {
+    padding: 20px 16px;
   }
   
-  .form-row {
-    grid-template-columns: 1fr;
+  .revenue-amount {
+    font-size: 28px;
   }
 }
 
 @media (max-width: 480px) {
   .planning-table td {
     height: 70px;
-    width: 80px;
+    min-height: 70px;
   }
   
   .time-header {
     width: 60px;
     min-width: 60px;
     font-size: 11px;
+    padding: 8px 4px;
+  }
+  
+  .day-header {
+    font-size: 13px;
+    padding: 10px 6px;
   }
   
   .event {
     font-size: 10px;
-    padding: 3px 4px;
+    padding: 4px 6px;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
   }
   
   .event-description {
-    margin-bottom: 1px;
+    font-size: 11px;
+    margin-bottom: 2px;
   }
   
   .event-time {
     font-size: 9px;
   }
   
+  .planning-title {
+    font-size: 22px;
+  }
+  
   .week-title {
     font-size: 16px;
     min-width: 150px;
+  }
+  
+  .week-nav-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+  
+  .revenue-cards {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  
+  .revenue-amount {
+    font-size: 24px;
+  }
+  
+  .revenue-label {
+    font-size: 13px;
+  }
+}
+
+/* Dark mode support for future */
+@media (prefers-color-scheme: dark) {
+  .planning-container {
+    background: #1f1f1f;
+    border-color: #3c4043;
+  }
+  
+  .planning-table th {
+    background: #2d2d2d;
+    color: #e8eaed;
+    border-color: #3c4043;
+  }
+  
+  .planning-table td {
+    background: #1f1f1f;
+    border-color: #3c4043;
+  }
+  
+  .planning-table td:hover {
+    background-color: #2d2d2d;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .planning-content,
+  .planning-content.transitioning,
+  .week-title.updating,
+  .event.new-event {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .planning-table td {
+    border: 2px solid #000;
+  }
+  
+  .event {
+    border: 2px solid;
   }
 }
