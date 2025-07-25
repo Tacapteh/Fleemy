@@ -1188,11 +1188,12 @@ const Planning = ({ user, sessionToken }) => {
         <button
           onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
           className="week-nav-btn"
+          disabled={transitioning}
         >
           ◀
         </button>
         
-        <h2 className="week-title">
+        <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
           {view === 'week' 
             ? `Semaine ${currentWeek} - ${monthNames[weekDates[0].getMonth()]} ${currentYear}`
             : `${monthNames[currentMonth]} ${currentYear}`
@@ -1202,6 +1203,7 @@ const Planning = ({ user, sessionToken }) => {
         <button
           onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
           className="week-nav-btn"
+          disabled={transitioning}
         >
           ▶
         </button>
