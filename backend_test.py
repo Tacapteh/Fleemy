@@ -394,6 +394,11 @@ class FleemyAPITester:
         test_suites = [
             self.test_basic_connectivity,
             self.test_auth_endpoints,
+            self.test_planning_week_endpoint,
+            self.test_planning_month_endpoint,
+            self.test_planning_earnings_endpoint,
+            self.test_event_crud_endpoints,
+            self.test_data_structure_compatibility,
             self.test_planning_endpoints_unauthorized,
             self.test_invalid_endpoints,
             self.test_data_validation,
