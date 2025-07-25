@@ -885,6 +885,39 @@ button:active {
   }
 }
 
+/* Force Light Mode - Override any dark mode */
+* {
+  color-scheme: light;
+}
+
+body {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+/* Remove dark mode support that was causing issues */
+.planning-container,
+.planning-table,
+.planning-table th,
+.planning-table td,
+.planning-header,
+.revenue-cards,
+.revenue-card,
+.week-navigation {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+}
+
+.planning-table th {
+  background-color: #f9fafb !important;
+  color: #374151 !important;
+}
+
+.time-header {
+  background-color: #f9fafb !important;
+  color: #6b7280 !important;
+}
+
 /* Enhanced Responsive Design */
 @media (max-width: 1200px) {
   .planning-table td {
