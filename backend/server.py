@@ -512,7 +512,7 @@ async def update_task(task_id: str, task_request: TaskCreateRequest, current_use
         {"$set": {**task_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
-    updated_task = await db.weekly_tasks.find_one({"id": task_id})
+    updated_task = await db.weekly_tasks.find_one({"id": task_id}, {"_id": 0})
     return updated_task
 
 @api_router.delete("/planning/tasks/{task_id}")
