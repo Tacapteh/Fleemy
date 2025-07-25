@@ -1553,10 +1553,11 @@ const GridBody = ({
                 {hourlyRate}€/h
               </button>
               
-              {view === 'week' && (
+              {!viewingMember && (
                 <button
                   onClick={handleClearWeek}
-                  className="btn btn-danger"
+                  className="btn btn-outline btn-danger"
+                  style={{ marginLeft: '12px' }}
                 >
                   Vider semaine
                 </button>
