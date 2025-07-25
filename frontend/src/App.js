@@ -888,6 +888,71 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
+// Navigation Header Components - Smooth Transitions
+const WeekHeader = ({ currentDate, currentWeek, currentYear, monthNames, onNavigate, transitioning }) => {
+  const weekDates = getWeekDates(currentYear, currentWeek);
+  
+  return (
+    <div className="week-navigation">
+      <button
+        onClick={() => onNavigate('week', -1)}
+        className="week-nav-btn"
+        disabled={transitioning}
+      >
+        ◀
+      </button>
+      
+      <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
+        Semaine {currentWeek} - {monthNames[weekDates[0].getMonth()]} {currentYear}
+      </h2>
+      
+      <button
+        onClick={() => onNavigate('week', 1)}
+        className="week-nav-btn"
+        disabled={transitioning}
+      >
+        ▶
+      </button>
+    </div>
+  );
+};
+
+const MonthHeader = ({ currentDate, currentMonth, currentYear, monthNames, onNavigate, transitioning, dayLabels }) => {
+  return (
+    <>
+      <div className="week-navigation">
+        <button
+          onClick={() => onNavigate('month', -1)}
+          className="week-nav-btn"
+          disabled={transitioning}
+        >
+          ◀
+        </button>
+        
+        <h2 className={`week-title ${transitioning ? 'updating' : ''}`}>
+          {monthNames[currentMonth]} {currentYear}
+        </h2>
+        
+        <button
+          onClick={() => onNavigate('month', 1)}
+          className="week-nav-btn"
+          disabled={transitioning}
+        >
+          ▶
+        </button>
+      </div>
+      
+      <div className="month-header">
+        {dayLabels.map((day, index) => (
+          <div key={index} className="month-day-label">
+            {day}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+};
+
 // Month View Components - Ultra Clean Design
 const MonthHeader = ({ dayLabels }) => {
   return (
