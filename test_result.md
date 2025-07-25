@@ -187,17 +187,17 @@ frontend:
         agent: "main"
         comment: "Structure ultra-épurée finale : DayHeader + HourLabels + GridBody, jours et heures comme simples labels sans bordures ni fond, seule la grille centrale avec bordures #e5e7eb, alignement parfait"
 
-  - task: "Layout Ultra-Clean - Texte Simple Sans Encadrements"
+  - task: "Month View - Ultra Clean Components (MonthHeader + MonthGrid + MonthEvent)"
     implemented: true
     working: true
-    file: "App.css"
+    file: "App.js + App.css"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Layout ultra-épuré : jours et heures comme simples textes sans bordures/fond, seule la grille centrale avec bordures fines, alignement parfait jours au-dessus des colonnes et heures à gauche des lignes"
+        comment: "Vue mois complètement reconstruite : MonthHeader (entêtes jours), MonthGrid (grille 7x6), MonthEvent (événements), style épuré avec bordures fines, fond blanc, gestion événements multiples, '+X autres' fonctionnel"
 
   - task: "Event Modals - CRUD Operations"
     implemented: true
