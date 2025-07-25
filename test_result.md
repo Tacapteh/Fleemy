@@ -264,6 +264,6 @@ test_plan:
 
 agent_communication:
   - agent: "main"
-    message: "✅ AMÉLIORATIONS TERMINÉES ! 1) Navigation ultra-fluide avec animations slide/fade directionnelles, pas de flash blanc 2) Alignement heures parfait avec 18h visible sur dernière ligne 3) Cartes revenus colorées (vert/rouge/orange) avec fonds colorés et texte contrasté. Module Planning totalement finalisé avec UX premium type Google Agenda."
+    message: "✅ TROIS AMÉLIORATIONS TERMINÉES ! 1) Cartes revenus avec fonds colorés complets (vert/rouge/orange) et texte contrasté 2) Formulaire événement : Client obligatoire, Description facultative, validation ajoutée 3) Alignement parfait des heures (9h→18h) avec lignes de séparation horizontales via margin-top. Module Planning ultra-finalisé avec UX optimale !"
   - agent: "testing"
     message: "BACKEND TESTING COMPLETE: All Planning module backend APIs tested and working correctly. CRITICAL FIX: Fixed data structure compatibility issue in earnings endpoint (was using start/end/type instead of start_time/end_time/status). Added missing GET /auth/me endpoint. All CRUD operations, week/month endpoints, and earnings calculation verified. Backend APIs are production-ready."
