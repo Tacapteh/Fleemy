@@ -505,124 +505,112 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full">
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            {event ? 'Modifier l\'événement' : 'Nouvel événement'}
-          </h2>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description *
-              </label>
-              <input
-                type="text"
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-                disabled={loading}
-                placeholder="Description de l'événement"
-              />
-            </div>
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <h2 className="modal-header">
+          {event ? 'Modifier l\'événement' : 'Nouvel événement'}
+        </h2>
+        
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Description *</label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              className="form-input"
+              required
+              disabled={loading}
+              placeholder="Description de l'événement"
+            />
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Jour
-              </label>
+          <div className="form-group">
+            <label className="form-label">Jour</label>
+            <select
+              value={formData.day}
+              onChange={(e) => setFormData({...formData, day: parseInt(e.target.value)})}
+              className="form-input"
+              disabled={loading}
+            >
+              {dayNames.map((day, index) => (
+                <option key={index} value={index}>{day}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Heure de début</label>
               <select
-                value={formData.day}
-                onChange={(e) => setFormData({...formData, day: parseInt(e.target.value)})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={formData.start}
+                onChange={(e) => setFormData({...formData, start: e.target.value})}
+                className="form-input"
                 disabled={loading}
               >
-                {dayNames.map((day, index) => (
-                  <option key={index} value={index}>{day}</option>
+                {timeSlots.slice(0, -1).map(time => (
+                  <option key={time} value={time}>{time}</option>
                 ))}
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Heure de début
-                </label>
-                <select
-                  value={formData.start}
-                  onChange={(e) => setFormData({...formData, start: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loading}
-                >
-                  {timeSlots.slice(0, -1).map(time => (
-                    <option key={time} value={time}>{time}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Heure de fin
-                </label>
-                <select
-                  value={formData.end}
-                  onChange={(e) => setFormData({...formData, end: e.target.value})}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loading}
-                >
-                  {timeSlots.slice(1).map(time => (
-                    <option key={time} value={time}>{time}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Type
-              </label>
+            <div className="form-group">
+              <label className="form-label">Heure de fin</label>
               <select
-                value={formData.type}
-                onChange={(e) => setFormData({...formData, type: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={formData.end}
+                onChange={(e) => setFormData({...formData, end: e.target.value})}
+                className="form-input"
                 disabled={loading}
               >
-                {Object.entries(eventTypes).map(([key, type]) => (
-                  <option key={key} value={key}>{type.label}</option>
+                {timeSlots.slice(1).map(time => (
+                  <option key={time} value={time}>{time}</option>
                 ))}
               </select>
             </div>
+          </div>
 
-            <div className="flex gap-3 pt-4">
+          <div className="form-group">
+            <label className="form-label">Type</label>
+            <select
+              value={formData.type}
+              onChange={(e) => setFormData({...formData, type: e.target.value})}
+              className="form-input"
+              disabled={loading}
+            >
+              {Object.entries(eventTypes).map(([key, type]) => (
+                <option key={key} value={key}>{type.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="modal-actions">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn btn-outline"
+              disabled={loading}
+            >
+              Annuler
+            </button>
+            {event && (
               <button
                 type="button"
-                onClick={onClose}
-                className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
+                onClick={handleDelete}
+                className="btn btn-danger"
                 disabled={loading}
               >
-                Annuler
+                {loading ? '...' : 'Supprimer'}
               </button>
-              {event && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  className="py-3 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-all disabled:opacity-50"
-                  disabled={loading}
-                >
-                  {loading ? '...' : 'Supprimer'}
-                </button>
-              )}
-              <button
-                type="submit"
-                className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all disabled:opacity-50"
-                disabled={loading}
-              >
-                {loading ? '...' : (event ? 'Modifier' : 'Créer')}
-              </button>
-            </div>
-          </form>
-        </div>
+            )}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+            >
+              {loading ? '...' : (event ? 'Modifier' : 'Créer')}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -633,49 +621,63 @@ const DayEventsModal = ({ isOpen, onClose, events, date, onEventClick, onCreateE
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-96 overflow-y-auto">
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
-            <span className="mr-2">📅</span>
-            {date && formatDate(date)}
-          </h2>
-          
-          <div className="space-y-3 mb-6">
-            {events.length > 0 ? (
-              events.map(event => (
-                <div
-                  key={event.id}
-                  onClick={() => onEventClick(event)}
-                  className={`p-3 rounded-lg border cursor-pointer hover:shadow-md transition-all ${eventTypes[event.type]?.color}`}
-                >
-                  <div className="font-medium">{event.description}</div>
-                  <div className="text-sm opacity-75">
-                    {event.start} - {event.end}
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <h2 className="modal-header">
+          📅 {date && formatDate(date)}
+        </h2>
+        
+        <div style={{ marginBottom: '24px' }}>
+          {events.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {events.map(event => {
+                const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
+                                    event.type === 'unpaid' ? 'task' : 
+                                    event.type === 'pending' ? 'break' : 'notworked'}`;
+                
+                return (
+                  <div
+                    key={event.id}
+                    onClick={() => onEventClick(event)}
+                    className={`${eventClass}`}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      borderLeft: '4px solid',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <div className="event-description" style={{ marginBottom: '4px' }}>
+                      {event.description}
+                    </div>
+                    <div className="event-time">
+                      {event.start} - {event.end}
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 text-center py-4">
-                Aucun événement pour cette journée
-              </p>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p style={{ textAlign: 'center', color: '#6c757d', padding: '20px 0' }}>
+              Aucun événement pour cette journée
+            </p>
+          )}
+        </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
-            >
-              Fermer
-            </button>
-            <button
-              onClick={() => onCreateEvent(date)}
-              className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all"
-            >
-              + Nouvel événement
-            </button>
-          </div>
+        <div className="modal-actions">
+          <button
+            onClick={onClose}
+            className="btn btn-outline"
+          >
+            Fermer
+          </button>
+          <button
+            onClick={() => onCreateEvent(date)}
+            className="btn btn-primary"
+          >
+            + Nouvel événement
+          </button>
         </div>
       </div>
     </div>
