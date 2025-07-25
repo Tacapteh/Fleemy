@@ -1371,7 +1371,7 @@ const GridBody = ({
           <div className="planning-layout">
             <DayHeader weekDates={weekDates} dayNames={dayNames} />
             <div className="planning-grid-container">
-              <HourSidebar timeSlots={timeSlots} />
+              <HourLabels timeSlots={timeSlots} />
               <GridBody
                 timeSlots={timeSlots}
                 dayNames={dayNames}
