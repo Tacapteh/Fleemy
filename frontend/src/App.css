@@ -453,72 +453,74 @@ button:active {
   line-height: 1.2;
 }
 
-/* Event Styles */
+/* Modern Event Styles */
 .event {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
-  bottom: 2px;
-  border-radius: 4px;
-  padding: 6px 8px;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  border-radius: 8px;
+  padding: 8px 10px;
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 1.4;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
   border-left: 4px solid;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .event:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   z-index: 10;
 }
 
 .event-meeting {
-  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-  border-left-color: #28a745;
-  color: #155724;
+  background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%);
+  border-left-color: #34a853;
+  color: #137333;
 }
 
 .event-task {
-  background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-  border-left-color: #dc3545;
-  color: #721c24;
+  background: linear-gradient(135deg, #fce8e6 0%, #f8d7da 100%);
+  border-left-color: #ea4335;
+  color: #d33b2c;
 }
 
 .event-break {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
-  border-left-color: #ffc107;
-  color: #856404;
+  background: linear-gradient(135deg, #fef7e0 0%, #fff3cd 100%);
+  border-left-color: #fbbc04;
+  color: #bf9000;
 }
 
 .event-notworked {
-  background: linear-gradient(135deg, #e2e3e5 0%, #d6d8db 100%);
-  border-left-color: #6c757d;
-  color: #383d41;
+  background: linear-gradient(135deg, #f1f3f4 0%, #e8eaed 100%);
+  border-left-color: #9aa0a6;
+  color: #5f6368;
 }
 
 .event-description {
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
 
 .event-time {
   font-size: 11px;
-  opacity: 0.8;
+  opacity: 0.85;
   font-weight: 500;
 }
 
 .event-client {
   font-size: 10px;
-  opacity: 0.7;
+  opacity: 0.75;
   margin-top: auto;
   overflow: hidden;
   text-overflow: ellipsis;
