@@ -1342,6 +1342,11 @@ body {
     min-height: 90px;
   }
   
+  .planning-hour-cell:last-child {
+    height: 0;
+    min-height: 0;
+  }
+  
   .planning-time-placeholder,
   .planning-hours-sidebar {
     width: 75px;
@@ -1364,7 +1369,13 @@ body {
     height: 80px;
     min-height: 80px;
     font-size: 11px;
-    padding: 6px 4px;
+    padding-right: 4px;
+  }
+  
+  .planning-hour-cell:last-child {
+    height: 0;
+    min-height: 0;
+    right: 4px;
   }
   
   .planning-time-placeholder,
@@ -1432,7 +1443,13 @@ body {
     height: 70px;
     min-height: 70px;
     font-size: 10px;
-    padding: 4px 2px;
+    padding-right: 2px;
+  }
+  
+  .planning-hour-cell:last-child {
+    height: 0;
+    min-height: 0;
+    right: 2px;
   }
   
   .planning-time-placeholder,
