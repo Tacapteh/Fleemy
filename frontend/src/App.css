@@ -843,34 +843,63 @@ button:active {
   color: #721c24;
 }
 
-/* Subtle Animations for Clean Design */
+/* Smooth and Fluid Transitions */
 @keyframes fadeIn {
   from {
     opacity: 0;
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
 .planning-content {
-  animation: fadeIn 0.2s ease;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .planning-content.transitioning {
-  opacity: 0.7;
-  transition: opacity 0.1s ease;
+  opacity: 0.6;
+  transition: opacity 0.15s ease;
 }
 
-/* Subtle week header animation */
+/* Smooth week header transition */
 .week-title.updating {
-  opacity: 0.5;
-  transition: opacity 0.1s ease;
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
 }
 
-/* Simple event appearance */
+/* Smooth event appearance */
 .event.new-event {
-  animation: fadeIn 0.2s ease;
+  animation: slideIn 0.25s ease-out;
+}
+
+/* Smooth skeleton loading */
+.planning-skeleton {
+  background: linear-gradient(90deg, #f8fafc 25%, #e2e8f0 50%, #f8fafc 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Enhanced Responsive Design */
