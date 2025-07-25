@@ -155,28 +155,28 @@ frontend:
         comment: "Structure de base du composant Planning fonctionnelle"
 
   - task: "Planning Table - Modern Styling"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "App.css"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
-      - working: false
+      - working: true
         agent: "main"
-        comment: "Style moderne requis : colonnes aérées, fond clair, ombres, entêtes en gras avec fond blanc cassé"
+        comment: "Style moderne implémenté : colonnes aérées, fond clair, ombres légères, entêtes en gras avec fond blanc cassé, design Google Agenda/Notion"
 
   - task: "Navigation Fluide Entre Semaines"
-    implemented: false
-    working: false
+    implemented: true
+    working: true
     file: "App.js"
     stuck_count: 0
     priority: "high"
     needs_retesting: true
     status_history:
-      - working: false
+      - working: true
         agent: "main"
-        comment: "Transitions douces nécessaires pour changement de semaine sans rechargement complet"
+        comment: "Transitions douces ajoutées : animations CSS, loadEvents(true) pour rechargement fluide, états de transition"
 
   - task: "Event Modals - CRUD Operations"
     implemented: true
