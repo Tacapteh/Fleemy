@@ -234,7 +234,6 @@ test_plan:
     - "Planning Table - Modern Styling"
     - "Navigation Fluide Entre Semaines"
     - "Event Modals - CRUD Operations"
-    - "API Planning Events - Week/Month endpoints"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
