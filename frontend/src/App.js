@@ -1596,20 +1596,12 @@ const GridBody = ({
 
       {/* Revenue Summary - Only show for personal view */}
       {view === 'week' && !viewingMember && (
-        <div className="revenue-cards">
-          <div className="revenue-card paid">
-            <div className="revenue-amount">{formatCurrency(revenue.paid)}</div>
-            <div className="revenue-label">Revenus payés</div>
-          </div>
-          <div className="revenue-card unpaid">
-            <div className="revenue-amount">{formatCurrency(revenue.unpaid)}</div>
-            <div className="revenue-label">Revenus impayés</div>
-          </div>
-          <div className="revenue-card pending">
-            <div className="revenue-amount">{formatCurrency(revenue.pending)}</div>
-            <div className="revenue-label">Revenus en attente</div>
-          </div>
-        </div>
+        <RevenueSummary
+          events={events}
+          currentWeek={currentWeek}
+          currentYear={currentYear}
+          hourlyRate={hourlyRate}
+        />
       )}
 
       {/* Planning Table */}
