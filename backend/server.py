@@ -13,7 +13,8 @@ import asyncio
 import httpx
 import json
 import calendar
-from .pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
+# from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
+
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -709,13 +710,13 @@ async def delete_quote(quote_id: str, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Quote not found")
     return {"message": "Quote deleted"}
 
-@api_router.get("/quotes/{quote_id}/pdf")
-async def get_quote_pdf(quote_id: str, current_user: User = Depends(get_current_user)):
-    quote = await db.quotes.find_one({"id": quote_id, "uid": current_user.uid}, {"_id": 0})
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
-    pdf_bytes = await quote_pdf_bytes(quote)
-    return Response(content=pdf_bytes, media_type="application/pdf")
+#@api_router.get("/quotes/{quote_id}/pdf")
+#async def get_quote_pdf(quote_id: str, current_user: User = Depends(get_current_user)):
+    #quote = await db.quotes.find_one({"id": quote_id, "uid": current_user.uid}, {"_id": 0})
+    #if not quote:
+        #raise HTTPException(status_code=404, detail="Quote not found")
+    #pdf_bytes = await quote_pdf_bytes(quote)
+    #return Response(content=pdf_bytes, media_type="application/pdf")
 
 @api_router.put("/quotes/{quote_id}/status")
 async def update_quote_status(quote_id: str, status: str, current_user: User = Depends(get_current_user)):
@@ -786,13 +787,13 @@ async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest,
     updated_invoice = await db.invoices.find_one({"id": invoice_id})
     return updated_invoice
 
-@api_router.get("/invoices/{invoice_id}/pdf")
-async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
-    invoice = await db.invoices.find_one({"id": invoice_id, "uid": current_user.uid}, {"_id": 0})
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    pdf_bytes = await invoice_pdf_bytes(invoice)
-    return Response(content=pdf_bytes, media_type="application/pdf")
+#@api_router.get("/invoices/{invoice_id}/pdf")
+#async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
+#    invoice = await db.invoices.find_one({"id": invoice_id, "uid": current_user.uid}, {"_id": 0})
+ #   if not invoice:
+  #      raise HTTPException(status_code=404, detail="Invoice not found")
+   # pdf_bytes = await invoice_pdf_bytes(invoice)
+    #return Response(content=pdf_bytes, media_type="application/pdf")
 
 @api_router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, current_user: User = Depends(get_current_user)):
