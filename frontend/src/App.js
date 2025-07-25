@@ -6,263 +6,347 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 // Utility functions
-const getCurrentWeek = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now - start + (start.getTimezoneOffset() - now.getTimezoneOffset()) * 60 * 1000;
-  const day = Math.floor(diff / (1000 * 60 * 60 * 24));
-  return Math.ceil((day + start.getDay() + 1) / 7);
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString('fr-FR');
 };
 
-const getWeekDays = (year, week) => {
-  const simple = new Date(year, 0, 1 + (week - 1) * 7);
-  const dow = simple.getDay();
-  const ISOweekStart = simple;
-  if (dow <= 4) ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-  else ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-  
-  const days = [];
-  for (let i = 0; i < 5; i++) { // Lundi à Vendredi seulement
-    const day = new Date(ISOweekStart);
-    day.setDate(ISOweekStart.getDate() + i);
-    days.push(day);
-  }
-  return days;
+const formatDateTime = (date) => {
+  return new Date(date).toLocaleString('fr-FR');
 };
 
-const getMonthDays = (year, month) => {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  const startDay = firstDay.getDay();
-  
-  const days = [];
-  
-  // Previous month days
-  const prevMonth = new Date(year, month - 1, 0);
-  for (let i = startDay - 1; i >= 0; i--) {
-    days.push({
-      date: new Date(year, month - 1, prevMonth.getDate() - i),
-      isCurrentMonth: false
-    });
-  }
-  
-  // Current month days
-  for (let i = 1; i <= daysInMonth; i++) {
-    days.push({
-      date: new Date(year, month, i),
-      isCurrentMonth: true
-    });
-  }
-  
-  // Next month days to fill the grid
-  const remaining = 42 - days.length;
-  for (let i = 1; i <= remaining; i++) {
-    days.push({
-      date: new Date(year, month + 1, i),
-      isCurrentMonth: false
-    });
-  }
-  
-  return days;
+const isOverdue = (date) => {
+  return new Date(date) < new Date().setHours(0, 0, 0, 0);
 };
 
-const timeSlots = [
-  "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"
+const isToday = (date) => {
+  const today = new Date();
+  const taskDate = new Date(date);
+  return taskDate.toDateString() === today.toDateString();
+};
+
+const isDueSoon = (date) => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const taskDate = new Date(date);
+  return taskDate.toDateString() === tomorrow.toDateString();
+};
+
+// Task categories and priorities
+const categories = [
+  { id: 'work', name: 'Travail', color: '#3B82F6', icon: '💼' },
+  { id: 'personal', name: 'Personnel', color: '#10B981', icon: '🏠' },
+  { id: 'urgent', name: 'Urgent', color: '#EF4444', icon: '🚨' },
+  { id: 'health', name: 'Santé', color: '#F59E0B', icon: '🏥' },
+  { id: 'learning', name: 'Apprentissage', color: '#8B5CF6', icon: '📚' },
+  { id: 'shopping', name: 'Courses', color: '#EC4899', icon: '🛒' },
+  { id: 'other', name: 'Autre', color: '#6B7280', icon: '📋' }
 ];
 
-const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
-const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday"];
-const fullDayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
-
-const statusColors = {
-  paid: "bg-green-100 border-green-400 text-green-800",
-  unpaid: "bg-red-100 border-red-400 text-red-800",
-  pending: "bg-yellow-100 border-yellow-400 text-yellow-800",
-  not_worked: "bg-gray-100 border-gray-400 text-gray-600"
-};
-
-const statusLabels = {
-  paid: "Payé",
-  unpaid: "Non payé", 
-  pending: "En attente",
-  not_worked: "Pas travaillé"
-};
-
-const pastelloColors = [
-  "#FFE5E5", "#E5F3FF", "#E5FFE5", "#FFF3E5", "#FFE5F3",
-  "#F3E5FF", "#E5FFFF", "#FFFFE5", "#F0F0F0", "#E5E5FF",
-  "#FFE5CC", "#CCE5FF", "#E5FFCC", "#FFCCCC", "#CCCCFF"
+const priorities = [
+  { id: 'low', name: 'Faible', color: '#10B981' },
+  { id: 'medium', name: 'Moyenne', color: '#F59E0B' },
+  { id: 'high', name: 'Élevée', color: '#EF4444' }
 ];
 
-// 50 icônes par catégories
-const iconCategories = {
-  "Travail": ["💼", "📊", "📈", "📉", "💻", "⌨️", "🖥️", "📱", "📞", "☎️"],
-  "Documents": ["📝", "📋", "📄", "📑", "📊", "📈", "📉", "🗂️", "📁", "🗃️"],
-  "Communication": ["📧", "💬", "📞", "☎️", "📱", "📲", "💌", "📩", "📨", "📮"],
-  "Outils": ["🔧", "⚙️", "🔨", "🪛", "⚡", "🔋", "🔌", "💡", "🔍", "🔎"],
-  "Général": ["⭐", "🎯", "🚀", "💰", "💎", "🎨", "🎵", "🎪", "🎭", "🏆"]
+// Local Storage functions
+const saveTasksToLocal = (tasks) => {
+  localStorage.setItem('fleemy_tasks', JSON.stringify(tasks));
 };
 
-const allIcons = Object.values(iconCategories).flat();
+const loadTasksFromLocal = () => {
+  const saved = localStorage.getItem('fleemy_tasks');
+  return saved ? JSON.parse(saved) : [];
+};
 
-// IndexedDB pour le mode offline
-class OfflineStorage {
-  constructor() {
-    this.dbName = 'FleemyDB';
-    this.version = 1;
-    this.db = null;
-  }
+const saveUserToLocal = (user) => {
+  localStorage.setItem('fleemy_user', JSON.stringify(user));
+};
 
-  async init() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.version);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        
-        // Create stores
-        if (!db.objectStoreNames.contains('events')) {
-          db.createObjectStore('events', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('tasks')) {
-          db.createObjectStore('tasks', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('clients')) {
-          db.createObjectStore('clients', { keyPath: 'name' });
-        }
-      };
-    });
-  }
+const loadUserFromLocal = () => {
+  const saved = localStorage.getItem('fleemy_user');
+  return saved ? JSON.parse(saved) : null;
+};
 
-  async saveEvent(event) {
-    const transaction = this.db.transaction(['events'], 'readwrite');
-    const store = transaction.objectStore('events');
-    await store.put(event);
-  }
+// Home Page Component
+const HomePage = ({ onNavigate, user, onLogout }) => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+            <div className="text-3xl">📅</div>
+            <h1 className="text-2xl font-bold text-gray-800">Fleemy</h1>
+          </div>
+          {user ? (
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">Bonjour, {user.name}</span>
+              <button
+                onClick={onLogout}
+                className="text-sm text-gray-500 hover:text-gray-700"
+              >
+                Se déconnecter
+              </button>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500">Mode invité</div>
+          )}
+        </div>
+      </header>
 
-  async saveTask(task) {
-    const transaction = this.db.transaction(['tasks'], 'readwrite');
-    const store = transaction.objectStore('tasks');
-    await store.put(task);
-  }
+      {/* Hero Section */}
+      <div className="max-w-6xl mx-auto px-4 py-20 text-center">
+        <div className="mb-8">
+          <div className="text-8xl mb-6">📅</div>
+          <h1 className="text-5xl font-bold text-gray-800 mb-4">
+            Fleemy
+          </h1>
+          <p className="text-xl text-gray-600 mb-2">
+            Votre assistant personnel de gestion des tâches
+          </p>
+          <p className="text-lg text-gray-500">
+            Organisez, planifiez et suivez vos tâches en toute simplicité
+          </p>
+        </div>
 
-  async getEvents(year, week) {
-    const transaction = this.db.transaction(['events'], 'readonly');
-    const store = transaction.objectStore('events');
-    const request = store.getAll();
-    
-    return new Promise((resolve) => {
-      request.onsuccess = () => {
-        const events = request.result.filter(e => e.year === year && e.week === week);
-        resolve(events);
-      };
-    });
-  }
+        {/* Features */}
+        <div className="grid md:grid-cols-3 gap-8 mb-12">
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div className="text-3xl mb-4">✅</div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Gestion complète</h3>
+            <p className="text-gray-600">Créez, modifiez et suivez vos tâches avec facilité</p>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div className="text-3xl mb-4">📊</div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Organisation avancée</h3>
+            <p className="text-gray-600">Catégories, priorités et filtres pour tout organiser</p>
+          </div>
+          <div className="bg-white p-6 rounded-2xl shadow-lg">
+            <div className="text-3xl mb-4">📱</div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Accès universel</h3>
+            <p className="text-gray-600">Disponible partout, même en mode invité</p>
+          </div>
+        </div>
 
-  async getTasks(year, week) {
-    const transaction = this.db.transaction(['tasks'], 'readonly');
-    const store = transaction.objectStore('tasks');
-    const request = store.getAll();
-    
-    return new Promise((resolve) => {
-      request.onsuccess = () => {
-        const tasks = request.result.filter(t => t.year === year && t.week === week);
-        resolve(tasks);
-      };
-    });
-  }
-}
+        {/* CTA Buttons */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <button
+            onClick={() => onNavigate('planning')}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-8 rounded-xl text-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            🚀 Commencer maintenant
+          </button>
+          {!user && (
+            <button
+              onClick={() => onNavigate('auth')}
+              className="bg-white hover:bg-gray-50 text-gray-700 font-semibold py-4 px-8 rounded-xl text-lg transition-all duration-200 border border-gray-300 shadow-lg"
+            >
+              🔐 Se connecter
+            </button>
+          )}
+        </div>
 
-// Authentication component
-const AuthScreen = ({ onLogin }) => {
+        {!user && (
+          <p className="text-sm text-gray-500 mt-4">
+            Ou continuez en mode invité sans inscription
+          </p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-gray-100 py-8 mt-20">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <div className="text-2xl">📅</div>
+            <span className="text-lg font-semibold text-gray-700">Fleemy</span>
+          </div>
+          <p className="text-gray-600">
+            Votre productivité, notre priorité
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+// Authentication Component
+const AuthPage = ({ onNavigate, onLogin }) => {
+  const [mode, setMode] = useState('login'); // 'login' or 'register'
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    name: ''
+  });
+  const [loading, setLoading] = useState(false);
+
   const handleLogin = () => {
     const redirectUrl = window.location.origin;
     window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
   };
 
+  const handleLocalAuth = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Simulate local authentication
+      const user = {
+        id: Date.now(),
+        name: mode === 'register' ? formData.name : formData.email.split('@')[0],
+        email: formData.email,
+        type: 'local'
+      };
+      
+      saveUserToLocal(user);
+      onLogin(user);
+      onNavigate('planning');
+    } catch (error) {
+      console.error('Auth error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // Check for session_id in URL fragment
+    // Check for session_id in URL fragment (Emergent auth)
     const hash = window.location.hash;
     if (hash.includes('session_id=')) {
       const sessionId = hash.split('session_id=')[1].split('&')[0];
-      onLogin(sessionId);
+      
+      // Handle Emergent auth (simplified)
+      const emergentUser = {
+        id: sessionId,
+        name: 'Utilisateur Emergent',
+        email: 'user@emergent.com',
+        type: 'emergent'
+      };
+      
+      saveUserToLocal(emergentUser);
+      onLogin(emergentUser);
+      onNavigate('planning');
+      
+      // Clear hash
+      window.history.replaceState(null, null, window.location.pathname);
     }
-  }, [onLogin]);
+  }, [onLogin, onNavigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md">
-        <div className="text-6xl mb-6">📅</div>
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Fleemy</h1>
-        <p className="text-gray-600 mb-8">Votre outil complet de gestion de planning et tâches</p>
-        <button
-          onClick={handleLogin}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105"
-        >
-          Se connecter
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Icon Selection Modal
-const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
-  const [activeCategory, setActiveCategory] = useState("Travail");
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Choisir une icône</h2>
-        
-        {/* Categories */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {Object.keys(iconCategories).map(category => (
-            <button
-              key={category}
-              onClick={() => setActiveCategory(category)}
-              className={`px-3 py-1 rounded-lg text-sm transition-all ${
-                activeCategory === category 
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {category}
-            </button>
-          ))}
+      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full mx-4">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="text-4xl mb-4">📅</div>
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            {mode === 'login' ? 'Connexion' : 'Inscription'}
+          </h1>
+          <p className="text-gray-600">
+            Accédez à votre espace Fleemy
+          </p>
         </div>
-        
-        {/* Icons Grid */}
-        <div className="grid grid-cols-10 gap-2 mb-6">
-          {iconCategories[activeCategory].map(icon => (
-            <button
-              key={icon}
-              onClick={() => onSelect(icon)}
-              className={`p-3 rounded-lg border text-xl hover:bg-gray-50 transition-all ${
-                selectedIcon === icon ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-              }`}
-            >
-              {icon}
-            </button>
-          ))}
-        </div>
-        
-        <div className="flex gap-4">
+
+        {/* Auth Methods */}
+        <div className="space-y-4 mb-6">
+          {/* Google/Emergent Auth */}
           <button
-            onClick={onClose}
-            className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+            onClick={handleLogin}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2"
           >
-            Fermer
+            <span>🌐</span>
+            <span>Connexion Emergent</span>
+          </button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">ou</span>
+            </div>
+          </div>
+
+          {/* Local Auth Form */}
+          <form onSubmit={handleLocalAuth} className="space-y-4">
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nom complet
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  required
+                />
+              </div>
+            )}
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Mot de passe
+              </label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gray-800 hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200"
+              disabled={loading}
+            >
+              {loading ? '...' : (mode === 'login' ? 'Se connecter' : 'S\'inscrire')}
+            </button>
+          </form>
+        </div>
+
+        {/* Switch Mode */}
+        <div className="text-center">
+          <button
+            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+            className="text-blue-600 hover:text-blue-800 text-sm"
+          >
+            {mode === 'login' 
+              ? 'Pas encore de compte ? S\'inscrire' 
+              : 'Déjà un compte ? Se connecter'
+            }
+          </button>
+        </div>
+
+        {/* Guest Mode */}
+        <div className="mt-6 pt-6 border-t border-gray-200 text-center">
+          <button
+            onClick={() => onNavigate('planning')}
+            className="text-gray-600 hover:text-gray-800 text-sm underline"
+          >
+            Continuer en mode invité
+          </button>
+        </div>
+
+        {/* Back to Home */}
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => onNavigate('home')}
+            className="text-gray-500 hover:text-gray-700 text-sm"
+          >
+            ← Retour à l'accueil
           </button>
         </div>
       </div>
@@ -270,708 +354,301 @@ const IconModal = ({ isOpen, onClose, onSelect, selectedIcon }) => {
   );
 };
 
-// Event Modal
-const EventModal = ({ isOpen, onClose, onSave, onDelete, event = null, clients = [] }) => {
+// Task Form Modal
+const TaskModal = ({ isOpen, onClose, onSave, task = null }) => {
   const [formData, setFormData] = useState({
-    description: "",
-    client: "",
-    day: "monday",
-    start_time: "09:00",
-    end_time: "10:00",
-    status: "pending",
-    hourly_rate: 50
+    title: '',
+    description: '',
+    dueDate: '',
+    category: 'other',
+    priority: 'medium',
+    completed: false
   });
-  const [filteredClients, setFilteredClients] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (event && event.id) {
+    if (task) {
       setFormData({
-        description: event.description || "",
-        client: event.client || "",
-        day: event.day || "monday",
-        start_time: event.start_time || "09:00",
-        end_time: event.end_time || "10:00",
-        status: event.status || "pending",
-        hourly_rate: event.hourly_rate || 50
-      });
-    } else if (event) {
-      // New event with pre-filled data (from time slot click)
-      setFormData({
-        description: "",
-        client: "",
-        day: event.day || "monday",
-        start_time: event.start_time || "09:00",
-        end_time: event.end_time || "10:00",
-        status: "pending",
-        hourly_rate: 50
+        title: task.title || '',
+        description: task.description || '',
+        dueDate: task.dueDate || '',
+        category: task.category || 'other',
+        priority: task.priority || 'medium',
+        completed: task.completed || false
       });
     } else {
+      // Default due date to today
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0];
       setFormData({
-        description: "",
-        client: "",
-        day: "monday",
-        start_time: "09:00",
-        end_time: "10:00",
-        status: "pending",
-        hourly_rate: 50
-      });
-    }
-  }, [event, isOpen]);
-
-  const handleClientChange = (value) => {
-    setFormData({...formData, client: value});
-    
-    if (value.length > 0) {
-      const filtered = clients.filter(client => 
-        client.toLowerCase().includes(value.toLowerCase())
-      );
-      setFilteredClients(filtered);
-      setShowSuggestions(filtered.length > 0);
-    } else {
-      setShowSuggestions(false);
-    }
-  };
-
-  const selectClient = (client) => {
-    setFormData({...formData, client});
-    setShowSuggestions(false);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      await onSave(formData);
-    } catch (error) {
-      console.error('Error saving event:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer cet événement ?")) {
-      setLoading(true);
-      try {
-        await onDelete(event.id);
-      } catch (error) {
-        console.error('Error deleting event:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold mb-4">
-          {event && event.id ? "Modifier l'événement" : "Nouvel événement"}
-        </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <input
-              type="text"
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-          </div>
-          
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client</label>
-            <input
-              type="text"
-              value={formData.client}
-              onChange={(e) => handleClientChange(e.target.value)}
-              onFocus={() => formData.client && setShowSuggestions(filteredClients.length > 0)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-              disabled={loading}
-            />
-            {showSuggestions && (
-              <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg mt-1 max-h-32 overflow-y-auto shadow-lg">
-                {filteredClients.map((client, index) => (
-                  <div
-                    key={index}
-                    onClick={() => selectClient(client)}
-                    className="p-2 hover:bg-gray-100 cursor-pointer text-sm border-b last:border-b-0"
-                  >
-                    {client}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Jour</label>
-            <select
-              value={formData.day}
-              onChange={(e) => setFormData({...formData, day: e.target.value})}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={loading}
-            >
-              {dayKeys.map((key, index) => (
-                <option key={key} value={key}>{dayNames[index]}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Début</label>
-              <select
-                value={formData.start_time}
-                onChange={(e) => setFormData({...formData, start_time: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loading}
-              >
-                {timeSlots.slice(0, -1).map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fin</label>
-              <select
-                value={formData.end_time}
-                onChange={(e) => setFormData({...formData, end_time: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loading}
-              >
-                {timeSlots.slice(1).map(time => (
-                  <option key={time} value={time}>{time}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData({...formData, status: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loading}
-              >
-                {Object.entries(statusLabels).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Taux horaire (€)</label>
-              <input
-                type="number"
-                value={formData.hourly_rate}
-                onChange={(e) => setFormData({...formData, hourly_rate: parseFloat(e.target.value) || 0})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                min="0"
-                step="0.01"
-                disabled={loading}
-              />
-            </div>
-          </div>
-          
-          <div className="flex gap-4 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            {event && event.id && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50"
-                disabled={loading}
-              >
-                {loading ? "..." : "Supprimer"}
-              </button>
-            )}
-            <button
-              type="submit"
-              className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-              disabled={loading}
-            >
-              {loading ? "..." : (event && event.id ? "Modifier" : "Créer")}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-// Task Modal
-const TaskModal = ({ isOpen, onClose, onSave, onDelete, task = null }) => {
-  const [formData, setFormData] = useState({
-    name: "",
-    price: 0,
-    color: pastelloColors[0],
-    icon: allIcons[0],
-    time_slots: []
-  });
-  const [iconModalOpen, setIconModalOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (task && task.id) {
-      setFormData({
-        name: task.name || "",
-        price: task.price || 0,
-        color: task.color || pastelloColors[0],
-        icon: task.icon || allIcons[0],
-        time_slots: task.time_slots || []
-      });
-    } else {
-      setFormData({
-        name: "",
-        price: 0,
-        color: pastelloColors[0],
-        icon: allIcons[0],
-        time_slots: []
+        title: '',
+        description: '',
+        dueDate: todayString,
+        category: 'other',
+        priority: 'medium',
+        completed: false
       });
     }
   }, [task, isOpen]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    setLoading(true);
-    
-    try {
-      await onSave(formData);
-    } catch (error) {
-      console.error('Error saving task:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleIconSelect = (icon) => {
-    setFormData({...formData, icon});
-    setIconModalOpen(false);
-  };
-
-  const addTimeSlot = () => {
-    const newSlot = { day: "monday", start: "09:00", end: "10:00" };
-    setFormData({
+    onSave({
       ...formData,
-      time_slots: [...formData.time_slots, newSlot]
+      id: task?.id || Date.now(),
+      createdAt: task?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     });
-  };
-
-  const removeTimeSlot = (index) => {
-    const newSlots = formData.time_slots.filter((_, i) => i !== index);
-    setFormData({...formData, time_slots: newSlots});
-  };
-
-  const updateTimeSlot = (index, field, value) => {
-    const newSlots = [...formData.time_slots];
-    newSlots[index][field] = value;
-    setFormData({...formData, time_slots: newSlots});
   };
 
   if (!isOpen) return null;
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4 max-h-96 overflow-y-auto">
-          <h2 className="text-xl font-bold mb-4">
-            {task && task.id ? "Modifier la tâche" : "Nouvelle tâche hebdomadaire"}
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-96 overflow-y-auto">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">
+            {task ? 'Modifier la tâche' : 'Nouvelle tâche'}
           </h2>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Titre *
+              </label>
               <input
                 type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
-                disabled={loading}
+                placeholder="Titre de la tâche"
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Prix (€)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({...formData, description: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows="3"
+                placeholder="Description optionnelle"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date d'échéance *
+              </label>
               <input
-                type="number"
-                value={formData.price}
-                onChange={(e) => setFormData({...formData, price: parseFloat(e.target.value) || 0})}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                type="date"
+                value={formData.dueDate}
+                onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 required
-                min="0"
-                step="0.01"
-                disabled={loading}
               />
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
-              <div className="flex flex-wrap gap-2">
-                {pastelloColors.map(color => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setFormData({...formData, color})}
-                    className={`w-8 h-8 rounded-full border-2 transition-all ${
-                      formData.color === color ? 'border-gray-800 scale-110' : 'border-gray-300 hover:border-gray-500'
-                    }`}
-                    style={{ backgroundColor: color }}
-                    disabled={loading}
-                  />
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Icône</label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIconModalOpen(true)}
-                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-2xl transition-all"
-                  disabled={loading}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Catégorie
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  {formData.icon}
-                </button>
-                <span className="text-sm text-gray-600">Cliquer pour changer</span>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Créneaux horaires</label>
-              <div className="space-y-2">
-                {formData.time_slots.map((slot, index) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <select
-                      value={slot.day}
-                      onChange={(e) => updateTimeSlot(index, 'day', e.target.value)}
-                      className="flex-1 p-1 border border-gray-300 rounded text-sm"
-                      disabled={loading}
-                    >
-                      {dayKeys.map((key, idx) => (
-                        <option key={key} value={key}>{dayNames[idx]}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={slot.start}
-                      onChange={(e) => updateTimeSlot(index, 'start', e.target.value)}
-                      className="flex-1 p-1 border border-gray-300 rounded text-sm"
-                      disabled={loading}
-                    >
-                      {timeSlots.slice(0, -1).map(time => (
-                        <option key={time} value={time}>{time}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={slot.end}
-                      onChange={(e) => updateTimeSlot(index, 'end', e.target.value)}
-                      className="flex-1 p-1 border border-gray-300 rounded text-sm"
-                      disabled={loading}
-                    >
-                      {timeSlots.slice(1).map(time => (
-                        <option key={time} value={time}>{time}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => removeTimeSlot(index)}
-                      className="p-1 text-red-600 hover:bg-red-50 rounded"
-                      disabled={loading}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addTimeSlot}
-                  className="w-full p-2 border border-dashed border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition-all"
-                  disabled={loading}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Priorité
+                </label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  + Ajouter un créneau
-                </button>
+                  {priorities.map(priority => (
+                    <option key={priority.id} value={priority.id}>
+                      {priority.name}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-            
-            <div className="flex gap-4 pt-4">
+
+            {task && (
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="completed"
+                  checked={formData.completed}
+                  onChange={(e) => setFormData({...formData, completed: e.target.checked})}
+                  className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <label htmlFor="completed" className="ml-2 text-sm text-gray-700">
+                  Marquer comme terminée
+                </label>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                disabled={loading}
+                className="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium transition-all"
               >
                 Annuler
               </button>
-              {task && task.id && onDelete && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(task.id)}
-                  className="py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all disabled:opacity-50"
-                  disabled={loading}
-                >
-                  Supprimer
-                </button>
-              )}
               <button
                 type="submit"
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all disabled:opacity-50"
-                disabled={loading}
+                className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-all"
               >
-                {loading ? "..." : (task && task.id ? "Modifier" : "Créer")}
+                {task ? 'Modifier' : 'Créer'}
               </button>
             </div>
           </form>
         </div>
-      </div>
-      
-      <IconModal
-        isOpen={iconModalOpen}
-        onClose={() => setIconModalOpen(false)}
-        onSelect={handleIconSelect}
-        selectedIcon={formData.icon}
-      />
-    </>
-  );
-};
-
-// Team Modal
-const TeamModal = ({ isOpen, onClose }) => {
-  const [mode, setMode] = useState('join'); // 'create' or 'join'
-  const [teamName, setTeamName] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleCreateTeam = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      // TODO: Implement team creation
-      console.log('Creating team:', teamName);
-      onClose();
-    } catch (error) {
-      console.error('Error creating team:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleJoinTeam = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      // TODO: Implement team joining
-      console.log('Joining team with code:', inviteCode);
-      onClose();
-    } catch (error) {
-      console.error('Error joining team:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-2xl shadow-xl max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold mb-4">Équipe</h2>
-        
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setMode('join')}
-            className={`flex-1 py-2 px-4 rounded-lg transition-all ${
-              mode === 'join' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-            }`}
-          >
-            Rejoindre
-          </button>
-          <button
-            onClick={() => setMode('create')}
-            className={`flex-1 py-2 px-4 rounded-lg transition-all ${
-              mode === 'create' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
-            }`}
-          >
-            Créer
-          </button>
-        </div>
-
-        {mode === 'create' ? (
-          <form onSubmit={handleCreateTeam} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nom de l'équipe
-              </label>
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                required
-                disabled={loading}
-              />
-            </div>
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
-                disabled={loading}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                disabled={loading}
-              >
-                {loading ? "..." : "Créer"}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handleJoinTeam} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Code d'invitation
-              </label>
-              <input
-                type="text"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Ex: AB12CD34"
-                required
-                disabled={loading}
-              />
-            </div>
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg hover:bg-gray-50"
-                disabled={loading}
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                disabled={loading}
-              >
-                {loading ? "..." : "Rejoindre"}
-              </button>
-            </div>
-          </form>
-        )}
       </div>
     </div>
   );
 };
 
-// Month View Component
-const MonthView = ({ year, month, events, tasks, onDayClick, onEventClick }) => {
-  const monthDays = getMonthDays(year, month);
+// Calendar View Component
+const CalendarView = ({ tasks, onTaskClick }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
   
-  const getEventsForDate = (date) => {
-    const dayKey = dayKeys[date.getDay() === 0 ? 6 : date.getDay() - 1];
-    if (!dayKey || date.getDay() === 0 || date.getDay() === 6) return []; // Skip weekends
+  const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+  
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startDay = firstDay.getDay();
     
-    return events.filter(event => {
-      return event.day === dayKey;
-    });
+    const days = [];
+    
+    // Previous month days
+    for (let i = startDay - 1; i >= 0; i--) {
+      const day = new Date(year, month, -i);
+      days.push({ date: day, isCurrentMonth: false });
+    }
+    
+    // Current month days
+    for (let i = 1; i <= daysInMonth; i++) {
+      const day = new Date(year, month, i);
+      days.push({ date: day, isCurrentMonth: true });
+    }
+    
+    // Next month days
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      const day = new Date(year, month + 1, i);
+      days.push({ date: day, isCurrentMonth: false });
+    }
+    
+    return days;
   };
 
   const getTasksForDate = (date) => {
-    const dayKey = dayKeys[date.getDay() === 0 ? 6 : date.getDay() - 1];
-    if (!dayKey || date.getDay() === 0 || date.getDay() === 6) return [];
-    
-    return tasks.filter(task => 
-      task.time_slots && task.time_slots.some(slot => slot.day === dayKey)
-    );
+    const dateString = date.toISOString().split('T')[0];
+    return tasks.filter(task => task.dueDate === dateString);
   };
 
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentDate(newDate);
+  };
+
+  const days = getDaysInMonth(currentDate);
+
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      {/* Month Header */}
-      <div className="grid grid-cols-7 border-b bg-gray-50">
-        {fullDayNames.map(day => (
-          <div key={day} className="p-4 text-center font-medium text-sm">
-            {day.slice(0, 3)}
+    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+      {/* Calendar Header */}
+      <div className="bg-gray-50 px-6 py-4 border-b">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => navigateMonth(-1)}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-all"
+          >
+            ←
+          </button>
+          
+          <h2 className="text-xl font-semibold text-gray-800">
+            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+          </h2>
+          
+          <button
+            onClick={() => navigateMonth(1)}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-all"
+          >
+            →
+          </button>
+        </div>
+      </div>
+
+      {/* Days of week */}
+      <div className="grid grid-cols-7 bg-gray-50 border-b">
+        {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
+          <div key={day} className="p-3 text-center text-sm font-medium text-gray-600">
+            {day}
           </div>
         ))}
       </div>
-      
+
       {/* Calendar Grid */}
       <div className="grid grid-cols-7">
-        {monthDays.map((day, index) => {
-          const dayEvents = getEventsForDate(day.date);
+        {days.map((day, index) => {
           const dayTasks = getTasksForDate(day.date);
-          const allItems = [...dayEvents, ...dayTasks];
-          const visibleItems = allItems.slice(0, 2);
-          const remainingCount = allItems.length - visibleItems.length;
-          const isWeekend = day.date.getDay() === 0 || day.date.getDay() === 6;
+          const isToday = day.date.toDateString() === new Date().toDateString();
           
           return (
             <div
               key={index}
-              onClick={() => !isWeekend && onDayClick(day.date)}
-              className={`min-h-24 p-2 border-b border-r cursor-pointer transition-all ${
-                !day.isCurrentMonth 
-                  ? 'bg-gray-100 text-gray-400' 
-                  : isWeekend 
-                    ? 'bg-gray-50 cursor-not-allowed' 
-                    : 'hover:bg-blue-50'
-              }`}
+              className={`min-h-24 p-2 border-b border-r cursor-pointer hover:bg-gray-50 transition-all ${
+                !day.isCurrentMonth ? 'bg-gray-100 text-gray-400' : ''
+              } ${isToday ? 'bg-blue-50 border-blue-200' : ''}`}
             >
-              <div className="font-medium text-sm mb-1">
+              <div className={`text-sm font-medium mb-1 ${
+                isToday ? 'text-blue-600' : day.isCurrentMonth ? 'text-gray-800' : 'text-gray-400'
+              }`}>
                 {day.date.getDate()}
               </div>
               
-              {visibleItems.map((item, idx) => (
-                <div
-                  key={idx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (item.client) { // It's an event
-                      onEventClick(item);
-                    }
-                  }}
-                  className={`text-xs p-1 mb-1 rounded cursor-pointer transition-all ${
-                    item.client 
-                      ? `${statusColors[item.status]} hover:opacity-80`
-                      : 'border'
-                  }`}
-                  style={!item.client ? { backgroundColor: item.color, opacity: 0.8 } : {}}
-                >
-                  {item.client ? item.client : `${item.icon} ${item.name}`}
-                </div>
-              ))}
-              
-              {remainingCount > 0 && (
-                <div className="text-xs text-blue-600 font-medium hover:text-blue-800">
-                  +{remainingCount} autres
-                </div>
-              )}
+              <div className="space-y-1">
+                {dayTasks.slice(0, 2).map(task => {
+                  const category = categories.find(c => c.id === task.category);
+                  return (
+                    <div
+                      key={task.id}
+                      onClick={() => onTaskClick(task)}
+                      className="text-xs p-1 rounded truncate cursor-pointer hover:opacity-80"
+                      style={{ backgroundColor: category?.color + '20', color: category?.color }}
+                    >
+                      {task.completed ? '✅' : ''} {task.title}
+                    </div>
+                  );
+                })}
+                {dayTasks.length > 2 && (
+                  <div className="text-xs text-gray-500 font-medium">
+                    +{dayTasks.length - 2} autres
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
@@ -980,591 +657,440 @@ const MonthView = ({ year, month, events, tasks, onDayClick, onEventClick }) => 
   );
 };
 
-// Main Planning Component
-const PlanningScreen = ({ user, sessionToken }) => {
-  const [currentWeek, setCurrentWeek] = useState(getCurrentWeek());
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [events, setEvents] = useState([]);
+// Planning Page Component
+const PlanningPage = ({ onNavigate, user, onLogout }) => {
   const [tasks, setTasks] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [earnings, setEarnings] = useState({ paid: 0, unpaid: 0, pending: 0, not_worked: 0, tasks_total: 0, total: 0 });
-  const [view, setView] = useState('week'); // 'week' or 'month'
-  const [eventModal, setEventModal] = useState({ isOpen: false, event: null });
+  const [filteredTasks, setFilteredTasks] = useState([]);
   const [taskModal, setTaskModal] = useState({ isOpen: false, task: null });
-  const [teamModal, setTeamModal] = useState({ isOpen: false });
-  const [team, setTeam] = useState(null);
-  const [viewingMember, setViewingMember] = useState(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [offlineStorage] = useState(new OfflineStorage());
+  const [view, setView] = useState('list'); // 'list' or 'calendar'
+  const [filters, setFilters] = useState({
+    search: '',
+    category: 'all',
+    priority: 'all',
+    status: 'all', // 'all', 'completed', 'pending'
+    sortBy: 'dueDate' // 'dueDate', 'priority', 'created', 'title'
+  });
 
+  // Load tasks from localStorage on component mount
   useEffect(() => {
-    // Initialize offline storage
-    offlineStorage.init();
-    
-    // Listen for online/offline events
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [offlineStorage]);
-
-  const apiCall = async (url, options = {}) => {
-    try {
-      return await axios({
-        url: `${API}${url}`,
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
-      });
-    } catch (error) {
-      if (!isOnline) {
-        // Handle offline mode
-        console.log('Offline mode - using local storage');
-        throw new Error('Offline mode');
-      }
-      throw error;
-    }
-  };
-
-  const loadWeekData = async () => {
-    try {
-      if (viewingMember) {
-        // Load member's planning
-        const planningRes = await apiCall(`/teams/member/${viewingMember.uid}/planning/${currentYear}/${currentWeek}`);
-        setEvents(planningRes.data.events || []);
-        setTasks(planningRes.data.tasks || []);
-        setEarnings({ paid: 0, unpaid: 0, pending: 0, not_worked: 0, tasks_total: 0, total: 0 }); // Don't show earnings for other members
-      } else {
-        // Load own planning
-        const [planningRes, earningsRes] = await Promise.all([
-          apiCall(`/planning/week/${currentYear}/${currentWeek}`),
-          apiCall(`/planning/earnings/${currentYear}/${currentWeek}`)
-        ]);
-        
-        setEvents(planningRes.data.events || []);
-        setTasks(planningRes.data.tasks || []);
-        setEarnings(earningsRes.data);
-      }
-    } catch (error) {
-      console.error('Error loading week data:', error);
-      if (!isOnline) {
-        // Load from offline storage
-        const offlineEvents = await offlineStorage.getEvents(currentYear, currentWeek);
-        const offlineTasks = await offlineStorage.getTasks(currentYear, currentWeek);
-        setEvents(offlineEvents);
-        setTasks(offlineTasks);
-      }
-    }
-  };
-
-  const loadMonthData = async () => {
-    try {
-      const planningRes = await apiCall(`/planning/month/${currentYear}/${currentMonth}`);
-      setEvents(planningRes.data.events || []);
-      setTasks(planningRes.data.tasks || []);
-    } catch (error) {
-      console.error('Error loading month data:', error);
-    }
-  };
-
-  const loadClients = async () => {
-    try {
-      const response = await apiCall('/clients');
-      setClients(response.data);
-    } catch (error) {
-      console.error('Error loading clients:', error);
-    }
-  };
-
-  const loadTeam = async () => {
-    try {
-      const response = await apiCall('/teams/my');
-      setTeam(response.data);
-    } catch (error) {
-      console.error('Error loading team:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (view === 'week') {
-      loadWeekData();
-    } else {
-      loadMonthData();
-    }
-  }, [currentWeek, currentYear, currentMonth, view, viewingMember]);
-
-  useEffect(() => {
-    loadClients();
-    loadTeam();
+    const savedTasks = loadTasksFromLocal();
+    setTasks(savedTasks);
   }, []);
 
-  const handleCreateEvent = async (eventData) => {
-    try {
-      const response = await apiCall('/planning/events', {
-        method: 'POST',
-        data: eventData
-      });
-      
-      // Save to offline storage
-      if (!isOnline) {
-        await offlineStorage.saveEvent(response.data);
-      }
-      
-      // Add client if new
-      if (eventData.client && !clients.includes(eventData.client)) {
-        await apiCall('/clients', {
-          method: 'POST',
-          data: eventData.client
-        });
-        setClients([...clients, eventData.client]);
-      }
-      
-      setEventModal({ isOpen: false, event: null });
-      view === 'week' ? loadWeekData() : loadMonthData();
-    } catch (error) {
-      console.error('Error creating event:', error);
-    }
-  };
+  // Save tasks to localStorage whenever tasks change
+  useEffect(() => {
+    saveTasksToLocal(tasks);
+  }, [tasks]);
 
-  const handleUpdateEvent = async (eventData) => {
-    try {
-      await apiCall(`/planning/events/${eventModal.event.id}`, {
-        method: 'PUT',
-        data: eventData
-      });
-      
-      // Add client if new
-      if (eventData.client && !clients.includes(eventData.client)) {
-        await apiCall('/clients', {
-          method: 'POST',
-          data: eventData.client
-        });
-        setClients([...clients, eventData.client]);
-      }
-      
-      setEventModal({ isOpen: false, event: null });
-      view === 'week' ? loadWeekData() : loadMonthData();
-    } catch (error) {
-      console.error('Error updating event:', error);
-    }
-  };
+  // Apply filters and sorting
+  useEffect(() => {
+    let filtered = [...tasks];
 
-  const handleDeleteEvent = async (eventId) => {
-    try {
-      await apiCall(`/planning/events/${eventId}`, {
-        method: 'DELETE'
-      });
-      setEventModal({ isOpen: false, event: null });
-      view === 'week' ? loadWeekData() : loadMonthData();
-    } catch (error) {
-      console.error('Error deleting event:', error);
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(task => 
+        task.title.toLowerCase().includes(searchLower) ||
+        task.description.toLowerCase().includes(searchLower)
+      );
     }
-  };
 
-  const handleDeleteAllWeekEvents = async () => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?")) {
-      try {
-        await apiCall(`/planning/events/week/${currentYear}/${currentWeek}`, {
-          method: 'DELETE'
-        });
-        loadWeekData();
-      } catch (error) {
-        console.error('Error deleting all events:', error);
+    // Category filter
+    if (filters.category !== 'all') {
+      filtered = filtered.filter(task => task.category === filters.category);
+    }
+
+    // Priority filter
+    if (filters.priority !== 'all') {
+      filtered = filtered.filter(task => task.priority === filters.priority);
+    }
+
+    // Status filter
+    if (filters.status !== 'all') {
+      if (filters.status === 'completed') {
+        filtered = filtered.filter(task => task.completed);
+      } else if (filters.status === 'pending') {
+        filtered = filtered.filter(task => !task.completed);
       }
     }
-  };
 
-  const handleCreateTask = async (taskData) => {
-    try {
-      const response = await apiCall('/planning/tasks', {
-        method: 'POST',
-        data: taskData
-      });
-      
-      // Save to offline storage
-      if (!isOnline) {
-        await offlineStorage.saveTask(response.data);
+    // Sorting
+    filtered.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'dueDate':
+          return new Date(a.dueDate) - new Date(b.dueDate);
+        case 'priority':
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
+          return priorityOrder[b.priority] - priorityOrder[a.priority];
+        case 'created':
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        case 'title':
+          return a.title.localeCompare(b.title);
+        default:
+          return 0;
       }
-      
-      setTaskModal({ isOpen: false, task: null });
-      view === 'week' ? loadWeekData() : loadMonthData();
-    } catch (error) {
-      console.error('Error creating task:', error);
+    });
+
+    setFilteredTasks(filtered);
+  }, [tasks, filters]);
+
+  const handleCreateTask = (taskData) => {
+    setTasks([...tasks, taskData]);
+    setTaskModal({ isOpen: false, task: null });
+  };
+
+  const handleUpdateTask = (taskData) => {
+    setTasks(tasks.map(task => task.id === taskData.id ? taskData : task));
+    setTaskModal({ isOpen: false, task: null });
+  };
+
+  const handleDeleteTask = (taskId) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette tâche ?')) {
+      setTasks(tasks.filter(task => task.id !== taskId));
     }
   };
 
-  const handleUpdateTask = async (taskData) => {
-    try {
-      await apiCall(`/planning/tasks/${taskModal.task.id}`, {
-        method: 'PUT',
-        data: taskData
-      });
-      setTaskModal({ isOpen: false, task: null });
-      view === 'week' ? loadWeekData() : loadMonthData();
-    } catch (error) {
-      console.error('Error updating task:', error);
-    }
-  };
-
-  const handleDeleteTask = async (taskId) => {
-    try {
-      await apiCall(`/planning/tasks/${taskId}`, {
-        method: 'DELETE'
-      });
-      setTaskModal({ isOpen: false, task: null });
-      view === 'week' ? loadWeekData() : loadMonthData();
-    } catch (error) {
-      console.error('Error deleting task:', error);
-    }
-  };
-
-  const navigateWeek = (direction) => {
-    const newWeek = currentWeek + direction;
-    if (newWeek < 1) {
-      setCurrentWeek(52);
-      setCurrentYear(currentYear - 1);
-    } else if (newWeek > 52) {
-      setCurrentWeek(1);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentWeek(newWeek);
-    }
-  };
-
-  const navigateMonth = (direction) => {
-    const newMonth = currentMonth + direction;
-    if (newMonth < 0) {
-      setCurrentMonth(11);
-      setCurrentYear(currentYear - 1);
-    } else if (newMonth > 11) {
-      setCurrentMonth(0);
-      setCurrentYear(currentYear + 1);
-    } else {
-      setCurrentMonth(newMonth);
-    }
-  };
-
-  const weekDays = getWeekDays(currentYear, currentWeek);
-
-  const getEventsForDay = (dayKey) => {
-    return events.filter(event => event.day === dayKey);
-  };
-
-  const getTasksForDay = (dayKey) => {
-    return tasks.filter(task => 
-      task.time_slots && task.time_slots.some(slot => slot.day === dayKey)
-    );
-  };
-
-  const handleEventClick = (event) => {
-    if (!viewingMember) { // Only allow editing own events
-      setEventModal({ isOpen: true, event });
-    }
+  const handleToggleComplete = (taskId) => {
+    setTasks(tasks.map(task => 
+      task.id === taskId 
+        ? { ...task, completed: !task.completed, updatedAt: new Date().toISOString() }
+        : task
+    ));
   };
 
   const handleTaskClick = (task) => {
-    if (!viewingMember) { // Only allow editing own tasks
-      setTaskModal({ isOpen: true, task });
-    }
+    setTaskModal({ isOpen: true, task });
   };
 
-  const handleDayClick = (date) => {
-    // Switch to week view for the selected date
-    const targetWeek = getCurrentWeek(); // Simplified - should calculate proper week for date
-    setCurrentWeek(targetWeek);
-    setView('week');
+  const getTaskStats = () => {
+    const total = tasks.length;
+    const completed = tasks.filter(t => t.completed).length;
+    const overdue = tasks.filter(t => !t.completed && isOverdue(t.dueDate)).length;
+    const today = tasks.filter(t => !t.completed && isToday(t.dueDate)).length;
+    
+    return { total, completed, overdue, today };
   };
 
-  const switchToMemberView = (member) => {
-    setViewingMember(member);
-    setView('week'); // Switch to week view when viewing member
-  };
-
-  const switchToPersonalView = () => {
-    setViewingMember(null);
-  };
+  const stats = getTaskStats();
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-gray-800">📅 Fleemy</h1>
-              
-              {/* Online/Offline indicator */}
-              <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                isOnline ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {isOnline ? '🟢 En ligne' : '🔴 Hors ligne'}
-              </div>
+              <button
+                onClick={() => onNavigate('home')}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800"
+              >
+                <div className="text-2xl">📅</div>
+                <h1 className="text-xl font-bold text-gray-800">Fleemy</h1>
+              </button>
               
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={() => setView('week')}
-                  className={`px-3 py-1 rounded-lg transition-all ${view === 'week' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                  onClick={() => setView('list')}
+                  className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                    view === 'list' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
                 >
-                  Semaine
+                  📋 Liste
                 </button>
                 <button
-                  onClick={() => setView('month')}
-                  className={`px-3 py-1 rounded-lg transition-all ${view === 'month' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
+                  onClick={() => setView('calendar')}
+                  className={`px-3 py-1 rounded-lg text-sm transition-all ${
+                    view === 'calendar' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
                 >
-                  Mois
+                  📅 Calendrier
                 </button>
               </div>
             </div>
-            
+
             <div className="flex items-center space-x-4">
-              {/* Team section */}
-              {team && (
-                <div className="flex items-center space-x-2">
-                  <div className="text-sm text-gray-600">Équipe: {team.name}</div>
-                  <div className="flex -space-x-1">
-                    {team.members.slice(0, 3).map((member) => (
-                      <button
-                        key={member.uid}
-                        onClick={() => switchToMemberView(member)}
-                        className={`w-8 h-8 rounded-full border-2 border-white bg-blue-500 text-white text-xs font-medium hover:z-10 transition-all ${
-                          viewingMember?.uid === member.uid ? 'ring-2 ring-blue-400' : ''
-                        }`}
-                        title={member.name}
-                      >
-                        {member.name.charAt(0).toUpperCase()}
-                      </button>
-                    ))}
-                    {team.members.length > 3 && (
-                      <div className="w-8 h-8 rounded-full border-2 border-white bg-gray-400 text-white text-xs font-medium flex items-center justify-center">
-                        +{team.members.length - 3}
-                      </div>
-                    )}
-                  </div>
-                  {viewingMember && (
-                    <button
-                      onClick={switchToPersonalView}
-                      className="text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      Mon planning
-                    </button>
-                  )}
+              {user ? (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-gray-600">
+                    {user.name} {user.type === 'local' ? '(Local)' : '(Emergent)'}
+                  </span>
+                  <button
+                    onClick={onLogout}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Déconnexion
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-gray-500">Mode invité</span>
+                  <button
+                    onClick={() => onNavigate('auth')}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    Se connecter
+                  </button>
                 </div>
               )}
               
-              <span className="text-sm text-gray-600">
-                Bonjour, {viewingMember ? `Planning de ${viewingMember.name}` : user.name}
-              </span>
-              
-              {!viewingMember && (
-                <>
-                  <button
-                    onClick={() => setTeamModal({ isOpen: true })}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all"
-                  >
-                    {team ? 'Gérer équipe' : '+ Équipe'}
-                  </button>
-                  <button
-                    onClick={() => setTaskModal({ isOpen: true, task: null })}
-                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-all"
-                  >
-                    + Tâche
-                  </button>
-                  <button
-                    onClick={() => setEventModal({ isOpen: true, event: null })}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all"
-                  >
-                    + Événement
-                  </button>
-                  {view === 'week' && events.length > 0 && (
-                    <button
-                      onClick={handleDeleteAllWeekEvents}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-all"
-                    >
-                      Vider semaine
-                    </button>
-                  )}
-                </>
-              )}
+              <button
+                onClick={() => setTaskModal({ isOpen: true, task: null })}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all"
+              >
+                ➕ Nouvelle tâche
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
+      {/* Stats Cards */}
       <div className="max-w-7xl mx-auto px-4 py-6">
-        {/* Navigation */}
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => view === 'week' ? navigateWeek(-1) : navigateMonth(-1)}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-all"
-            >
-              ◀
-            </button>
-            <h2 className="text-xl font-semibold">
-              {view === 'week' 
-                ? `Semaine ${currentWeek}, ${currentYear}`
-                : `${monthNames[currentMonth]} ${currentYear}`
-              }
-            </h2>
-            <button
-              onClick={() => view === 'week' ? navigateWeek(1) : navigateMonth(1)}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-all"
-            >
-              ▶
-            </button>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <div className="text-2xl font-bold text-gray-800">{stats.total}</div>
+            <div className="text-sm text-gray-600">Total des tâches</div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+            <div className="text-sm text-gray-600">Terminées</div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <div className="text-2xl font-bold text-blue-600">{stats.today}</div>
+            <div className="text-sm text-gray-600">Aujourd'hui</div>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border">
+            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+            <div className="text-sm text-gray-600">En retard</div>
           </div>
         </div>
 
-        {/* Earnings Summary - Only show for personal view */}
-        {!viewingMember && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div className="bg-green-100 p-4 rounded-lg border border-green-200">
-              <div className="text-green-800 font-semibold text-sm">Payé</div>
-              <div className="text-2xl font-bold text-green-900">{earnings.paid.toFixed(2)}€</div>
-            </div>
-            <div className="bg-red-100 p-4 rounded-lg border border-red-200">
-              <div className="text-red-800 font-semibold text-sm">Non payé</div>
-              <div className="text-2xl font-bold text-red-900">{earnings.unpaid.toFixed(2)}€</div>
-            </div>
-            <div className="bg-yellow-100 p-4 rounded-lg border border-yellow-200">
-              <div className="text-yellow-800 font-semibold text-sm">En attente</div>
-              <div className="text-2xl font-bold text-yellow-900">{earnings.pending.toFixed(2)}€</div>
-            </div>
-            <div className="bg-blue-100 p-4 rounded-lg border border-blue-200">
-              <div className="text-blue-800 font-semibold text-sm">Tâches</div>
-              <div className="text-2xl font-bold text-blue-900">{earnings.tasks_total.toFixed(2)}€</div>
-            </div>
-            <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
-              <div className="text-gray-800 font-semibold text-sm">Total</div>
-              <div className="text-2xl font-bold text-gray-900">{earnings.total.toFixed(2)}€</div>
+        {/* Filters - Only show in list view */}
+        {view === 'list' && (
+          <div className="bg-white p-4 rounded-xl shadow-sm border mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+              {/* Search */}
+              <div className="md:col-span-2">
+                <input
+                  type="text"
+                  placeholder="Rechercher une tâche..."
+                  value={filters.search}
+                  onChange={(e) => setFilters({...filters, search: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Category Filter */}
+              <div>
+                <select
+                  value={filters.category}
+                  onChange={(e) => setFilters({...filters, category: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Toutes catégories</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Priority Filter */}
+              <div>
+                <select
+                  value={filters.priority}
+                  onChange={(e) => setFilters({...filters, priority: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Toutes priorités</option>
+                  {priorities.map(priority => (
+                    <option key={priority.id} value={priority.id}>{priority.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status Filter */}
+              <div>
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({...filters, status: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Tous statuts</option>
+                  <option value="pending">En cours</option>
+                  <option value="completed">Terminées</option>
+                </select>
+              </div>
+
+              {/* Sort */}
+              <div>
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="dueDate">Par échéance</option>
+                  <option value="priority">Par priorité</option>
+                  <option value="created">Par création</option>
+                  <option value="title">Par titre</option>
+                </select>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Calendar Views */}
-        {view === 'week' ? (
-          /* Weekly Calendar */
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="grid grid-cols-6 border-b">
-              <div className="p-4 bg-gray-50 font-medium text-sm">Heure</div>
-              {weekDays.map((date, index) => (
-                <div key={index} className="p-4 bg-gray-50 text-center">
-                  <div className="font-medium text-sm">{dayNames[index]}</div>
-                  <div className="text-xs text-gray-600">
-                    {date.getDate()}/{date.getMonth() + 1}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Time slots */}
-            {timeSlots.slice(0, -1).map((time, timeIndex) => (
-              <div key={time} className="grid grid-cols-6 border-b hover:bg-gray-50">
-                <div className="p-4 bg-gray-50 text-sm font-medium border-r">
-                  {time}
-                </div>
-                {dayKeys.map((dayKey, dayIndex) => {
-                  const dayEvents = getEventsForDay(dayKey);
-                  const dayTasks = getTasksForDay(dayKey);
-                  const slotEvents = dayEvents.filter(event => event.start_time === time);
-                  const slotTasks = dayTasks.filter(task => 
-                    task.time_slots && task.time_slots.some(slot => slot.day === dayKey && slot.start === time)
-                  );
-
-                  const hasOverlap = slotEvents.length > 0 && slotTasks.length > 0;
-
+        {/* Content */}
+        {view === 'list' ? (
+          /* List View */
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            {filteredTasks.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="text-6xl mb-4">📝</div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                  Aucune tâche trouvée
+                </h3>
+                <p className="text-gray-500 mb-6">
+                  {tasks.length === 0 
+                    ? 'Commencez par créer votre première tâche !' 
+                    : 'Essayez de modifier vos filtres de recherche.'
+                  }
+                </p>
+                <button
+                  onClick={() => setTaskModal({ isOpen: true, task: null })}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all"
+                >
+                  ➕ Créer une tâche
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {filteredTasks.map(task => {
+                  const category = categories.find(c => c.id === task.category);
+                  const priority = priorities.find(p => p.id === task.priority);
+                  const taskIsOverdue = isOverdue(task.dueDate) && !task.completed;
+                  const taskIsToday = isToday(task.dueDate);
+                  const taskIsDueSoon = isDueSoon(task.dueDate);
+                  
                   return (
-                    <div 
-                      key={dayKey}
-                      className="p-2 min-h-16 border-r cursor-pointer transition-all hover:bg-blue-50"
-                      onClick={() => !viewingMember && setEventModal({ 
-                        isOpen: true, 
-                        event: { day: dayKey, start_time: time, end_time: timeSlots[timeIndex + 1] }
-                      })}
+                    <div
+                      key={task.id}
+                      className={`p-4 hover:bg-gray-50 transition-all cursor-pointer ${
+                        task.completed ? 'opacity-60' : ''
+                      } ${taskIsOverdue ? 'bg-red-50 border-l-4 border-red-500' : ''} ${
+                        taskIsToday ? 'bg-blue-50 border-l-4 border-blue-500' : ''
+                      } ${taskIsDueSoon ? 'bg-yellow-50 border-l-4 border-yellow-500' : ''}`}
+                      onClick={() => handleTaskClick(task)}
                     >
-                      {slotEvents.map(event => (
-                        <div
-                          key={event.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEventClick(event);
-                          }}
-                          className={`text-xs p-2 mb-1 rounded border cursor-pointer transition-all hover:shadow-md ${statusColors[event.status]}`}
-                        >
-                          <div className="font-semibold">{event.client}</div>
-                          <div className="truncate">{event.description}</div>
-                        </div>
-                      ))}
-                      
-                      {slotTasks.map(task => (
-                        <div
-                          key={task.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTaskClick(task);
-                          }}
-                          className={`text-xs p-2 mb-1 rounded border cursor-pointer transition-all hover:shadow-md ${
-                            hasOverlap ? 'opacity-60' : ''
-                          }`}
-                          style={{ backgroundColor: task.color }}
-                        >
-                          <div className="flex items-center">
-                            <span className="mr-1 text-sm">{hasOverlap ? task.icon : task.icon}</span>
-                            <span className="font-semibold truncate">{task.name}</span>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleComplete(task.id);
+                              }}
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                task.completed 
+                                  ? 'bg-green-500 border-green-500 text-white' 
+                                  : 'border-gray-300 hover:border-green-500'
+                              }`}
+                            >
+                              {task.completed && '✓'}
+                            </button>
+                            
+                            <h3 className={`font-semibold ${
+                              task.completed ? 'line-through text-gray-500' : 'text-gray-800'
+                            }`}>
+                              {task.title}
+                            </h3>
+                            
+                            <div className="flex items-center space-x-2">
+                              <span 
+                                className="px-2 py-1 rounded-full text-xs font-medium"
+                                style={{ 
+                                  backgroundColor: category?.color + '20', 
+                                  color: category?.color 
+                                }}
+                              >
+                                {category?.icon} {category?.name}
+                              </span>
+                              
+                              <span 
+                                className="px-2 py-1 rounded-full text-xs font-medium"
+                                style={{ 
+                                  backgroundColor: priority?.color + '20', 
+                                  color: priority?.color 
+                                }}
+                              >
+                                {priority?.name}
+                              </span>
+                            </div>
                           </div>
-                          <div className="font-medium">{task.price.toFixed(2)}€</div>
+                          
+                          {task.description && (
+                            <p className="text-gray-600 text-sm mb-2 ml-8">
+                              {task.description}
+                            </p>
+                          )}
+                          
+                          <div className="flex items-center space-x-4 text-xs text-gray-500 ml-8">
+                            <span className={`${
+                              taskIsOverdue ? 'text-red-600 font-medium' : 
+                              taskIsToday ? 'text-blue-600 font-medium' :
+                              taskIsDueSoon ? 'text-yellow-600 font-medium' : ''
+                            }`}>
+                              📅 {formatDate(task.dueDate)}
+                              {taskIsOverdue && ' (En retard)'}
+                              {taskIsToday && ' (Aujourd\'hui)'}
+                              {taskIsDueSoon && ' (Demain)'}
+                            </span>
+                            <span>
+                              🕒 Créée le {formatDateTime(task.createdAt)}
+                            </span>
+                          </div>
                         </div>
-                      ))}
+                        
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setTaskModal({ isOpen: true, task });
+                            }}
+                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTask(task.id);
+                            }}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            ))}
+            )}
           </div>
         ) : (
-          /* Monthly Calendar */
-          <MonthView
-            year={currentYear}
-            month={currentMonth}
-            events={events}
+          /* Calendar View */
+          <CalendarView
             tasks={tasks}
-            onDayClick={handleDayClick}
-            onEventClick={handleEventClick}
+            onTaskClick={handleTaskClick}
           />
         )}
       </div>
 
-      {/* Modals */}
-      <EventModal
-        isOpen={eventModal.isOpen}
-        onClose={() => setEventModal({ isOpen: false, event: null })}
-        onSave={eventModal.event && eventModal.event.id ? handleUpdateEvent : handleCreateEvent}
-        onDelete={handleDeleteEvent}
-        event={eventModal.event}
-        clients={clients}
-      />
-      
+      {/* Task Modal */}
       <TaskModal
         isOpen={taskModal.isOpen}
         onClose={() => setTaskModal({ isOpen: false, task: null })}
-        onSave={taskModal.task && taskModal.task.id ? handleUpdateTask : handleCreateTask}
-        onDelete={handleDeleteTask}
+        onSave={taskModal.task ? handleUpdateTask : handleCreateTask}
         task={taskModal.task}
-      />
-      
-      <TeamModal
-        isOpen={teamModal.isOpen}
-        onClose={() => setTeamModal({ isOpen: false })}
       />
     </div>
   );
@@ -1572,63 +1098,58 @@ const PlanningScreen = ({ user, sessionToken }) => {
 
 // Main App Component
 function App() {
+  const [currentPage, setCurrentPage] = useState('home'); // 'home', 'auth', 'planning'
   const [user, setUser] = useState(null);
-  const [sessionToken, setSessionToken] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const handleLogin = async (sessionId) => {
-    try {
-      setLoading(true);
-      const response = await axios.post(`${API}/auth/login`, { session_id: sessionId });
-      setUser(response.data.user);
-      setSessionToken(response.data.session_token);
-      localStorage.setItem('fleemy_session_token', response.data.session_token);
-      // Clear the hash from URL
-      window.history.replaceState(null, null, window.location.pathname);
-    } catch (error) {
-      console.error('Login error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkExistingSession = async () => {
-    const token = localStorage.getItem('fleemy_session_token');
-    if (token) {
-      try {
-        const response = await axios.get(`${API}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setUser(response.data);
-        setSessionToken(token);
-      } catch (error) {
-        localStorage.removeItem('fleemy_session_token');
-      }
-    }
-    setLoading(false);
-  };
 
   useEffect(() => {
-    checkExistingSession();
+    // Load user from localStorage on app start
+    const savedUser = loadUserFromLocal();
+    if (savedUser) {
+      setUser(savedUser);
+    }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">📅</div>
-          <div className="text-xl font-semibold text-gray-700">Chargement de Fleemy...</div>
-          <div className="text-sm text-gray-500 mt-2">Votre outil de planning professionnel</div>
-        </div>
-      </div>
-    );
-  }
+  const handleLogin = (userData) => {
+    setUser(userData);
+    saveUserToLocal(userData);
+  };
 
-  if (!user) {
-    return <AuthScreen onLogin={handleLogin} />;
-  }
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('fleemy_user');
+    setCurrentPage('home');
+  };
 
-  return <PlanningScreen user={user} sessionToken={sessionToken} />;
+  const handleNavigate = (page) => {
+    setCurrentPage(page);
+  };
+
+  return (
+    <div className="App">
+      {currentPage === 'home' && (
+        <HomePage 
+          onNavigate={handleNavigate}
+          user={user}
+          onLogout={handleLogout}
+        />
+      )}
+      
+      {currentPage === 'auth' && (
+        <AuthPage 
+          onNavigate={handleNavigate}
+          onLogin={handleLogin}
+        />
+      )}
+      
+      {currentPage === 'planning' && (
+        <PlanningPage 
+          onNavigate={handleNavigate}
+          user={user}
+          onLogout={handleLogout}
+        />
+      )}
+    </div>
+  );
 }
 
 export default App;
