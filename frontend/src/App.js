@@ -1553,7 +1553,7 @@ const GridBody = ({
     newDate.setDate(newDate.getDate() + (direction * 7));
     setCurrentDate(newDate);
     
-    // Load events for the new week smoothly
+    // Load events and tasks for the new week smoothly
     const newWeek = getWeekNumber(newDate);
     const newYear = newDate.getFullYear();
     
@@ -1564,6 +1564,7 @@ const GridBody = ({
       // Longer delay for smoother animation
       setTimeout(() => {
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []);
         setTransitioning(false);
       }, 300);
     } catch (error) {
