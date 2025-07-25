@@ -470,21 +470,22 @@ async def get_earnings(year: int, week: int, current_user: User = Depends(get_cu
     return earnings
 
 # Tasks endpoints
-@api_router.post("/planning/tasks")
-async def create_task(task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
-    now = datetime.now()
-    year = now.year
-    week = now.isocalendar()[1]
-    
-    task = WeeklyTask(
-        uid=current_user.uid,
-        week=week,
-        year=year,
-        **task_request.dict()
+@api_router.put("/planning/tasks/{task_id}")
+async def update_task(task_id: str, task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
+    await db.weekly_tasks.update_one(
+        {"id": task_id, "uid": current_user.uid},
+        {"$set": {**task_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
-    await db.weekly_tasks.insert_one(task.dict())
-    return task
+    updated_task = await db.weekly_tasks.find_one({"id": task_id})
+    return updated_task
+
+@api_router.delete("/planning/tasks/{task_id}")
+async def delete_task(task_id: str, current_user: User = Depends(get_current_user)):
+    result = await db.weekly_tasks.delete_one({"id": task_id, "uid": current_user.uid})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"message": "Task deleted"}
 
 @api_router.get("/todos")
 async def get_todos(current_user: User = Depends(get_current_user)):
