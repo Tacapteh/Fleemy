@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 import axios from "axios";
+import { generateQuotePDF, generateInvoicePDF } from './utils/pdf';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -3696,6 +3697,12 @@ const Quotes = ({ user, sessionToken }) => {
                         {quote.status === 'sent' ? 'Envoyé' : 'Envoyer'}
                       </button>
                     )}
+                    <button
+                      onClick={() => generateQuotePDF(quote)}
+                      className="btn btn-outline btn-sm"
+                    >
+                      📄 PDF
+                    </button>
                   </div>
                 </div>
               </div>
@@ -4317,7 +4324,7 @@ const Invoices = ({ user, sessionToken }) => {
                       </button>
                     )}
                     <button
-                      onClick={() => {/* TODO: Generate PDF */}}
+                      onClick={() => generateInvoicePDF(invoice)}
                       className="btn btn-outline btn-sm"
                     >
                       📄 PDF

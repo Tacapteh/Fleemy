@@ -331,4 +331,5 @@ agent_communication:
   - agent: "main"
     message: "🔧 PHASE 4 DÉMARRÉE : Corrections finales Planning et complétion Devis & Factures : 1) Correction alignement exact heures 9h-18h 2) Ajustement couleurs cartes revenus selon spécifications 3) Transitions fade plus discrètes 4) Ajout export PDF pour devis/factures 5) Tests backend complets."
   - agent: "main"
-    message: "Nettoyage final du module Planning : suppression complète de la page 'Tâches'. Toutes les fonctionnalités de tâches restent dans la vue Planning."
+    message: "Nettoyage final du module Planning : suppression complète de la page 'Tâches'. Toutes les fonctionnalités de tâches restent dans la vue Planning."- agent: "main"
+  message: "Implemented client-side PDF generation for quotes and invoices using pdfmake"
