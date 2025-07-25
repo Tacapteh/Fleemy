@@ -1215,22 +1215,60 @@ const GridBody = ({
     }
   };
 
-  const navigateWeek = (direction) => {
+  const navigateWeek = async (direction) => {
+    // Start transition immediately
+    setTransitioning(true);
+    
+    // Update date
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + (direction * 7));
     setCurrentDate(newDate);
     
-    // Use smooth loading for better UX
-    setTimeout(() => loadEvents(true), 50);
+    // Load events for the new week smoothly
+    const newWeek = getWeekNumber(newDate);
+    const newYear = newDate.getFullYear();
+    
+    try {
+      const targetUid = viewingMember ? viewingMember.uid : user.uid;
+      const response = await apiCall(`/planning/week/${newYear}/${newWeek}`);
+      
+      // Small delay for smooth transition
+      setTimeout(() => {
+        setEvents(response.data.events || []);
+        setTransitioning(false);
+      }, 200);
+    } catch (error) {
+      console.error('Error loading week events:', error);
+      setTransitioning(false);
+    }
   };
 
-  const navigateMonth = (direction) => {
+  const navigateMonth = async (direction) => {
+    // Start transition immediately
+    setTransitioning(true);
+    
+    // Update date
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
     
-    // Use smooth loading for better UX
-    setTimeout(() => loadEvents(true), 50);
+    // Load events for the new month smoothly
+    const newMonth = newDate.getMonth();
+    const newYear = newDate.getFullYear();
+    
+    try {
+      const targetUid = viewingMember ? viewingMember.uid : user.uid;
+      const response = await apiCall(`/planning/month/${newYear}/${newMonth}`);
+      
+      // Small delay for smooth transition
+      setTimeout(() => {
+        setEvents(response.data.events || []);
+        setTransitioning(false);
+      }, 200);
+    } catch (error) {
+      console.error('Error loading month events:', error);
+      setTransitioning(false);
+    }
   };
 
   const calculateRevenue = () => {
