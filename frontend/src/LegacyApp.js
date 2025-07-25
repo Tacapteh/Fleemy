@@ -142,13 +142,13 @@ const Sidebar = ({
       <div className="p-4 border-t border-gray-200">
         <div className="flex items-center space-x-3 mb-3">
           <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-            {user.name.charAt(0).toUpperCase()}
+            {user?.name ? user.name.charAt(0).toUpperCase() : ""}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-800 truncate">
-              {user.name}
+              {user?.name ?? ""}
             </p>
-            <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            <p className="text-xs text-gray-500 truncate">{user?.email ?? ""}</p>
           </div>
         </div>
         <button
@@ -211,7 +211,7 @@ const Dashboard = ({ user, sessionToken }) => {
     <div className="space-y-6">
       {/* Welcome Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-2xl">
-        <h1 className="text-2xl font-bold mb-2">Bonjour, {user.name} ! 👋</h1>
+        <h1 className="text-2xl font-bold mb-2">Bonjour, {user?.name ?? ""} ! 👋</h1>
         <p className="text-blue-100">Voici un aperçu de votre activité</p>
       </div>
 
@@ -285,7 +285,7 @@ const Dashboard = ({ user, sessionToken }) => {
                     <p className="font-medium text-gray-800">
                       {event.description}
                     </p>
-                    <p className="text-sm text-gray-600">{event.client_name}</p>
+                    <p className="text-sm text-gray-600">{event?.client_name ?? ''}</p>
                   </div>
                   <div className="text-sm text-gray-500">
                     {event.day} {event.start_time}
@@ -360,8 +360,8 @@ const Dashboard = ({ user, sessionToken }) => {
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                 >
                   <div>
-                    <p className="font-medium text-gray-800">{client.name}</p>
-                    {client.company && (
+                    <p className="font-medium text-gray-800">{client?.name ?? ""}</p>
+                    {client?.company && (
                       <p className="text-sm text-gray-600">{client.company}</p>
                     )}
                   </div>
@@ -393,7 +393,7 @@ const Dashboard = ({ user, sessionToken }) => {
                 >
                   <div>
                     <p className="font-medium text-gray-800">{quote.title}</p>
-                    <p className="text-sm text-gray-600">{quote.client_name}</p>
+                    <p className="text-sm text-gray-600">{quote?.client_name ?? ""}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-gray-800">
@@ -1928,7 +1928,7 @@ const Planning = ({ user, sessionToken }) => {
                             cursor: "pointer",
                             zIndex: 20,
                           }}
-                          title={task.name}
+                          title={task?.name ?? ''}
                         >
                           {task.icon}
                         </div>
@@ -1968,7 +1968,7 @@ const Planning = ({ user, sessionToken }) => {
                             {task.icon}
                           </div>
                           <div style={{ fontSize: "10px", fontWeight: 500 }}>
-                            {task.name}
+                            {task?.name ?? ''}
                           </div>
                         </div>
                       );
@@ -2469,7 +2469,7 @@ const Planning = ({ user, sessionToken }) => {
                 .filter((m) => m.uid !== user.uid)
                 .map((member) => (
                   <option key={member.uid} value={member.uid}>
-                    {member.name} (lecture seule)
+                    {member?.name ?? ''} (lecture seule)
                   </option>
                 ))}
             </select>
@@ -3338,7 +3338,7 @@ const Quotes = ({ user, sessionToken }) => {
                     </div>
                     <p className="text-gray-900 font-medium">{quote.title}</p>
                     <p className="text-gray-600 text-sm">
-                      Client: {quote.client_name}
+                      Client: {quote?.client_name ?? ''}
                     </p>
                     <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                       <span>💰 {formatCurrency(quote.total)}</span>
@@ -3627,12 +3627,12 @@ const InvoiceModal = ({
               className="form-input"
             >
               <option value="">Créer une nouvelle facture</option>
-              {acceptedQuotes.map((quote) => (
-                <option key={quote.id} value={quote.id}>
-                  {quote.quote_number} - {quote.client_name} -{" "}
-                  {formatCurrency(quote.total)}
-                </option>
-              ))}
+                {acceptedQuotes.map((quote) => (
+                  <option key={quote.id} value={quote.id}>
+                    {quote.quote_number} - {quote?.client_name ?? ''} -{' '}
+                    {formatCurrency(quote.total)}
+                  </option>
+                ))}
             </select>
             <div className="text-sm text-gray-500 mt-1">
               Sélectionnez un devis accepté pour créer automatiquement une
@@ -3654,7 +3654,7 @@ const InvoiceModal = ({
               <option value="">Sélectionner un client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client.name}
+                  {client?.name ?? ""}
                 </option>
               ))}
             </select>
@@ -4080,7 +4080,7 @@ const Invoices = ({ user, sessionToken }) => {
                     </div>
                     <p className="text-gray-900 font-medium">{invoice.title}</p>
                     <p className="text-gray-600 text-sm">
-                      Client: {invoice.client_name}
+                      Client: {invoice?.client_name ?? ''}
                     </p>
                     <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                       <span>💰 {formatCurrency(invoice.total)}</span>

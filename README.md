@@ -45,6 +45,10 @@ npm install
 npm start
 ```
 
+The PDF export feature is temporarily disabled in `frontend/src/utils/pdf.js`.
+All other pages (Planning, Devis, Factures) work normally. To re-enable PDF
+generation later, implement the real functions in `pdf.js`.
+
 Create a `.env` file based on `.env.example` at the project root to configure both frontend and backend URLs.
 
 ## Project structure
