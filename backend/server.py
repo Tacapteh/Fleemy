@@ -270,6 +270,17 @@ async def login(auth_request: AuthRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.get("/auth/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "uid": current_user.uid,
+        "name": current_user.name,
+        "email": current_user.email,
+        "picture": current_user.picture,
+        "hourly_rate": current_user.hourly_rate,
+        "team_id": current_user.team_id
+    }
+
 @api_router.put("/auth/me")
 async def update_me(hourly_rate: float, current_user: User = Depends(get_current_user)):
     await db.users.update_one(
