@@ -1195,10 +1195,21 @@ const GridBody = ({
       // Save to offline storage
       await offlineStorage.saveEvent(response.data);
 
+      // Update local state immediately
+      const newEvent = {
+        ...response.data,
+        day: eventData.day, // Keep day as number for local filtering
+        start: eventData.start, // Keep both formats for compatibility
+        end: eventData.end
+      };
+
+      setEvents(prevEvents => [...prevEvents, newEvent]);
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
       
-      // Smooth reload after event creation
-      loadEvents(true);
+      // Force revenue recalculation
+      setTimeout(() => {
+        // This will trigger a re-render with updated revenue
+      }, 100);
     } catch (error) {
       console.error('Error creating event:', error);
       // If offline, save locally only
@@ -1212,8 +1223,8 @@ const GridBody = ({
           created_at: new Date().toISOString()
         };
         await offlineStorage.saveEvent(eventToCreateLocal);
+        setEvents(prevEvents => [...prevEvents, eventToCreateLocal]);
         setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-        loadEvents(true);
       }
     }
   };
@@ -1235,8 +1246,22 @@ const GridBody = ({
         data: updateData
       });
 
+      // Update local state immediately
+      setEvents(prevEvents => 
+        prevEvents.map(event => 
+          event.id === eventModal.event.id 
+            ? { 
+                ...event, 
+                ...updateData,
+                day: eventData.day, // Keep day as number for local filtering
+                start: eventData.start, // Keep both formats for compatibility
+                end: eventData.end
+              }
+            : event
+        )
+      );
+
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents(true);
     } catch (error) {
       console.error('Error updating event:', error);
     }
@@ -1249,8 +1274,10 @@ const GridBody = ({
       });
 
       await offlineStorage.deleteEvent(eventId);
+      
+      // Update local state immediately
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== eventId));
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents(true);
     } catch (error) {
       console.error('Error deleting event:', error);
     }
@@ -1266,7 +1293,11 @@ const GridBody = ({
         );
 
         await offlineStorage.clearWeekEvents(user.uid, currentYear, currentWeek);
-        loadEvents(true);
+        
+        // Update local state immediately
+        setEvents(prevEvents => 
+          prevEvents.filter(event => !(event.week === currentWeek && event.year === currentYear))
+        );
       } catch (error) {
         console.error('Error clearing week:', error);
       }
