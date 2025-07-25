@@ -888,7 +888,102 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
-// Ultra Clean Planning Components - Simple Labels + Clean Grid
+// Month View Components - Ultra Clean Design
+const MonthHeader = ({ dayLabels }) => {
+  return (
+    <div className="month-header">
+      {dayLabels.map((day, index) => (
+        <div key={index} className="month-day-label">
+          {day}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const MonthEvent = ({ event, onClick }) => {
+  const eventType = event.status || event.type;
+  const eventClass = `month-event ${
+    eventType === 'paid' ? 'event-meeting' : 
+    eventType === 'unpaid' ? 'event-task' : 
+    eventType === 'pending' ? 'event-break' : 
+    'event-notworked'
+  }`;
+
+  return (
+    <div
+      className={eventClass}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(event);
+      }}
+    >
+      {event.description}
+    </div>
+  );
+};
+
+const MonthGrid = ({ 
+  monthData, 
+  onDayClick, 
+  onEventClick, 
+  getEventsForDate,
+  viewingMember 
+}) => {
+  const rows = [];
+  for (let i = 0; i < monthData.length; i += 7) {
+    rows.push(monthData.slice(i, i + 7));
+  }
+
+  return (
+    <div className="month-grid">
+      {rows.map((week, weekIndex) => (
+        <div key={weekIndex} className="month-week">
+          {week.map((day, dayIndex) => {
+            const dayEvents = getEventsForDate(day.date);
+            const visibleEvents = dayEvents.slice(0, 2);
+            const remainingCount = dayEvents.length - visibleEvents.length;
+            const isToday = day.date.toDateString() === new Date().toDateString();
+            const isCurrentMonth = day.isCurrentMonth;
+
+            return (
+              <div
+                key={dayIndex}
+                className={`month-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''}`}
+                onClick={() => onDayClick(day.date)}
+              >
+                <div className="month-day-number">
+                  {day.date.getDate()}
+                </div>
+                
+                <div className="month-day-events">
+                  {visibleEvents.map(event => (
+                    <MonthEvent
+                      key={event.id}
+                      event={event}
+                      onClick={onEventClick}
+                    />
+                  ))}
+                  {remainingCount > 0 && (
+                    <div 
+                      className="month-more-events"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDayClick(day.date);
+                      }}
+                    >
+                      +{remainingCount} autres
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
 const DayHeader = ({ weekDates, dayNames }) => {
   return (
     <div className="planning-days-header">
