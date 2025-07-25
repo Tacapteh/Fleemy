@@ -1325,13 +1325,13 @@ const Planning = ({ user, sessionToken }) => {
                             </div>
                           ))}
                           
-                          {/* Loading skeleton during transition */}
+                          {/* Smooth loading skeleton during transition */}
                           {transitioning && (
                             <div className="planning-skeleton" style={{
-                              width: '100%',
-                              height: '20px',
-                              borderRadius: '4px',
-                              marginTop: '4px'
+                              width: '90%',
+                              height: '16px',
+                              borderRadius: '2px',
+                              margin: '4px auto'
                             }}></div>
                           )}
                         </td>
