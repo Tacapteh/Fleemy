@@ -1283,10 +1283,7 @@ const Planning = ({ user, sessionToken }) => {
                   <th className="time-header">Heure</th>
                   {weekDates.map((date, index) => (
                     <th key={index} className="day-header">
-                      {dayNames[index]}
-                      <div className="day-date">
-                        {date.getDate()}/{date.getMonth() + 1}
-                      </div>
+                      {dayNames[index]} {date.getDate()}
                     </th>
                   ))}
                 </tr>
