@@ -969,48 +969,60 @@ body {
   color: #6b7280 !important;
 }
 
-/* Enhanced Responsive Design */
+/* Enhanced Responsive Design for Modular Components */
 @media (max-width: 1200px) {
-  .planning-table td {
+  .planning-grid-row {
     height: 90px;
     min-height: 90px;
   }
   
-  .time-header {
+  .planning-hour-cell {
+    height: 90px;
+    min-height: 90px;
+  }
+  
+  .planning-time-placeholder,
+  .planning-hours-sidebar {
     width: 75px;
     min-width: 75px;
   }
 }
 
 @media (max-width: 768px) {
-  .planning-container {
+  .planning-layout {
     border-radius: 0;
     margin: 0 -8px;
   }
   
-  .planning-table td {
+  .planning-grid-row {
     height: 80px;
     min-height: 80px;
   }
   
-  .time-header {
-    width: 60px;
-    min-width: 60px;
+  .planning-hour-cell {
+    height: 80px;
+    min-height: 80px;
     font-size: 11px;
-    padding: 8px 4px;
+    padding: 6px 4px;
   }
   
-  .day-header {
+  .planning-time-placeholder,
+  .planning-hours-sidebar {
+    width: 60px;
+    min-width: 60px;
+  }
+  
+  .planning-day-header {
     font-size: 13px;
     padding: 10px 6px;
   }
   
-  .event {
+  .planning-event {
     font-size: 11px;
     padding: 4px 6px;
   }
   
-  .event-description {
+  .planning-event-description {
     font-size: 11px;
   }
   
@@ -1050,24 +1062,30 @@ body {
 }
 
 @media (max-width: 480px) {
-  .planning-table td {
+  .planning-grid-row {
     height: 70px;
     min-height: 70px;
   }
   
-  .time-header {
-    width: 50px;
-    min-width: 50px;
+  .planning-hour-cell {
+    height: 70px;
+    min-height: 70px;
     font-size: 10px;
-    padding: 6px 2px;
+    padding: 4px 2px;
   }
   
-  .day-header {
+  .planning-time-placeholder,
+  .planning-hours-sidebar {
+    width: 50px;
+    min-width: 50px;
+  }
+  
+  .planning-day-header {
     font-size: 12px;
     padding: 8px 4px;
   }
   
-  .event {
+  .planning-event {
     font-size: 10px;
     padding: 3px 4px;
     top: 1px;
@@ -1076,12 +1094,12 @@ body {
     bottom: 1px;
   }
   
-  .event-description {
+  .planning-event-description {
     font-size: 10px;
     margin-bottom: 1px;
   }
   
-  .event-time {
+  .planning-event-time {
     font-size: 9px;
   }
   
