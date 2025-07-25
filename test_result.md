@@ -175,7 +175,7 @@ frontend:
         agent: "main"
         comment: "Structure de base du composant Planning fonctionnelle"
 
-  - task: "Planning Structure Modulaire - Composants Séparés" 
+  - task: "Planning Structure Ultra-Épurée - Labels Simples + Grille Pure" 
     implemented: true
     working: true
     file: "App.js + App.css"
@@ -185,7 +185,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Structure modulaire implémentée : DayHeader (entêtes jours), HourSidebar (colonne heures), GridBody (grille centrale), entêtes séparés et distincts du tableau principal, tout visible sans scroll"
+        comment: "Structure ultra-épurée finale : DayHeader + HourLabels + GridBody, jours et heures comme simples labels sans bordures ni fond, seule la grille centrale avec bordures #e5e7eb, alignement parfait"
 
   - task: "Layout Fixed - No Scroll + Visual Separation"
     implemented: true
