@@ -969,6 +969,11 @@ class FleemyAPITester:
             self.test_data_validation,
             self.test_event_creation_with_valid_data,
             self.test_task_creation_with_valid_data,
+            self.test_task_crud_endpoints,
+            self.test_task_data_structure_validation,
+            self.test_week_month_endpoints_with_tasks,
+            self.test_earnings_with_tasks_integration,
+            self.test_task_scenarios_comprehensive,
             self.test_cors_headers,
         ]
         
