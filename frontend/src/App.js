@@ -1583,7 +1583,7 @@ const GridBody = ({
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
     
-    // Load events for the new month smoothly
+    // Load events and tasks for the new month smoothly
     const newMonth = newDate.getMonth();
     const newYear = newDate.getFullYear();
     
@@ -1594,6 +1594,7 @@ const GridBody = ({
       // Longer delay for smoother animation
       setTimeout(() => {
         setEvents(response.data.events || []);
+        setTasks(response.data.tasks || []);
         setTransitioning(false);
       }, 300);
     } catch (error) {
