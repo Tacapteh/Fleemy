@@ -978,6 +978,9 @@ const Planning = ({ user, sessionToken }) => {
     const newDate = new Date(currentDate);
     newDate.setDate(newDate.getDate() + (direction * 7));
     setCurrentDate(newDate);
+    
+    // Use smooth loading for better UX
+    setTimeout(() => loadEvents(true), 50);
   };
 
   const navigateMonth = (direction) => {
