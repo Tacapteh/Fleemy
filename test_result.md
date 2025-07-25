@@ -175,17 +175,20 @@ frontend:
         agent: "main"
         comment: "Structure de base du composant Planning fonctionnelle"
 
-  - task: "Planning Table - Ultra Clean Style (Reference Image)" 
+  - task: "Planning Table - Light Clean Style (Problem Fixed)" 
     implemented: true
     working: true
-    file: "App.css + App.js"
-    stuck_count: 0
+    file: "App.css"
+    stuck_count: 1
     priority: "high"
     needs_retesting: true
     status_history:
+      - working: false
+        agent: "main"
+        comment: "Problème détecté : tableau sombre au lieu de clair"
       - working: true
         agent: "main"
-        comment: "Style ultra-épuré appliqué selon l'image de référence exacte : fond blanc pur, bordures fines #e5e7eb, entêtes 'Lundi 21' format simple, hauteur 96px par créneau, design minimaliste parfait"
+        comment: "CORRIGÉ : fond blanc forcé (#ffffff), bordures claires (#e5e7eb), entêtes gris clair (#f9fafb), dark mode désactivé, style clair et lisible restauré"
 
   - task: "Navigation Fluide avec Transitions Douces"
     implemented: true
