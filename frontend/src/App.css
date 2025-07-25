@@ -804,6 +804,7 @@ button:active {
   max-height: calc(100vh - 300px);
   min-height: 864px; /* 9 slots * 96px */
   background: #ffffff;
+  position: relative;
 }
 
 .planning-hours-sidebar {
@@ -815,6 +816,7 @@ button:active {
   flex-direction: column;
   padding-right: 8px;
   position: relative;
+  height: 100%;
 }
 
 .planning-hour-cell {
@@ -830,20 +832,25 @@ button:active {
   border: none;
   background: #ffffff;
   position: relative;
-  padding-top: -8px; /* Align with line separator */
+  padding-top: 0;
+  margin-top: -6px; /* Align with grid lines */
 }
 
 .planning-hour-cell:first-child {
-  padding-top: 0; /* First hour (9h) aligns with top of grid */
+  margin-top: 0; /* 9h aligns with top */
 }
 
 .planning-hour-cell:last-child {
-  height: 0; /* Last hour (18h) has no height, just marks the end */
-  min-height: 0;
-  padding-top: 0;
   position: absolute;
   bottom: 0;
   right: 8px;
+  height: auto;
+  min-height: auto;
+  margin-top: 0;
+  padding-top: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
 }
 
 .planning-grid-body {
