@@ -579,7 +579,7 @@ async def delete_todo(todo_id: str, current_user: User = Depends(get_current_use
 # Clients endpoints
 @api_router.get("/clients")
 async def get_clients(current_user: User = Depends(get_current_user)):
-    clients = await db.clients.find({"uid": current_user.uid}).sort("name", 1).to_list(1000)
+    clients = await db.clients.find({"uid": current_user.uid}, {"_id": 0}).sort("name", 1).to_list(1000)
     return clients
 
 @api_router.post("/clients")
