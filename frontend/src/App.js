@@ -1001,13 +1001,16 @@ const Planning = ({ user, sessionToken }) => {
     const revenue = { paid: 0, unpaid: 0, pending: 0 };
 
     weekEvents.forEach(event => {
-      if (event.type !== 'not_worked') {
-        const startHour = parseInt(event.start.split(':')[0]);
-        const endHour = parseInt(event.end.split(':')[0]);
+      if ((event.status || event.type) !== 'not_worked') {
+        const startTime = event.start_time || event.start || '09:00';
+        const endTime = event.end_time || event.end || '10:00';
+        const startHour = parseInt(startTime.split(':')[0]);
+        const endHour = parseInt(endTime.split(':')[0]);
         const hours = endHour - startHour;
         const amount = hours * hourlyRate;
 
-        switch (event.type) {
+        const eventType = event.status || event.type;
+        switch (eventType) {
           case 'paid':
             revenue.paid += amount;
             break;
