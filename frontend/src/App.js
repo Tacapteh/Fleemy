@@ -939,7 +939,7 @@ const Planning = ({ user, sessionToken }) => {
       });
 
       setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
-      loadEvents();
+      loadEvents(true);
     } catch (error) {
       console.error('Error updating event:', error);
     }
