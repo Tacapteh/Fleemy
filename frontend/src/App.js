@@ -801,9 +801,11 @@ const Planning = ({ user, sessionToken }) => {
   const [view, setView] = useState('week'); // 'week' or 'month'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
+  const [tasks, setTasks] = useState([]); // Add tasks state
   const [loading, setLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
   const [eventModal, setEventModal] = useState({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+  const [taskModal, setTaskModal] = useState({ isOpen: false, task: null }); // Add task modal state
   const [dayEventsModal, setDayEventsModal] = useState({ isOpen: false, events: [], date: null });
   const [team, setTeam] = useState(null);
   const [viewingMember, setViewingMember] = useState(null);
