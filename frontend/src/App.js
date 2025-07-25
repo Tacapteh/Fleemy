@@ -440,12 +440,21 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
 
   useEffect(() => {
     if (event) {
+      // Convert day from string to number if needed
+      let dayIndex = event.day;
+      if (typeof dayIndex === 'string') {
+        dayIndex = dayNames.findIndex(d => d.toLowerCase() === dayIndex.toLowerCase());
+        if (dayIndex === -1) dayIndex = 0;
+      }
+      
       setFormData({
         description: event.description || '',
-        day: event.day || 0,
-        start: event.start || '09:00',
-        end: event.end || '10:00',
-        type: event.type || 'pending'
+        day: dayIndex || 0,
+        start: event.start_time || event.start || '09:00',
+        end: event.end_time || event.end || '10:00',
+        type: event.status || event.type || 'pending',
+        client_id: event.client_id || '',
+        client_name: event.client_name || ''
       });
     } else if (timeSlot) {
       setFormData({
@@ -453,7 +462,9 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         day: timeSlot.day,
         start: timeSlot.start,
         end: timeSlot.end,
-        type: 'pending'
+        type: 'pending',
+        client_id: '',
+        client_name: ''
       });
     } else if (selectedDate) {
       const dayOfWeek = selectedDate.getDay();
@@ -463,7 +474,9 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         day: adjustedDay < 5 ? adjustedDay : 0,
         start: '09:00',
         end: '10:00',
-        type: 'pending'
+        type: 'pending',
+        client_id: '',
+        client_name: ''
       });
     } else {
       setFormData({
@@ -471,7 +484,9 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         day: 0,
         start: '09:00',
         end: '10:00',
-        type: 'pending'
+        type: 'pending',
+        client_id: '',
+        client_name: ''
       });
     }
   }, [event, timeSlot, selectedDate, isOpen]);
