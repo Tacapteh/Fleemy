@@ -63,7 +63,6 @@ const Sidebar = ({ currentPage, setCurrentPage, user, onLogout, isMobile, setIsM
   const menuItems = [
     { id: 'dashboard', name: 'Dashboard', icon: '📊' },
     { id: 'planning', name: 'Planning', icon: '📅' },
-    { id: 'tasks', name: 'Tâches', icon: '✅' },
     { id: 'todos', name: 'To-do List', icon: '📝' },
     { id: 'clients', name: 'Clients', icon: '👥' },
     { id: 'quotes', name: 'Devis', icon: '📋' },
