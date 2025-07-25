@@ -211,17 +211,17 @@ frontend:
         agent: "main"
         comment: "Navigation ultra-fluide implémentée : WeekNavigationHeader + MonthNavigationHeader, transitions fadeSlideIn/Out, headerPulse, indicateur loading, state management optimisé, pas de rechargement complet"
 
-  - task: "Revenue Calculation Display"
+  - task: "State Management Optimisé - React Hooks"
     implemented: true
     working: true
     file: "App.js"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Affichage des revenus (payé, impayé, en attente) opérationnel"
+        comment: "UseEffect optimisé pour éviter rechargements inutiles, navigation avec état transitioning, loadEvents direct pour navigation, unified handleNavigation, boutons disabled pendant transitions"
 
 metadata:
   created_by: "main_agent"
