@@ -135,13 +135,13 @@ backend:
         agent: "testing"
         comment: "TESTED: All CRUD operations working correctly. POST /api/planning/events, PUT /api/planning/events/{id}, DELETE /api/planning/events/{id} all properly implemented with authentication. Event data structure uses correct field names: start_time, end_time, status (not start/end/type)."
 
-  - task: "API Earnings Calculation"
+  - task: "API Earnings Calculation with Tasks Integration"
     implemented: true
-    working: true
+    working: false
     file: "server.py"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
@@ -149,6 +149,21 @@ backend:
       - working: true
         agent: "testing"
         comment: "TESTED & FIXED: Critical data structure compatibility issue fixed. Earnings endpoint was using wrong field names (start/end instead of start_time/end_time, type instead of status). Fixed to use correct PlanningEvent model fields. Revenue calculation accuracy verified with test scenarios. GET /api/planning/earnings/{year}/{week} now works correctly."
+      - working: false
+        agent: "main"
+        comment: "MODIFIÉ: Ajout du calcul des gains des tâches dans l'endpoint earnings. Les tâches sont considérées comme 'paid' automatiquement et leurs gains s'ajoutent aux revenus."
+
+  - task: "API CRUD Tasks - Integrated in Planning"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "NOUVEAU: Endpoints CRUD pour tâches intégrées au planning : POST /api/planning/tasks, PUT /api/planning/tasks/{id}, DELETE /api/planning/tasks/{id}. Modèle WeeklyTask avec nom, prix, couleur, icône, time_slots."
 
   - task: "Authentication endpoints"
     implemented: true
