@@ -18,6 +18,9 @@ from .pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# External authentication service
+AUTH_URL = os.environ.get('AUTH_URL', 'https://demobackend.emergentagent.com')
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
@@ -229,7 +232,7 @@ async def login(auth_request: AuthRequest):
         headers = {"X-Session-ID": auth_request.session_id}
         async with httpx.AsyncClient() as client_http:
             response = await client_http.get(
-                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                f"{AUTH_URL}/auth/v1/env/oauth/session-data",
                 headers=headers,
             )
 
@@ -271,6 +274,8 @@ async def login(auth_request: AuthRequest):
                 "picture": auth_data.get("picture")
             }
         }
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Auth service unreachable: {exc}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -365,23 +370,27 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
 
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
-async def get_week_planning(year: int, week: int, current_user: User = Depends(get_current_user)):
+async def get_week_planning(year: int, week: int, team_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    uids = [current_user.uid]
+    if team_id:
+        team = await db.teams.find_one({"team_id": team_id})
+        if not team or current_user.uid not in (team.get("members", []) + [team.get("created_by")]):
+            raise HTTPException(status_code=403, detail="Not authorized for this team")
+        uids = team.get("members", []) + [team.get("created_by")]
+
     events = await db.planning_events.find(
-        {"uid": current_user.uid, "year": year, "week": week},
-        {"_id": 0}  # Exclude MongoDB ObjectId
+        {"uid": {"$in": uids}, "year": year, "week": week},
+        {"_id": 0}
     ).to_list(1000)
     tasks = await db.weekly_tasks.find(
-        {"uid": current_user.uid, "year": year, "week": week},
-        {"_id": 0}  # Exclude MongoDB ObjectId
+        {"uid": {"$in": uids}, "year": year, "week": week},
+        {"_id": 0}
     ).to_list(1000)
-    
-    return {
-        "events": events,
-        "tasks": tasks
-    }
+
+    return {"events": events, "tasks": tasks}
 
 @api_router.get("/planning/month/{year}/{month}")
-async def get_month_planning(year: int, month: int, current_user: User = Depends(get_current_user)):
+async def get_month_planning(year: int, month: int, team_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
     last_day = calendar.monthrange(year, month)[1]
     pairs = {
         (datetime(year, month, day).isocalendar().year,
@@ -390,12 +399,19 @@ async def get_month_planning(year: int, month: int, current_user: User = Depends
     }
     or_filters = [{"year": y, "week": w} for y, w in pairs]
 
+    uids = [current_user.uid]
+    if team_id:
+        team = await db.teams.find_one({"team_id": team_id})
+        if not team or current_user.uid not in (team.get("members", []) + [team.get("created_by")]):
+            raise HTTPException(status_code=403, detail="Not authorized for this team")
+        uids = team.get("members", []) + [team.get("created_by")]
+
     events_cursor = db.planning_events.find(
-        {"uid": current_user.uid, "$or": or_filters},
+        {"uid": {"$in": uids}, "$or": or_filters},
         {"_id": 0}
     )
     tasks_cursor = db.weekly_tasks.find(
-        {"uid": current_user.uid, "$or": or_filters},
+        {"uid": {"$in": uids}, "$or": or_filters},
         {"_id": 0}
     )
     events, tasks = await asyncio.gather(events_cursor.to_list(1000), tasks_cursor.to_list(1000))
@@ -436,14 +452,21 @@ async def delete_event(event_id: str, current_user: User = Depends(get_current_u
     return {"message": "Event deleted"}
 
 @api_router.get("/planning/earnings/{year}/{week}")
-async def get_earnings(year: int, week: int, current_user: User = Depends(get_current_user)):
+async def get_earnings(year: int, week: int, team_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    uids = [current_user.uid]
+    if team_id:
+        team = await db.teams.find_one({"team_id": team_id})
+        if not team or current_user.uid not in (team.get("members", []) + [team.get("created_by")]):
+            raise HTTPException(status_code=403, detail="Not authorized for this team")
+        uids = team.get("members", []) + [team.get("created_by")]
+
     events = await db.planning_events.find(
-        {"uid": current_user.uid, "year": year, "week": week},
-        {"_id": 0}  # Exclude MongoDB ObjectId
+        {"uid": {"$in": uids}, "year": year, "week": week},
+        {"_id": 0}
     ).to_list(1000)
     tasks = await db.weekly_tasks.find(
-        {"uid": current_user.uid, "year": year, "week": week},
-        {"_id": 0}  # Exclude MongoDB ObjectId
+        {"uid": {"$in": uids}, "year": year, "week": week},
+        {"_id": 0}
     ).to_list(1000)
     
     earnings = {
