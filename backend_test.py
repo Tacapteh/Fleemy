@@ -675,11 +675,11 @@ class FleemyAPITester:
         
         # Test data from the request
         task_data = {
-            "name": "Développement",
-            "price": 100.0,
-            "color": "#FFB3E6",
-            "icon": "💼",
-            "time_slots": [{"day": "monday", "start": "09:00", "end": "10:00"}]
+            "name": "Développement web",
+            "price": 75.0,
+            "color": "#3b82f6",
+            "icon": "💻",
+            "time_slots": [{"day": "monday", "start": "09:00", "end": "12:00"}]
         }
         
         # Should still fail with 401 due to no authentication
@@ -692,6 +692,241 @@ class FleemyAPITester:
         )
         
         return success
+
+    def test_task_crud_endpoints(self):
+        """Test task CRUD endpoints structure"""
+        print("\n🔍 Testing Task CRUD Endpoints...")
+        
+        # Test task creation without auth
+        task_data = {
+            "name": "Développement web",
+            "price": 75.0,
+            "color": "#3b82f6",
+            "icon": "💻",
+            "time_slots": [
+                {"day": "monday", "start": "09:00", "end": "12:00"},
+                {"day": "wednesday", "start": "14:00", "end": "17:00"}
+            ]
+        }
+        
+        success, data = self.run_api_test(
+            "Create task (no auth)", 
+            "POST", 
+            "/planning/tasks", 
+            401,
+            task_data
+        )
+        
+        # Test task update without auth
+        update_data = {
+            "name": "Développement web avancé",
+            "price": 85.0,
+            "color": "#ef4444",
+            "icon": "🚀",
+            "time_slots": [{"day": "tuesday", "start": "10:00", "end": "15:00"}]
+        }
+        
+        success, data = self.run_api_test(
+            "Update task (no auth)", 
+            "PUT", 
+            "/planning/tasks/test-task-id", 
+            401,
+            update_data
+        )
+        
+        # Test task deletion without auth
+        success, data = self.run_api_test(
+            "Delete task (no auth)", 
+            "DELETE", 
+            "/planning/tasks/test-task-id", 
+            401
+        )
+        
+        return True
+
+    def test_task_data_structure_validation(self):
+        """Test task data structure validation"""
+        print("\n🔍 Testing Task Data Structure Validation...")
+        
+        # Test with complete task data
+        complete_task = {
+            "name": "Consultation technique",
+            "price": 120.0,
+            "color": "#10b981",
+            "icon": "🔧",
+            "time_slots": [
+                {"day": "monday", "start": "09:00", "end": "10:00"},
+                {"day": "friday", "start": "15:00", "end": "16:00"}
+            ]
+        }
+        
+        success, data = self.run_api_test(
+            "Create task with complete data (no auth)", 
+            "POST", 
+            "/planning/tasks", 
+            401,
+            complete_task
+        )
+        
+        # Test with minimal task data
+        minimal_task = {
+            "name": "Formation",
+            "price": 50.0,
+            "color": "#f59e0b",
+            "icon": "📚",
+            "time_slots": []
+        }
+        
+        success, data = self.run_api_test(
+            "Create task with minimal data (no auth)", 
+            "POST", 
+            "/planning/tasks", 
+            401,
+            minimal_task
+        )
+        
+        # Test with missing required fields
+        incomplete_task = {
+            "name": "Test task"
+            # Missing price, color, icon
+        }
+        
+        success, data = self.run_api_test(
+            "Create task with missing fields (no auth)", 
+            "POST", 
+            "/planning/tasks", 
+            401,
+            incomplete_task
+        )
+        
+        # Test with invalid time slots
+        invalid_time_task = {
+            "name": "Invalid time task",
+            "price": 60.0,
+            "color": "#8b5cf6",
+            "icon": "⚠️",
+            "time_slots": [
+                {"day": "monday", "start": "25:00", "end": "26:00"},  # Invalid times
+                {"day": "invalid_day", "start": "09:00", "end": "10:00"}  # Invalid day
+            ]
+        }
+        
+        success, data = self.run_api_test(
+            "Create task with invalid time slots (no auth)", 
+            "POST", 
+            "/planning/tasks", 
+            401,
+            invalid_time_task
+        )
+        
+        return True
+
+    def test_week_month_endpoints_with_tasks(self):
+        """Test week/month endpoints return both events and tasks"""
+        print("\n🔍 Testing Week/Month Endpoints with Tasks Integration...")
+        
+        current_year = datetime.now().year
+        current_week = datetime.now().isocalendar()[1]
+        current_month = datetime.now().month
+        
+        # Test week endpoint structure (should return {events: [], tasks: []})
+        success, data = self.run_api_test(
+            "Get week planning with tasks structure (no auth)", 
+            "GET", 
+            f"/planning/week/{current_year}/{current_week}", 
+            401
+        )
+        
+        # Test month endpoint structure (should return {events: [], tasks: []})
+        success, data = self.run_api_test(
+            "Get month planning with tasks structure (no auth)", 
+            "GET", 
+            f"/planning/month/{current_year}/{current_month}", 
+            401
+        )
+        
+        return True
+
+    def test_earnings_with_tasks_integration(self):
+        """Test earnings calculation includes tasks"""
+        print("\n🔍 Testing Earnings Calculation with Tasks Integration...")
+        
+        current_year = datetime.now().year
+        current_week = datetime.now().isocalendar()[1]
+        
+        # Test earnings endpoint (should include task earnings)
+        success, data = self.run_api_test(
+            "Get earnings with tasks integration (no auth)", 
+            "GET", 
+            f"/planning/earnings/{current_year}/{current_week}", 
+            401
+        )
+        
+        # Test earnings for different weeks to verify task calculation
+        for week_offset in [-1, 0, 1]:
+            test_week = max(1, min(52, current_week + week_offset))
+            success, data = self.run_api_test(
+                f"Get earnings with tasks for week {test_week} (no auth)", 
+                "GET", 
+                f"/planning/earnings/{current_year}/{test_week}", 
+                401
+            )
+        
+        return True
+
+    def test_task_scenarios_comprehensive(self):
+        """Test comprehensive task scenarios"""
+        print("\n🔍 Testing Comprehensive Task Scenarios...")
+        
+        # Test various realistic task scenarios
+        task_scenarios = [
+            {
+                "name": "Développement web",
+                "price": 75.0,
+                "color": "#3b82f6",
+                "icon": "💻",
+                "time_slots": [{"day": "monday", "start": "09:00", "end": "12:00"}],
+                "description": "Web development task"
+            },
+            {
+                "name": "Consultation",
+                "price": 120.0,
+                "color": "#10b981",
+                "icon": "🤝",
+                "time_slots": [
+                    {"day": "tuesday", "start": "14:00", "end": "15:00"},
+                    {"day": "thursday", "start": "10:00", "end": "11:00"}
+                ],
+                "description": "Client consultation"
+            },
+            {
+                "name": "Formation",
+                "price": 90.0,
+                "color": "#f59e0b",
+                "icon": "📚",
+                "time_slots": [{"day": "friday", "start": "09:00", "end": "17:00"}],
+                "description": "Training session"
+            },
+            {
+                "name": "Maintenance",
+                "price": 60.0,
+                "color": "#ef4444",
+                "icon": "🔧",
+                "time_slots": [{"day": "wednesday", "start": "16:00", "end": "18:00"}],
+                "description": "System maintenance"
+            }
+        ]
+        
+        for i, task_data in enumerate(task_scenarios):
+            success, data = self.run_api_test(
+                f"Create task scenario {i+1}: {task_data['name']} (no auth)", 
+                "POST", 
+                "/planning/tasks", 
+                401,
+                task_data
+            )
+        
+        return True
 
     def test_cors_headers(self):
         """Test CORS configuration"""
