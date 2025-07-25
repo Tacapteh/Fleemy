@@ -1377,71 +1377,22 @@ const GridBody = ({
       {/* Planning Table */}
       {view === 'week' ? (
         <div className={`planning-content ${transitioning ? 'transitioning' : ''}`}>
-          <div className="planning-container">
-            <table className="planning-table">
-              <thead>
-                <tr>
-                  <th className="time-header">Heure</th>
-                  {weekDates.map((date, index) => (
-                    <th key={index} className="day-header">
-                      {dayNames[index]} {date.getDate()}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {timeSlots.slice(0, -1).map((time, timeIndex) => (
-                  <tr key={time}>
-                    <td className="time-header">{time}</td>
-                    {dayNames.map((dayName, dayIndex) => {
-                      const slotEvents = getEventsForTimeSlot(dayIndex, time);
-                      
-                      return (
-                        <td
-                          key={dayIndex}
-                          onClick={() => handleTimeSlotClick(dayIndex, time)}
-                          style={{ cursor: viewingMember ? 'default' : 'pointer' }}
-                        >
-                          {slotEvents.map(event => (
-                            <div
-                              key={event.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEventClick(event);
-                              }}
-                              className={`event ${
-                                (event.status || event.type) === 'paid' ? 'event-meeting' : 
-                                (event.status || event.type) === 'unpaid' ? 'event-task' : 
-                                (event.status || event.type) === 'pending' ? 'event-break' : 
-                                'event-notworked'
-                              } ${transitioning ? '' : 'new-event'}`}
-                            >
-                              <div className="event-description">{event.description}</div>
-                              <div className="event-time">
-                                {(event.start_time || event.start)} - {(event.end_time || event.end)}
-                              </div>
-                              {event.client_name && (
-                                <div className="event-client">{event.client_name}</div>
-                              )}
-                            </div>
-                          ))}
-                          
-                          {/* Smooth loading skeleton during transition */}
-                          {transitioning && (
-                            <div className="planning-skeleton" style={{
-                              width: '90%',
-                              height: '16px',
-                              borderRadius: '2px',
-                              margin: '4px auto'
-                            }}></div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="planning-layout">
+            <DayHeader weekDates={weekDates} dayNames={dayNames} />
+            <div className="planning-grid-container">
+              <HourSidebar timeSlots={timeSlots} />
+              <GridBody
+                timeSlots={timeSlots}
+                dayNames={dayNames}
+                events={events}
+                currentWeek={currentWeek}
+                currentYear={currentYear}
+                onTimeSlotClick={handleTimeSlotClick}
+                onEventClick={handleEventClick}
+                viewingMember={viewingMember}
+                transitioning={transitioning}
+              />
+            </div>
           </div>
         </div>
       ) : (
