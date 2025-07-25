@@ -1482,94 +1482,18 @@ const GridBody = ({
           </div>
         </div>
       ) : (
-        /* Month View - Using same style as before but with original styling */
-        <div className="planning-container">
-          <table className="planning-table">
-            <thead>
-              <tr>
-                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
-                  <th key={day} className="day-header">{day}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {getMonthDays(currentYear, currentMonth).reduce((rows, day, index) => {
-                if (index % 7 === 0) rows.push([]);
-                rows[rows.length - 1].push(day);
-                return rows;
-              }, []).map((week, weekIndex) => (
-                <tr key={weekIndex}>
-                  {week.map((day, dayIndex) => {
-                    const dayEvents = getEventsForDate(day.date);
-                    const visibleEvents = dayEvents.slice(0, 2);
-                    const remainingCount = dayEvents.length - visibleEvents.length;
-                    const isToday = day.date.toDateString() === new Date().toDateString();
-
-                    return (
-                      <td
-                        key={dayIndex}
-                        onClick={() => handleDayClick(day.date)}
-                        style={{
-                          backgroundColor: !day.isCurrentMonth ? '#f8f9fa' : 
-                                          isToday ? '#e3f2fd' : '#fff',
-                          color: !day.isCurrentMonth ? '#6c757d' : '#212529',
-                          height: '100px',
-                          verticalAlign: 'top',
-                          padding: '8px'
-                        }}
-                      >
-                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>
-                          {day.date.getDate()}
-                        </div>
-                        
-                        <div style={{ fontSize: '11px' }}>
-                          {visibleEvents.map(event => {
-                            const eventClass = `event-${event.type === 'paid' ? 'meeting' : 
-                                                event.type === 'unpaid' ? 'task' : 
-                                                event.type === 'pending' ? 'break' : 'notworked'}`;
-                            
-                            return (
-                              <div
-                                key={event.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEventClick(event);
-                                }}
-                                className={`${eventClass}`}
-                                style={{
-                                  padding: '2px 4px',
-                                  marginBottom: '2px',
-                                  borderRadius: '3px',
-                                  fontSize: '10px',
-                                  cursor: 'pointer',
-                                  borderLeft: '3px solid',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {event.description}
-                              </div>
-                            );
-                          })}
-                          {remainingCount > 0 && (
-                            <div style={{ 
-                              fontSize: '10px', 
-                              color: '#007bff', 
-                              fontWeight: '600',
-                              cursor: 'pointer'
-                            }}>
-                              +{remainingCount} autres
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        /* Month View - Ultra Clean Design */
+        <div className={`planning-content ${transitioning ? 'transitioning' : ''}`}>
+          <div className="planning-layout">
+            <MonthHeader dayLabels={['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']} />
+            <MonthGrid
+              monthData={getMonthDays(currentYear, currentMonth)}
+              onDayClick={handleDayClick}
+              onEventClick={handleEventClick}
+              getEventsForDate={getEventsForDate}
+              viewingMember={viewingMember}
+            />
+          </div>
         </div>
       )}
 
