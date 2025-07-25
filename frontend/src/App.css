@@ -364,6 +364,92 @@ button:active {
   }
 }
 
+/* Enhanced Smooth Transitions - No Page Reload */
+@keyframes fadeSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes headerPulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.planning-content {
+  animation: fadeSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.planning-content.transitioning {
+  animation: fadeSlideOut 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.planning-content.transitioning .planning-layout {
+  opacity: 0.4;
+  transform: translateY(4px);
+  transition: all 0.3s ease;
+}
+
+.planning-content.transitioning .month-grid {
+  opacity: 0.4;
+  transform: translateY(4px);
+  transition: all 0.3s ease;
+}
+
+/* Enhanced week header animation */
+.week-title.updating {
+  animation: headerPulse 0.4s ease-in-out;
+}
+
+/* Smooth event transitions */
+.planning-event.new-event,
+.month-event.new-event {
+  animation: fadeSlideIn 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.planning-event.transitioning,
+.month-event.transitioning {
+  animation: fadeSlideOut 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Navigation button states */
+.week-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.week-nav-btn:disabled:hover {
+  background: #ffffff;
+  transform: none;
+}
+
 /* Month View Transitions */
 .month-grid {
   display: flex;
