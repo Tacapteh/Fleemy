@@ -1172,15 +1172,6 @@ const GridBody = ({
   const revenue = calculateRevenue();
   const weekDates = getWeekDates(currentYear, currentWeek);
 
-  const getEventsForTimeSlot = (day, time) => {
-    return events.filter(event => 
-      event.day === day && 
-      (event.start_time || event.start) === time &&
-      event.week === currentWeek &&
-      event.year === currentYear
-    );
-  };
-
   const getEventsForDate = (date) => {
     const dayOfWeek = date.getDay();
     const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
