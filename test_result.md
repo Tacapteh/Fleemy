@@ -175,7 +175,7 @@ frontend:
         agent: "main"
         comment: "Structure de base du composant Planning fonctionnelle"
 
-  - task: "Planning Table - Modern Styling"
+  - task: "Planning Table - Simple Clean Styling" 
     implemented: true
     working: true
     file: "App.css"
@@ -185,7 +185,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Style moderne implémenté : colonnes aérées, fond clair, ombres légères, entêtes en gras avec fond blanc cassé, design Google Agenda/Notion"
+        comment: "Style simple et épuré appliqué comme demandé : fond blanc pur, bordures fines #e5e7eb, police simple, pas d'ombres, design minimaliste identique à l'image de référence"
 
   - task: "Navigation Fluide Entre Semaines"
     implemented: true
