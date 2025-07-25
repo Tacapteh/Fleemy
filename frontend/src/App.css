@@ -458,14 +458,6 @@ button:active {
   text-transform: capitalize;
 }
 
-.day-date {
-  font-size: 13px;
-  color: #374151;
-  font-weight: 400;
-  margin-top: 0;
-  line-height: 1.2;
-}
-
 /* Ultra Clean Event Styles */
 .event {
   position: absolute;
