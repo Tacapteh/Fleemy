@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 class FleemyAPITester:
-    def __init__(self, base_url="https://676ab278-45e9-4e58-8ac9-0c414b3131c7.preview.emergentagent.com"):
+    def __init__(self, base_url="https://be3367aa-ed75-4a84-b8d2-ad1b0e2aa3df.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session_token = None
