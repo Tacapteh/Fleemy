@@ -1638,6 +1638,7 @@ const GridBody = ({
       {view === 'week' && !viewingMember && (
         <RevenueSummary
           events={events}
+          tasks={tasks}
           currentWeek={currentWeek}
           currentYear={currentYear}
           hourlyRate={hourlyRate}
