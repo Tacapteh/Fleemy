@@ -511,7 +511,7 @@ button:active {
   white-space: nowrap;
 }
 
-/* Simple and Clean Planning Header */
+/* Light and Clean Planning Header */
 .planning-header {
   display: flex;
   justify-content: space-between;
@@ -519,6 +519,7 @@ button:active {
   padding: 20px 0;
   border-bottom: 1px solid #e5e7eb;
   margin-bottom: 20px;
+  background: #ffffff;
 }
 
 .planning-title {
@@ -541,10 +542,10 @@ button:active {
   border-radius: 6px;
   padding: 8px 12px;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   color: #374151;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.2s ease;
 }
 
 .planning-nav button:hover {
@@ -553,8 +554,8 @@ button:active {
 }
 
 .planning-nav button.active {
-  background: #1f2937;
-  border-color: #1f2937;
+  background: #2563eb;
+  border-color: #2563eb;
   color: white;
 }
 
@@ -562,6 +563,7 @@ button:active {
   display: flex;
   align-items: center;
   gap: 12px;
+  background: #ffffff;
 }
 
 .week-nav-btn {
@@ -574,7 +576,7 @@ button:active {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.2s ease;
   font-size: 14px;
   color: #374151;
 }
@@ -598,12 +600,13 @@ button:active {
   letter-spacing: -0.025em;
 }
 
-/* Simple Revenue Cards */
+/* Light Revenue Cards */
 .revenue-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
+  background: #ffffff;
 }
 
 .revenue-card {
@@ -612,7 +615,7 @@ button:active {
   border-radius: 8px;
   padding: 20px;
   text-align: center;
-  transition: all 0.1s ease;
+  transition: all 0.2s ease;
 }
 
 .revenue-card:hover {
