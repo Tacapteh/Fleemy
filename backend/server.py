@@ -524,7 +524,7 @@ async def delete_task(task_id: str, current_user: User = Depends(get_current_use
 
 @api_router.get("/todos")
 async def get_todos(current_user: User = Depends(get_current_user)):
-    todos = await db.todos.find({"uid": current_user.uid}).sort("created_at", -1).to_list(1000)
+    todos = await db.todos.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return todos
 
 @api_router.post("/todos")
