@@ -536,27 +536,27 @@ const EventModal = ({ isOpen, onClose, onSave, onDelete, event, timeSlot, select
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">Description *</label>
-            <input
-              type="text"
-              value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
-              className="form-input"
-              required
-              disabled={loading}
-              placeholder="Description de l'événement"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Client</label>
+            <label className="form-label">Client *</label>
             <input
               type="text"
               value={formData.client_name}
               onChange={(e) => setFormData({...formData, client_name: e.target.value})}
               className="form-input"
+              required
               disabled={loading}
-              placeholder="Nom du client (optionnel)"
+              placeholder="Nom du client (obligatoire)"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              className="form-input"
+              disabled={loading}
+              placeholder="Description de l'événement (optionnel)"
             />
           </div>
 
