@@ -1422,38 +1422,6 @@ const GridBody = ({
     }
   };
 
-  const calculateRevenue = () => {
-    const weekEvents = events.filter(e => e.week === currentWeek && e.year === currentYear);
-    const revenue = { paid: 0, unpaid: 0, pending: 0 };
-
-    weekEvents.forEach(event => {
-      if ((event.status || event.type) !== 'not_worked') {
-        const startTime = event.start_time || event.start || '09:00';
-        const endTime = event.end_time || event.end || '10:00';
-        const startHour = parseInt(startTime.split(':')[0]);
-        const endHour = parseInt(endTime.split(':')[0]);
-        const hours = endHour - startHour;
-        const amount = hours * hourlyRate;
-
-        const eventType = event.status || event.type;
-        switch (eventType) {
-          case 'paid':
-            revenue.paid += amount;
-            break;
-          case 'unpaid':
-            revenue.unpaid += amount;
-            break;
-          case 'pending':
-            revenue.pending += amount;
-            break;
-        }
-      }
-    });
-
-    return revenue;
-  };
-
-  const revenue = calculateRevenue();
   const weekDates = getWeekDates(currentYear, currentWeek);
 
   const getEventsForDate = (date) => {
