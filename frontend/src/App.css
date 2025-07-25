@@ -364,34 +364,34 @@ button:active {
   }
 }
 
-/* Modern Planning Styles - Google Agenda/Notion inspired */
+/* Simple and Clean Planning Styles - Based on provided image */
 .planning-container {
   background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
-  border: 1px solid #f1f3f4;
+  border: 1px solid #e5e7eb;
 }
 
 .planning-table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
   background: #ffffff;
+  border: none;
 }
 
 .planning-table th {
-  background: #fafbfc;
+  background: #ffffff;
   border: none;
-  border-bottom: 1px solid #e8eaed;
-  border-right: 1px solid #e8eaed;
-  padding: 16px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  padding: 12px 8px;
   text-align: center;
-  font-weight: 700;
-  font-size: 15px;
-  color: #3c4043;
-  letter-spacing: 0.2px;
+  font-weight: 400;
+  font-size: 14px;
+  color: #374151;
+  letter-spacing: 0;
 }
 
 .planning-table th:last-child {
@@ -400,15 +400,15 @@ button:active {
 
 .planning-table td {
   border: none;
-  border-bottom: 1px solid #f1f3f4;
-  border-right: 1px solid #f1f3f4;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
   height: 96px;
   min-height: 96px;
   position: relative;
   vertical-align: top;
-  padding: 4px;
+  padding: 0;
   background: #ffffff;
-  transition: all 0.15s cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: background-color 0.1s ease;
 }
 
 .planning-table td:last-child {
@@ -416,40 +416,40 @@ button:active {
 }
 
 .planning-table td:hover {
-  background-color: #f8f9fa;
+  background-color: #f9fafb;
   cursor: pointer;
-  box-shadow: inset 0 0 0 1px #e8eaed;
 }
 
 .time-header {
-  background: #fafbfc !important;
-  font-weight: 600;
-  font-size: 13px;
-  color: #5f6368;
+  background: #ffffff !important;
+  font-weight: 400;
+  font-size: 12px;
+  color: #6b7280;
   text-align: center;
   vertical-align: middle;
-  width: 90px;
-  min-width: 90px;
-  border-right: 1px solid #e8eaed !important;
+  width: 80px;
+  min-width: 80px;
+  border-right: 1px solid #e5e7eb !important;
+  padding: 12px 8px;
 }
 
 .day-header {
-  background: #fafbfc !important;
-  font-weight: 700;
-  font-size: 16px;
-  color: #202124;
+  background: #ffffff !important;
+  font-weight: 400;
+  font-size: 14px;
+  color: #374151;
   text-align: center;
-  padding: 18px 12px;
-  border-bottom: 2px solid #e8eaed;
-  letter-spacing: 0.3px;
+  padding: 12px 8px;
+  border-bottom: 1px solid #e5e7eb;
+  letter-spacing: 0;
   text-transform: capitalize;
 }
 
 .day-date {
-  font-size: 13px;
-  color: #5f6368;
-  font-weight: 500;
-  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
+  margin-top: 2px;
   line-height: 1.2;
 }
 
