@@ -364,13 +364,13 @@ button:active {
   }
 }
 
-/* Ultra Clean Planning Styles - Exactly like reference image */
+/* Ultra Clean and Light Planning Styles - White Background */
 .planning-container {
   background: #ffffff;
   border-radius: 0;
   box-shadow: none;
   overflow: hidden;
-  border: none;
+  border: 1px solid #e5e7eb;
 }
 
 .planning-table {
@@ -382,45 +382,25 @@ button:active {
 }
 
 .planning-table th {
-  background: #ffffff;
-  border: none;
-  border-bottom: 1px solid #e5e7eb;
-  border-right: 1px solid #e5e7eb;
-  padding: 8px 6px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  padding: 10px 8px;
   text-align: center;
-  font-weight: 400;
-  font-size: 13px;
+  font-weight: 500;
+  font-size: 14px;
   color: #374151;
   letter-spacing: 0;
 }
 
-.planning-table th:first-child {
-  border-right: 1px solid #e5e7eb;
-}
-
-.planning-table th:last-child {
-  border-right: none;
-}
-
 .planning-table td {
-  border: none;
-  border-bottom: 1px solid #e5e7eb;
-  border-right: 1px solid #e5e7eb;
+  border: 1px solid #e5e7eb;
   height: 96px;
   min-height: 96px;
   position: relative;
   vertical-align: top;
   padding: 0;
   background: #ffffff;
-  transition: background-color 0.1s ease;
-}
-
-.planning-table td:first-child {
-  border-right: 1px solid #e5e7eb;
-}
-
-.planning-table td:last-child {
-  border-right: none;
+  transition: background-color 0.2s ease;
 }
 
 .planning-table td:hover:not(.time-header) {
@@ -429,31 +409,30 @@ button:active {
 }
 
 .time-header {
-  background: #ffffff !important;
-  font-weight: 400;
+  background: #f9fafb !important;
+  font-weight: 500;
   font-size: 12px;
-  color: #64748b;
+  color: #6b7280;
   text-align: center;
   vertical-align: middle;
   width: 60px;
   min-width: 60px;
-  border-right: 1px solid #e5e7eb !important;
-  padding: 8px 4px;
+  padding: 10px 8px;
   cursor: default !important;
 }
 
 .time-header:hover {
-  background: #ffffff !important;
+  background: #f9fafb !important;
 }
 
 .day-header {
-  background: #ffffff !important;
-  font-weight: 400;
-  font-size: 13px;
+  background: #f9fafb !important;
+  font-weight: 500;
+  font-size: 14px;
   color: #374151;
   text-align: center;
-  padding: 8px 6px;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 10px 8px;
+  border: 1px solid #e5e7eb;
   letter-spacing: 0;
   text-transform: capitalize;
 }
