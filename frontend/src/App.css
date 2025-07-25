@@ -1351,22 +1351,22 @@ button:active {
 }
 
 .planning-content {
-  animation: fadeIn 0.3s ease-out;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .planning-content.transitioning {
-  opacity: 0.6;
-  transition: opacity 0.15s ease;
+  opacity: 0.85;
+  transition: opacity 0.1s ease;
 }
 
 .planning-content.transitioning .planning-layout {
-  opacity: 0.7;
+  opacity: 0.9;
 }
 
-/* Smooth week header transition */
+/* Smooth week header transition - more subtle */
 .week-title.updating {
-  opacity: 0.4;
-  transition: opacity 0.15s ease;
+  opacity: 0.7;
+  transition: opacity 0.1s ease;
 }
 
 /* Smooth event appearance */
