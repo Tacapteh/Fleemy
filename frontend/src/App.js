@@ -888,6 +888,107 @@ const Planning = ({ user, sessionToken }) => {
     }
   };
 
+// Modular Planning Components
+const DayHeader = ({ weekDates, dayNames }) => {
+  return (
+    <div className="planning-days-header">
+      <div className="planning-time-placeholder">Heure</div>
+      {weekDates.map((date, index) => (
+        <div key={index} className="planning-day-header">
+          {dayNames[index]} {date.getDate()}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const HourSidebar = ({ timeSlots }) => {
+  return (
+    <div className="planning-hours-sidebar">
+      {timeSlots.slice(0, -1).map((time, index) => (
+        <div key={index} className="planning-hour-cell">
+          {time}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const GridBody = ({ 
+  timeSlots, 
+  dayNames, 
+  events, 
+  currentWeek, 
+  currentYear, 
+  onTimeSlotClick, 
+  onEventClick, 
+  viewingMember, 
+  transitioning 
+}) => {
+  const getEventsForTimeSlot = (day, time) => {
+    return events.filter(event => 
+      event.day === day && 
+      (event.start_time || event.start) === time &&
+      event.week === currentWeek &&
+      event.year === currentYear
+    );
+  };
+
+  return (
+    <div className="planning-grid-body">
+      {timeSlots.slice(0, -1).map((time, timeIndex) => (
+        <div key={time} className="planning-grid-row">
+          {dayNames.map((dayName, dayIndex) => {
+            const slotEvents = getEventsForTimeSlot(dayIndex, time);
+            
+            return (
+              <div
+                key={dayIndex}
+                className={`planning-grid-cell ${viewingMember ? 'readonly' : ''}`}
+                onClick={() => !viewingMember && onTimeSlotClick(dayIndex, time)}
+              >
+                {slotEvents.map(event => (
+                  <div
+                    key={event.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEventClick(event);
+                    }}
+                    className={`planning-event ${
+                      (event.status || event.type) === 'paid' ? 'event-meeting' : 
+                      (event.status || event.type) === 'unpaid' ? 'event-task' : 
+                      (event.status || event.type) === 'pending' ? 'event-break' : 
+                      'event-notworked'
+                    } ${transitioning ? '' : 'new-event'}`}
+                  >
+                    <div className="planning-event-description">{event.description}</div>
+                    <div className="planning-event-time">
+                      {(event.start_time || event.start)} - {(event.end_time || event.end)}
+                    </div>
+                    {event.client_name && (
+                      <div className="planning-event-client">{event.client_name}</div>
+                    )}
+                  </div>
+                ))}
+                
+                {/* Smooth loading skeleton during transition */}
+                {transitioning && (
+                  <div className="planning-skeleton" style={{
+                    width: '90%',
+                    height: '16px',
+                    borderRadius: '2px',
+                    margin: '4px auto'
+                  }}></div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
   const loadTeam = async () => {
     try {
       const response = await apiCall('/teams/my');
