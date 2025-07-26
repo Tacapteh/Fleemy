@@ -12,10 +12,8 @@ Fleemy is a planning and invoicing application built with React and FastAPI.
 cp backend/.env.example backend/.env
 ```
 
-The variables are:
+The variable is:
 
-- `MONGO_URL` – connection string to your MongoDB instance
-- `DB_NAME` – database name (default `fleemy`)
 - `FIREBASE_CREDENTIALS` – path to your Firebase service account JSON file
 
 2. Install dependencies:
