@@ -14,7 +14,7 @@ def test_planning_api_structure():
     try:
         requests.get(f"{api_url}/ping", timeout=5)
     except Exception:
-        print("\u26A0\uFE0F Backend unreachable, skipping tests")
+        print("\u26A0\uFE0F Backend not running, skipping tests")
         return
     
     print("🔍 Testing Planning API Data Structure Compatibility")

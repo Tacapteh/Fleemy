@@ -407,7 +407,7 @@ def main():
     try:
         requests.get(f"{tester.api_url}/ping", timeout=5)
     except Exception:
-        print("\u26A0\uFE0F Backend unreachable, skipping integration tests")
+        print("\u26A0\uFE0F Backend not running, skipping integration tests")
         return 0
     return tester.run_all_tests()
 
