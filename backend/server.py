@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Response, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -16,9 +16,8 @@ import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
-from fastapi import Depends, HTTPException, Request
 
-cred = credentials.Certificate("serviceAccountKey.json")
+cred = credentials.Certificate(Path(__file__).parent / "serviceAccountKey.json")
 firebase_admin.initialize_app(cred)
 
 async def verify_token(request: Request):
@@ -301,66 +300,72 @@ async def login(auth_request: AuthRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/auth/me")
-async def get_me(current_user: User = Depends(get_current_user)):
+async def get_me(user: Dict[str, Any] = Depends(verify_token)):
+    db_user = await db.users.find_one({"uid": user["uid"]})
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
     return {
-        "uid": current_user.uid,
-        "name": current_user.name,
-        "email": current_user.email,
-        "picture": current_user.picture,
-        "hourly_rate": current_user.hourly_rate,
-        "team_id": current_user.team_id
+        "uid": db_user["uid"],
+        "name": db_user.get("name"),
+        "email": db_user.get("email"),
+        "picture": db_user.get("picture"),
+        "hourly_rate": db_user.get("hourly_rate"),
+        "team_id": db_user.get("team_id")
     }
 
 @api_router.put("/auth/me")
-async def update_me(hourly_rate: float, current_user: User = Depends(get_current_user)):
+async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_token)):
     await db.users.update_one(
-        {"uid": current_user.uid},
+        {"uid": user["uid"]},
         {"$set": {"hourly_rate": hourly_rate}}
     )
-    
-    updated_user = await db.users.find_one({"uid": current_user.uid})
+
+    updated_user = await db.users.find_one({"uid": user["uid"]})
     return User(**updated_user)
 
 # Dashboard endpoint
 @api_router.get("/dashboard")
-async def get_dashboard(current_user: User = Depends(get_current_user)):
+async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
+    current_user = await db.users.find_one({"uid": user["uid"]})
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
     now = datetime.now()
     current_week = now.isocalendar()[1]
     current_year = now.year
     
     # Get upcoming events (next 7 days)
     upcoming_events = await db.planning_events.find({
-        "uid": current_user.uid,
+        "uid": current_user["uid"],
         "year": current_year,
         "week": {"$in": [current_week, current_week + 1]}
     }, {"_id": 0}).limit(5).to_list(5)
     
     # Get pending todos
     pending_todos = await db.todos.find({
-        "uid": current_user.uid,
+        "uid": current_user["uid"],
         "completed": False
     }, {"_id": 0}).limit(5).to_list(5)
     
     # Get recent clients
     recent_clients = await db.clients.find({
-        "uid": current_user.uid
+        "uid": current_user["uid"]
     }, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
     
     # Get pending quotes
     pending_quotes = await db.quotes.find({
-        "uid": current_user.uid,
+        "uid": current_user["uid"],
         "status": {"$in": ["draft", "sent"]}
     }, {"_id": 0}).limit(5).to_list(5)
     
     # Get unpaid invoices
     unpaid_invoices = await db.invoices.find({
-        "uid": current_user.uid,
+        "uid": current_user["uid"],
         "status": {"$in": ["sent", "overdue"]}
     }, {"_id": 0}).limit(5).to_list(5)
     
     # Calculate revenue stats
     paid_events = await db.planning_events.find({
-        "uid": current_user.uid,
+        "uid": current_user["uid"],
         "status": "paid",
         "year": current_year
     }, {"_id": 0}).to_list(1000)
@@ -383,19 +388,19 @@ async def get_dashboard(current_user: User = Depends(get_current_user)):
         "unpaid_invoices": unpaid_invoices,
         "stats": {
             "monthly_revenue": monthly_revenue,
-            "total_clients": await db.clients.count_documents({"uid": current_user.uid}),
-            "pending_todos_count": await db.todos.count_documents({"uid": current_user.uid, "completed": False}),
+            "total_clients": await db.clients.count_documents({"uid": current_user["uid"]}),
+            "pending_todos_count": await db.todos.count_documents({"uid": current_user["uid"], "completed": False}),
             "unpaid_invoices_count": len(unpaid_invoices)
         }
     }
 
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
-async def get_week_planning(year: int, week: int, team_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
-    uids = [current_user.uid]
+async def get_week_planning(year: int, week: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
+    uids = [user["uid"]]
     if team_id:
         team = await db.teams.find_one({"team_id": team_id})
-        if not team or current_user.uid not in (team.get("members", []) + [team.get("created_by")]):
+        if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
         uids = team.get("members", []) + [team.get("created_by")]
 
@@ -440,13 +445,13 @@ async def get_month_planning(year: int, month: int, team_id: Optional[str] = Non
     return {"events": events, "tasks": tasks}
 
 @api_router.post("/planning/events")
-async def create_event(event_request: EventCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_event(event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     now = datetime.now()
     year = now.year
     week = now.isocalendar()[1]
     
     event = PlanningEvent(
-        uid=current_user.uid,
+        uid=user["uid"],
         week=week,
         year=year,
         **event_request.dict()
@@ -665,14 +670,14 @@ async def delete_client(client_id: str, current_user: User = Depends(get_current
 
 # Quotes endpoints
 @api_router.get("/quotes")
-async def get_quotes(current_user: User = Depends(get_current_user)):
-    quotes = await db.quotes.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def get_quotes(user: Dict[str, Any] = Depends(verify_token)):
+    quotes = await db.quotes.find({"uid": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return quotes
 
 @api_router.post("/quotes")
-async def create_quote(quote_request: QuoteCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_quote(quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     # Generate quote number
-    quote_count = await db.quotes.count_documents({"uid": current_user.uid})
+    quote_count = await db.quotes.count_documents({"uid": user["uid"]})
     quote_number = f"DEV-{datetime.now().year}-{quote_count + 1:04d}"
     
     quote_data = quote_request.dict()
@@ -691,7 +696,7 @@ async def create_quote(quote_request: QuoteCreateRequest, current_user: User = D
     })
     
     quote = Quote(
-        uid=current_user.uid,
+        uid=user["uid"],
         **quote_data
     )
     
@@ -750,14 +755,14 @@ async def update_quote_status(quote_id: str, status: str, current_user: User = D
 
 # Invoices endpoints
 @api_router.get("/invoices")
-async def get_invoices(current_user: User = Depends(get_current_user)):
-    invoices = await db.invoices.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def get_invoices(user: Dict[str, Any] = Depends(verify_token)):
+    invoices = await db.invoices.find({"uid": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return invoices
 
 @api_router.post("/invoices")
-async def create_invoice(invoice_request: InvoiceCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_invoice(invoice_request: InvoiceCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     # Generate invoice number
-    invoice_count = await db.invoices.count_documents({"uid": current_user.uid})
+    invoice_count = await db.invoices.count_documents({"uid": user["uid"]})
     invoice_number = f"FACT-{datetime.now().year}-{invoice_count + 1:04d}"
     
     invoice_data = invoice_request.dict()
@@ -776,7 +781,7 @@ async def create_invoice(invoice_request: InvoiceCreateRequest, current_user: Us
     })
     
     invoice = Invoice(
-        uid=current_user.uid,
+        uid=user["uid"],
         **invoice_data
     )
     
@@ -856,11 +861,12 @@ async def create_team(team_request: TeamCreateRequest, current_user: User = Depe
     return team
 
 @api_router.get("/teams/my")
-async def get_my_team(current_user: User = Depends(get_current_user)):
-    if not current_user.team_id:
+async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
+    db_user = await db.users.find_one({"uid": user["uid"]})
+    if not db_user or not db_user.get("team_id"):
         return None
-    
-    team = await db.teams.find_one({"team_id": current_user.team_id})
+
+    team = await db.teams.find_one({"team_id": db_user["team_id"]})
     if not team:
         return None
     

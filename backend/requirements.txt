@@ -9,3 +9,4 @@ motor==3.3.1
 python-multipart>=0.0.9
 httpx>=0.28.1
 weasyprint>=66.0
+firebase-admin>=7.0.0
