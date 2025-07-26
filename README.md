@@ -16,7 +16,7 @@ The variables are:
 
 - `MONGO_URL` – connection string to your MongoDB instance
 - `DB_NAME` – database name (default `fleemy`)
-- `AUTH_URL` – external authentication endpoint
+- `FIREBASE_CREDENTIALS` – path to your Firebase service account JSON file
 
 2. Install dependencies:
 
@@ -44,6 +44,9 @@ npm install
 ```bash
 npm start
 ```
+
+Open the application in your browser, sign in with Google and all API calls will
+use your Firebase token automatically.
 
 The PDF export feature is temporarily disabled in `frontend/src/utils/pdf.js`.
 All other pages (Planning, Devis, Factures) work normally. To re-enable PDF

@@ -8,16 +8,19 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 import asyncio
-import httpx
 import json
 import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 
-cred = credentials.Certificate(Path(__file__).parent / "serviceAccountKey.json")
+cred_path = os.environ.get(
+    "FIREBASE_CREDENTIALS",
+    str(Path(__file__).parent / "serviceAccountKey.json"),
+)
+cred = credentials.Certificate(cred_path)
 firebase_admin.initialize_app(cred)
 
 async def verify_token(request: Request):
@@ -37,9 +40,6 @@ async def verify_token(request: Request):
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-# External authentication service
-AUTH_URL = os.environ.get('AUTH_URL', 'http://localhost:8000')
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -164,15 +164,7 @@ class Invoice(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
-class Session(BaseModel):
-    session_token: str
-    uid: str
-    expires_at: datetime
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
 # Request models
-class AuthRequest(BaseModel):
-    session_id: str
 
 class EventCreateRequest(BaseModel):
     description: str
@@ -228,76 +220,7 @@ class TeamCreateRequest(BaseModel):
 class TeamJoinRequest(BaseModel):
     invite_code: str
 
-# Dependency to get current user
-async def get_current_user(authorization: Optional[str] = Header(None)):
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Session token required")
-    
-    session_token = authorization.replace("Bearer ", "")
-    session = await db.sessions.find_one({"session_token": session_token})
-    
-    if not session or datetime.now() > session["expires_at"]:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    
-    user = await db.users.find_one({"uid": session["uid"]})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    return User(**user)
-
 # Authentication endpoints
-@api_router.post("/auth/login")
-async def login(auth_request: AuthRequest):
-    try:
-        headers = {"X-Session-ID": auth_request.session_id}
-        async with httpx.AsyncClient() as client_http:
-            response = await client_http.get(
-                f"{AUTH_URL}/auth/v1/env/oauth/session-data",
-                headers=headers,
-            )
-
-        if response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session")
-
-        auth_data = response.json()
-        
-        # Check if user exists
-        existing_user = await db.users.find_one({"email": auth_data["email"]})
-        
-        if not existing_user:
-            # Create new user
-            user = User(
-                name=auth_data["name"],
-                email=auth_data["email"],
-                picture=auth_data.get("picture")
-            )
-            await db.users.insert_one(user.dict())
-            user_uid = user.uid
-        else:
-            user_uid = existing_user["uid"]
-        
-        # Create session
-        session_token = str(uuid.uuid4())
-        session = Session(
-            session_token=session_token,
-            uid=user_uid,
-            expires_at=datetime.now() + timedelta(days=7)
-        )
-        await db.sessions.insert_one(session.dict())
-        
-        return {
-            "session_token": session_token,
-            "user": {
-                "uid": user_uid,
-                "name": auth_data["name"],
-                "email": auth_data["email"],
-                "picture": auth_data.get("picture")
-            }
-        }
-    except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Auth service unreachable: {exc}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/auth/me")
 async def get_me(user: Dict[str, Any] = Depends(verify_token)):

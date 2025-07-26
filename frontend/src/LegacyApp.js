@@ -39,23 +39,18 @@ const getCurrentWeek = () => {
 };
 
 // Authentication Screen
-const AuthScreen = ({ onLogin }) => {
-  const handleLogin = () => {
-    const redirectUrl = window.location.origin;
-    const authUrl = process.env.REACT_APP_AUTH_URL || "";
-    window.location.href = `${authUrl}/?redirect=${encodeURIComponent(
-      redirectUrl
-    )}`;
-  };
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider } from "./firebase";
 
-  useEffect(() => {
-    // Check for session_id in URL fragment
-    const hash = window.location.hash;
-    if (hash.includes("session_id=")) {
-      const sessionId = hash.split("session_id=")[1].split("&")[0];
-      onLogin(sessionId);
+const AuthScreen = ({ onLogin }) => {
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      onLogin(result.user);
+    } catch (e) {
+      console.error("Firebase auth error", e);
     }
-  }, [onLogin]);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -163,7 +158,7 @@ const Sidebar = ({
 };
 
 // Dashboard Component
-const Dashboard = ({ user, sessionToken }) => {
+const Dashboard = ({ user }) => {
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -1376,7 +1371,7 @@ class PlanningOfflineStorage {
 }
 
 // Main Planning Component
-const Planning = ({ user, sessionToken }) => {
+const Planning = ({ user }) => {
   const [view, setView] = useState("week"); // 'week' or 'month'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [events, setEvents] = useState([]);
@@ -2723,7 +2718,7 @@ const Planning = ({ user, sessionToken }) => {
   );
 };
 
-const TodoList = ({ sessionToken }) => {
+const TodoList = () => {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -3111,7 +3106,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
 };
 
 // Quotes Module - Complete Implementation
-const Quotes = ({ user, sessionToken }) => {
+const Quotes = ({ user }) => {
   const [quotes, setQuotes] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3859,7 +3854,7 @@ const InvoiceModal = ({
 };
 
 // Invoices Module - Complete Implementation
-const Invoices = ({ user, sessionToken }) => {
+const Invoices = ({ user }) => {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [quotes, setQuotes] = useState([]);

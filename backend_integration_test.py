@@ -7,7 +7,7 @@ from datetime import datetime
 import uuid
 
 class FleemyTasksIntegrationTester:
-    def __init__(self, base_url="https://335cbee7-62f7-45d4-8dab-be3c3a14905b.preview.emergentagent.com"):
+    def __init__(self, base_url="http://localhost:8000"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session_token = None
@@ -76,19 +76,11 @@ class FleemyTasksIntegrationTester:
         # Since we can't authenticate with real external service, we'll test the structure
         # and verify endpoints exist and respond correctly to auth requirements
         
-        # Test that auth endpoints exist and respond correctly
+        # Test that /auth/me responds with 401 when not authenticated
         success, data = self.run_api_test(
-            "Auth endpoints exist", 
-            "POST", 
-            "/auth/login", 
-            422,  # Should fail validation without session_id
-            {}
-        )
-        
-        success, data = self.run_api_test(
-            "Auth me endpoint exists", 
-            "GET", 
-            "/auth/me", 
+            "Auth me endpoint exists",
+            "GET",
+            "/auth/me",
             401  # Should fail without token
         )
         
