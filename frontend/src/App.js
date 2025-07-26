@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,7 +6,7 @@ import {
   Navigate,
   Outlet,
 } from "react-router-dom";
-import { signOut } from "firebase/auth";
+import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 
 import Login from "./Login";
@@ -16,6 +16,7 @@ import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
 import Clients from "./pages/Clients";
 import Sidebar from "./components/Sidebar";
+import NotFound from "./pages/NotFound";
 
 // Composant qui gère la mise en page commune (Sidebar + Outlet)
 function Layout({ user, onLogout }) {
@@ -32,6 +33,13 @@ function Layout({ user, onLogout }) {
 
 function App() {
   const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+    });
+    return () => unsub();
+  }, []);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -53,6 +61,7 @@ function App() {
           <Route path="/quotes" element={<Quotes />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/clients" element={<Clients />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </Router>

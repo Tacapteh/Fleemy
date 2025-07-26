@@ -13,7 +13,7 @@ import json
 import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 from firebase_admin import auth as firebase_auth
-from firebase import db
+from firebase import db, InMemoryFirestore
 from google.cloud import firestore
 
 async def verify_token(request: Request):
@@ -883,6 +883,18 @@ async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
         "members": members,
         "created_by": team["created_by"]
     }
+
+# Health check route
+@api_router.get("/ping")
+async def ping():
+    if isinstance(db, InMemoryFirestore):
+        return {"status": "error", "message": "running in mock mode"}
+    try:
+        test_ref = db.collection("_ping").document("ping")
+        await asyncio.to_thread(test_ref.set, {"ok": True})
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # Firestore test route
 @api_router.get("/test-firestore")

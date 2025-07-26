@@ -1,8 +1,9 @@
 import axios from 'axios';
 import { auth } from './firebase';
 
+const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: `${base.replace(/\/$/, '')}/api`,
 });
 
 api.interceptors.request.use(async (config) => {
