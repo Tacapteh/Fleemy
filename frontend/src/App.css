@@ -844,8 +844,8 @@ button:active {
 }
 
 .planning-hour-cell:not(:first-child):not(:last-child) {
-  /* All intermediate hours align with grid separators */
-  margin-top: -48px;
+  /* Align directly with grid lines */
+  margin-top: 0;
   padding-top: 0;
 }
 
@@ -1495,7 +1495,7 @@ body {
   }
   
   .planning-hour-cell:not(:first-child):not(:last-child) {
-    margin-top: -45px; /* Adjust for 90px height */
+    margin-top: 0;
   }
   
   .planning-hour-cell:last-child {
@@ -1529,7 +1529,7 @@ body {
   }
   
   .planning-hour-cell:not(:first-child):not(:last-child) {
-    margin-top: -40px; /* Adjust for 80px height */
+    margin-top: 0;
   }
   
   .planning-hour-cell:last-child {
@@ -1607,7 +1607,7 @@ body {
   }
   
   .planning-hour-cell:not(:first-child):not(:last-child) {
-    margin-top: -35px; /* Adjust for 70px height */
+    margin-top: 0;
   }
   
   .planning-hour-cell:last-child {
