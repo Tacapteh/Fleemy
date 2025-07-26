@@ -495,39 +495,15 @@ const getWeekDates = (year, week) => {
 };
 
 const getMonthDays = (year, month) => {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  const startDay = firstDay.getDay();
-
+  // Only return the days of the current month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days = [];
-
-  // Previous month days
-  const prevMonth = new Date(year, month - 1, 0);
-  for (let i = startDay === 0 ? 6 : startDay - 1; i >= 0; i--) {
-    days.push({
-      date: new Date(year, month - 1, prevMonth.getDate() - i),
-      isCurrentMonth: false,
-    });
-  }
-
-  // Current month days
   for (let i = 1; i <= daysInMonth; i++) {
     days.push({
       date: new Date(year, month, i),
       isCurrentMonth: true,
     });
   }
-
-  // Next month days to fill the grid
-  const remaining = 42 - days.length;
-  for (let i = 1; i <= remaining; i++) {
-    days.push({
-      date: new Date(year, month + 1, i),
-      isCurrentMonth: false,
-    });
-  }
-
   return days;
 };
 
