@@ -4335,6 +4335,7 @@ export {
   Planning,
   Quotes,
   Invoices,
+  Clients,
   EventModal,
   TaskModal,
   WeekNavigationHeader,
