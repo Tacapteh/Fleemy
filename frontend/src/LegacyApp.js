@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
-import api from "./utils/api";
+import api from "./api";
 import { showToast } from "./utils/toast";
 import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
@@ -171,7 +171,6 @@ const Dashboard = ({ user, sessionToken }) => {
     return await api({
       url,
       headers: {
-        Authorization: `Bearer ${sessionToken}`,
         "Content-Type": "application/json",
         ...options.headers,
       },
@@ -1429,7 +1428,6 @@ const Planning = ({ user, sessionToken }) => {
       return await api({
         url,
         headers: {
-          Authorization: `Bearer ${sessionToken}`,
           "Content-Type": "application/json",
           ...options.headers,
         },
@@ -2741,7 +2739,6 @@ const TodoList = ({ sessionToken }) => {
     return await api({
       url,
       headers: {
-        Authorization: `Bearer ${sessionToken}`,
         "Content-Type": "application/json",
         ...options.headers,
       },
@@ -3126,7 +3123,6 @@ const Quotes = ({ user, sessionToken }) => {
     return await api({
       url,
       headers: {
-        Authorization: `Bearer ${sessionToken}`,
         "Content-Type": "application/json",
         ...options.headers,
       },
@@ -3875,7 +3871,6 @@ const Invoices = ({ user, sessionToken }) => {
     return await api({
       url,
       headers: {
-        Authorization: `Bearer ${sessionToken}`,
         "Content-Type": "application/json",
         ...options.headers,
       },
@@ -4233,9 +4228,7 @@ function App() {
     const token = localStorage.getItem("fleemy_session_token");
     if (token) {
       try {
-        const response = await api.get("/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await api.get("/auth/me");
         setUser(response.data);
         setSessionToken(token);
       } catch (error) {
