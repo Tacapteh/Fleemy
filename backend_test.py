@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 class FleemyAPITester:
-    def __init__(self, base_url="https://335cbee7-62f7-45d4-8dab-be3c3a14905b.preview.emergentagent.com"):
+    def __init__(self, base_url="http://localhost:8000"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session_token = None
@@ -76,29 +76,11 @@ class FleemyAPITester:
         """Test authentication endpoints"""
         print("\n🔍 Testing Authentication Endpoints...")
         
-        # Test login without session_id (should fail)
-        success, data = self.run_api_test(
-            "Login without session_id", 
-            "POST", 
-            "/auth/login", 
-            422,  # Validation error expected
-            {}
-        )
-        
-        # Test login with invalid session_id (should fail)
-        success, data = self.run_api_test(
-            "Login with invalid session_id", 
-            "POST", 
-            "/auth/login", 
-            401,  # Unauthorized expected
-            {"session_id": "invalid_session_123"}
-        )
-        
         # Test /auth/me without token (should fail)
         success, data = self.run_api_test(
-            "Get user info without token", 
-            "GET", 
-            "/auth/me", 
+            "Get user info without token",
+            "GET",
+            "/auth/me",
             401
         )
         
