@@ -425,7 +425,7 @@ async def get_week_planning(year: int, week: int, team_id: Optional[str] = None,
     return {"events": events, "tasks": tasks}
 
 @api_router.get("/planning/month/{year}/{month}")
-async def get_month_planning(year: int, month: int, team_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
+async def get_month_planning(year: int, month: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
     last_day = calendar.monthrange(year, month)[1]
     pairs = {
         (datetime(year, month, day).isocalendar().year,
@@ -434,10 +434,10 @@ async def get_month_planning(year: int, month: int, team_id: Optional[str] = Non
     }
     or_filters = [{"year": y, "week": w} for y, w in pairs]
 
-    uids = [current_user.uid]
+    uids = [user["uid"]]
     if team_id:
         team = await db.teams.find_one({"team_id": team_id})
-        if not team or current_user.uid not in (team.get("members", []) + [team.get("created_by")]):
+        if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
         uids = team.get("members", []) + [team.get("created_by")]
 
@@ -452,6 +452,16 @@ async def get_month_planning(year: int, month: int, team_id: Optional[str] = Non
     events, tasks = await asyncio.gather(events_cursor.to_list(1000), tasks_cursor.to_list(1000))
 
     return {"events": events, "tasks": tasks}
+
+@api_router.get("/planning/events")
+async def list_events(year: Optional[int] = None, week: Optional[int] = None, user: Dict[str, Any] = Depends(verify_token)):
+    query = {"uid": user["uid"]}
+    if year is not None:
+        query["year"] = year
+    if week is not None:
+        query["week"] = week
+    events = await db.planning_events.find(query, {"_id": 0}).to_list(1000)
+    return events
 
 @api_router.post("/planning/events")
 async def create_event(event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
@@ -487,11 +497,15 @@ async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_toke
     return {"message": "Event deleted"}
 
 @api_router.get("/planning/earnings/{year}/{week}")
-async def get_earnings(year: int, week: int, team_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
-    uids = [current_user.uid]
+async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
+    db_user = await db.users.find_one({"uid": user["uid"]})
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    uids = [user["uid"]]
     if team_id:
         team = await db.teams.find_one({"team_id": team_id})
-        if not team or current_user.uid not in (team.get("members", []) + [team.get("created_by")]):
+        if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
         uids = team.get("members", []) + [team.get("created_by")]
 
@@ -518,7 +532,7 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, curr
             start_hour = int(event["start_time"].split(":")[0])
             end_hour = int(event["end_time"].split(":")[0])
             hours = end_hour - start_hour
-            amount = hours * event.get("hourly_rate", current_user.hourly_rate)
+            amount = hours * event.get("hourly_rate", db_user.get("hourly_rate", 50.0))
             
             if event["status"] == "paid":
                 earnings["paid"] += amount
@@ -530,7 +544,7 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, curr
                 earnings["not_worked"] += amount
         except:
             # Fallback calculation
-            amount = event.get("hourly_rate", current_user.hourly_rate)
+            amount = event.get("hourly_rate", db_user.get("hourly_rate", 50.0))
             if event["status"] == "paid":
                 earnings["paid"] += amount
             elif event["status"] == "unpaid":
@@ -556,6 +570,16 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, curr
     return earnings
 
 # Tasks endpoints
+@api_router.get("/planning/tasks")
+async def list_tasks(year: Optional[int] = None, week: Optional[int] = None, user: Dict[str, Any] = Depends(verify_token)):
+    query = {"uid": user["uid"]}
+    if year is not None:
+        query["year"] = year
+    if week is not None:
+        query["week"] = week
+    tasks = await db.weekly_tasks.find(query, {"_id": 0}).to_list(1000)
+    return tasks
+
 # Tasks endpoints
 @api_router.post("/planning/tasks")
 async def create_task(task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
@@ -591,18 +615,18 @@ async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)
     return {"message": "Task deleted"}
 
 @api_router.get("/todos")
-async def get_todos(current_user: User = Depends(get_current_user)):
-    todos = await db.todos.find({"uid": current_user.uid}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+async def get_todos(user: Dict[str, Any] = Depends(verify_token)):
+    todos = await db.todos.find({"uid": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return todos
 
 @api_router.post("/todos")
-async def create_todo(todo_request: TodoCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_todo(todo_request: TodoCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     todo_data = todo_request.dict()
     if todo_data.get("due_date"):
         todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
     
     todo = Todo(
-        uid=current_user.uid,
+        uid=user["uid"],
         **todo_data
     )
     
@@ -610,13 +634,13 @@ async def create_todo(todo_request: TodoCreateRequest, current_user: User = Depe
     return todo
 
 @api_router.put("/todos/{todo_id}")
-async def update_todo(todo_id: str, todo_request: TodoCreateRequest, current_user: User = Depends(get_current_user)):
+async def update_todo(todo_id: str, todo_request: TodoCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     todo_data = todo_request.dict()
     if todo_data.get("due_date"):
         todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
     
     await db.todos.update_one(
-        {"id": todo_id, "uid": current_user.uid},
+        {"id": todo_id, "uid": user["uid"]},
         {"$set": {**todo_data, "updated_at": datetime.utcnow()}}
     )
     
@@ -624,8 +648,8 @@ async def update_todo(todo_id: str, todo_request: TodoCreateRequest, current_use
     return updated_todo
 
 @api_router.put("/todos/{todo_id}/toggle")
-async def toggle_todo(todo_id: str, current_user: User = Depends(get_current_user)):
-    todo = await db.todos.find_one({"id": todo_id, "uid": current_user.uid})
+async def toggle_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    todo = await db.todos.find_one({"id": todo_id, "uid": user["uid"]})
     if not todo:
         raise HTTPException(status_code=404, detail="Todo not found")
     
@@ -638,22 +662,22 @@ async def toggle_todo(todo_id: str, current_user: User = Depends(get_current_use
     return updated_todo
 
 @api_router.delete("/todos/{todo_id}")
-async def delete_todo(todo_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.todos.delete_one({"id": todo_id, "uid": current_user.uid})
+async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    result = await db.todos.delete_one({"id": todo_id, "uid": user["uid"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Todo not found")
     return {"message": "Todo deleted"}
 
 # Clients endpoints
 @api_router.get("/clients")
-async def get_clients(current_user: User = Depends(get_current_user)):
-    clients = await db.clients.find({"uid": current_user.uid}, {"_id": 0}).sort("name", 1).to_list(1000)
+async def get_clients(user: Dict[str, Any] = Depends(verify_token)):
+    clients = await db.clients.find({"uid": user["uid"]}, {"_id": 0}).sort("name", 1).to_list(1000)
     return clients
 
 @api_router.post("/clients")
-async def create_client(client_request: ClientCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_client(client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     client = Client(
-        uid=current_user.uid,
+        uid=user["uid"],
         **client_request.dict()
     )
     
@@ -661,9 +685,9 @@ async def create_client(client_request: ClientCreateRequest, current_user: User 
     return client
 
 @api_router.put("/clients/{client_id}")
-async def update_client(client_id: str, client_request: ClientCreateRequest, current_user: User = Depends(get_current_user)):
+async def update_client(client_id: str, client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     await db.clients.update_one(
-        {"id": client_id, "uid": current_user.uid},
+        {"id": client_id, "uid": user["uid"]},
         {"$set": {**client_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
@@ -671,8 +695,8 @@ async def update_client(client_id: str, client_request: ClientCreateRequest, cur
     return updated_client
 
 @api_router.delete("/clients/{client_id}")
-async def delete_client(client_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.clients.delete_one({"id": client_id, "uid": current_user.uid})
+async def delete_client(client_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    result = await db.clients.delete_one({"id": client_id, "uid": user["uid"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Client not found")
     return {"message": "Client deleted"}
@@ -852,18 +876,18 @@ async def update_invoice_status(invoice_id: str, status: str, user: Dict[str, An
 
 # Teams endpoints
 @api_router.post("/teams")
-async def create_team(team_request: TeamCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_team(team_request: TeamCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     team = Team(
         name=team_request.name,
-        members=[current_user.uid],
-        created_by=current_user.uid
+        members=[user["uid"]],
+        created_by=user["uid"]
     )
-    
+
     await db.teams.insert_one(team.dict())
-    
+
     # Update user's team_id
     await db.users.update_one(
-        {"uid": current_user.uid},
+        {"uid": user["uid"]},
         {"$set": {"team_id": team.team_id}}
     )
     
