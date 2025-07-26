@@ -9,5 +9,5 @@ def test_ping_endpoint():
         resp = requests.get(api_url, timeout=5)
         data = resp.json()
     except Exception as e:
-        pytest.skip(f"Backend unavailable: {e}")
+        pytest.skip(f"Backend not running: {e}")
     assert "status" in data

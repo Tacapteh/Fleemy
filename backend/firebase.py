@@ -122,3 +122,4 @@ def initialize_firestore():
 
 
 db = initialize_firestore()
+
