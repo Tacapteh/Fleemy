@@ -81,3 +81,6 @@ android-sdk/
 # Environment files
 .env
 frontend/.env
+
+
+serviceAccountKey.json
