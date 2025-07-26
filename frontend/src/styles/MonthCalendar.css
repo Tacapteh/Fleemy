@@ -1,0 +1,28 @@
+.month-calendar {
+  display: flex;
+  flex-direction: column;
+}
+
+.calendar-header, .calendar-row {
+  display: flex;
+}
+
+.calendar-header-cell, .calendar-cell {
+  flex: 1;
+  height: 80px;
+  border: 1px solid #e5e7eb;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-header-cell {
+  font-weight: 600;
+  background: #f9fafb;
+}
+
+.calendar-cell.empty {
+  background: #fafafa;
+  pointer-events: none;
+}
