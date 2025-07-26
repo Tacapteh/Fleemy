@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import api from '../utils/api';
+import api from '../api';
 import Sidebar from './Sidebar';
 
 
@@ -13,9 +13,7 @@ export default function Layout() {
     async function check() {
       if (token) {
         try {
-          const response = await api.get('/auth/me', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const response = await api.get('/auth/me');
           setUser(response.data);
           setSessionToken(token);
         } catch (e) {
