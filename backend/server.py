@@ -14,6 +14,26 @@ import httpx
 import json
 import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
+from fastapi import Depends, HTTPException, Request
+
+cred = credentials.Certificate("serviceAccountKey.json")
+firebase_admin.initialize_app(cred)
+
+async def verify_token(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+
+    token = auth_header.split("Bearer ")[1]
+    try:
+        decoded = firebase_auth.verify_id_token(token)
+        request.state.user = decoded
+        return decoded
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
 
 
 ROOT_DIR = Path(__file__).parent

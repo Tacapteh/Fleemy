@@ -146,7 +146,9 @@ const Sidebar = ({
             <p className="text-sm font-medium text-gray-800 truncate">
               {user?.name ?? ""}
             </p>
-            <p className="text-xs text-gray-500 truncate">{user?.email ?? ""}</p>
+            <p className="text-xs text-gray-500 truncate">
+              {user?.email ?? ""}
+            </p>
           </div>
         </div>
         <button
@@ -170,7 +172,7 @@ const Dashboard = ({ user, sessionToken }) => {
       url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
       ...options,
@@ -209,7 +211,9 @@ const Dashboard = ({ user, sessionToken }) => {
     <div className="space-y-6">
       {/* Welcome Header */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-2xl">
-        <h1 className="text-2xl font-bold mb-2">Bonjour, {user?.name ?? ""} ! 👋</h1>
+        <h1 className="text-2xl font-bold mb-2">
+          Bonjour, {user?.name ?? ""} ! 👋
+        </h1>
         <p className="text-blue-100">Voici un aperçu de votre activité</p>
       </div>
 
@@ -283,7 +287,9 @@ const Dashboard = ({ user, sessionToken }) => {
                     <p className="font-medium text-gray-800">
                       {event.description}
                     </p>
-                    <p className="text-sm text-gray-600">{event?.client_name ?? ''}</p>
+                    <p className="text-sm text-gray-600">
+                      {event?.client_name ?? ""}
+                    </p>
                   </div>
                   <div className="text-sm text-gray-500">
                     {event.day} {event.start_time}
@@ -358,7 +364,9 @@ const Dashboard = ({ user, sessionToken }) => {
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                 >
                   <div>
-                    <p className="font-medium text-gray-800">{client?.name ?? ""}</p>
+                    <p className="font-medium text-gray-800">
+                      {client?.name ?? ""}
+                    </p>
                     {client?.company && (
                       <p className="text-sm text-gray-600">{client.company}</p>
                     )}
@@ -391,7 +399,9 @@ const Dashboard = ({ user, sessionToken }) => {
                 >
                   <div>
                     <p className="font-medium text-gray-800">{quote.title}</p>
-                    <p className="text-sm text-gray-600">{quote?.client_name ?? ""}</p>
+                    <p className="text-sm text-gray-600">
+                      {quote?.client_name ?? ""}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="font-medium text-gray-800">
@@ -1420,7 +1430,7 @@ const Planning = ({ user, sessionToken }) => {
         url,
         headers: {
           Authorization: `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           ...options.headers,
         },
         ...options,
@@ -1902,7 +1912,7 @@ const Planning = ({ user, sessionToken }) => {
                             cursor: "pointer",
                             zIndex: 20,
                           }}
-                          title={task?.name ?? ''}
+                          title={task?.name ?? ""}
                         >
                           {task.icon}
                         </div>
@@ -1942,7 +1952,7 @@ const Planning = ({ user, sessionToken }) => {
                             {task.icon}
                           </div>
                           <div style={{ fontSize: "10px", fontWeight: 500 }}>
-                            {task?.name ?? ''}
+                            {task?.name ?? ""}
                           </div>
                         </div>
                       );
@@ -2097,9 +2107,7 @@ const Planning = ({ user, sessionToken }) => {
       console.log(
         `Élément enregistré avec succès (ID: ${eventModal.event.id})`
       );
-      showToast(
-        `Élément enregistré avec succès (ID: ${eventModal.event.id})`
-      );
+      showToast(`Élément enregistré avec succès (ID: ${eventModal.event.id})`);
 
       // Update local state immediately
       setEvents((prevEvents) =>
@@ -2179,7 +2187,10 @@ const Planning = ({ user, sessionToken }) => {
       setTaskModal({ isOpen: false, task: null });
     } catch (error) {
       console.error("Error creating task:", error);
-      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true
+      );
     }
   };
 
@@ -2196,12 +2207,8 @@ const Planning = ({ user, sessionToken }) => {
         },
       });
 
-      console.log(
-        `Élément enregistré avec succès (ID: ${taskModal.task.id})`
-      );
-      showToast(
-        `Élément enregistré avec succès (ID: ${taskModal.task.id})`
-      );
+      console.log(`Élément enregistré avec succès (ID: ${taskModal.task.id})`);
+      showToast(`Élément enregistré avec succès (ID: ${taskModal.task.id})`);
 
       // Update local state immediately
       setTasks((prevTasks) =>
@@ -2213,7 +2220,10 @@ const Planning = ({ user, sessionToken }) => {
       setTaskModal({ isOpen: false, task: null });
     } catch (error) {
       console.error("Error updating task:", error);
-      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true
+      );
     }
   };
 
@@ -2472,7 +2482,7 @@ const Planning = ({ user, sessionToken }) => {
                 .filter((m) => m.uid !== user.uid)
                 .map((member) => (
                   <option key={member.uid} value={member.uid}>
-                    {member?.name ?? ''} (lecture seule)
+                    {member?.name ?? ""} (lecture seule)
                   </option>
                 ))}
             </select>
@@ -2732,7 +2742,7 @@ const TodoList = ({ sessionToken }) => {
       url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
       ...options,
@@ -3117,7 +3127,7 @@ const Quotes = ({ user, sessionToken }) => {
       url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
       ...options,
@@ -3156,12 +3166,8 @@ const Quotes = ({ user, sessionToken }) => {
           method: "PUT",
           data: quoteData,
         });
-        console.log(
-          `Élément enregistré avec succès (ID: ${editingQuote.id})`
-        );
-        showToast(
-          `Élément enregistré avec succès (ID: ${editingQuote.id})`
-        );
+        console.log(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
+        showToast(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
         setQuotes((prevQuotes) =>
           prevQuotes.map((q) =>
             q.id === editingQuote.id ? { ...q, ...quoteData } : q
@@ -3172,18 +3178,17 @@ const Quotes = ({ user, sessionToken }) => {
           method: "POST",
           data: quoteData,
         });
-        console.log(
-          `Élément enregistré avec succès (ID: ${response.data.id})`
-        );
-        showToast(
-          `Élément enregistré avec succès (ID: ${response.data.id})`
-        );
+        console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
+        showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
         setQuotes((prevQuotes) => [response.data, ...prevQuotes]);
       }
       setShowQuoteModal(false);
     } catch (error) {
       console.error("Error saving quote:", error);
-      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true
+      );
     }
   };
 
@@ -3354,7 +3359,7 @@ const Quotes = ({ user, sessionToken }) => {
                     </div>
                     <p className="text-gray-900 font-medium">{quote.title}</p>
                     <p className="text-gray-600 text-sm">
-                      Client: {quote?.client_name ?? ''}
+                      Client: {quote?.client_name ?? ""}
                     </p>
                     <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                       <span>💰 {formatCurrency(quote.total)}</span>
@@ -3643,12 +3648,12 @@ const InvoiceModal = ({
               className="form-input"
             >
               <option value="">Créer une nouvelle facture</option>
-                {acceptedQuotes.map((quote) => (
-                  <option key={quote.id} value={quote.id}>
-                    {quote.quote_number} - {quote?.client_name ?? ''} -{' '}
-                    {formatCurrency(quote.total)}
-                  </option>
-                ))}
+              {acceptedQuotes.map((quote) => (
+                <option key={quote.id} value={quote.id}>
+                  {quote.quote_number} - {quote?.client_name ?? ""} -{" "}
+                  {formatCurrency(quote.total)}
+                </option>
+              ))}
             </select>
             <div className="text-sm text-gray-500 mt-1">
               Sélectionnez un devis accepté pour créer automatiquement une
@@ -3871,7 +3876,7 @@ const Invoices = ({ user, sessionToken }) => {
       url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...options.headers,
       },
       ...options,
@@ -3916,9 +3921,7 @@ const Invoices = ({ user, sessionToken }) => {
         console.log(
           `Élément enregistré avec succès (ID: ${editingInvoice.id})`
         );
-        showToast(
-          `Élément enregistré avec succès (ID: ${editingInvoice.id})`
-        );
+        showToast(`Élément enregistré avec succès (ID: ${editingInvoice.id})`);
         setInvoices((prevInvoices) =>
           prevInvoices.map((i) =>
             i.id === editingInvoice.id ? { ...i, ...invoiceData } : i
@@ -3929,18 +3932,17 @@ const Invoices = ({ user, sessionToken }) => {
           method: "POST",
           data: invoiceData,
         });
-        console.log(
-          `Élément enregistré avec succès (ID: ${response.data.id})`
-        );
-        showToast(
-          `Élément enregistré avec succès (ID: ${response.data.id})`
-        );
+        console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
+        showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
         setInvoices((prevInvoices) => [response.data, ...prevInvoices]);
       }
       setShowInvoiceModal(false);
     } catch (error) {
       console.error("Error saving invoice:", error);
-      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true
+      );
     }
   };
 
@@ -4109,7 +4111,7 @@ const Invoices = ({ user, sessionToken }) => {
                     </div>
                     <p className="text-gray-900 font-medium">{invoice.title}</p>
                     <p className="text-gray-600 text-sm">
-                      Client: {invoice?.client_name ?? ''}
+                      Client: {invoice?.client_name ?? ""}
                     </p>
                     <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                       <span>💰 {formatCurrency(invoice.total)}</span>
@@ -4205,7 +4207,7 @@ function App() {
   const handleLogin = async (sessionId) => {
     try {
       setLoading(true);
-      const response = await api.post('/auth/login', {
+      const response = await api.post("/auth/login", {
         session_id: sessionId,
       });
       setUser(response.data.user);
@@ -4231,7 +4233,7 @@ function App() {
     const token = localStorage.getItem("fleemy_session_token");
     if (token) {
       try {
-        const response = await api.get('/auth/me', {
+        const response = await api.get("/auth/me", {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUser(response.data);

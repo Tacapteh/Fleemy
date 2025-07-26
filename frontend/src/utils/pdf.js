@@ -57,11 +57,11 @@
 
 // Temporary stubs while PDF generation is disabled
 export function generateQuotePDF() {
-  console.warn('PDF export is temporarily disabled');
+  console.warn("PDF export is temporarily disabled");
 }
 
 export function generateInvoicePDF() {
-  console.warn('PDF export is temporarily disabled');
+  console.warn("PDF export is temporarily disabled");
 }
 
 // export function generateInvoicePDF(invoice) {
