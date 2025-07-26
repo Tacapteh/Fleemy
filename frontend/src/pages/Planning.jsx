@@ -1,2 +1,7 @@
-import { Planning } from '../LegacyApp';
-export default Planning;
+import { Planning as LegacyPlanning } from '../LegacyApp';
+import { useOutletContext } from 'react-router-dom';
+
+export default function Planning() {
+  const { user, sessionToken } = useOutletContext();
+  return <LegacyPlanning user={user} sessionToken={sessionToken} />;
+}
