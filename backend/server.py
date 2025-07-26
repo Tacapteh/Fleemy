@@ -1,7 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Response, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
@@ -13,15 +12,9 @@ import asyncio
 import json
 import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
-import firebase_admin
-from firebase_admin import credentials, auth as firebase_auth
-
-cred_path = os.environ.get(
-    "FIREBASE_CREDENTIALS",
-    str(Path(__file__).parent / "serviceAccountKey.json"),
-)
-cred = credentials.Certificate(cred_path)
-firebase_admin.initialize_app(cred)
+from firebase_admin import auth as firebase_auth
+from firebase import db
+from google.cloud import firestore
 
 async def verify_token(request: Request):
     auth_header = request.headers.get("Authorization")
@@ -40,11 +33,6 @@ async def verify_token(request: Request):
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -220,21 +208,39 @@ class TeamCreateRequest(BaseModel):
 class TeamJoinRequest(BaseModel):
     invite_code: str
 
+# Firestore helper utilities
+def user_doc(uid: str):
+    return db.collection("users").document(uid)
+
+
+def user_col(uid: str, name: str):
+    return user_doc(uid).collection(name)
+
+
+def team_col(team_id: str, name: str):
+    return db.collection("teams").document(team_id).collection(name)
+
+
+async def stream_docs(query):
+    docs = await asyncio.to_thread(lambda: list(query.stream()))
+    return [d.to_dict() for d in docs]
+
 # Authentication endpoints
 
 @api_router.get("/auth/me")
 async def get_me(user: Dict[str, Any] = Depends(verify_token)):
     """Return the authenticated user's info and create the DB entry if missing."""
-    db_user = await db.users.find_one({"uid": user["uid"]})
+    user_ref = user_doc(user["uid"])
+    snapshot = await asyncio.to_thread(user_ref.get)
+    db_user = snapshot.to_dict() if snapshot.exists else None
     if not db_user:
-        # Create a new user document based on the token payload
         new_user = User(
             uid=user["uid"],
             name=user.get("name", ""),
             email=user.get("email", ""),
             picture=user.get("picture"),
         )
-        await db.users.insert_one(new_user.dict())
+        await asyncio.to_thread(user_ref.set, new_user.dict())
         db_user = new_user.dict()
     return {
         "uid": db_user["uid"],
@@ -247,19 +253,18 @@ async def get_me(user: Dict[str, Any] = Depends(verify_token)):
 
 @api_router.put("/auth/me")
 async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_token)):
-    await db.users.update_one(
-        {"uid": user["uid"]},
-        {"$set": {"hourly_rate": hourly_rate}}
-    )
-
-    updated_user = await db.users.find_one({"uid": user["uid"]})
-    return User(**updated_user)
+    user_ref = user_doc(user["uid"])
+    await asyncio.to_thread(user_ref.update, {"hourly_rate": hourly_rate})
+    updated_user = await asyncio.to_thread(user_ref.get)
+    return User(**updated_user.to_dict())
 
 # Dashboard endpoint
 @api_router.get("/dashboard")
 async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
     """Return dashboard data for the authenticated user."""
-    current_user = await db.users.find_one({"uid": user["uid"]})
+    user_ref = user_doc(user["uid"])
+    snapshot = await asyncio.to_thread(user_ref.get)
+    current_user = snapshot.to_dict() if snapshot.exists else None
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -267,32 +272,30 @@ async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
     current_week = now.isocalendar()[1]
     current_year = now.year
 
-    upcoming_events = await db.planning_events.find(
-        {"uid": current_user["uid"], "year": current_year, "week": {"$in": [current_week, current_week + 1]}},
-        {"_id": 0},
-    ).limit(5).to_list(5)
+    events_ref = user_col(current_user["uid"], "events")\
+        .where("year", "==", current_year)\
+        .where("week", "in", [current_week, current_week + 1])\
+        .limit(5)
+    upcoming_events = await stream_docs(events_ref)
 
-    pending_todos = await db.todos.find(
-        {"uid": current_user["uid"], "completed": False},
-        {"_id": 0},
-    ).limit(5).to_list(5)
+    pending_todos = await stream_docs(
+        user_col(current_user["uid"], "todos").where("completed", "==", False).limit(5)
+    )
 
-    recent_clients = await db.clients.find(
-        {"uid": current_user["uid"]}, {"_id": 0}
-    ).sort("created_at", -1).limit(5).to_list(5)
+    recent_clients = await stream_docs(
+        user_col(current_user["uid"], "clients").order_by("created_at", direction=firestore.Query.DESCENDING).limit(5)
+    )
 
-    pending_quotes = await db.quotes.find(
-        {"uid": current_user["uid"], "status": {"$in": ["draft", "sent", "accepted"]}},
-        {"_id": 0},
-    ).limit(5).to_list(5)
+    pending_quotes = await stream_docs(
+        user_col(current_user["uid"], "quotes").where("status", "in", ["draft", "sent", "accepted"]).limit(5)
+    )
 
-    unpaid_invoices = await db.invoices.find(
-        {"uid": current_user["uid"], "status": {"$in": ["sent", "overdue"]}},
-        {"_id": 0},
-    ).limit(5).to_list(5)
+    unpaid_invoices = await stream_docs(
+        user_col(current_user["uid"], "invoices").where("status", "in", ["sent", "overdue"]).limit(5)
+    )
 
-    invoices = await db.invoices.find({"uid": current_user["uid"]}, {"_id": 0}).to_list(1000)
-    quotes = await db.quotes.find({"uid": current_user["uid"]}, {"_id": 0}).to_list(1000)
+    invoices = await stream_docs(user_col(current_user["uid"], "invoices"))
+    quotes = await stream_docs(user_col(current_user["uid"], "quotes"))
 
     revenue = {"paid": 0.0, "unpaid": 0.0, "pending": 0.0}
     for inv in invoices:
@@ -320,8 +323,8 @@ async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
         "unpaid_invoices": unpaid_invoices,
         "revenue": revenue,
         "stats": {
-            "total_clients": await db.clients.count_documents({"uid": current_user["uid"]}),
-            "pending_todos_count": await db.todos.count_documents({"uid": current_user["uid"], "completed": False}),
+            "total_clients": len(await stream_docs(user_col(current_user["uid"], "clients"))),
+            "pending_todos_count": len(await stream_docs(user_col(current_user["uid"], "todos").where("completed", "==", False))),
             "unpaid_invoices_count": len(unpaid_invoices),
         },
     }
@@ -329,21 +332,19 @@ async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
 async def get_week_planning(year: int, week: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
-    uids = [user["uid"]]
     if team_id:
-        team = await db.teams.find_one({"team_id": team_id})
+        team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
+        team = team_snap.to_dict() if team_snap.exists else None
         if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
-        uids = team.get("members", []) + [team.get("created_by")]
+        events_ref = team_col(team_id, "events")
+        tasks_ref = team_col(team_id, "tasks")
+    else:
+        events_ref = user_col(user["uid"], "events")
+        tasks_ref = user_col(user["uid"], "tasks")
 
-    events = await db.planning_events.find(
-        {"uid": {"$in": uids}, "year": year, "week": week},
-        {"_id": 0}
-    ).to_list(1000)
-    tasks = await db.weekly_tasks.find(
-        {"uid": {"$in": uids}, "year": year, "week": week},
-        {"_id": 0}
-    ).to_list(1000)
+    events = await stream_docs(events_ref.where("year", "==", year).where("week", "==", week))
+    tasks = await stream_docs(tasks_ref.where("year", "==", year).where("week", "==", week))
 
     return {"events": events, "tasks": tasks}
 
@@ -357,33 +358,33 @@ async def get_month_planning(year: int, month: int, team_id: Optional[str] = Non
     }
     or_filters = [{"year": y, "week": w} for y, w in pairs]
 
-    uids = [user["uid"]]
     if team_id:
-        team = await db.teams.find_one({"team_id": team_id})
+        team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
+        team = team_snap.to_dict() if team_snap.exists else None
         if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
-        uids = team.get("members", []) + [team.get("created_by")]
+        events_ref = team_col(team_id, "events")
+        tasks_ref = team_col(team_id, "tasks")
+    else:
+        events_ref = user_col(user["uid"], "events")
+        tasks_ref = user_col(user["uid"], "tasks")
 
-    events_cursor = db.planning_events.find(
-        {"uid": {"$in": uids}, "$or": or_filters},
-        {"_id": 0}
-    )
-    tasks_cursor = db.weekly_tasks.find(
-        {"uid": {"$in": uids}, "$or": or_filters},
-        {"_id": 0}
-    )
-    events, tasks = await asyncio.gather(events_cursor.to_list(1000), tasks_cursor.to_list(1000))
+    events: List[Dict[str, Any]] = []
+    tasks: List[Dict[str, Any]] = []
+    for y, w in pairs:
+        events += await stream_docs(events_ref.where("year", "==", y).where("week", "==", w))
+        tasks += await stream_docs(tasks_ref.where("year", "==", y).where("week", "==", w))
 
     return {"events": events, "tasks": tasks}
 
 @api_router.get("/planning/events")
 async def list_events(year: Optional[int] = None, week: Optional[int] = None, user: Dict[str, Any] = Depends(verify_token)):
-    query = {"uid": user["uid"]}
+    events_ref = user_col(user["uid"], "events")
     if year is not None:
-        query["year"] = year
+        events_ref = events_ref.where("year", "==", year)
     if week is not None:
-        query["week"] = week
-    events = await db.planning_events.find(query, {"_id": 0}).to_list(1000)
+        events_ref = events_ref.where("week", "==", week)
+    events = await stream_docs(events_ref)
     return events
 
 @api_router.post("/planning/events")
@@ -398,48 +399,57 @@ async def create_event(event_request: EventCreateRequest, user: Dict[str, Any] =
         year=year,
         **event_request.dict()
     )
-    
-    await db.planning_events.insert_one(event.dict())
+    await asyncio.to_thread(user_col(user["uid"], "events").document(event.id).set, event.dict())
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "events").document(event.id).set, event.dict())
     return event
 
 @api_router.put("/planning/events/{event_id}")
 async def update_event(event_id: str, event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
-    await db.planning_events.update_one(
-        {"id": event_id, "uid": user["uid"]},
-        {"$set": {**event_request.dict(), "updated_at": datetime.utcnow()}}
-    )
-    
-    updated_event = await db.planning_events.find_one({"id": event_id}, {"_id": 0})
-    return updated_event
+    update_data = {**event_request.dict(), "updated_at": datetime.utcnow()}
+    await asyncio.to_thread(user_col(user["uid"], "events").document(event_id).update, update_data)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "events").document(event_id).update, update_data)
+    updated = await asyncio.to_thread(user_col(user["uid"], "events").document(event_id).get)
+    return updated.to_dict()
 
 @api_router.delete("/planning/events/{event_id}")
 async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    result = await db.planning_events.delete_one({"id": event_id, "uid": user["uid"]})
-    if result.deleted_count == 0:
+    doc_ref = user_col(user["uid"], "events").document(event_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Event not found")
+    await asyncio.to_thread(doc_ref.delete)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
     return {"message": "Event deleted"}
 
 @api_router.get("/planning/earnings/{year}/{week}")
 async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
-    db_user = await db.users.find_one({"uid": user["uid"]})
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    db_user = user_snap.to_dict() if user_snap.exists else None
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    uids = [user["uid"]]
     if team_id:
-        team = await db.teams.find_one({"team_id": team_id})
+        team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
+        team = team_snap.to_dict() if team_snap.exists else None
         if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
-        uids = team.get("members", []) + [team.get("created_by")]
+        events_ref = team_col(team_id, "events")
+        tasks_ref = team_col(team_id, "tasks")
+    else:
+        events_ref = user_col(user["uid"], "events")
+        tasks_ref = user_col(user["uid"], "tasks")
 
-    events = await db.planning_events.find(
-        {"uid": {"$in": uids}, "year": year, "week": week},
-        {"_id": 0}
-    ).to_list(1000)
-    tasks = await db.weekly_tasks.find(
-        {"uid": {"$in": uids}, "year": year, "week": week},
-        {"_id": 0}
-    ).to_list(1000)
+    events = await stream_docs(events_ref.where("year", "==", year).where("week", "==", week))
+    tasks = await stream_docs(tasks_ref.where("year", "==", year).where("week", "==", week))
     
     earnings = {
         "paid": 0,
@@ -495,12 +505,12 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user
 # Tasks endpoints
 @api_router.get("/planning/tasks")
 async def list_tasks(year: Optional[int] = None, week: Optional[int] = None, user: Dict[str, Any] = Depends(verify_token)):
-    query = {"uid": user["uid"]}
+    tasks_ref = user_col(user["uid"], "tasks")
     if year is not None:
-        query["year"] = year
+        tasks_ref = tasks_ref.where("year", "==", year)
     if week is not None:
-        query["week"] = week
-    tasks = await db.weekly_tasks.find(query, {"_id": 0}).to_list(1000)
+        tasks_ref = tasks_ref.where("week", "==", week)
+    tasks = await stream_docs(tasks_ref)
     return tasks
 
 # Tasks endpoints
@@ -516,30 +526,42 @@ async def create_task(task_request: TaskCreateRequest, user: Dict[str, Any] = De
         year=year,
         **task_request.dict()
     )
-    
-    await db.weekly_tasks.insert_one(task.dict())
+    await asyncio.to_thread(user_col(user["uid"], "tasks").document(task.id).set, task.dict())
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "tasks").document(task.id).set, task.dict())
     return task
 
 @api_router.put("/planning/tasks/{task_id}")
 async def update_task(task_id: str, task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
-    await db.weekly_tasks.update_one(
-        {"id": task_id, "uid": user["uid"]},
-        {"$set": {**task_request.dict(), "updated_at": datetime.utcnow()}}
-    )
-    
-    updated_task = await db.weekly_tasks.find_one({"id": task_id}, {"_id": 0})
-    return updated_task
+    update_data = {**task_request.dict(), "updated_at": datetime.utcnow()}
+    await asyncio.to_thread(user_col(user["uid"], "tasks").document(task_id).update, update_data)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "tasks").document(task_id).update, update_data)
+    updated = await asyncio.to_thread(user_col(user["uid"], "tasks").document(task_id).get)
+    return updated.to_dict()
 
 @api_router.delete("/planning/tasks/{task_id}")
 async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    result = await db.weekly_tasks.delete_one({"id": task_id, "uid": user["uid"]})
-    if result.deleted_count == 0:
+    doc_ref = user_col(user["uid"], "tasks").document(task_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Task not found")
+    await asyncio.to_thread(doc_ref.delete)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "tasks").document(task_id).delete)
     return {"message": "Task deleted"}
 
 @api_router.get("/todos")
 async def get_todos(user: Dict[str, Any] = Depends(verify_token)):
-    todos = await db.todos.find({"uid": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    todos = await stream_docs(
+        user_col(user["uid"], "todos").order_by("created_at", direction=firestore.Query.DESCENDING)
+    )
     return todos
 
 @api_router.post("/todos")
@@ -553,7 +575,7 @@ async def create_todo(todo_request: TodoCreateRequest, user: Dict[str, Any] = De
         **todo_data
     )
     
-    await db.todos.insert_one(todo.dict())
+    await asyncio.to_thread(user_col(user["uid"], "todos").document(todo.id).set, todo.dict())
     return todo
 
 @api_router.put("/todos/{todo_id}")
@@ -562,39 +584,37 @@ async def update_todo(todo_id: str, todo_request: TodoCreateRequest, user: Dict[
     if todo_data.get("due_date"):
         todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
     
-    await db.todos.update_one(
-        {"id": todo_id, "uid": user["uid"]},
-        {"$set": {**todo_data, "updated_at": datetime.utcnow()}}
-    )
-    
-    updated_todo = await db.todos.find_one({"id": todo_id}, {"_id": 0})
-    return updated_todo
+    update_data = {**todo_data, "updated_at": datetime.utcnow()}
+    await asyncio.to_thread(user_col(user["uid"], "todos").document(todo_id).update, update_data)
+    snap = await asyncio.to_thread(user_col(user["uid"], "todos").document(todo_id).get)
+    return snap.to_dict()
 
 @api_router.put("/todos/{todo_id}/toggle")
 async def toggle_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    todo = await db.todos.find_one({"id": todo_id, "uid": user["uid"]})
-    if not todo:
+    doc_ref = user_col(user["uid"], "todos").document(todo_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Todo not found")
-    
-    await db.todos.update_one(
-        {"id": todo_id},
-        {"$set": {"completed": not todo["completed"], "updated_at": datetime.utcnow()}}
-    )
-    
-    updated_todo = await db.todos.find_one({"id": todo_id}, {"_id": 0})
-    return updated_todo
+    data = snap.to_dict()
+    await asyncio.to_thread(doc_ref.update, {"completed": not data.get("completed", False), "updated_at": datetime.utcnow()})
+    updated = await asyncio.to_thread(doc_ref.get)
+    return updated.to_dict()
 
 @api_router.delete("/todos/{todo_id}")
 async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    result = await db.todos.delete_one({"id": todo_id, "uid": user["uid"]})
-    if result.deleted_count == 0:
+    doc_ref = user_col(user["uid"], "todos").document(todo_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Todo not found")
+    await asyncio.to_thread(doc_ref.delete)
     return {"message": "Todo deleted"}
 
 # Clients endpoints
 @api_router.get("/clients")
 async def get_clients(user: Dict[str, Any] = Depends(verify_token)):
-    clients = await db.clients.find({"uid": user["uid"]}, {"_id": 0}).sort("name", 1).to_list(1000)
+    clients = await stream_docs(
+        user_col(user["uid"], "clients").order_by("name")
+    )
     return clients
 
 @api_router.post("/clients")
@@ -604,36 +624,38 @@ async def create_client(client_request: ClientCreateRequest, user: Dict[str, Any
         **client_request.dict()
     )
     
-    await db.clients.insert_one(client.dict())
+    await asyncio.to_thread(user_col(user["uid"], "clients").document(client.id).set, client.dict())
     return client
 
 @api_router.put("/clients/{client_id}")
 async def update_client(client_id: str, client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
-    await db.clients.update_one(
-        {"id": client_id, "uid": user["uid"]},
-        {"$set": {**client_request.dict(), "updated_at": datetime.utcnow()}}
-    )
-    
-    updated_client = await db.clients.find_one({"id": client_id}, {"_id": 0})
-    return updated_client
+    update_data = {**client_request.dict(), "updated_at": datetime.utcnow()}
+    doc_ref = user_col(user["uid"], "clients").document(client_id)
+    await asyncio.to_thread(doc_ref.update, update_data)
+    updated = await asyncio.to_thread(doc_ref.get)
+    return updated.to_dict()
 
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    result = await db.clients.delete_one({"id": client_id, "uid": user["uid"]})
-    if result.deleted_count == 0:
+    doc_ref = user_col(user["uid"], "clients").document(client_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Client not found")
+    await asyncio.to_thread(doc_ref.delete)
     return {"message": "Client deleted"}
 
 # Quotes endpoints
 @api_router.get("/quotes")
 async def get_quotes(user: Dict[str, Any] = Depends(verify_token)):
-    quotes = await db.quotes.find({"uid": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    quotes = await stream_docs(
+        user_col(user["uid"], "quotes").order_by("created_at", direction=firestore.Query.DESCENDING)
+    )
     return quotes
 
 @api_router.post("/quotes")
 async def create_quote(quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     # Generate quote number
-    quote_count = await db.quotes.count_documents({"uid": user["uid"]})
+    quote_count = len(await stream_docs(user_col(user["uid"], "quotes")))
     quote_number = f"DEV-{datetime.now().year}-{quote_count + 1:04d}"
     
     quote_data = quote_request.dict()
@@ -656,7 +678,11 @@ async def create_quote(quote_request: QuoteCreateRequest, user: Dict[str, Any] =
         **quote_data
     )
     
-    await db.quotes.insert_one(quote.dict())
+    await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote.id).set, quote.dict())
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "quotes").document(quote.id).set, quote.dict())
     return quote
 
 @api_router.put("/quotes/{quote_id}")
@@ -676,19 +702,25 @@ async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, user: D
         "updated_at": datetime.utcnow()
     })
     
-    await db.quotes.update_one(
-        {"id": quote_id, "uid": user["uid"]},
-        {"$set": quote_data}
-    )
-    
-    updated_quote = await db.quotes.find_one({"id": quote_id})
-    return updated_quote
+    await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).update, quote_data)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "quotes").document(quote_id).update, quote_data)
+    updated = await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).get)
+    return updated.to_dict()
 
 @api_router.delete("/quotes/{quote_id}")
 async def delete_quote(quote_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    result = await db.quotes.delete_one({"id": quote_id, "uid": user["uid"]})
-    if result.deleted_count == 0:
+    doc_ref = user_col(user["uid"], "quotes").document(quote_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Quote not found")
+    await asyncio.to_thread(doc_ref.delete)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "quotes").document(quote_id).delete)
     return {"message": "Quote deleted"}
 
 #@api_router.get("/quotes/{quote_id}/pdf")
@@ -701,24 +733,27 @@ async def delete_quote(quote_id: str, user: Dict[str, Any] = Depends(verify_toke
 
 @api_router.put("/quotes/{quote_id}/status")
 async def update_quote_status(quote_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)):
-    await db.quotes.update_one(
-        {"id": quote_id, "uid": user["uid"]},
-        {"$set": {"status": status, "updated_at": datetime.utcnow()}}
-    )
-    
-    updated_quote = await db.quotes.find_one({"id": quote_id})
-    return updated_quote
+    update_data = {"status": status, "updated_at": datetime.utcnow()}
+    await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).update, update_data)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "quotes").document(quote_id).update, update_data)
+    updated = await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).get)
+    return updated.to_dict()
 
 # Invoices endpoints
 @api_router.get("/invoices")
 async def get_invoices(user: Dict[str, Any] = Depends(verify_token)):
-    invoices = await db.invoices.find({"uid": user["uid"]}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    invoices = await stream_docs(
+        user_col(user["uid"], "invoices").order_by("created_at", direction=firestore.Query.DESCENDING)
+    )
     return invoices
 
 @api_router.post("/invoices")
 async def create_invoice(invoice_request: InvoiceCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     # Generate invoice number
-    invoice_count = await db.invoices.count_documents({"uid": user["uid"]})
+    invoice_count = len(await stream_docs(user_col(user["uid"], "invoices")))
     invoice_number = f"FACT-{datetime.now().year}-{invoice_count + 1:04d}"
     
     invoice_data = invoice_request.dict()
@@ -741,7 +776,11 @@ async def create_invoice(invoice_request: InvoiceCreateRequest, user: Dict[str, 
         **invoice_data
     )
     
-    await db.invoices.insert_one(invoice.dict())
+    await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice.id).set, invoice.dict())
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice.id).set, invoice.dict())
     return invoice
 
 @api_router.put("/invoices/{invoice_id}")
@@ -760,13 +799,13 @@ async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest,
         "updated_at": datetime.utcnow(),
     })
 
-    await db.invoices.update_one(
-        {"id": invoice_id, "uid": user["uid"]},
-        {"$set": invoice_data},
-    )
-
-    updated_invoice = await db.invoices.find_one({"id": invoice_id})
-    return updated_invoice
+    await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).update, invoice_data)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice_id).update, invoice_data)
+    updated = await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).get)
+    return updated.to_dict()
 
 #@api_router.get("/invoices/{invoice_id}/pdf")
 #async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
@@ -778,9 +817,15 @@ async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest,
 
 @api_router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    result = await db.invoices.delete_one({"id": invoice_id, "uid": user["uid"]})
-    if result.deleted_count == 0:
+    doc_ref = user_col(user["uid"], "invoices").document(invoice_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    if not snap.exists:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    await asyncio.to_thread(doc_ref.delete)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice_id).delete)
     return {"message": "Invoice deleted"}
 
 @api_router.put("/invoices/{invoice_id}/status")
@@ -789,13 +834,13 @@ async def update_invoice_status(invoice_id: str, status: str, user: Dict[str, An
     if status == "paid":
         update_data["paid_date"] = datetime.utcnow()
     
-    await db.invoices.update_one(
-        {"id": invoice_id, "uid": user["uid"]},
-        {"$set": update_data}
-    )
-    
-    updated_invoice = await db.invoices.find_one({"id": invoice_id})
-    return updated_invoice
+    await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).update, update_data)
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice_id).update, update_data)
+    updated = await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).get)
+    return updated.to_dict()
 
 # Teams endpoints
 @api_router.post("/teams")
@@ -806,36 +851,30 @@ async def create_team(team_request: TeamCreateRequest, user: Dict[str, Any] = De
         created_by=user["uid"]
     )
 
-    await db.teams.insert_one(team.dict())
-
-    # Update user's team_id
-    await db.users.update_one(
-        {"uid": user["uid"]},
-        {"$set": {"team_id": team.team_id}}
-    )
+    await asyncio.to_thread(db.collection("teams").document(team.team_id).set, team.dict())
+    await asyncio.to_thread(user_doc(user["uid"]).update, {"team_id": team.team_id})
     
     return team
 
 @api_router.get("/teams/my")
 async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
-    db_user = await db.users.find_one({"uid": user["uid"]})
+    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+    db_user = user_snap.to_dict() if user_snap.exists else None
     if not db_user or not db_user.get("team_id"):
         return None
 
-    team = await db.teams.find_one({"team_id": db_user["team_id"]})
+    team_snap = await asyncio.to_thread(db.collection("teams").document(db_user["team_id"]).get)
+    team = team_snap.to_dict() if team_snap.exists else None
     if not team:
         return None
     
     # Get team members info
     members = []
     for member_uid in team["members"]:
-        member = await db.users.find_one({"uid": member_uid})
+        snap = await asyncio.to_thread(db.collection("users").document(member_uid).get)
+        member = snap.to_dict() if snap.exists else None
         if member:
-            members.append({
-                "uid": member["uid"],
-                "name": member["name"],
-                "email": member["email"]
-            })
+            members.append({"uid": member["uid"], "name": member["name"], "email": member["email"]})
     
     return {
         "team_id": team["team_id"],
@@ -844,6 +883,14 @@ async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
         "members": members,
         "created_by": team["created_by"]
     }
+
+# Firestore test route
+@api_router.get("/test-firestore")
+async def test_firestore():
+    test_ref = db.collection("test").document("ping")
+    await asyncio.to_thread(test_ref.set, {"hello": "world"})
+    snap = await asyncio.to_thread(test_ref.get)
+    return snap.to_dict()
 
 # Basic test route
 @api_router.get("/")
@@ -868,6 +915,3 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
