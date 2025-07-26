@@ -301,9 +301,18 @@ async def login(auth_request: AuthRequest):
 
 @api_router.get("/auth/me")
 async def get_me(user: Dict[str, Any] = Depends(verify_token)):
+    """Return the authenticated user's info and create the DB entry if missing."""
     db_user = await db.users.find_one({"uid": user["uid"]})
     if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Create a new user document based on the token payload
+        new_user = User(
+            uid=user["uid"],
+            name=user.get("name", ""),
+            email=user.get("email", ""),
+            picture=user.get("picture"),
+        )
+        await db.users.insert_one(new_user.dict())
+        db_user = new_user.dict()
     return {
         "uid": db_user["uid"],
         "name": db_user.get("name"),
@@ -326,72 +335,72 @@ async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_to
 # Dashboard endpoint
 @api_router.get("/dashboard")
 async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
+    """Return dashboard data for the authenticated user."""
     current_user = await db.users.find_one({"uid": user["uid"]})
     if not current_user:
         raise HTTPException(status_code=404, detail="User not found")
-    now = datetime.now()
+
+    now = datetime.utcnow()
     current_week = now.isocalendar()[1]
     current_year = now.year
-    
-    # Get upcoming events (next 7 days)
-    upcoming_events = await db.planning_events.find({
-        "uid": current_user["uid"],
-        "year": current_year,
-        "week": {"$in": [current_week, current_week + 1]}
-    }, {"_id": 0}).limit(5).to_list(5)
-    
-    # Get pending todos
-    pending_todos = await db.todos.find({
-        "uid": current_user["uid"],
-        "completed": False
-    }, {"_id": 0}).limit(5).to_list(5)
-    
-    # Get recent clients
-    recent_clients = await db.clients.find({
-        "uid": current_user["uid"]
-    }, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
-    
-    # Get pending quotes
-    pending_quotes = await db.quotes.find({
-        "uid": current_user["uid"],
-        "status": {"$in": ["draft", "sent"]}
-    }, {"_id": 0}).limit(5).to_list(5)
-    
-    # Get unpaid invoices
-    unpaid_invoices = await db.invoices.find({
-        "uid": current_user["uid"],
-        "status": {"$in": ["sent", "overdue"]}
-    }, {"_id": 0}).limit(5).to_list(5)
-    
-    # Calculate revenue stats
-    paid_events = await db.planning_events.find({
-        "uid": current_user["uid"],
-        "status": "paid",
-        "year": current_year
-    }, {"_id": 0}).to_list(1000)
-    
-    monthly_revenue = 0
-    for event in paid_events:
-        try:
-            start_hour = int(event["start_time"].split(":")[0])
-            end_hour = int(event["end_time"].split(":")[0])
-            hours = end_hour - start_hour
-            monthly_revenue += hours * event.get("hourly_rate", 50)
-        except:
-            monthly_revenue += 50
-    
+
+    upcoming_events = await db.planning_events.find(
+        {"uid": current_user["uid"], "year": current_year, "week": {"$in": [current_week, current_week + 1]}},
+        {"_id": 0},
+    ).limit(5).to_list(5)
+
+    pending_todos = await db.todos.find(
+        {"uid": current_user["uid"], "completed": False},
+        {"_id": 0},
+    ).limit(5).to_list(5)
+
+    recent_clients = await db.clients.find(
+        {"uid": current_user["uid"]}, {"_id": 0}
+    ).sort("created_at", -1).limit(5).to_list(5)
+
+    pending_quotes = await db.quotes.find(
+        {"uid": current_user["uid"], "status": {"$in": ["draft", "sent", "accepted"]}},
+        {"_id": 0},
+    ).limit(5).to_list(5)
+
+    unpaid_invoices = await db.invoices.find(
+        {"uid": current_user["uid"], "status": {"$in": ["sent", "overdue"]}},
+        {"_id": 0},
+    ).limit(5).to_list(5)
+
+    invoices = await db.invoices.find({"uid": current_user["uid"]}, {"_id": 0}).to_list(1000)
+    quotes = await db.quotes.find({"uid": current_user["uid"]}, {"_id": 0}).to_list(1000)
+
+    revenue = {"paid": 0.0, "unpaid": 0.0, "pending": 0.0}
+    for inv in invoices:
+        if inv.get("status") == "paid":
+            revenue["paid"] += inv.get("total", 0)
+        elif inv.get("status") in ["sent", "overdue"]:
+            revenue["unpaid"] += inv.get("total", 0)
+
+    for q in quotes:
+        if q.get("status") in ["draft", "sent", "accepted"]:
+            revenue["pending"] += q.get("total", 0)
+
     return {
+        "user": {
+            "uid": current_user["uid"],
+            "name": current_user.get("name"),
+            "email": current_user.get("email"),
+            "picture": current_user.get("picture"),
+            "hourly_rate": current_user.get("hourly_rate"),
+        },
         "upcoming_events": upcoming_events,
         "pending_todos": pending_todos,
         "recent_clients": recent_clients,
         "pending_quotes": pending_quotes,
         "unpaid_invoices": unpaid_invoices,
+        "revenue": revenue,
         "stats": {
-            "monthly_revenue": monthly_revenue,
             "total_clients": await db.clients.count_documents({"uid": current_user["uid"]}),
             "pending_todos_count": await db.todos.count_documents({"uid": current_user["uid"], "completed": False}),
-            "unpaid_invoices_count": len(unpaid_invoices)
-        }
+            "unpaid_invoices_count": len(unpaid_invoices),
+        },
     }
 
 # Planning endpoints
@@ -461,9 +470,9 @@ async def create_event(event_request: EventCreateRequest, user: Dict[str, Any] =
     return event
 
 @api_router.put("/planning/events/{event_id}")
-async def update_event(event_id: str, event_request: EventCreateRequest, current_user: User = Depends(get_current_user)):
+async def update_event(event_id: str, event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     await db.planning_events.update_one(
-        {"id": event_id, "uid": current_user.uid},
+        {"id": event_id, "uid": user["uid"]},
         {"$set": {**event_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
@@ -471,8 +480,8 @@ async def update_event(event_id: str, event_request: EventCreateRequest, current
     return updated_event
 
 @api_router.delete("/planning/events/{event_id}")
-async def delete_event(event_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.planning_events.delete_one({"id": event_id, "uid": current_user.uid})
+async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    result = await db.planning_events.delete_one({"id": event_id, "uid": user["uid"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Event not found")
     return {"message": "Event deleted"}
@@ -549,13 +558,13 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, curr
 # Tasks endpoints
 # Tasks endpoints
 @api_router.post("/planning/tasks")
-async def create_task(task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
+async def create_task(task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     now = datetime.now()
     year = now.year
     week = now.isocalendar()[1]
     
     task = WeeklyTask(
-        uid=current_user.uid,
+        uid=user["uid"],
         week=week,
         year=year,
         **task_request.dict()
@@ -565,9 +574,9 @@ async def create_task(task_request: TaskCreateRequest, current_user: User = Depe
     return task
 
 @api_router.put("/planning/tasks/{task_id}")
-async def update_task(task_id: str, task_request: TaskCreateRequest, current_user: User = Depends(get_current_user)):
+async def update_task(task_id: str, task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     await db.weekly_tasks.update_one(
-        {"id": task_id, "uid": current_user.uid},
+        {"id": task_id, "uid": user["uid"]},
         {"$set": {**task_request.dict(), "updated_at": datetime.utcnow()}}
     )
     
@@ -575,8 +584,8 @@ async def update_task(task_id: str, task_request: TaskCreateRequest, current_use
     return updated_task
 
 @api_router.delete("/planning/tasks/{task_id}")
-async def delete_task(task_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.weekly_tasks.delete_one({"id": task_id, "uid": current_user.uid})
+async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    result = await db.weekly_tasks.delete_one({"id": task_id, "uid": user["uid"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": "Task deleted"}
@@ -704,7 +713,7 @@ async def create_quote(quote_request: QuoteCreateRequest, user: Dict[str, Any] =
     return quote
 
 @api_router.put("/quotes/{quote_id}")
-async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, current_user: User = Depends(get_current_user)):
+async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     quote_data = quote_request.dict()
     quote_data["valid_until"] = datetime.fromisoformat(quote_data["valid_until"].replace("Z", "+00:00"))
     
@@ -721,7 +730,7 @@ async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, current
     })
     
     await db.quotes.update_one(
-        {"id": quote_id, "uid": current_user.uid},
+        {"id": quote_id, "uid": user["uid"]},
         {"$set": quote_data}
     )
     
@@ -729,8 +738,8 @@ async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, current
     return updated_quote
 
 @api_router.delete("/quotes/{quote_id}")
-async def delete_quote(quote_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.quotes.delete_one({"id": quote_id, "uid": current_user.uid})
+async def delete_quote(quote_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    result = await db.quotes.delete_one({"id": quote_id, "uid": user["uid"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Quote not found")
     return {"message": "Quote deleted"}
@@ -744,9 +753,9 @@ async def delete_quote(quote_id: str, current_user: User = Depends(get_current_u
     #return Response(content=pdf_bytes, media_type="application/pdf")
 
 @api_router.put("/quotes/{quote_id}/status")
-async def update_quote_status(quote_id: str, status: str, current_user: User = Depends(get_current_user)):
+async def update_quote_status(quote_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)):
     await db.quotes.update_one(
-        {"id": quote_id, "uid": current_user.uid},
+        {"id": quote_id, "uid": user["uid"]},
         {"$set": {"status": status, "updated_at": datetime.utcnow()}}
     )
     
@@ -789,7 +798,7 @@ async def create_invoice(invoice_request: InvoiceCreateRequest, user: Dict[str, 
     return invoice
 
 @api_router.put("/invoices/{invoice_id}")
-async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest, current_user: User = Depends(get_current_user)):
+async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
     invoice_data = invoice_request.dict()
     invoice_data["due_date"] = datetime.fromisoformat(invoice_data["due_date"].replace("Z", "+00:00"))
 
@@ -805,7 +814,7 @@ async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest,
     })
 
     await db.invoices.update_one(
-        {"id": invoice_id, "uid": current_user.uid},
+        {"id": invoice_id, "uid": user["uid"]},
         {"$set": invoice_data},
     )
 
@@ -821,20 +830,20 @@ async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest,
     #return Response(content=pdf_bytes, media_type="application/pdf")
 
 @api_router.delete("/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str, current_user: User = Depends(get_current_user)):
-    result = await db.invoices.delete_one({"id": invoice_id, "uid": current_user.uid})
+async def delete_invoice(invoice_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    result = await db.invoices.delete_one({"id": invoice_id, "uid": user["uid"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return {"message": "Invoice deleted"}
 
 @api_router.put("/invoices/{invoice_id}/status")
-async def update_invoice_status(invoice_id: str, status: str, current_user: User = Depends(get_current_user)):
+async def update_invoice_status(invoice_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)):
     update_data = {"status": status, "updated_at": datetime.utcnow()}
     if status == "paid":
         update_data["paid_date"] = datetime.utcnow()
     
     await db.invoices.update_one(
-        {"id": invoice_id, "uid": current_user.uid},
+        {"id": invoice_id, "uid": user["uid"]},
         {"$set": update_data}
     )
     
