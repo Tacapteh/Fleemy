@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
-import axios from 'axios';
+import api from '../utils/api';
 import Sidebar from './Sidebar';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 export default function Layout() {
   const [user, setUser] = useState(null);
@@ -15,7 +13,7 @@ export default function Layout() {
     async function check() {
       if (token) {
         try {
-          const response = await axios.get(`${API}/auth/me`, {
+          const response = await api.get('/auth/me', {
             headers: { Authorization: `Bearer ${token}` },
           });
           setUser(response.data);

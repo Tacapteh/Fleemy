@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
-import axios from "axios";
+import api from "./utils/api";
+import { showToast } from "./utils/toast";
 import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
 
 // Utility functions
 const formatDate = (date) => {
@@ -168,11 +166,11 @@ const Dashboard = ({ user, sessionToken }) => {
   const [loading, setLoading] = useState(true);
 
   const apiCall = async (url, options = {}) => {
-    return await axios({
-      url: `${API}${url}`,
+    return await api({
+      url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options.headers,
       },
       ...options,
@@ -1418,11 +1416,11 @@ const Planning = ({ user, sessionToken }) => {
 
   const apiCall = async (url, options = {}) => {
     try {
-      return await axios({
-        url: `${API}${url}`,
+      return await api({
+        url,
         headers: {
           Authorization: `Bearer ${sessionToken}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           ...options.headers,
         },
         ...options,
@@ -2036,6 +2034,9 @@ const Planning = ({ user, sessionToken }) => {
         end: eventData.end,
       };
 
+      console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
+      showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
+
       setEvents((prevEvents) => [...prevEvents, newEvent]);
       setEventModal({
         isOpen: false,
@@ -2050,6 +2051,10 @@ const Planning = ({ user, sessionToken }) => {
       }, 100);
     } catch (error) {
       console.error("Error creating event:", error);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true
+      );
       // If offline, save locally only
       if (!isOnline) {
         const eventToCreateLocal = {
@@ -2089,6 +2094,12 @@ const Planning = ({ user, sessionToken }) => {
         method: "PUT",
         data: updateData,
       });
+      console.log(
+        `Élément enregistré avec succès (ID: ${eventModal.event.id})`
+      );
+      showToast(
+        `Élément enregistré avec succès (ID: ${eventModal.event.id})`
+      );
 
       // Update local state immediately
       setEvents((prevEvents) =>
@@ -2113,6 +2124,10 @@ const Planning = ({ user, sessionToken }) => {
       });
     } catch (error) {
       console.error("Error updating event:", error);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true
+      );
     }
   };
 
@@ -2156,11 +2171,15 @@ const Planning = ({ user, sessionToken }) => {
         },
       });
 
+      console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
+      showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
+
       // Update local state immediately
       setTasks((prevTasks) => [...prevTasks, response.data]);
       setTaskModal({ isOpen: false, task: null });
     } catch (error) {
       console.error("Error creating task:", error);
+      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
     }
   };
 
@@ -2177,6 +2196,13 @@ const Planning = ({ user, sessionToken }) => {
         },
       });
 
+      console.log(
+        `Élément enregistré avec succès (ID: ${taskModal.task.id})`
+      );
+      showToast(
+        `Élément enregistré avec succès (ID: ${taskModal.task.id})`
+      );
+
       // Update local state immediately
       setTasks((prevTasks) =>
         prevTasks.map((task) =>
@@ -2187,6 +2213,7 @@ const Planning = ({ user, sessionToken }) => {
       setTaskModal({ isOpen: false, task: null });
     } catch (error) {
       console.error("Error updating task:", error);
+      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
     }
   };
 
@@ -2701,11 +2728,11 @@ const TodoList = ({ sessionToken }) => {
   });
 
   const apiCall = async (url, options = {}) => {
-    return await axios({
-      url: `${API}${url}`,
+    return await api({
+      url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options.headers,
       },
       ...options,
@@ -3086,11 +3113,11 @@ const Quotes = ({ user, sessionToken }) => {
   const [quoteTemplates, setQuoteTemplates] = useState([]);
 
   const apiCall = async (url, options = {}) => {
-    return await axios({
-      url: `${API}${url}`,
+    return await api({
+      url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options.headers,
       },
       ...options,
@@ -3129,6 +3156,12 @@ const Quotes = ({ user, sessionToken }) => {
           method: "PUT",
           data: quoteData,
         });
+        console.log(
+          `Élément enregistré avec succès (ID: ${editingQuote.id})`
+        );
+        showToast(
+          `Élément enregistré avec succès (ID: ${editingQuote.id})`
+        );
         setQuotes((prevQuotes) =>
           prevQuotes.map((q) =>
             q.id === editingQuote.id ? { ...q, ...quoteData } : q
@@ -3139,11 +3172,18 @@ const Quotes = ({ user, sessionToken }) => {
           method: "POST",
           data: quoteData,
         });
+        console.log(
+          `Élément enregistré avec succès (ID: ${response.data.id})`
+        );
+        showToast(
+          `Élément enregistré avec succès (ID: ${response.data.id})`
+        );
         setQuotes((prevQuotes) => [response.data, ...prevQuotes]);
       }
       setShowQuoteModal(false);
     } catch (error) {
       console.error("Error saving quote:", error);
+      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
     }
   };
 
@@ -3827,11 +3867,11 @@ const Invoices = ({ user, sessionToken }) => {
   const [editingInvoice, setEditingInvoice] = useState(null);
 
   const apiCall = async (url, options = {}) => {
-    return await axios({
-      url: `${API}${url}`,
+    return await api({
+      url,
       headers: {
         Authorization: `Bearer ${sessionToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options.headers,
       },
       ...options,
@@ -3873,6 +3913,12 @@ const Invoices = ({ user, sessionToken }) => {
           method: "PUT",
           data: invoiceData,
         });
+        console.log(
+          `Élément enregistré avec succès (ID: ${editingInvoice.id})`
+        );
+        showToast(
+          `Élément enregistré avec succès (ID: ${editingInvoice.id})`
+        );
         setInvoices((prevInvoices) =>
           prevInvoices.map((i) =>
             i.id === editingInvoice.id ? { ...i, ...invoiceData } : i
@@ -3883,11 +3929,18 @@ const Invoices = ({ user, sessionToken }) => {
           method: "POST",
           data: invoiceData,
         });
+        console.log(
+          `Élément enregistré avec succès (ID: ${response.data.id})`
+        );
+        showToast(
+          `Élément enregistré avec succès (ID: ${response.data.id})`
+        );
         setInvoices((prevInvoices) => [response.data, ...prevInvoices]);
       }
       setShowInvoiceModal(false);
     } catch (error) {
       console.error("Error saving invoice:", error);
+      showToast(`Erreur: ${error.response?.data?.detail || error.message}`, true);
     }
   };
 
@@ -4152,7 +4205,7 @@ function App() {
   const handleLogin = async (sessionId) => {
     try {
       setLoading(true);
-      const response = await axios.post(`${API}/auth/login`, {
+      const response = await api.post('/auth/login', {
         session_id: sessionId,
       });
       setUser(response.data.user);
@@ -4178,7 +4231,7 @@ function App() {
     const token = localStorage.getItem("fleemy_session_token");
     if (token) {
       try {
-        const response = await axios.get(`${API}/auth/me`, {
+        const response = await api.get('/auth/me', {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUser(response.data);
