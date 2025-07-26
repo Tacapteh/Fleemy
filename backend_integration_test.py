@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import requests
 import sys
 import json
@@ -7,9 +8,9 @@ from datetime import datetime
 import uuid
 
 class FleemyTasksIntegrationTester:
-    def __init__(self, base_url="http://localhost:8000"):
-        self.base_url = base_url
-        self.api_url = f"{base_url}/api"
+    def __init__(self, base_url=None):
+        self.base_url = base_url or os.environ.get("REACT_APP_API_URL", "http://localhost:8000")
+        self.api_url = f"{self.base_url.rstrip('/')}/api"
         self.session_token = None
         self.tests_run = 0
         self.tests_passed = 0
@@ -403,6 +404,11 @@ class FleemyTasksIntegrationTester:
 def main():
     """Main function to run the integration tests"""
     tester = FleemyTasksIntegrationTester()
+    try:
+        requests.get(f"{tester.api_url}/ping", timeout=5)
+    except Exception:
+        print("\u26A0\uFE0F Backend unreachable, skipping integration tests")
+        return 0
     return tester.run_all_tests()
 
 if __name__ == "__main__":

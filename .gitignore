@@ -84,3 +84,4 @@ frontend/.env
 
 
 serviceAccountKey.json
+backend/serviceAccountKey.json

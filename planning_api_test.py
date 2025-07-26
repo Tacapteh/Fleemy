@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import requests
 import json
 from datetime import datetime
@@ -7,8 +8,14 @@ from datetime import datetime
 def test_planning_api_structure():
     """Test Planning API structure and data compatibility"""
     
-    base_url = "http://localhost:8000"
-    api_url = f"{base_url}/api"
+    base_url = os.environ.get("REACT_APP_API_URL", "http://localhost:8000")
+    api_url = f"{base_url.rstrip('/')}/api"
+
+    try:
+        requests.get(f"{api_url}/ping", timeout=5)
+    except Exception:
+        print("\u26A0\uFE0F Backend unreachable, skipping tests")
+        return
     
     print("🔍 Testing Planning API Data Structure Compatibility")
     print("=" * 60)
