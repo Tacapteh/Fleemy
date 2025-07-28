@@ -2,41 +2,34 @@ import axios from "axios";
 import { auth } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 
-// Promise resolved once Firebase auth state is ready
-let firebaseReadyResolve;
-export const firebaseReady = new Promise((resolve) => {
-  firebaseReadyResolve = resolve;
-});
-
-// Wait for the first auth state change to resolve firebaseReady
-const unsubscribe = onAuthStateChanged(auth, () => {
-  firebaseReadyResolve();
-  unsubscribe();
-});
-
-// On utilise REACT_APP_API_URL si défini, sinon fallback en local
 const base = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 const api = axios.create({
   baseURL: `${base.replace(/\/$/, "")}/api`,
 });
 
-// Intercepteur pour AJOUTER le token avant chaque requête
-api.interceptors.request.use(async (config) => {
-  try {
-    // Attendre que Firebase ait définitivement chargé l'état d'authentification
-    await firebaseReady;
+// Promesse résolue une fois que Firebase a vérifié la session
+let firebaseReady = new Promise((resolve) => {
+  const unsub = onAuthStateChanged(auth, () => {
+    unsub();
+    resolve();
+  });
+});
 
-    if (auth.currentUser) {
-      const token = await auth.currentUser.getIdToken();
-      config.headers = {
-        ...config.headers,
-        Authorization: `Bearer ${token}`,
-      };
+api.interceptors.request.use(async (config) => {
+  // On attend la fin de l'initialisation Firebase
+  await firebaseReady;
+
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    try {
+      const token = await currentUser.getIdToken();
+      config.headers.Authorization = `Bearer ${token}`;
+    } catch (e) {
+      console.warn("Erreur lors de la récupération du token Firebase :", e);
     }
-  } catch (e) {
-    console.warn("Impossible de récupérer le token Firebase :", e);
   }
+  console.log("Token envoyé à l'API:", config.headers.Authorization);
 
   return config;
 });

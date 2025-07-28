@@ -13,32 +13,72 @@ import json
 import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 from firebase_admin import auth as firebase_auth
-from backend.firebase import db, InMemoryFirestore
+from firebase import db, InMemoryFirestore
+
 
 
 
 from google.cloud import firestore
 
 async def verify_token(request: Request):
+    # Lire l'en-tête Authorization
     auth_header = request.headers.get("Authorization")
+    print("Header Authorization reçu:", auth_header)
+
+    # Vérifier présence et format
     if not auth_header or not auth_header.startswith("Bearer "):
+        print("[DEBUG] Aucun ou mauvais token reçu")
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
+    # Récupérer le token
     token = auth_header.split("Bearer ")[1]
+    print(f"Token reçu par le backend: {token[:50]}...")  # n'affiche que le début pour éviter un log énorme
+
     try:
         decoded = firebase_auth.verify_id_token(token)
         request.state.user = decoded
+        print("Token validé pour UID:", decoded.get("uid"))
         return decoded
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except Exception as e:
+        import traceback
+        print("\n=== ERREUR VERIFICATION TOKEN ===")
+        print("Type :", type(e).__name__)
+        print("Message :", str(e))
+        print("Traceback :")
+        traceback.print_exc()
+        print("===============================\n")
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid token: {str(e)}"
+        )
+
+
+
+
+
+
 
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# Create the main app without a prefix
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from firebase_admin import auth as firebase_auth
+
 app = FastAPI()
+
+# Ajoute ce bloc CORS ici
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # autorise ton frontend
+    allow_credentials=True,
+    allow_methods=["*"],  # autorise toutes les méthodes
+    allow_headers=["*"],  # autorise tous les headers (dont Authorization)
+)
+
+
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")

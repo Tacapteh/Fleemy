@@ -15,6 +15,14 @@ cred_path = os.environ.get(
     str(Path(__file__).parent / "serviceAccountKey.json"),
 )
 
+import firebase_admin
+from firebase_admin import credentials
+
+cred = credentials.Certificate(cred_path)
+firebase_admin.initialize_app(cred)
+
+print(f"[DEBUG] Firebase Admin initialisé avec : {cred_path}")
+
 
 class InMemoryDocument(dict):
     def __init__(self, store, path):
