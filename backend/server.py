@@ -1,6 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Response, Request
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
 from pathlib import Path
@@ -64,8 +63,16 @@ load_dotenv()
 allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",")
 
 # Créer l'app
-app = FastAPI()
 
+# Configure CORS globally right after creating the FastAPI app
+allowed_origins = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+origin_list = [o.strip() for o in allowed_origins.split(",")]
+logger.info("CORS allowed origins: %s", origin_list)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origin_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 # Ajouter CORS pour toutes les routes
 app.add_middleware(
     CORSMiddleware,
