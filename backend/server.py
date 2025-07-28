@@ -11,11 +11,17 @@ from datetime import datetime
 import asyncio
 import json
 import calendar
+
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 from firebase_admin import auth as firebase_auth
 from firebase import db, InMemoryFirestore
 
-
+# Configure logging early so dependencies can use it
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 from google.cloud import firestore
@@ -26,12 +32,13 @@ async def verify_token(request: Request):
     auth_header = request.headers.get("Authorization")
     logger.info("Header Authorization reçu: %s", auth_header)
 
-    if not auth_header or not auth_header.lower().startswith("bearer "):
+    token = None
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+        logger.info("Token reçu par le backend: %s", token[:50])
+    else:
         logger.info("[DEBUG] Aucun ou mauvais token reçu")
         raise HTTPException(status_code=401, detail="Missing or invalid token")
-
-    token = auth_header.split(" ", 1)[1].strip()
-    logger.info("Token reçu par le backend: %s", token[:50])
 
     try:
         decoded = firebase_auth.verify_id_token(token)
@@ -39,22 +46,12 @@ async def verify_token(request: Request):
         logger.info("Token validé pour UID: %s", decoded.get("uid"))
         return decoded
     except Exception as e:
-        logger.error("Erreur de validation du token", exc_info=True)
-        raise HTTPException(
-            status_code=401,
-            detail=f"Invalid token: {str(e)}"
-        )
-
-
-
-
-
-
-
+        logger.error("Erreur de validation du token: %s", e, exc_info=True)
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,10 +68,21 @@ app.add_middleware(
     allow_headers=["*"],  # autorise tous les headers (dont Authorization)
 )
 
+# Global exception handler to always return JSON and keep CORS headers
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    logger.error("Unhandled error", exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
 
 # Models
 class User(BaseModel):
@@ -86,6 +94,7 @@ class User(BaseModel):
     hourly_rate: float = 50.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class Team(BaseModel):
     team_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
@@ -93,6 +102,7 @@ class Team(BaseModel):
     created_by: str
     invite_code: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 class PlanningEvent(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -110,6 +120,7 @@ class PlanningEvent(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class WeeklyTask(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     uid: str
@@ -123,6 +134,7 @@ class WeeklyTask(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class Todo(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     uid: str
@@ -133,6 +145,7 @@ class Todo(BaseModel):
     due_date: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -146,11 +159,13 @@ class Client(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 class QuoteItem(BaseModel):
     description: str
     quantity: float = 1.0
     unit_price: float = 0.0
     total: float = 0.0
+
 
 class Quote(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -168,6 +183,7 @@ class Quote(BaseModel):
     valid_until: datetime
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
 
 class Invoice(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -188,7 +204,9 @@ class Invoice(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+
 # Request models
+
 
 class EventCreateRequest(BaseModel):
     description: str
@@ -200,6 +218,7 @@ class EventCreateRequest(BaseModel):
     status: str = "pending"
     hourly_rate: Optional[float] = 50.0
 
+
 class TaskCreateRequest(BaseModel):
     name: str
     price: float
@@ -207,11 +226,13 @@ class TaskCreateRequest(BaseModel):
     icon: str
     time_slots: List[Dict[str, str]] = []
 
+
 class TodoCreateRequest(BaseModel):
     title: str
     description: Optional[str] = ""
     priority: str = "normal"
     due_date: Optional[str] = None
+
 
 class ClientCreateRequest(BaseModel):
     name: str
@@ -221,6 +242,7 @@ class ClientCreateRequest(BaseModel):
     company: Optional[str] = ""
     notes: Optional[str] = ""
 
+
 class QuoteCreateRequest(BaseModel):
     client_id: str
     client_name: str
@@ -228,6 +250,7 @@ class QuoteCreateRequest(BaseModel):
     items: List[QuoteItem]
     tax_rate: float = 20.0
     valid_until: str
+
 
 class InvoiceCreateRequest(BaseModel):
     quote_id: Optional[str] = None
@@ -238,11 +261,14 @@ class InvoiceCreateRequest(BaseModel):
     tax_rate: float = 20.0
     due_date: str
 
+
 class TeamCreateRequest(BaseModel):
     name: str
 
+
 class TeamJoinRequest(BaseModel):
     invite_code: str
+
 
 # Firestore helper utilities
 def user_doc(uid: str):
@@ -261,7 +287,9 @@ async def stream_docs(query):
     docs = await asyncio.to_thread(lambda: list(query.stream()))
     return [d.to_dict() for d in docs]
 
+
 # Authentication endpoints
+
 
 @api_router.get("/auth/me")
 async def get_me(user: Dict[str, Any] = Depends(verify_token)):
@@ -284,8 +312,9 @@ async def get_me(user: Dict[str, Any] = Depends(verify_token)):
         "email": db_user.get("email"),
         "picture": db_user.get("picture"),
         "hourly_rate": db_user.get("hourly_rate"),
-        "team_id": db_user.get("team_id")
+        "team_id": db_user.get("team_id"),
     }
+
 
 @api_router.put("/auth/me")
 async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_token)):
@@ -294,15 +323,22 @@ async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_to
     updated_user = await asyncio.to_thread(user_ref.get)
     return User(**updated_user.to_dict())
 
+
 # Dashboard endpoint used for testing basic connectivity
 @api_router.get("/dashboard")
 async def get_dashboard() -> Dict[str, str]:
     """Simple dashboard route returning a static response."""
     return {"status": "ok"}
 
+
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
-async def get_week_planning(year: int, week: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
+async def get_week_planning(
+    year: int,
+    week: int,
+    team_id: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     if team_id:
         team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
         team = team_snap.to_dict() if team_snap.exists else None
@@ -319,12 +355,26 @@ async def get_week_planning(year: int, week: int, team_id: Optional[str] = None,
 
     return {"events": events, "tasks": tasks}
 
+
+# Simple test endpoint to validate CORS on planning routes
+@api_router.get("/planning/week/{year}/{week}/test")
+async def test_week_planning(year: int, week: int):
+    return {"year": year, "week": week, "ok": True}
+
+
 @api_router.get("/planning/month/{year}/{month}")
-async def get_month_planning(year: int, month: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
+async def get_month_planning(
+    year: int,
+    month: int,
+    team_id: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     last_day = calendar.monthrange(year, month)[1]
     pairs = {
-        (datetime(year, month, day).isocalendar().year,
-         datetime(year, month, day).isocalendar().week)
+        (
+            datetime(year, month, day).isocalendar().year,
+            datetime(year, month, day).isocalendar().week,
+        )
         for day in range(1, last_day + 1)
     }
     or_filters = [{"year": y, "week": w} for y, w in pairs]
@@ -348,8 +398,13 @@ async def get_month_planning(year: int, month: int, team_id: Optional[str] = Non
 
     return {"events": events, "tasks": tasks}
 
+
 @api_router.get("/planning/events")
-async def list_events(year: Optional[int] = None, week: Optional[int] = None, user: Dict[str, Any] = Depends(verify_token)):
+async def list_events(
+    year: Optional[int] = None,
+    week: Optional[int] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     events_ref = user_col(user["uid"], "events")
     if year is not None:
         events_ref = events_ref.where("year", "==", year)
@@ -358,18 +413,16 @@ async def list_events(year: Optional[int] = None, week: Optional[int] = None, us
     events = await stream_docs(events_ref)
     return events
 
+
 @api_router.post("/planning/events")
-async def create_event(event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def create_event(
+    event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     now = datetime.now()
     year = now.year
     week = now.isocalendar()[1]
-    
-    event = PlanningEvent(
-        uid=user["uid"],
-        week=week,
-        year=year,
-        **event_request.dict()
-    )
+
+    event = PlanningEvent(uid=user["uid"], week=week, year=year, **event_request.dict())
     await asyncio.to_thread(user_col(user["uid"], "events").document(event.id).set, event.dict())
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
@@ -377,8 +430,11 @@ async def create_event(event_request: EventCreateRequest, user: Dict[str, Any] =
         await asyncio.to_thread(team_col(team_id, "events").document(event.id).set, event.dict())
     return event
 
+
 @api_router.put("/planning/events/{event_id}")
-async def update_event(event_id: str, event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def update_event(
+    event_id: str, event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     update_data = {**event_request.dict(), "updated_at": datetime.utcnow()}
     await asyncio.to_thread(user_col(user["uid"], "events").document(event_id).update, update_data)
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
@@ -387,6 +443,7 @@ async def update_event(event_id: str, event_request: EventCreateRequest, user: D
         await asyncio.to_thread(team_col(team_id, "events").document(event_id).update, update_data)
     updated = await asyncio.to_thread(user_col(user["uid"], "events").document(event_id).get)
     return updated.to_dict()
+
 
 @api_router.delete("/planning/events/{event_id}")
 async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -401,8 +458,14 @@ async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_toke
         await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
     return {"message": "Event deleted"}
 
+
 @api_router.get("/planning/earnings/{year}/{week}")
-async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user: Dict[str, Any] = Depends(verify_token)):
+async def get_earnings(
+    year: int,
+    week: int,
+    team_id: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     db_user = user_snap.to_dict() if user_snap.exists else None
     if not db_user:
@@ -421,15 +484,9 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user
 
     events = await stream_docs(events_ref.where("year", "==", year).where("week", "==", week))
     tasks = await stream_docs(tasks_ref.where("year", "==", year).where("week", "==", week))
-    
-    earnings = {
-        "paid": 0,
-        "unpaid": 0,
-        "pending": 0,
-        "not_worked": 0,
-        "total": 0
-    }
-    
+
+    earnings = {"paid": 0, "unpaid": 0, "pending": 0, "not_worked": 0, "total": 0}
+
     # Calculate earnings from events based on hours and rate
     for event in events:
         try:
@@ -437,7 +494,7 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user
             end_hour = int(event["end_time"].split(":")[0])
             hours = end_hour - start_hour
             amount = hours * event.get("hourly_rate", db_user.get("hourly_rate", 50.0))
-            
+
             if event["status"] == "paid":
                 earnings["paid"] += amount
             elif event["status"] == "unpaid":
@@ -455,7 +512,7 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user
                 earnings["unpaid"] += amount
             elif event["status"] == "pending":
                 earnings["pending"] += amount
-    
+
     # Add earnings from tasks - tasks are always considered as "paid"
     for task in tasks:
         for time_slot in task.get("time_slots", []):
@@ -468,14 +525,19 @@ async def get_earnings(year: int, week: int, team_id: Optional[str] = None, user
             except:
                 # Fallback: add base task price
                 earnings["paid"] += task.get("price", 0)
-    
+
     earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"]
-    
+
     return earnings
+
 
 # Tasks endpoints
 @api_router.get("/planning/tasks")
-async def list_tasks(year: Optional[int] = None, week: Optional[int] = None, user: Dict[str, Any] = Depends(verify_token)):
+async def list_tasks(
+    year: Optional[int] = None,
+    week: Optional[int] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     tasks_ref = user_col(user["uid"], "tasks")
     if year is not None:
         tasks_ref = tasks_ref.where("year", "==", year)
@@ -484,19 +546,17 @@ async def list_tasks(year: Optional[int] = None, week: Optional[int] = None, use
     tasks = await stream_docs(tasks_ref)
     return tasks
 
+
 # Tasks endpoints
 @api_router.post("/planning/tasks")
-async def create_task(task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def create_task(
+    task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     now = datetime.now()
     year = now.year
     week = now.isocalendar()[1]
-    
-    task = WeeklyTask(
-        uid=user["uid"],
-        week=week,
-        year=year,
-        **task_request.dict()
-    )
+
+    task = WeeklyTask(uid=user["uid"], week=week, year=year, **task_request.dict())
     await asyncio.to_thread(user_col(user["uid"], "tasks").document(task.id).set, task.dict())
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
@@ -504,8 +564,11 @@ async def create_task(task_request: TaskCreateRequest, user: Dict[str, Any] = De
         await asyncio.to_thread(team_col(team_id, "tasks").document(task.id).set, task.dict())
     return task
 
+
 @api_router.put("/planning/tasks/{task_id}")
-async def update_task(task_id: str, task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def update_task(
+    task_id: str, task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     update_data = {**task_request.dict(), "updated_at": datetime.utcnow()}
     await asyncio.to_thread(user_col(user["uid"], "tasks").document(task_id).update, update_data)
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
@@ -514,6 +577,7 @@ async def update_task(task_id: str, task_request: TaskCreateRequest, user: Dict[
         await asyncio.to_thread(team_col(team_id, "tasks").document(task_id).update, update_data)
     updated = await asyncio.to_thread(user_col(user["uid"], "tasks").document(task_id).get)
     return updated.to_dict()
+
 
 @api_router.delete("/planning/tasks/{task_id}")
 async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -528,6 +592,7 @@ async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)
         await asyncio.to_thread(team_col(team_id, "tasks").document(task_id).delete)
     return {"message": "Task deleted"}
 
+
 @api_router.get("/todos")
 async def get_todos(user: Dict[str, Any] = Depends(verify_token)):
     todos = await stream_docs(
@@ -535,30 +600,34 @@ async def get_todos(user: Dict[str, Any] = Depends(verify_token)):
     )
     return todos
 
+
 @api_router.post("/todos")
-async def create_todo(todo_request: TodoCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def create_todo(
+    todo_request: TodoCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     todo_data = todo_request.dict()
     if todo_data.get("due_date"):
         todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
-    
-    todo = Todo(
-        uid=user["uid"],
-        **todo_data
-    )
-    
+
+    todo = Todo(uid=user["uid"], **todo_data)
+
     await asyncio.to_thread(user_col(user["uid"], "todos").document(todo.id).set, todo.dict())
     return todo
 
+
 @api_router.put("/todos/{todo_id}")
-async def update_todo(todo_id: str, todo_request: TodoCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def update_todo(
+    todo_id: str, todo_request: TodoCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     todo_data = todo_request.dict()
     if todo_data.get("due_date"):
         todo_data["due_date"] = datetime.fromisoformat(todo_data["due_date"].replace("Z", "+00:00"))
-    
+
     update_data = {**todo_data, "updated_at": datetime.utcnow()}
     await asyncio.to_thread(user_col(user["uid"], "todos").document(todo_id).update, update_data)
     snap = await asyncio.to_thread(user_col(user["uid"], "todos").document(todo_id).get)
     return snap.to_dict()
+
 
 @api_router.put("/todos/{todo_id}/toggle")
 async def toggle_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -567,9 +636,13 @@ async def toggle_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)
     if not snap.exists:
         raise HTTPException(status_code=404, detail="Todo not found")
     data = snap.to_dict()
-    await asyncio.to_thread(doc_ref.update, {"completed": not data.get("completed", False), "updated_at": datetime.utcnow()})
+    await asyncio.to_thread(
+        doc_ref.update,
+        {"completed": not data.get("completed", False), "updated_at": datetime.utcnow()},
+    )
     updated = await asyncio.to_thread(doc_ref.get)
     return updated.to_dict()
+
 
 @api_router.delete("/todos/{todo_id}")
 async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -580,31 +653,36 @@ async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)
     await asyncio.to_thread(doc_ref.delete)
     return {"message": "Todo deleted"}
 
+
 # Clients endpoints
 @api_router.get("/clients")
 async def get_clients(user: Dict[str, Any] = Depends(verify_token)):
-    clients = await stream_docs(
-        user_col(user["uid"], "clients").order_by("name")
-    )
+    clients = await stream_docs(user_col(user["uid"], "clients").order_by("name"))
     return clients
 
+
 @api_router.post("/clients")
-async def create_client(client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
-    client = Client(
-        uid=user["uid"],
-        **client_request.dict()
-    )
-    
+async def create_client(
+    client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
+    client = Client(uid=user["uid"], **client_request.dict())
+
     await asyncio.to_thread(user_col(user["uid"], "clients").document(client.id).set, client.dict())
     return client
 
+
 @api_router.put("/clients/{client_id}")
-async def update_client(client_id: str, client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def update_client(
+    client_id: str,
+    client_request: ClientCreateRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     update_data = {**client_request.dict(), "updated_at": datetime.utcnow()}
     doc_ref = user_col(user["uid"], "clients").document(client_id)
     await asyncio.to_thread(doc_ref.update, update_data)
     updated = await asyncio.to_thread(doc_ref.get)
     return updated.to_dict()
+
 
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -615,6 +693,7 @@ async def delete_client(client_id: str, user: Dict[str, Any] = Depends(verify_to
     await asyncio.to_thread(doc_ref.delete)
     return {"message": "Client deleted"}
 
+
 # Quotes endpoints
 @api_router.get("/quotes")
 async def get_quotes(user: Dict[str, Any] = Depends(verify_token)):
@@ -623,32 +702,30 @@ async def get_quotes(user: Dict[str, Any] = Depends(verify_token)):
     )
     return quotes
 
+
 @api_router.post("/quotes")
-async def create_quote(quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def create_quote(
+    quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     # Generate quote number
     quote_count = len(await stream_docs(user_col(user["uid"], "quotes")))
     quote_number = f"DEV-{datetime.now().year}-{quote_count + 1:04d}"
-    
+
     quote_data = quote_request.dict()
     quote_data["quote_number"] = quote_number
-    quote_data["valid_until"] = datetime.fromisoformat(quote_data["valid_until"].replace("Z", "+00:00"))
-    
+    quote_data["valid_until"] = datetime.fromisoformat(
+        quote_data["valid_until"].replace("Z", "+00:00")
+    )
+
     # Calculate totals
     subtotal = sum(item["quantity"] * item["unit_price"] for item in quote_data["items"])
     tax_amount = subtotal * (quote_data["tax_rate"] / 100)
     total = subtotal + tax_amount
-    
-    quote_data.update({
-        "subtotal": subtotal,
-        "tax_amount": tax_amount,
-        "total": total
-    })
-    
-    quote = Quote(
-        uid=user["uid"],
-        **quote_data
-    )
-    
+
+    quote_data.update({"subtotal": subtotal, "tax_amount": tax_amount, "total": total})
+
+    quote = Quote(uid=user["uid"], **quote_data)
+
     await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote.id).set, quote.dict())
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
@@ -656,23 +733,30 @@ async def create_quote(quote_request: QuoteCreateRequest, user: Dict[str, Any] =
         await asyncio.to_thread(team_col(team_id, "quotes").document(quote.id).set, quote.dict())
     return quote
 
+
 @api_router.put("/quotes/{quote_id}")
-async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def update_quote(
+    quote_id: str, quote_request: QuoteCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     quote_data = quote_request.dict()
-    quote_data["valid_until"] = datetime.fromisoformat(quote_data["valid_until"].replace("Z", "+00:00"))
-    
+    quote_data["valid_until"] = datetime.fromisoformat(
+        quote_data["valid_until"].replace("Z", "+00:00")
+    )
+
     # Calculate totals
     subtotal = sum(item["quantity"] * item["unit_price"] for item in quote_data["items"])
     tax_amount = subtotal * (quote_data["tax_rate"] / 100)
     total = subtotal + tax_amount
-    
-    quote_data.update({
-        "subtotal": subtotal,
-        "tax_amount": tax_amount,
-        "total": total,
-        "updated_at": datetime.utcnow()
-    })
-    
+
+    quote_data.update(
+        {
+            "subtotal": subtotal,
+            "tax_amount": tax_amount,
+            "total": total,
+            "updated_at": datetime.utcnow(),
+        }
+    )
+
     await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).update, quote_data)
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
@@ -680,6 +764,7 @@ async def update_quote(quote_id: str, quote_request: QuoteCreateRequest, user: D
         await asyncio.to_thread(team_col(team_id, "quotes").document(quote_id).update, quote_data)
     updated = await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).get)
     return updated.to_dict()
+
 
 @api_router.delete("/quotes/{quote_id}")
 async def delete_quote(quote_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -694,16 +779,20 @@ async def delete_quote(quote_id: str, user: Dict[str, Any] = Depends(verify_toke
         await asyncio.to_thread(team_col(team_id, "quotes").document(quote_id).delete)
     return {"message": "Quote deleted"}
 
-#@api_router.get("/quotes/{quote_id}/pdf")
-#async def get_quote_pdf(quote_id: str, current_user: User = Depends(get_current_user)):
-    #quote = await db.quotes.find_one({"id": quote_id, "uid": current_user.uid}, {"_id": 0})
-    #if not quote:
-        #raise HTTPException(status_code=404, detail="Quote not found")
-    #pdf_bytes = await quote_pdf_bytes(quote)
-    #return Response(content=pdf_bytes, media_type="application/pdf")
+
+# @api_router.get("/quotes/{quote_id}/pdf")
+# async def get_quote_pdf(quote_id: str, current_user: User = Depends(get_current_user)):
+# quote = await db.quotes.find_one({"id": quote_id, "uid": current_user.uid}, {"_id": 0})
+# if not quote:
+# raise HTTPException(status_code=404, detail="Quote not found")
+# pdf_bytes = await quote_pdf_bytes(quote)
+# return Response(content=pdf_bytes, media_type="application/pdf")
+
 
 @api_router.put("/quotes/{quote_id}/status")
-async def update_quote_status(quote_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)):
+async def update_quote_status(
+    quote_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)
+):
     update_data = {"status": status, "updated_at": datetime.utcnow()}
     await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).update, update_data)
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
@@ -713,78 +802,98 @@ async def update_quote_status(quote_id: str, status: str, user: Dict[str, Any] =
     updated = await asyncio.to_thread(user_col(user["uid"], "quotes").document(quote_id).get)
     return updated.to_dict()
 
+
 # Invoices endpoints
 @api_router.get("/invoices")
 async def get_invoices(user: Dict[str, Any] = Depends(verify_token)):
     invoices = await stream_docs(
-        user_col(user["uid"], "invoices").order_by("created_at", direction=firestore.Query.DESCENDING)
+        user_col(user["uid"], "invoices").order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        )
     )
     return invoices
 
+
 @api_router.post("/invoices")
-async def create_invoice(invoice_request: InvoiceCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def create_invoice(
+    invoice_request: InvoiceCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
     # Generate invoice number
     invoice_count = len(await stream_docs(user_col(user["uid"], "invoices")))
     invoice_number = f"FACT-{datetime.now().year}-{invoice_count + 1:04d}"
-    
+
     invoice_data = invoice_request.dict()
     invoice_data["invoice_number"] = invoice_number
-    invoice_data["due_date"] = datetime.fromisoformat(invoice_data["due_date"].replace("Z", "+00:00"))
-    
+    invoice_data["due_date"] = datetime.fromisoformat(
+        invoice_data["due_date"].replace("Z", "+00:00")
+    )
+
     # Calculate totals
     subtotal = sum(item["quantity"] * item["unit_price"] for item in invoice_data["items"])
     tax_amount = subtotal * (invoice_data["tax_rate"] / 100)
     total = subtotal + tax_amount
-    
-    invoice_data.update({
-        "subtotal": subtotal,
-        "tax_amount": tax_amount,
-        "total": total
-    })
-    
-    invoice = Invoice(
-        uid=user["uid"],
-        **invoice_data
+
+    invoice_data.update({"subtotal": subtotal, "tax_amount": tax_amount, "total": total})
+
+    invoice = Invoice(uid=user["uid"], **invoice_data)
+
+    await asyncio.to_thread(
+        user_col(user["uid"], "invoices").document(invoice.id).set, invoice.dict()
     )
-    
-    await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice.id).set, invoice.dict())
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
     if team_id:
-        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice.id).set, invoice.dict())
+        await asyncio.to_thread(
+            team_col(team_id, "invoices").document(invoice.id).set, invoice.dict()
+        )
     return invoice
 
+
 @api_router.put("/invoices/{invoice_id}")
-async def update_invoice(invoice_id: str, invoice_request: InvoiceCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
+async def update_invoice(
+    invoice_id: str,
+    invoice_request: InvoiceCreateRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
     invoice_data = invoice_request.dict()
-    invoice_data["due_date"] = datetime.fromisoformat(invoice_data["due_date"].replace("Z", "+00:00"))
+    invoice_data["due_date"] = datetime.fromisoformat(
+        invoice_data["due_date"].replace("Z", "+00:00")
+    )
 
     subtotal = sum(item["quantity"] * item["unit_price"] for item in invoice_data["items"])
     tax_amount = subtotal * (invoice_data["tax_rate"] / 100)
     total = subtotal + tax_amount
 
-    invoice_data.update({
-        "subtotal": subtotal,
-        "tax_amount": tax_amount,
-        "total": total,
-        "updated_at": datetime.utcnow(),
-    })
+    invoice_data.update(
+        {
+            "subtotal": subtotal,
+            "tax_amount": tax_amount,
+            "total": total,
+            "updated_at": datetime.utcnow(),
+        }
+    )
 
-    await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).update, invoice_data)
+    await asyncio.to_thread(
+        user_col(user["uid"], "invoices").document(invoice_id).update, invoice_data
+    )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
     if team_id:
-        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice_id).update, invoice_data)
+        await asyncio.to_thread(
+            team_col(team_id, "invoices").document(invoice_id).update, invoice_data
+        )
     updated = await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).get)
     return updated.to_dict()
 
-#@api_router.get("/invoices/{invoice_id}/pdf")
-#async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
+
+# @api_router.get("/invoices/{invoice_id}/pdf")
+# async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
 #    invoice = await db.invoices.find_one({"id": invoice_id, "uid": current_user.uid}, {"_id": 0})
- #   if not invoice:
-  #      raise HTTPException(status_code=404, detail="Invoice not found")
-   # pdf_bytes = await invoice_pdf_bytes(invoice)
-    #return Response(content=pdf_bytes, media_type="application/pdf")
+#   if not invoice:
+#      raise HTTPException(status_code=404, detail="Invoice not found")
+# pdf_bytes = await invoice_pdf_bytes(invoice)
+# return Response(content=pdf_bytes, media_type="application/pdf")
+
 
 @api_router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user: Dict[str, Any] = Depends(verify_token)):
@@ -799,33 +908,40 @@ async def delete_invoice(invoice_id: str, user: Dict[str, Any] = Depends(verify_
         await asyncio.to_thread(team_col(team_id, "invoices").document(invoice_id).delete)
     return {"message": "Invoice deleted"}
 
+
 @api_router.put("/invoices/{invoice_id}/status")
-async def update_invoice_status(invoice_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)):
+async def update_invoice_status(
+    invoice_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)
+):
     update_data = {"status": status, "updated_at": datetime.utcnow()}
     if status == "paid":
         update_data["paid_date"] = datetime.utcnow()
-    
-    await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).update, update_data)
+
+    await asyncio.to_thread(
+        user_col(user["uid"], "invoices").document(invoice_id).update, update_data
+    )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
     if team_id:
-        await asyncio.to_thread(team_col(team_id, "invoices").document(invoice_id).update, update_data)
+        await asyncio.to_thread(
+            team_col(team_id, "invoices").document(invoice_id).update, update_data
+        )
     updated = await asyncio.to_thread(user_col(user["uid"], "invoices").document(invoice_id).get)
     return updated.to_dict()
 
+
 # Teams endpoints
 @api_router.post("/teams")
-async def create_team(team_request: TeamCreateRequest, user: Dict[str, Any] = Depends(verify_token)):
-    team = Team(
-        name=team_request.name,
-        members=[user["uid"]],
-        created_by=user["uid"]
-    )
+async def create_team(
+    team_request: TeamCreateRequest, user: Dict[str, Any] = Depends(verify_token)
+):
+    team = Team(name=team_request.name, members=[user["uid"]], created_by=user["uid"])
 
     await asyncio.to_thread(db.collection("teams").document(team.team_id).set, team.dict())
     await asyncio.to_thread(user_doc(user["uid"]).update, {"team_id": team.team_id})
-    
+
     return team
+
 
 @api_router.get("/teams/my")
 async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
@@ -838,7 +954,7 @@ async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
     team = team_snap.to_dict() if team_snap.exists else None
     if not team:
         return None
-    
+
     # Get team members info
     members = []
     for member_uid in team["members"]:
@@ -846,14 +962,15 @@ async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
         member = snap.to_dict() if snap.exists else None
         if member:
             members.append({"uid": member["uid"], "name": member["name"], "email": member["email"]})
-    
+
     return {
         "team_id": team["team_id"],
         "name": team["name"],
         "invite_code": team["invite_code"],
         "members": members,
-        "created_by": team["created_by"]
+        "created_by": team["created_by"],
     }
+
 
 # Health check route
 @api_router.get("/ping")
@@ -867,6 +984,7 @@ async def ping():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
 # Firestore test route
 @api_router.get("/test-firestore")
 async def test_firestore():
@@ -875,19 +993,12 @@ async def test_firestore():
     snap = await asyncio.to_thread(test_ref.get)
     return snap.to_dict()
 
+
 # Basic test route
 @api_router.get("/")
 async def root():
     return {"message": "Fleemy API is running!"}
 
+
 # Include the router in the main app
 app.include_router(api_router)
-
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
