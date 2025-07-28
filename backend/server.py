@@ -60,12 +60,14 @@ from firebase_admin import auth as firebase_auth
 app = FastAPI()
 
 # Ajoute ce bloc CORS ici
+# Allow CORS from configured origins (comma separated) or default to local React dev server
+allowed_origins = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # autorise ton frontend
+    allow_origins=[o.strip() for o in allowed_origins.split(",")],
     allow_credentials=True,
-    allow_methods=["*"],  # autorise toutes les méthodes
-    allow_headers=["*"],  # autorise tous les headers (dont Authorization)
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Global exception handler to always return JSON and keep CORS headers
