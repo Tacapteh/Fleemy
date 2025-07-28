@@ -1,6 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Header, Depends, Response, Request
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
 from pathlib import Path
@@ -59,13 +58,16 @@ from firebase_admin import auth as firebase_auth
 
 app = FastAPI()
 
-# Ajoute ce bloc CORS ici
+# Configure CORS globally right after creating the FastAPI app
+allowed_origins = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+origin_list = [o.strip() for o in allowed_origins.split(",")]
+logger.info("CORS allowed origins: %s", origin_list)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # autorise ton frontend
+    allow_origins=origin_list,
     allow_credentials=True,
-    allow_methods=["*"],  # autorise toutes les méthodes
-    allow_headers=["*"],  # autorise tous les headers (dont Authorization)
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 # Global exception handler to always return JSON and keep CORS headers
