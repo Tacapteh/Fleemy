@@ -20,33 +20,26 @@ from firebase import db, InMemoryFirestore
 
 from google.cloud import firestore
 
-async def verify_token(request: Request):
-    # Lire l'en-tête Authorization
-    auth_header = request.headers.get("Authorization")
-    print("Header Authorization reçu:", auth_header)
 
-    # Vérifier présence et format
-    if not auth_header or not auth_header.startswith("Bearer "):
-        print("[DEBUG] Aucun ou mauvais token reçu")
+async def verify_token(request: Request):
+    """Validate the Firebase token sent in the Authorization header."""
+    auth_header = request.headers.get("Authorization")
+    logger.info("Header Authorization reçu: %s", auth_header)
+
+    if not auth_header or not auth_header.lower().startswith("bearer "):
+        logger.info("[DEBUG] Aucun ou mauvais token reçu")
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
-    # Récupérer le token
-    token = auth_header.split("Bearer ")[1]
-    print(f"Token reçu par le backend: {token[:50]}...")  # n'affiche que le début pour éviter un log énorme
+    token = auth_header.split(" ", 1)[1].strip()
+    logger.info("Token reçu par le backend: %s", token[:50])
 
     try:
         decoded = firebase_auth.verify_id_token(token)
         request.state.user = decoded
-        print("Token validé pour UID:", decoded.get("uid"))
+        logger.info("Token validé pour UID: %s", decoded.get("uid"))
         return decoded
     except Exception as e:
-        import traceback
-        print("\n=== ERREUR VERIFICATION TOKEN ===")
-        print("Type :", type(e).__name__)
-        print("Message :", str(e))
-        print("Traceback :")
-        traceback.print_exc()
-        print("===============================\n")
+        logger.error("Erreur de validation du token", exc_info=True)
         raise HTTPException(
             status_code=401,
             detail=f"Invalid token: {str(e)}"
@@ -301,76 +294,11 @@ async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_to
     updated_user = await asyncio.to_thread(user_ref.get)
     return User(**updated_user.to_dict())
 
-# Dashboard endpoint
+# Dashboard endpoint used for testing basic connectivity
 @api_router.get("/dashboard")
-async def get_dashboard(user: Dict[str, Any] = Depends(verify_token)):
-    """Return dashboard data for the authenticated user."""
-    user_ref = user_doc(user["uid"])
-    snapshot = await asyncio.to_thread(user_ref.get)
-    current_user = snapshot.to_dict() if snapshot.exists else None
-    if not current_user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    now = datetime.utcnow()
-    current_week = now.isocalendar()[1]
-    current_year = now.year
-
-    events_ref = user_col(current_user["uid"], "events")\
-        .where("year", "==", current_year)\
-        .where("week", "in", [current_week, current_week + 1])\
-        .limit(5)
-    upcoming_events = await stream_docs(events_ref)
-
-    pending_todos = await stream_docs(
-        user_col(current_user["uid"], "todos").where("completed", "==", False).limit(5)
-    )
-
-    recent_clients = await stream_docs(
-        user_col(current_user["uid"], "clients").order_by("created_at", direction=firestore.Query.DESCENDING).limit(5)
-    )
-
-    pending_quotes = await stream_docs(
-        user_col(current_user["uid"], "quotes").where("status", "in", ["draft", "sent", "accepted"]).limit(5)
-    )
-
-    unpaid_invoices = await stream_docs(
-        user_col(current_user["uid"], "invoices").where("status", "in", ["sent", "overdue"]).limit(5)
-    )
-
-    invoices = await stream_docs(user_col(current_user["uid"], "invoices"))
-    quotes = await stream_docs(user_col(current_user["uid"], "quotes"))
-
-    revenue = {"paid": 0.0, "unpaid": 0.0, "pending": 0.0}
-    for inv in invoices:
-        if inv.get("status") == "paid":
-            revenue["paid"] += inv.get("total", 0)
-        elif inv.get("status") in ["sent", "overdue"]:
-            revenue["unpaid"] += inv.get("total", 0)
-
-    for q in quotes:
-        if q.get("status") in ["draft", "sent", "accepted"]:
-            revenue["pending"] += q.get("total", 0)
-
-    return {
-        "user": {
-            "uid": current_user["uid"],
-            "name": current_user.get("name"),
-            "email": current_user.get("email"),
-            "picture": current_user.get("picture"),
-            "hourly_rate": current_user.get("hourly_rate"),
-        },
-        "upcoming_events": upcoming_events,
-        "pending_todos": pending_todos,
-        "recent_clients": recent_clients,
-        "pending_quotes": pending_quotes,
-        "unpaid_invoices": unpaid_invoices,
-        "revenue": revenue,
-        "stats": {
-            "total_clients": len(await stream_docs(user_col(current_user["uid"], "clients"))),
-            "pending_todos_count": len(await stream_docs(user_col(current_user["uid"], "todos").where("completed", "==", False))),
-            "unpaid_invoices_count": len(unpaid_invoices),
-        },
-    }
+async def get_dashboard() -> Dict[str, str]:
+    """Simple dashboard route returning a static response."""
+    return {"status": "ok"}
 
 # Planning endpoints
 @api_router.get("/planning/week/{year}/{week}")
@@ -955,13 +883,6 @@ async def root():
 # Include the router in the main app
 app.include_router(api_router)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Configure logging
 logging.basicConfig(
