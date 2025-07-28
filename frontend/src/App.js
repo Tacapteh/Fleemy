@@ -33,10 +33,12 @@ function Layout({ user, onLogout }) {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setInitializing(false); // On sait que Firebase a fini d’initialiser
     });
     return () => unsub();
   }, []);
@@ -45,6 +47,10 @@ function App() {
     await signOut(auth);
     setUser(null);
   };
+
+  if (initializing) {
+    return <div>Chargement du compte...</div>;
+  }
 
   if (!user) {
     return <Login onLogin={setUser} />;

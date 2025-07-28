@@ -13,7 +13,10 @@ import json
 import calendar
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 from firebase_admin import auth as firebase_auth
-from firebase import db, InMemoryFirestore
+from backend.firebase import db, InMemoryFirestore
+
+
+
 from google.cloud import firestore
 
 async def verify_token(request: Request):
