@@ -15,6 +15,7 @@ cp backend/.env.example backend/.env
 The variable is:
 
 - `FIREBASE_CREDENTIALS` – path to your Firebase service account JSON file
+- `CORS_ALLOW_ORIGINS` – comma separated list of origins allowed to access the API (defaults to `http://localhost:3000`)
 
 2. Install dependencies:
 
