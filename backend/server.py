@@ -90,13 +90,18 @@ async def verify_token(request: Request):
 # Global exception handler to always return JSON and keep CORS headers
 from fastapi.responses import JSONResponse
 
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    if isinstance(exc, HTTPException):
+@app.middleware("http")
+async def error_handling_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    logger.error("Unhandled error", exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    except Exception as exc:
+        logger.error("Unhandled server error: %s", exc, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal Server Error", "details": str(exc)},
+        )
 
 
 # Create a router with the /api prefix
@@ -330,23 +335,18 @@ async def get_me(user: Dict[str, Any] = Depends(verify_token)):
             await asyncio.to_thread(user_ref.set, new_user.dict())
             db_user = new_user.dict()
         return {
-            "uid": db_user["uid"],
-            "name": db_user.get("name"),
-            "email": db_user.get("email"),
-            "picture": db_user.get("picture"),
-            "hourly_rate": db_user.get("hourly_rate"),
-            "team_id": db_user.get("team_id"),
+            "user": {
+                "uid": db_user["uid"],
+                "name": db_user.get("name"),
+                "email": db_user.get("email"),
+                "picture": db_user.get("picture"),
+                "hourly_rate": db_user.get("hourly_rate"),
+                "team_id": db_user.get("team_id"),
+            }
         }
     except Exception as e:
         logger.error("get_me error: %s", e, exc_info=True)
-        return {
-            "uid": user.get("uid"),
-            "name": user.get("name"),
-            "email": user.get("email"),
-            "picture": user.get("picture"),
-            "hourly_rate": 50.0,
-            "team_id": None,
-        }
+        return {"user": None}
 
 
 @api_router.put("/auth/me")
@@ -391,15 +391,19 @@ async def get_week_planning(
             events_ref = user_col(user["uid"], "events")
             tasks_ref = user_col(user["uid"], "tasks")
 
-        events = await stream_docs(
-            events_ref.where("year", "==", year).where("week", "==", week)
-        )
-        tasks = await stream_docs(
-            tasks_ref.where("year", "==", year).where("week", "==", week)
-        )
+        try:
+            events = await stream_docs(
+                events_ref.where("year", "==", year).where("week", "==", week)
+            )
+            tasks = await stream_docs(
+                tasks_ref.where("year", "==", year).where("week", "==", week)
+            )
+        except Exception as e:
+            logger.error("Erreur Firestore (planning): %s", e, exc_info=True)
+            events, tasks = [], []
 
         logger.info("Found %d events and %d tasks", len(events), len(tasks))
-        return {"events": events, "tasks": tasks}
+        return {"events": events or [], "tasks": tasks or []}
 
     except Exception as e:
         logger.error("get_week_planning error: %s", e, exc_info=True)
@@ -1095,14 +1099,14 @@ async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
         user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
         db_user = user_snap.to_dict() if user_snap.exists else None
         if not db_user or not db_user.get("team_id"):
-            return {}
+            return {"team": None}
 
         team_snap = await asyncio.to_thread(
             db.collection("teams").document(db_user["team_id"]).get
         )
         team = team_snap.to_dict() if team_snap.exists else None
         if not team:
-            return {}
+            return {"team": None}
 
         members = []
         for member_uid in team.get("members", []):
@@ -1120,15 +1124,17 @@ async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
                 )
 
         return {
-            "team_id": team["team_id"],
-            "name": team["name"],
-            "invite_code": team.get("invite_code"),
-            "members": members,
-            "created_by": team.get("created_by"),
+            "team": {
+                "team_id": team["team_id"],
+                "name": team["name"],
+                "invite_code": team.get("invite_code"),
+                "members": members,
+                "created_by": team.get("created_by"),
+            }
         }
     except Exception as e:
         logger.error("get_my_team error: %s", e, exc_info=True)
-        return {}
+        return {"team": None}
 
 
 # Translate endpoint (server-side proxy)
@@ -1182,17 +1188,6 @@ from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from fastapi.exception_handlers import RequestValidationError
 from fastapi.exceptions import RequestValidationError as FastAPIRequestValidationError
-
-
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception):
-    # Log l’erreur complète dans la console
-    logger.error("Erreur serveur inattendue", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"error": str(exc)},
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
 
 
 @app.exception_handler(FastAPIRequestValidationError)
