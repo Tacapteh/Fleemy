@@ -54,29 +54,17 @@ load_dotenv(ROOT_DIR / ".env")
 
 from fastapi.middleware.cors import CORSMiddleware
 import os
-from dotenv import load_dotenv
 
-# Charger les variables d'environnement
-load_dotenv()
+# Create the FastAPI app
+app = FastAPI()
 
-# Lire les origines autorisées (par défaut localhost:3000)
-allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",")
-
-# Créer l'app
-
-# Configure CORS globally right after creating the FastAPI app
-allowed_origins = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+# Configure CORS globally using origins from the environment
+allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 origin_list = [o.strip() for o in allowed_origins.split(",")]
 logger.info("CORS allowed origins: %s", origin_list)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origin_list,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-# Ajouter CORS pour toutes les routes
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
