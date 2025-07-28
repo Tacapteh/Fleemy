@@ -14,24 +14,6 @@ cred_path = os.environ.get(
     str(Path(__file__).parent / "serviceAccountKey.json"),
 )
 
-# Initialiser Firebase Admin si pas déjà fait
-if not firebase_admin._apps:
-    cred = credentials.Certificate(cred_path)
-    firebase_admin.initialize_app(cred)
-    logger.debug(f"[DEBUG] Firebase Admin initialisé avec : {cred_path}")
-
-# Initialiser Firestore correctement via Firebase Admin
-db = firestore.client()
-
-# Exemple de mock si Firestore n'est pas accessible (optionnel)
-class InMemoryFirestore:
-    def __init__(self):
-        self.store = {}
-
-    def collection(self, name):
-        return self.store.setdefault(name, {})
-
-
 
 class InMemoryDocument(dict):
     def __init__(self, store, path):
@@ -111,7 +93,7 @@ class InMemoryFirestore:
         return InMemoryCollection(self.store, [name])
 
 
-__all__ = ["db", "InMemoryFirestore"]
+__all__ = ["db", "InMemoryFirestore", "initialize_firestore"]
 
 
 def initialize_firestore():
@@ -139,4 +121,3 @@ def initialize_firestore():
 
 
 db = initialize_firestore()
-
