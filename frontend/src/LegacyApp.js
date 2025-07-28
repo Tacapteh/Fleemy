@@ -5,6 +5,32 @@ import { showToast } from "./utils/toast";
 import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: "20px", color: "red" }}>
+          Une erreur est survenue.
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Utility functions
 const formatDate = (date) => {
   return new Date(date).toLocaleDateString("fr-FR");
@@ -1396,6 +1422,7 @@ const Planning = ({ user }) => {
   const [showRateModal, setShowRateModal] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineStorage] = useState(new PlanningOfflineStorage());
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const currentYear = currentDate.getFullYear();
   const currentWeek = getWeekNumber(currentDate);
@@ -1436,8 +1463,22 @@ const Planning = ({ user }) => {
     }
   };
 
+  const apiCallWithRetry = async (url, options = {}, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await apiCall(url, options);
+      } catch (err) {
+        if (i === retries - 1) {
+          throw err;
+        }
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+    }
+  };
+
   const loadEvents = async (smooth = false) => {
     try {
+      setErrorMessage(null);
       if (smooth) {
         setTransitioning(true);
         // Small delay to show transition
@@ -1448,7 +1489,7 @@ const Planning = ({ user }) => {
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       if (view === "week") {
-        const response = await apiCall(
+        const response = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`
         );
         let eventsData = response.data.events || [];
@@ -1460,7 +1501,7 @@ const Planning = ({ user }) => {
         setEvents(eventsData);
         setTasks(tasksData);
       } else {
-        const response = await apiCall(
+        const response = await apiCallWithRetry(
           `/planning/month/${currentYear}/${currentMonth}${teamParam}`
         );
         let eventsData = response.data.events || [];
@@ -1479,6 +1520,7 @@ const Planning = ({ user }) => {
       }
     } catch (error) {
       console.error("Error loading events:", error);
+      setErrorMessage("Erreur lors du chargement du planning");
       if (!isOnline) {
         // Load from offline storage
         const offlineEvents = await offlineStorage.getEvents(
@@ -1979,19 +2021,21 @@ const Planning = ({ user }) => {
 
   const loadTeam = async () => {
     try {
-      const response = await apiCall("/teams/my");
+      const response = await apiCallWithRetry("/teams/my");
       setTeam(response.data);
     } catch (error) {
       console.error("Error loading team:", error);
+      setErrorMessage("Erreur lors du chargement de l'équipe");
     }
   };
 
   const loadUserRate = async () => {
     try {
-      const response = await apiCall("/auth/me");
+      const response = await apiCallWithRetry("/auth/me");
       setHourlyRate(response.data.hourly_rate || 50);
     } catch (error) {
       console.error("Error loading user rate:", error);
+      setErrorMessage("Erreur lors du chargement des informations utilisateur");
     }
   };
 
@@ -2292,8 +2336,9 @@ const Planning = ({ user }) => {
     const newYear = newDate.getFullYear();
 
     try {
+      setErrorMessage(null);
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      const response = await apiCall(
+      const response = await apiCallWithRetry(
         `/planning/week/${newYear}/${newWeek}${teamParam}`
       );
       let eventsData = response.data.events || [];
@@ -2311,6 +2356,7 @@ const Planning = ({ user }) => {
       }, 300);
     } catch (error) {
       console.error("Error loading week events:", error);
+      setErrorMessage("Erreur lors du chargement du planning");
       setTransitioning(false);
     }
   };
@@ -2330,8 +2376,9 @@ const Planning = ({ user }) => {
     const newYear = newDate.getFullYear();
 
     try {
+      setErrorMessage(null);
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      const response = await apiCall(
+      const response = await apiCallWithRetry(
         `/planning/month/${newYear}/${newMonth}${teamParam}`
       );
       let eventsData = response.data.events || [];
@@ -2349,6 +2396,7 @@ const Planning = ({ user }) => {
       }, 300);
     } catch (error) {
       console.error("Error loading month events:", error);
+      setErrorMessage("Erreur lors du chargement du planning");
       setTransitioning(false);
     }
   };
@@ -2575,6 +2623,13 @@ const Planning = ({ user }) => {
           currentYear={currentYear}
           hourlyRate={hourlyRate}
         />
+      )}
+
+      {errorMessage && (
+        <div className="text-red-500 text-center">{errorMessage}</div>
+      )}
+      {events?.length === 0 && tasks?.length === 0 && !errorMessage && (
+        <p className="text-center text-gray-500">Aucune donnée disponible</p>
       )}
 
       {/* Planning Table */}
@@ -4354,7 +4409,13 @@ function App() {
   );
 }
 
-export default App;
+const AppWithBoundary = () => (
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
+
+export default AppWithBoundary;
 export {
   Dashboard,
   Planning,
