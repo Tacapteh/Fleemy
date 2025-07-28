@@ -13,7 +13,7 @@ import calendar
 
 # from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
 from firebase_admin import auth as firebase_auth
-from firebase import db, InMemoryFirestore
+from backend.firebase import db, InMemoryFirestore
 
 # Configure logging early so dependencies can use it
 logging.basicConfig(
