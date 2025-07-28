@@ -36,9 +36,13 @@ function App() {
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
+    let first = true;
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setInitializing(false); // On sait que Firebase a fini d’initialiser
+      if (first) {
+        setInitializing(false); // Firebase a fini d’initialiser
+        first = false;
+      }
     });
     return () => unsub();
   }, []);
