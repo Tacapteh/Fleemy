@@ -1508,10 +1508,12 @@ const Planning = ({ user }) => {
     hourlyRate,
   }) => {
     const calculateRevenue = () => {
-      const weekEvents = events.filter(
+      const safeEvents = Array.isArray(events) ? events : [];
+      const safeTasks = Array.isArray(tasks) ? tasks : [];
+      const weekEvents = safeEvents.filter(
         (e) => e.week === currentWeek && e.year === currentYear
       );
-      const weekTasks = tasks.filter(
+      const weekTasks = safeTasks.filter(
         (t) => t.week === currentWeek && t.year === currentYear
       );
       const revenue = { paid: 0, unpaid: 0, pending: 0 };
@@ -1793,7 +1795,8 @@ const Planning = ({ user }) => {
     transitioning,
   }) => {
     const getEventsForTimeSlot = (day, time) => {
-      return events.filter(
+      const safeEvents = Array.isArray(events) ? events : [];
+      return safeEvents.filter(
         (event) =>
           event.day === day &&
           (event.start_time || event.start) === time &&
@@ -1812,7 +1815,8 @@ const Planning = ({ user }) => {
         "saturday",
         "sunday",
       ][day];
-      return tasks.filter(
+      const safeTasks = Array.isArray(tasks) ? tasks : [];
+      return safeTasks.filter(
         (task) =>
           task.week === currentWeek &&
           task.year === currentYear &&
@@ -2242,7 +2246,8 @@ const Planning = ({ user }) => {
     ) {
       try {
         // Delete all events for current week
-        const weekEvents = events.filter(
+        const safeEvents = Array.isArray(events) ? events : [];
+        const weekEvents = safeEvents.filter(
           (e) => e.week === currentWeek && e.year === currentYear
         );
         await Promise.all(
@@ -2365,7 +2370,8 @@ const Planning = ({ user }) => {
 
     if (adjustedDay >= 5) return []; // Weekend
 
-    return events.filter((event) => {
+    const safeEvents = Array.isArray(events) ? events : [];
+    return safeEvents.filter((event) => {
       const eventDate = new Date(currentYear, 0, 1);
       eventDate.setDate(eventDate.getDate() + (event.week - 1) * 7 + event.day);
       return eventDate.toDateString() === date.toDateString();
