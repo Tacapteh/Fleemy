@@ -53,22 +53,28 @@ async def verify_token(request: Request):
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from firebase_admin import auth as firebase_auth
+import os
+from dotenv import load_dotenv
 
+# Charger les variables d'environnement
+load_dotenv()
+
+# Lire les origines autorisées (par défaut localhost:3000)
+allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000").split(",")
+
+# Créer l'app
 app = FastAPI()
 
-# Ajoute ce bloc CORS ici
-# Allow CORS from configured origins (comma separated) or default to local React dev server
-allowed_origins = os.environ.get("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+# Ajouter CORS pour toutes les routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in allowed_origins.split(",")],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Global exception handler to always return JSON and keep CORS headers
 from fastapi.responses import JSONResponse
