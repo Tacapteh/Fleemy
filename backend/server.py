@@ -11,19 +11,43 @@ import asyncio
 import json
 import calendar
 
-# from pdf_utils import quote_pdf_bytes, invoice_pdf_bytes
+# Firebase Admin
 from firebase_admin import auth as firebase_auth
-from backend.firebase import db, InMemoryFirestore
+from .firebase import db, InMemoryFirestore
 
-# Configure logging early so dependencies can use it
+# Charger les variables d'environnement AVANT toute config
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")
+
+# Créer l'application FastAPI
+app = FastAPI()
+
+# Configurer le logger
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
+# Configurer CORS (après app et après dotenv)
+from fastapi.middleware.cors import CORSMiddleware
 
+allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+origin_list = [o.strip() for o in allowed_origins.split(",")]
+
+logger.info("CORS activé pour : %s", origin_list)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origin_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Google Firestore
 from google.cloud import firestore
+
 
 
 async def verify_token(request: Request):
@@ -48,27 +72,6 @@ async def verify_token(request: Request):
         logger.error("Erreur de validation du token: %s", e, exc_info=True)
         raise HTTPException(status_code=401, detail="Invalid token")
 
-
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / ".env")
-
-from fastapi.middleware.cors import CORSMiddleware
-import os
-
-# Create the FastAPI app
-app = FastAPI()
-
-# Configure CORS globally using origins from the environment
-allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
-origin_list = [o.strip() for o in allowed_origins.split(",")]
-logger.info("CORS allowed origins: %s", origin_list)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origin_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # Global exception handler to always return JSON and keep CORS headers
@@ -342,21 +345,36 @@ async def get_week_planning(
     team_id: Optional[str] = None,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    if team_id:
-        team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
-        team = team_snap.to_dict() if team_snap.exists else None
-        if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
-            raise HTTPException(status_code=403, detail="Not authorized for this team")
-        events_ref = team_col(team_id, "events")
-        tasks_ref = team_col(team_id, "tasks")
-    else:
-        events_ref = user_col(user["uid"], "events")
-        tasks_ref = user_col(user["uid"], "tasks")
+    import traceback
+    print(f"--- Appel reçu pour week {week}/{year}, team_id={team_id} ---")
 
-    events = await stream_docs(events_ref.where("year", "==", year).where("week", "==", week))
-    tasks = await stream_docs(tasks_ref.where("year", "==", year).where("week", "==", week))
+    try:
+        if team_id:
+            team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
+            team = team_snap.to_dict() if team_snap.exists else None
+            if not team or user["uid"] not in (team.get("members", []) + [team.get("created_by")]):
+                raise HTTPException(status_code=403, detail="Not authorized for this team")
+            events_ref = team_col(team_id, "events")
+            tasks_ref = team_col(team_id, "tasks")
+        else:
+            events_ref = user_col(user["uid"], "events")
+            tasks_ref = user_col(user["uid"], "tasks")
 
-    return {"events": events, "tasks": tasks}
+        events = await stream_docs(events_ref.where("year", "==", year).where("week", "==", week))
+        tasks = await stream_docs(tasks_ref.where("year", "==", year).where("week", "==", week))
+
+        print(f"--- {len(events)} events et {len(tasks)} tasks trouvés ---")
+        return {"events": events, "tasks": tasks}
+
+    except Exception as e:
+        print("\n=== ERREUR get_week_planning ===")
+        print("Type :", type(e).__name__)
+        print("Message :", str(e))
+        print("Traceback :")
+        traceback.print_exc()
+        print("==============================\n")
+        raise HTTPException(status_code=500, detail=f"Erreur serveur : {str(e)}")
+
 
 
 # Simple test endpoint to validate CORS on planning routes
@@ -1005,3 +1023,27 @@ async def root():
 
 # Include the router in the main app
 app.include_router(api_router)
+
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
+from fastapi.exception_handlers import RequestValidationError
+from fastapi.exceptions import RequestValidationError as FastAPIRequestValidationError
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Log l’erreur complète dans la console
+    logger.error("Erreur serveur inattendue", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"error": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+@app.exception_handler(FastAPIRequestValidationError)
+async def validation_exception_handler(request: Request, exc: FastAPIRequestValidationError):
+    logger.error("Erreur de validation : %s", exc.errors())
+    return JSONResponse(
+        status_code=422,
+        content={"errors": exc.errors()},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )

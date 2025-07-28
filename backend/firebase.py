@@ -1,27 +1,36 @@
 import os
 import json
+
 import logging
 from pathlib import Path
-
 import firebase_admin
-from firebase_admin import credentials
-from google.cloud import firestore
-
+from firebase_admin import credentials, firestore
 
 logger = logging.getLogger(__name__)
 
+# Définir le chemin vers le fichier de clé de service
 cred_path = os.environ.get(
     "FIREBASE_CREDENTIALS",
     str(Path(__file__).parent / "serviceAccountKey.json"),
 )
 
-import firebase_admin
-from firebase_admin import credentials
+# Initialiser Firebase Admin si pas déjà fait
+if not firebase_admin._apps:
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
+    logger.debug(f"[DEBUG] Firebase Admin initialisé avec : {cred_path}")
 
-cred = credentials.Certificate(cred_path)
-firebase_admin.initialize_app(cred)
+# Initialiser Firestore correctement via Firebase Admin
+db = firestore.client()
 
-print(f"[DEBUG] Firebase Admin initialisé avec : {cred_path}")
+# Exemple de mock si Firestore n'est pas accessible (optionnel)
+class InMemoryFirestore:
+    def __init__(self):
+        self.store = {}
+
+    def collection(self, name):
+        return self.store.setdefault(name, {})
+
 
 
 class InMemoryDocument(dict):
