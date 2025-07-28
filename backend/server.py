@@ -89,19 +89,29 @@ async def verify_token(request: Request):
 
 # Global exception handler to always return JSON and keep CORS headers
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 
 @app.middleware("http")
 async def error_handling_middleware(request: Request, call_next):
     try:
-        return await call_next(request)
+        response = await call_next(request)
+        return response
+    except RequestValidationError as exc:
+        logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
+        return JSONResponse(status_code=400, content={"error": str(exc)})
     except HTTPException as exc:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-    except Exception as exc:
-        logger.error("Unhandled server error: %s", exc, exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"error": "Internal Server Error", "details": str(exc)},
+        status = 403 if exc.status_code == 403 else 400
+        logger.error(
+            "HTTPException on %s [%s]: %s",
+            request.url.path,
+            exc.status_code,
+            exc.detail,
+            exc_info=True,
         )
+        return JSONResponse(status_code=status, content={"error": exc.detail})
+    except Exception as exc:
+        logger.error("Unhandled server error on %s: %s", request.url.path, exc, exc_info=True)
+        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
 
 
 # Create a router with the /api prefix
