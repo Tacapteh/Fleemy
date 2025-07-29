@@ -510,20 +510,44 @@ async def list_events(
 ):
     if year is not None and week is not None:
         events_ref = db.collection("events").document(str(year)).collection(str(week))
-        events = await stream_docs(events_ref)
-        events = events if isinstance(events, list) else []
-        logger.info("Returning %d events for %s/%s", len(events), week, year)
-        return {"success": True, "events": events}
+        events_raw = await stream_docs(events_ref)
+        events_raw = events_raw if isinstance(events_raw, list) else []
+        formatted = [
+            {
+                **ev,
+                "id": ev.get("id"),
+                "title": ev.get("description", ""),
+                "color": ev.get("color", ""),
+                "startTime": ev.get("start_time"),
+                "endTime": ev.get("end_time"),
+                "status": ev.get("status"),
+            }
+            for ev in events_raw
+        ]
+        logger.info("Returning %d events for %s/%s", len(formatted), week, year)
+        return {"success": True, "events": formatted}
     events_ref = user_col(user["uid"], "events")
     if year is not None:
         events_ref = events_ref.where("year", "==", year)
     if week is not None:
         events_ref = events_ref.where("week", "==", week)
-    events = await stream_docs(events_ref)
-    events = events if isinstance(events, list) else []
-    logger.info("Returning %d events for user %s", len(events), user["uid"])
-    logger.debug("Events payload: %s", events)
-    return {"success": True, "events": events}
+    events_raw = await stream_docs(events_ref)
+    events_raw = events_raw if isinstance(events_raw, list) else []
+    formatted = [
+        {
+            **ev,
+            "id": ev.get("id"),
+            "title": ev.get("description", ""),
+            "color": ev.get("color", ""),
+            "startTime": ev.get("start_time"),
+            "endTime": ev.get("end_time"),
+            "status": ev.get("status"),
+        }
+        for ev in events_raw
+    ]
+    logger.info("Returning %d events for user %s", len(formatted), user["uid"])
+    logger.debug("Events payload: %s", formatted)
+    return {"success": True, "events": formatted}
 
 
 @api_router.get("/planning/events/{owner_id}/{year}/{week}")
@@ -539,17 +563,30 @@ async def list_events_by_owner(owner_id: str, year: int, week: int):
             .collection(str(week))
             .where("owner_id", "==", owner_id)
         )
-        events = await stream_docs(events_ref)
-        events = events if isinstance(events, list) else []
+        events_raw = await stream_docs(events_ref)
+        events_raw = events_raw if isinstance(events_raw, list) else []
+        formatted = []
+        for ev in events_raw:
+            formatted.append(
+                {
+                    **ev,
+                    "id": ev.get("id"),
+                    "title": ev.get("description", ""),
+                    "color": ev.get("color", ""),
+                    "startTime": ev.get("start_time"),
+                    "endTime": ev.get("end_time"),
+                    "status": ev.get("status"),
+                }
+            )
         logger.info(
             "Returning %d events for owner %s week %s/%s",
-            len(events),
+            len(formatted),
             owner_id,
             week,
             year,
         )
-        logger.debug("Events payload: %s", events)
-        return {"success": True, "events": events}
+        logger.debug("Events payload: %s", formatted)
+        return {"success": True, "events": formatted}
     except Exception as e:
         logger.error("list_events_by_owner error: %s", e, exc_info=True)
         return {"success": False, "events": [], "error": str(e)}
