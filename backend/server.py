@@ -511,6 +511,8 @@ async def list_events(
     if year is not None and week is not None:
         events_ref = db.collection("events").document(str(year)).collection(str(week))
         events = await stream_docs(events_ref)
+        events = events if isinstance(events, list) else []
+        logger.info("Returning %d events for %s/%s", len(events), week, year)
         return {"success": True, "events": events}
     events_ref = user_col(user["uid"], "events")
     if year is not None:
@@ -518,6 +520,8 @@ async def list_events(
     if week is not None:
         events_ref = events_ref.where("week", "==", week)
     events = await stream_docs(events_ref)
+    events = events if isinstance(events, list) else []
+    logger.info("Returning %d events for user %s", len(events), user["uid"])
     return {"success": True, "events": events}
 
 
@@ -535,6 +539,14 @@ async def list_events_by_owner(owner_id: str, year: int, week: int):
             .where("owner_id", "==", owner_id)
         )
         events = await stream_docs(events_ref)
+        events = events if isinstance(events, list) else []
+        logger.info(
+            "Returning %d events for owner %s week %s/%s",
+            len(events),
+            owner_id,
+            week,
+            year,
+        )
         return {"success": True, "events": events}
     except Exception as e:
         logger.error("list_events_by_owner error: %s", e, exc_info=True)
