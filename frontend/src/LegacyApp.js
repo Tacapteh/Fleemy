@@ -1683,11 +1683,22 @@ const Planning = ({ user }) => {
           Array.isArray(eventsResponse.data.events)
         ) {
           eventsData = eventsResponse.data.events.map(parseEvent);
-        } else if (
-          eventsResponse.data &&
-          eventsResponse.data.success === false
-        ) {
-          setErrorMessage(eventsResponse.data.error || "Erreur serveur");
+        } else {
+          console.error(
+            "Event load failed:",
+            eventsResponse.data?.error || eventsResponse.status
+          );
+          showToast(
+            eventsResponse.data?.error || "Erreur lors du chargement des événements",
+            true
+          );
+          // Fallback to IndexedDB
+          const offlineEvents = await offlineStorage.getEvents(
+            ownerId,
+            currentYear,
+            currentWeek
+          );
+          eventsData = offlineEvents.map(parseEvent);
         }
 
         const tasksResponse = await apiCallWithRetry(
@@ -1702,8 +1713,21 @@ const Planning = ({ user }) => {
           if (viewingMember) {
             tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
           }
-        } else if (tasksResponse.data && tasksResponse.data.success === false) {
-          setErrorMessage(tasksResponse.data.error || "Erreur serveur");
+        } else {
+          console.error(
+            "Task load failed:",
+            tasksResponse.data?.error || tasksResponse.status
+          );
+          showToast(
+            tasksResponse.data?.error || "Erreur lors du chargement des tâches",
+            true
+          );
+          const offlineTasks = await offlineStorage.getTasks(
+            ownerId,
+            currentYear,
+            currentWeek
+          );
+          tasksData = offlineTasks;
         }
 
         if (viewingMember) {
@@ -1723,7 +1747,11 @@ const Planning = ({ user }) => {
           `/planning/month/${currentYear}/${currentMonth}${teamParam}`,
         );
         if (response.data && response.data.success === false) {
-          setErrorMessage(response.data.error || "Erreur serveur");
+          console.error("Month load failed:", response.data.error);
+          showToast(
+            response.data.error || "Erreur lors du chargement du planning",
+            true
+          );
           setEvents([]);
           setTasks([]);
         } else {
@@ -2327,7 +2355,23 @@ const Planning = ({ user }) => {
       });
 
       if (response.data && response.data.success === false) {
-        // Error already shown in apiCall
+        showToast(response.data.error || "Erreur serveur", true);
+        const localEvent = {
+          ...eventData,
+          uid: user.uid,
+          week: currentWeek,
+          year: currentYear,
+          id: Date.now().toString(),
+          created_at: new Date().toISOString(),
+        };
+        await offlineStorage.saveEvent(localEvent);
+        setEvents((prev) => [...prev, localEvent]);
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
+        });
         return;
       }
 
@@ -2408,6 +2452,20 @@ const Planning = ({ user }) => {
         },
       );
       if (response.data && response.data.success === false) {
+        showToast(response.data.error || "Erreur serveur", true);
+        const offlineUpdate = {
+          ...eventModal.event,
+          ...updateData,
+        };
+        await offlineStorage.saveEvent(offlineUpdate);
+        setEvents((prevEvents) =>
+          prevEvents.map((evt) =>
+            evt.id === eventModal.event.id
+              ? { ...evt, ...updateData, day: eventData.day, start: eventData.start, end: eventData.end }
+              : evt
+          )
+        );
+        setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
         return;
       }
       const updatedEvent = response.data.event;
@@ -2445,6 +2503,22 @@ const Planning = ({ user }) => {
         `Erreur: ${error.response?.data?.detail || error.message}`,
         true,
       );
+      if (!isOnline) {
+        const offlineUpdate = {
+          ...eventModal.event,
+          ...updateData,
+          day: eventData.day,
+          start: eventData.start,
+          end: eventData.end,
+        };
+        await offlineStorage.saveEvent(offlineUpdate);
+        setEvents((prevEvents) =>
+          prevEvents.map((evt) =>
+            evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt
+          )
+        );
+        setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+      }
     }
   };
 
@@ -2454,6 +2528,17 @@ const Planning = ({ user }) => {
         method: "DELETE",
       });
       if (response.data && response.data.success === false) {
+        showToast(response.data.error || "Erreur serveur", true);
+        await offlineStorage.deleteEvent(eventId);
+        setEvents((prevEvents) =>
+          prevEvents.filter((event) => event.id !== eventId)
+        );
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
+        });
         return;
       }
 
@@ -2471,6 +2556,18 @@ const Planning = ({ user }) => {
       });
     } catch (error) {
       console.error("Error deleting event:", error);
+      if (!isOnline) {
+        await offlineStorage.deleteEvent(eventId);
+        setEvents((prevEvents) =>
+          prevEvents.filter((event) => event.id !== eventId)
+        );
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
+        });
+      }
     }
   };
 
