@@ -437,8 +437,13 @@ async def get_week_planning(
             logger.error("Erreur Firestore (planning): %s", e, exc_info=True)
             events, tasks = [], []
 
+        if not isinstance(events, list):
+            events = []
+        if not isinstance(tasks, list):
+            tasks = []
+
         logger.info("Found %d events and %d tasks", len(events), len(tasks))
-        return {"success": True, "events": events or [], "tasks": tasks or []}
+        return {"success": True, "events": events, "tasks": tasks}
 
     except Exception as e:
         logger.error("get_week_planning error: %s", e, exc_info=True)

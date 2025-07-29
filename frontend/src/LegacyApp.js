@@ -1474,6 +1474,30 @@ const Planning = ({ user }) => {
   const [offlineStorage] = useState(new PlanningOfflineStorage());
   const [errorMessage, setErrorMessage] = useState(null);
 
+  const backendDayNames = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
+
+  const parseEvent = (evt) => {
+    let dayIndex = evt.day;
+    if (typeof dayIndex === "string") {
+      dayIndex = backendDayNames.indexOf(dayIndex.toLowerCase());
+    }
+    return {
+      ...evt,
+      day: dayIndex,
+      start: evt.start_time || evt.start,
+      end: evt.end_time || evt.end,
+      type: evt.status || evt.type,
+    };
+  };
+
   const currentYear = currentDate.getFullYear();
   const currentWeek = getWeekNumber(currentDate);
   const currentMonth = currentDate.getMonth();
@@ -1551,8 +1575,12 @@ const Planning = ({ user }) => {
           setEvents([]);
           setTasks([]);
         } else {
-          let eventsData = response.data.events || [];
-          let tasksData = response.data.tasks || [];
+          let eventsData = Array.isArray(response.data.events)
+            ? response.data.events.map(parseEvent)
+            : [];
+          let tasksData = Array.isArray(response.data.tasks)
+            ? response.data.tasks
+            : [];
           if (viewingMember) {
             eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
             tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
@@ -1569,8 +1597,12 @@ const Planning = ({ user }) => {
           setEvents([]);
           setTasks([]);
         } else {
-          let eventsData = response.data.events || [];
-          let tasksData = response.data.tasks || [];
+          let eventsData = Array.isArray(response.data.events)
+            ? response.data.events.map(parseEvent)
+            : [];
+          let tasksData = Array.isArray(response.data.tasks)
+            ? response.data.tasks
+            : [];
           if (viewingMember) {
             eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
             tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
@@ -1600,7 +1632,7 @@ const Planning = ({ user }) => {
           currentYear,
           currentWeek
         );
-        setEvents(offlineEvents);
+        setEvents(offlineEvents.map(parseEvent));
         setTasks(offlineTasks);
       }
       if (smooth) {
@@ -2494,8 +2526,12 @@ const Planning = ({ user }) => {
       const response = await apiCallWithRetry(
         `/planning/week/${newYear}/${newWeek}${teamParam}`
       );
-      let eventsData = response.data.events || [];
-      let tasksData = response.data.tasks || [];
+      let eventsData = Array.isArray(response.data.events)
+        ? response.data.events.map(parseEvent)
+        : [];
+      let tasksData = Array.isArray(response.data.tasks)
+        ? response.data.tasks
+        : [];
       if (viewingMember) {
         eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
         tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
@@ -2534,8 +2570,12 @@ const Planning = ({ user }) => {
       const response = await apiCallWithRetry(
         `/planning/month/${newYear}/${newMonth}${teamParam}`
       );
-      let eventsData = response.data.events || [];
-      let tasksData = response.data.tasks || [];
+      let eventsData = Array.isArray(response.data.events)
+        ? response.data.events.map(parseEvent)
+        : [];
+      let tasksData = Array.isArray(response.data.tasks)
+        ? response.data.tasks
+        : [];
       if (viewingMember) {
         eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
         tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
