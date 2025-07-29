@@ -1712,14 +1712,19 @@ const Planning = ({ user }) => {
         const offlineEvents = await offlineStorage.getEvents(
           ownerId,
           currentYear,
-          currentWeek
+          currentWeek,
         );
         console.log(`Loaded ${offlineEvents.length} events from IndexedDB`);
 
-        const eventMap = new Map();
-        offlineEvents.map(parseEvent).forEach((e) => eventMap.set(e.id, e));
-        apiEvents.forEach((e) => eventMap.set(e.id, e));
-        eventsData = Array.from(eventMap.values());
+        if (apiSuccess) {
+          const eventMap = new Map();
+          offlineEvents.map(parseEvent).forEach((e) => eventMap.set(e.id, e));
+          apiEvents.forEach((e) => eventMap.set(e.id, e));
+          eventsData = Array.from(eventMap.values());
+        } else {
+          eventsData = offlineEvents.map(parseEvent);
+          console.log("Using IndexedDB fallback for events");
+        }
 
         const tasksResponse = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`,
@@ -1763,6 +1768,7 @@ const Planning = ({ user }) => {
           for (const evt of eventsData) {
             await offlineStorage.saveEvent({ ...evt, uid: ownerId });
           }
+          console.log("IndexedDB updated after Firestore fetch");
         }
       } else {
         const response = await apiCallWithRetry(
@@ -1813,6 +1819,7 @@ const Planning = ({ user }) => {
         tasksData = offlineTasks;
         setEvents(eventsData);
         setTasks(tasksData);
+        console.log("Using IndexedDB fallback for events");
       } catch (idbError) {
         console.error("Fallback IndexedDB error", idbError);
         eventsData = [];
