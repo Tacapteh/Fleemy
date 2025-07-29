@@ -1498,26 +1498,38 @@ const Planning = ({ user }) => {
         const response = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`
         );
-        let eventsData = response.data.events || [];
-        let tasksData = response.data.tasks || [];
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-          tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (response.data && response.data.success === false) {
+          setErrorMessage(response.data.error || "Erreur serveur");
+          setEvents([]);
+          setTasks([]);
+        } else {
+          let eventsData = response.data.events || [];
+          let tasksData = response.data.tasks || [];
+          if (viewingMember) {
+            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          }
+          setEvents(eventsData);
+          setTasks(tasksData);
         }
-        setEvents(eventsData);
-        setTasks(tasksData);
       } else {
         const response = await apiCallWithRetry(
           `/planning/month/${currentYear}/${currentMonth}${teamParam}`
         );
-        let eventsData = response.data.events || [];
-        let tasksData = response.data.tasks || [];
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-          tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (response.data && response.data.success === false) {
+          setErrorMessage(response.data.error || "Erreur serveur");
+          setEvents([]);
+          setTasks([]);
+        } else {
+          let eventsData = response.data.events || [];
+          let tasksData = response.data.tasks || [];
+          if (viewingMember) {
+            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          }
+          setEvents(eventsData);
+          setTasks(tasksData);
         }
-        setEvents(eventsData);
-        setTasks(tasksData);
       }
 
       if (smooth) {
@@ -2091,6 +2103,11 @@ const Planning = ({ user }) => {
         method: "POST",
         data: eventToCreate,
       });
+
+      if (response.data && response.data.success === false) {
+        // Error already shown in apiCall
+        return;
+      }
 
       // Save to offline storage
       await offlineStorage.saveEvent(response.data);

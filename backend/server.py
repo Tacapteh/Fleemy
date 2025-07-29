@@ -98,9 +98,8 @@ async def error_handling_middleware(request: Request, call_next):
         return response
     except RequestValidationError as exc:
         logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return JSONResponse(status_code=200, content={"success": False, "error": str(exc)})
     except HTTPException as exc:
-        status = 403 if exc.status_code == 403 else 400
         logger.error(
             "HTTPException on %s [%s]: %s",
             request.url.path,
@@ -108,7 +107,7 @@ async def error_handling_middleware(request: Request, call_next):
             exc.detail,
             exc_info=True,
         )
-        return JSONResponse(status_code=status, content={"error": exc.detail})
+        return JSONResponse(status_code=200, content={"success": False, "error": exc.detail})
     except Exception as exc:
         logger.error("Unhandled server error on %s: %s", request.url.path, exc, exc_info=True)
         # Never expose raw 500 errors to the client
@@ -492,21 +491,25 @@ async def list_events(
 async def create_event(
     event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
-    now = datetime.now()
-    year = now.year
-    week = now.isocalendar()[1]
+    try:
+        now = datetime.now()
+        year = now.year
+        week = now.isocalendar()[1]
 
-    event = PlanningEvent(uid=user["uid"], week=week, year=year, **event_request.dict())
-    await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event.id).set, event.dict()
-    )
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    if team_id:
+        event = PlanningEvent(uid=user["uid"], week=week, year=year, **event_request.dict())
         await asyncio.to_thread(
-            team_col(team_id, "events").document(event.id).set, event.dict()
+            user_col(user["uid"], "events").document(event.id).set, event.dict()
         )
-    return event
+        user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+        team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+        if team_id:
+            await asyncio.to_thread(
+                team_col(team_id, "events").document(event.id).set, event.dict()
+            )
+        return event
+    except Exception as e:
+        logger.error("create_event error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
 
 
 @api_router.put("/planning/events/{event_id}")
