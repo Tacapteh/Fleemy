@@ -319,14 +319,12 @@ def team_col(team_id: str, name: str):
     return db.collection("teams").document(team_id).collection(name)
 
 
-def global_event_doc(year: int, week: int, owner_id: str, event_id: str):
-    """Return document reference for event stored by year, week and owner."""
+def global_event_doc(year: int, week: int, event_id: str):
+    """Return document reference for event stored by year and week."""
     return (
         db.collection("events")
         .document(str(year))
         .collection(str(week))
-        .document(owner_id)
-        .collection("items")
         .document(event_id)
     )
 
@@ -523,6 +521,23 @@ async def list_events(
     return {"success": True, "events": events}
 
 
+@api_router.get("/planning/events/{owner_id}/{year}/{week}")
+async def list_events_by_owner(owner_id: str, year: int, week: int):
+    """Return events for a specific owner stored under events/{year}/{week}."""
+    try:
+        events_ref = (
+            db.collection("events")
+            .document(str(year))
+            .collection(str(week))
+            .where("owner_id", "==", owner_id)
+        )
+        events = await stream_docs(events_ref)
+        return {"success": True, "events": events}
+    except Exception as e:
+        logger.error("list_events_by_owner error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
 @api_router.post("/planning/events")
 async def create_event(
     event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)
@@ -542,7 +557,7 @@ async def create_event(
         if team_id:
             owner_id = team_id
         await asyncio.to_thread(
-            global_event_doc(year, week, owner_id, event.id).set,
+            global_event_doc(year, week, event.id).set,
             {**event.dict(), "owner_id": owner_id},
         )
         if team_id:
@@ -578,7 +593,7 @@ async def update_event(
     if team_id:
         owner_id = team_id
     await asyncio.to_thread(
-        global_event_doc(existing["year"], existing["week"], owner_id, event_id).set,
+        global_event_doc(existing["year"], existing["week"], event_id).set,
         {**existing, **update_data, "owner_id": owner_id},
     )
     if team_id:
@@ -603,7 +618,7 @@ async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_toke
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
     owner_id = team_id if team_id else user["uid"]
     await asyncio.to_thread(
-        global_event_doc(data["year"], data["week"], owner_id, event_id).delete
+        global_event_doc(data["year"], data["week"], event_id).delete
     )
     if team_id:
         await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
