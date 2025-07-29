@@ -98,9 +98,8 @@ async def error_handling_middleware(request: Request, call_next):
         return response
     except RequestValidationError as exc:
         logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
-        return JSONResponse(status_code=400, content={"error": str(exc)})
+        return JSONResponse(status_code=200, content={"success": False, "error": str(exc)})
     except HTTPException as exc:
-        status = 403 if exc.status_code == 403 else 400
         logger.error(
             "HTTPException on %s [%s]: %s",
             request.url.path,
@@ -108,10 +107,11 @@ async def error_handling_middleware(request: Request, call_next):
             exc.detail,
             exc_info=True,
         )
-        return JSONResponse(status_code=status, content={"error": exc.detail})
+        return JSONResponse(status_code=200, content={"success": False, "error": exc.detail})
     except Exception as exc:
         logger.error("Unhandled server error on %s: %s", request.url.path, exc, exc_info=True)
-        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+        # Never expose raw 500 errors to the client
+        return JSONResponse(status_code=200, content={"success": False, "error": str(exc)})
 
 
 # Create a router with the /api prefix
@@ -328,10 +328,11 @@ async def stream_docs(query):
 
 
 @api_router.get("/auth/me")
-async def get_me(user: Dict[str, Any] = Depends(verify_token)):
+async def get_me(request: Request):
     """Return the authenticated user's info and create the DB entry if missing."""
-    logger.info("/auth/me called for %s", user.get("uid"))
     try:
+        user = await verify_token(request)
+        logger.info("/auth/me called for %s", user.get("uid"))
         user_ref = user_doc(user["uid"])
         snapshot = await asyncio.to_thread(user_ref.get)
         db_user = snapshot.to_dict() if snapshot.exists else None
@@ -490,21 +491,40 @@ async def list_events(
 async def create_event(
     event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
-    now = datetime.now()
-    year = now.year
-    week = now.isocalendar()[1]
+    try:
+        now = datetime.now()
+        year = now.year
+        week = now.isocalendar()[1]
 
-    event = PlanningEvent(uid=user["uid"], week=week, year=year, **event_request.dict())
-    await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event.id).set, event.dict()
-    )
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    if team_id:
+        event = PlanningEvent(uid=user["uid"], week=week, year=year, **event_request.dict())
+        data = event.dict()
+
+        # Persist under user collection
         await asyncio.to_thread(
-            team_col(team_id, "events").document(event.id).set, event.dict()
+            user_col(user["uid"], "events").document(event.id).set, data
         )
-    return event
+
+        # Persist under year/week for easier querying
+        await asyncio.to_thread(
+            db.collection("events")
+            .document(str(year))
+            .collection(str(week))
+            .document(event.id)
+            .set,
+            data,
+        )
+
+        user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+        team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+        if team_id:
+            await asyncio.to_thread(
+                team_col(team_id, "events").document(event.id).set, data
+            )
+
+        return {"success": True, "event": data}
+    except Exception as e:
+        logger.error("create_event error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
 
 
 @api_router.put("/planning/events/{event_id}")
@@ -513,34 +533,72 @@ async def update_event(
     event_request: EventCreateRequest,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    update_data = {**event_request.dict(), "updated_at": datetime.utcnow()}
-    await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event_id).update, update_data
-    )
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    if team_id:
+    try:
+        update_data = {**event_request.dict(), "updated_at": datetime.utcnow()}
+
         await asyncio.to_thread(
-            team_col(team_id, "events").document(event_id).update, update_data
+            user_col(user["uid"], "events").document(event_id).set, update_data, merge=True
         )
-    updated = await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event_id).get
-    )
-    return updated.to_dict()
+
+        now = datetime.now()
+        year = now.year
+        week = now.isocalendar()[1]
+
+        await asyncio.to_thread(
+            db.collection("events")
+            .document(str(year))
+            .collection(str(week))
+            .document(event_id)
+            .set,
+            {"id": event_id, **update_data},
+        )
+
+        user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+        team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+        if team_id:
+            await asyncio.to_thread(
+                team_col(team_id, "events").document(event_id).set, update_data, merge=True
+            )
+
+        updated = await asyncio.to_thread(
+            user_col(user["uid"], "events").document(event_id).get
+        )
+        return {"success": True, "event": updated.to_dict()}
+    except Exception as e:
+        logger.error("update_event error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
 
 
 @api_router.delete("/planning/events/{event_id}")
 async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    doc_ref = user_col(user["uid"], "events").document(event_id)
-    snap = await asyncio.to_thread(doc_ref.get)
-    if not snap.exists:
-        raise HTTPException(status_code=404, detail="Event not found")
-    await asyncio.to_thread(doc_ref.delete)
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    if team_id:
-        await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
-    return {"message": "Event deleted"}
+    try:
+        doc_ref = user_col(user["uid"], "events").document(event_id)
+        snap = await asyncio.to_thread(doc_ref.get)
+        if not snap.exists:
+            raise HTTPException(status_code=404, detail="Event not found")
+        await asyncio.to_thread(doc_ref.delete)
+
+        now = datetime.now()
+        year = now.year
+        week = now.isocalendar()[1]
+
+        await asyncio.to_thread(
+            db.collection("events")
+            .document(str(year))
+            .collection(str(week))
+            .document(event_id)
+            .delete
+        )
+
+        user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
+        team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+        if team_id:
+            await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
+
+        return {"success": True}
+    except Exception as e:
+        logger.error("delete_event error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e)}
 
 
 @api_router.get("/planning/earnings/{year}/{week}")

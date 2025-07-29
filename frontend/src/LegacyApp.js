@@ -1129,9 +1129,9 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
                 marginTop: "8px",
               }}
             >
-              {availableColors.map((color) => (
+              {availableColors.map((color, idx) => (
                 <button
-                  key={color}
+                  key={`${color}-${idx}`}
                   type="button"
                   onClick={() => handleInputChange("color", color)}
                   style={{
@@ -1162,9 +1162,9 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
                 overflowY: "auto",
               }}
             >
-              {availableIcons.map((icon) => (
+              {availableIcons.map((icon, idx) => (
                 <button
-                  key={icon}
+                  key={`${icon}-${idx}`}
                   type="button"
                   onClick={() => handleInputChange("icon", icon)}
                   style={{
@@ -1363,7 +1363,8 @@ class PlanningOfflineStorage {
 
     return new Promise((resolve) => {
       request.onsuccess = () => {
-        const events = request.result.filter(
+        const results = Array.isArray(request.result) ? request.result : [];
+        const events = results.filter(
           (e) => e.uid === uid && e.year === year && e.week === week
         );
         resolve(events);
@@ -1386,7 +1387,8 @@ class PlanningOfflineStorage {
 
     return new Promise((resolve) => {
       request.onsuccess = () => {
-        const events = request.result.filter(
+        const results = Array.isArray(request.result) ? request.result : [];
+        const events = results.filter(
           (e) => e.uid === uid && e.year === year && e.week === week
         );
         events.forEach((event) => store.delete(event.id));
@@ -1447,7 +1449,7 @@ const Planning = ({ user }) => {
 
   const apiCall = async (url, options = {}) => {
     try {
-      return await api({
+      const resp = await api({
         url,
         headers: {
           "Content-Type": "application/json",
@@ -1455,6 +1457,10 @@ const Planning = ({ user }) => {
         },
         ...options,
       });
+      if (resp.data && resp.data.success === false) {
+        showToast(resp.data.error || "Erreur serveur", true);
+      }
+      return resp;
     } catch (error) {
       if (!isOnline) {
         throw new Error("Offline mode");
@@ -1492,36 +1498,51 @@ const Planning = ({ user }) => {
         const response = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`
         );
-        let eventsData = response.data.events || [];
-        let tasksData = response.data.tasks || [];
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-          tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (response.data && response.data.success === false) {
+          setErrorMessage(response.data.error || "Erreur serveur");
+          showToast(response.data.error || "Erreur serveur", true);
+          setEvents([]);
+          setTasks([]);
+        } else {
+          let eventsData = response.data.events || [];
+          let tasksData = response.data.tasks || [];
+          if (viewingMember) {
+            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          }
+          setEvents(eventsData);
+          setTasks(tasksData);
         }
-        setEvents(eventsData);
-        setTasks(tasksData);
       } else {
         const response = await apiCallWithRetry(
           `/planning/month/${currentYear}/${currentMonth}${teamParam}`
         );
-        let eventsData = response.data.events || [];
-        let tasksData = response.data.tasks || [];
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-          tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (response.data && response.data.success === false) {
+          setErrorMessage(response.data.error || "Erreur serveur");
+          showToast(response.data.error || "Erreur serveur", true);
+          setEvents([]);
+          setTasks([]);
+        } else {
+          let eventsData = response.data.events || [];
+          let tasksData = response.data.tasks || [];
+          if (viewingMember) {
+            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          }
+          setEvents(eventsData);
+          setTasks(tasksData);
         }
-        setEvents(eventsData);
-        setTasks(tasksData);
       }
 
       if (smooth) {
         // Add slight delay for smooth animation
         setTimeout(() => setTransitioning(false), 100);
       }
-    } catch (error) {
-      console.error("Error loading events:", error);
-      setErrorMessage("Erreur lors du chargement du planning");
-      if (!isOnline) {
+  } catch (error) {
+    console.error("Error loading events:", error);
+    setErrorMessage("Erreur lors du chargement du planning");
+    showToast(error.message || "Erreur lors du chargement du planning", true);
+    if (!isOnline) {
         // Load from offline storage
         const offlineEvents = await offlineStorage.getEvents(
           user.uid,
@@ -2022,7 +2043,13 @@ const Planning = ({ user }) => {
   const loadTeam = async () => {
     try {
       const response = await apiCallWithRetry("/teams/my");
-      setTeam(response.data);
+      if (response.data && response.data.success === false) {
+        setErrorMessage(response.data.error);
+      } else if (response.data && response.data.team == null) {
+        setTeam(null);
+      } else {
+        setTeam(response.data);
+      }
     } catch (error) {
       console.error("Error loading team:", error);
       setErrorMessage("Erreur lors du chargement de l'équipe");
@@ -2032,7 +2059,13 @@ const Planning = ({ user }) => {
   const loadUserRate = async () => {
     try {
       const response = await apiCallWithRetry("/auth/me");
-      setHourlyRate(response.data.hourly_rate || 50);
+      if (response.data && response.data.success === false) {
+        setErrorMessage(response.data.error);
+      } else if (response.data && response.data.user == null) {
+        setHourlyRate(50);
+      } else {
+        setHourlyRate(response.data.hourly_rate || 50);
+      }
     } catch (error) {
       console.error("Error loading user rate:", error);
       setErrorMessage("Erreur lors du chargement des informations utilisateur");
@@ -2074,19 +2107,26 @@ const Planning = ({ user }) => {
         data: eventToCreate,
       });
 
+      if (response.data && response.data.success === false) {
+        // Error already shown in apiCall
+        return;
+      }
+
+      const saved = response.data.event || response.data;
+
       // Save to offline storage
-      await offlineStorage.saveEvent(response.data);
+      await offlineStorage.saveEvent(saved);
 
       // Update local state immediately
       const newEvent = {
-        ...response.data,
+        ...saved,
         day: eventData.day, // Keep day as number for local filtering
         start: eventData.start, // Keep both formats for compatibility
         end: eventData.end,
       };
 
-      console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
-      showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
+      console.log(`Élément enregistré avec succès (ID: ${saved.id})`);
+      showToast(`Élément enregistré avec succès (ID: ${saved.id})`);
 
       setEvents((prevEvents) => [...prevEvents, newEvent]);
       setEventModal({
@@ -2149,6 +2189,8 @@ const Planning = ({ user }) => {
         `Élément enregistré avec succès (ID: ${eventModal.event.id})`
       );
       showToast(`Élément enregistré avec succès (ID: ${eventModal.event.id})`);
+
+      await offlineStorage.saveEvent({ id: eventModal.event.id, uid: user.uid, week: currentWeek, year: currentYear, ...updateData });
 
       // Update local state immediately
       setEvents((prevEvents) =>
