@@ -1322,14 +1322,15 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
 class PlanningOfflineStorage {
   constructor() {
     this.dbName = "FleemyPlanningDB";
-    this.version = 1;
     this.db = null;
   }
 
   async init() {
     if (this.db) return;
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.version);
+      // Always open the DB without specifying a version to get the
+      // latest existing version automatically
+      const request = indexedDB.open(this.dbName);
 
       request.onerror = () => {
         console.error("IndexedDB open error", request.error);
@@ -1348,10 +1349,12 @@ class PlanningOfflineStorage {
           store.createIndex("week_year", ["week", "year"]);
           store.createIndex("uid", "uid");
         }
+        console.log(`IndexedDB upgraded to version ${db.version}`);
       };
 
       request.onsuccess = () => {
         this.db = request.result;
+        this.version = this.db.version;
 
         const missingStores = [];
         if (!this.db.objectStoreNames.contains("events"))
@@ -1360,6 +1363,7 @@ class PlanningOfflineStorage {
           missingStores.push("tasks");
 
         if (missingStores.length === 0) {
+          console.log(`IndexedDB opened with version ${this.db.version}`);
           resolve();
         } else {
           // Reopen DB with higher version to create missing stores
@@ -1388,11 +1392,13 @@ class PlanningOfflineStorage {
               store.createIndex("week_year", ["week", "year"]);
               store.createIndex("uid", "uid");
             }
+            console.log(`IndexedDB upgraded to version ${upgradeDb.version}`);
           };
 
           upgradeRequest.onsuccess = () => {
             this.db = upgradeRequest.result;
             this.version = newVersion;
+            console.log(`IndexedDB opened with version ${newVersion}`);
             resolve();
           };
         }
@@ -1674,32 +1680,46 @@ const Planning = ({ user }) => {
       const ownerId = viewingMember ? viewingMember.uid : user.uid;
 
       if (view === "week") {
-        const eventsResponse = await apiCallWithRetry(
-          `/planning/events/${ownerId}/${currentYear}/${currentWeek}`,
-        );
-        if (
-          eventsResponse.data &&
-          eventsResponse.data.success &&
-          Array.isArray(eventsResponse.data.events)
-        ) {
-          eventsData = eventsResponse.data.events.map(parseEvent);
-        } else {
-          console.error(
-            "Event load failed:",
-            eventsResponse.data?.error || eventsResponse.status
+        let apiEvents = [];
+        let apiSuccess = false;
+        try {
+          const eventsResponse = await apiCallWithRetry(
+            `/planning/events/${ownerId}/${currentYear}/${currentWeek}`,
           );
-          showToast(
-            eventsResponse.data?.error || "Erreur lors du chargement des événements",
-            true
-          );
-          // Fallback to IndexedDB
-          const offlineEvents = await offlineStorage.getEvents(
-            ownerId,
-            currentYear,
-            currentWeek
-          );
-          eventsData = offlineEvents.map(parseEvent);
+          if (
+            eventsResponse.data &&
+            eventsResponse.data.success &&
+            Array.isArray(eventsResponse.data.events)
+          ) {
+            apiEvents = eventsResponse.data.events.map(parseEvent);
+            apiSuccess = true;
+            console.log(`Loaded ${apiEvents.length} events from Firestore`);
+          } else {
+            console.error(
+              "Event load failed:",
+              eventsResponse.data?.error || eventsResponse.status
+            );
+            showToast(
+              eventsResponse.data?.error ||
+                "Erreur lors du chargement des événements",
+              true
+            );
+          }
+        } catch (err) {
+          console.error("Event API error", err);
         }
+
+        const offlineEvents = await offlineStorage.getEvents(
+          ownerId,
+          currentYear,
+          currentWeek
+        );
+        console.log(`Loaded ${offlineEvents.length} events from IndexedDB`);
+
+        const eventMap = new Map();
+        offlineEvents.map(parseEvent).forEach((e) => eventMap.set(e.id, e));
+        apiEvents.forEach((e) => eventMap.set(e.id, e));
+        eventsData = Array.from(eventMap.values());
 
         const tasksResponse = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`,
@@ -1737,10 +1757,12 @@ const Planning = ({ user }) => {
         setEvents(eventsData);
         setTasks(tasksData);
 
-        // Save retrieved events to IndexedDB for offline usage
-        await offlineStorage.clearWeekEvents(ownerId, currentYear, currentWeek);
-        for (const evt of eventsData) {
-          await offlineStorage.saveEvent({ ...evt, uid: ownerId });
+        if (apiSuccess) {
+          // Synchronize IndexedDB with data from Firestore and local events
+          await offlineStorage.clearWeekEvents(ownerId, currentYear, currentWeek);
+          for (const evt of eventsData) {
+            await offlineStorage.saveEvent({ ...evt, uid: ownerId });
+          }
         }
       } else {
         const response = await apiCallWithRetry(
