@@ -1344,6 +1344,11 @@ class PlanningOfflineStorage {
           store.createIndex("week_year", ["week", "year"]);
           store.createIndex("uid", "uid");
         }
+        if (!db.objectStoreNames.contains("tasks")) {
+          const store = db.createObjectStore("tasks", { keyPath: "id" });
+          store.createIndex("week_year", ["week", "year"]);
+          store.createIndex("uid", "uid");
+        }
       };
     });
   }
@@ -1379,20 +1384,63 @@ class PlanningOfflineStorage {
     await store.delete(eventId);
   }
 
-  async clearWeekEvents(uid, year, week) {
+  async saveTask(task) {
     if (!this.db) await this.init();
-    const transaction = this.db.transaction(["events"], "readwrite");
-    const store = transaction.objectStore("events");
-    const request = store.getAll();
+    const tx = this.db.transaction(["tasks"], "readwrite");
+    const store = tx.objectStore("tasks");
+    await store.put(task);
+  }
 
+  async getTasks(uid, year, week) {
+    if (!this.db) await this.init();
+    const tx = this.db.transaction(["tasks"], "readonly");
+    const store = tx.objectStore("tasks");
+    const request = store.getAll();
     return new Promise((resolve) => {
       request.onsuccess = () => {
         const results = Array.isArray(request.result) ? request.result : [];
-        const events = results.filter(
-          (e) => e.uid === uid && e.year === year && e.week === week
+        const tasks = results.filter(
+          (t) => t.uid === uid && t.year === year && t.week === week
         );
-        events.forEach((event) => store.delete(event.id));
-        resolve();
+        resolve(tasks);
+      };
+    });
+  }
+
+  async deleteTask(taskId) {
+    if (!this.db) await this.init();
+    const tx = this.db.transaction(["tasks"], "readwrite");
+    const store = tx.objectStore("tasks");
+    await store.delete(taskId);
+  }
+
+  async clearWeekEvents(uid, year, week) {
+    if (!this.db) await this.init();
+    const transaction = this.db.transaction(["events", "tasks"], "readwrite");
+    const eventStore = transaction.objectStore("events");
+    const taskStore = transaction.objectStore("tasks");
+    const requestEvents = eventStore.getAll();
+    const requestTasks = taskStore.getAll();
+
+    return new Promise((resolve) => {
+      let done = 0;
+      const checkDone = () => {
+        done += 1;
+        if (done === 2) resolve();
+      };
+      requestEvents.onsuccess = () => {
+        const results = Array.isArray(requestEvents.result) ? requestEvents.result : [];
+        results
+          .filter((e) => e.uid === uid && e.year === year && e.week === week)
+          .forEach((e) => eventStore.delete(e.id));
+        checkDone();
+      };
+      requestTasks.onsuccess = () => {
+        const results = Array.isArray(requestTasks.result) ? requestTasks.result : [];
+        results
+          .filter((t) => t.uid === uid && t.year === year && t.week === week)
+          .forEach((t) => taskStore.delete(t.id));
+        checkDone();
       };
     });
   }
@@ -1547,8 +1595,13 @@ const Planning = ({ user }) => {
           currentYear,
           currentWeek
         );
+        const offlineTasks = await offlineStorage.getTasks(
+          user.uid,
+          currentYear,
+          currentWeek
+        );
         setEvents(offlineEvents);
-        setTasks([]); // No offline storage for tasks yet
+        setTasks(offlineTasks);
       }
       if (smooth) {
         setTransitioning(false);
@@ -2179,14 +2232,20 @@ const Planning = ({ user }) => {
         status: eventData.type,
       };
 
-      await apiCall(`/planning/events/${eventModal.event.id}`, {
+      const response = await apiCall(`/planning/events/${eventModal.event.id}`, {
         method: "PUT",
         data: updateData,
       });
+      if (response.data && response.data.success === false) {
+        return;
+      }
+      const updatedEvent = response.data.event;
       console.log(
         `Élément enregistré avec succès (ID: ${eventModal.event.id})`
       );
       showToast(`Élément enregistré avec succès (ID: ${eventModal.event.id})`);
+
+      await offlineStorage.saveEvent(updatedEvent);
 
       // Update local state immediately
       setEvents((prevEvents) =>
@@ -2220,9 +2279,12 @@ const Planning = ({ user }) => {
 
   const handleDeleteEvent = async (eventId) => {
     try {
-      await apiCall(`/planning/events/${eventId}`, {
+      const response = await apiCall(`/planning/events/${eventId}`, {
         method: "DELETE",
       });
+      if (response.data && response.data.success === false) {
+        return;
+      }
 
       await offlineStorage.deleteEvent(eventId);
 
@@ -2257,12 +2319,17 @@ const Planning = ({ user }) => {
           time_slots: taskData.time_slots || [],
         },
       });
+      if (response.data && response.data.success === false) {
+        return;
+      }
+      const createdTask = response.data.task;
+      console.log(`Élément enregistré avec succès (ID: ${createdTask.id})`);
+      showToast(`Élément enregistré avec succès (ID: ${createdTask.id})`);
 
-      console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
-      showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
+      await offlineStorage.saveTask(createdTask);
 
       // Update local state immediately
-      setTasks((prevTasks) => [...prevTasks, response.data]);
+      setTasks((prevTasks) => [...prevTasks, createdTask]);
       setTaskModal({ isOpen: false, task: null });
     } catch (error) {
       console.error("Error creating task:", error);
@@ -2270,12 +2337,25 @@ const Planning = ({ user }) => {
         `Erreur: ${error.response?.data?.detail || error.message}`,
         true
       );
+      if (!isOnline) {
+        const localTask = {
+          ...taskData,
+          id: Date.now().toString(),
+          uid: user.uid,
+          week: currentWeek,
+          year: currentYear,
+          created_at: new Date().toISOString(),
+        };
+        await offlineStorage.saveTask(localTask);
+        setTasks((prev) => [...prev, localTask]);
+        setTaskModal({ isOpen: false, task: null });
+      }
     }
   };
 
   const handleUpdateTask = async (taskData) => {
     try {
-      await apiCall(`/planning/tasks/${taskModal.task.id}`, {
+      const response = await apiCall(`/planning/tasks/${taskModal.task.id}`, {
         method: "PUT",
         data: {
           name: taskData.name,
@@ -2285,9 +2365,14 @@ const Planning = ({ user }) => {
           time_slots: taskData.time_slots || [],
         },
       });
-
+      if (response.data && response.data.success === false) {
+        return;
+      }
+      const updatedTask = response.data.task;
       console.log(`Élément enregistré avec succès (ID: ${taskModal.task.id})`);
       showToast(`Élément enregistré avec succès (ID: ${taskModal.task.id})`);
+
+      await offlineStorage.saveTask(updatedTask);
 
       // Update local state immediately
       setTasks((prevTasks) =>
@@ -2303,15 +2388,31 @@ const Planning = ({ user }) => {
         `Erreur: ${error.response?.data?.detail || error.message}`,
         true
       );
+      if (!isOnline) {
+        const localTask = {
+          ...taskModal.task,
+          ...taskData,
+          updated_at: new Date().toISOString(),
+        };
+        await offlineStorage.saveTask(localTask);
+        setTasks((prev) =>
+          prev.map((t) => (t.id === localTask.id ? localTask : t))
+        );
+        setTaskModal({ isOpen: false, task: null });
+      }
     }
   };
 
   const handleDeleteTask = async (taskId) => {
     try {
-      await apiCall(`/planning/tasks/${taskId}`, {
+      const response = await apiCall(`/planning/tasks/${taskId}`, {
         method: "DELETE",
       });
-
+      if (response.data && response.data.success === false) {
+        showToast(response.data.error || "Erreur serveur", true);
+        return;
+      }
+      await offlineStorage.deleteTask(taskId);
       // Update local state immediately
       setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
       setTaskModal({ isOpen: false, task: null });
@@ -2337,6 +2438,15 @@ const Planning = ({ user }) => {
             apiCall(`/planning/events/${event.id}`, { method: "DELETE" })
           )
         );
+        const safeTasks = Array.isArray(tasks) ? tasks : [];
+        const weekTasks = safeTasks.filter(
+          (t) => t.week === currentWeek && t.year === currentYear
+        );
+        await Promise.all(
+          weekTasks.map((task) =>
+            apiCall(`/planning/tasks/${task.id}`, { method: "DELETE" })
+          )
+        );
 
         await offlineStorage.clearWeekEvents(
           user.uid,
@@ -2349,6 +2459,11 @@ const Planning = ({ user }) => {
           prevEvents.filter(
             (event) =>
               !(event.week === currentWeek && event.year === currentYear)
+          )
+        );
+        setTasks((prevTasks) =>
+          prevTasks.filter(
+            (task) => !(task.week === currentWeek && task.year === currentYear)
           )
         );
       } catch (error) {
