@@ -524,6 +524,9 @@ async def list_events(
 @api_router.get("/planning/events/{owner_id}/{year}/{week}")
 async def list_events_by_owner(owner_id: str, year: int, week: int):
     """Return events for a specific owner stored under events/{year}/{week}."""
+    logger.info(
+        "Fetching events for owner %s week %s/%s", owner_id, week, year
+    )
     try:
         events_ref = (
             db.collection("events")
@@ -535,7 +538,7 @@ async def list_events_by_owner(owner_id: str, year: int, week: int):
         return {"success": True, "events": events}
     except Exception as e:
         logger.error("list_events_by_owner error: %s", e, exc_info=True)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "events": [], "error": str(e)}
 
 
 @api_router.post("/planning/events")
