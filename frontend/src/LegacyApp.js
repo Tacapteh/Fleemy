@@ -1363,7 +1363,8 @@ class PlanningOfflineStorage {
 
     return new Promise((resolve) => {
       request.onsuccess = () => {
-        const events = request.result.filter(
+        const results = Array.isArray(request.result) ? request.result : [];
+        const events = results.filter(
           (e) => e.uid === uid && e.year === year && e.week === week
         );
         resolve(events);
@@ -1386,7 +1387,8 @@ class PlanningOfflineStorage {
 
     return new Promise((resolve) => {
       request.onsuccess = () => {
-        const events = request.result.filter(
+        const results = Array.isArray(request.result) ? request.result : [];
+        const events = results.filter(
           (e) => e.uid === uid && e.year === year && e.week === week
         );
         events.forEach((event) => store.delete(event.id));
@@ -1447,7 +1449,7 @@ const Planning = ({ user }) => {
 
   const apiCall = async (url, options = {}) => {
     try {
-      return await api({
+      const resp = await api({
         url,
         headers: {
           "Content-Type": "application/json",
@@ -1455,6 +1457,10 @@ const Planning = ({ user }) => {
         },
         ...options,
       });
+      if (resp.data && resp.data.success === false) {
+        showToast(resp.data.error || "Erreur serveur", true);
+      }
+      return resp;
     } catch (error) {
       if (!isOnline) {
         throw new Error("Offline mode");
@@ -1492,26 +1498,38 @@ const Planning = ({ user }) => {
         const response = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`
         );
-        let eventsData = response.data.events || [];
-        let tasksData = response.data.tasks || [];
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-          tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (response.data && response.data.success === false) {
+          setErrorMessage(response.data.error || "Erreur serveur");
+          setEvents([]);
+          setTasks([]);
+        } else {
+          let eventsData = response.data.events || [];
+          let tasksData = response.data.tasks || [];
+          if (viewingMember) {
+            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          }
+          setEvents(eventsData);
+          setTasks(tasksData);
         }
-        setEvents(eventsData);
-        setTasks(tasksData);
       } else {
         const response = await apiCallWithRetry(
           `/planning/month/${currentYear}/${currentMonth}${teamParam}`
         );
-        let eventsData = response.data.events || [];
-        let tasksData = response.data.tasks || [];
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-          tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (response.data && response.data.success === false) {
+          setErrorMessage(response.data.error || "Erreur serveur");
+          setEvents([]);
+          setTasks([]);
+        } else {
+          let eventsData = response.data.events || [];
+          let tasksData = response.data.tasks || [];
+          if (viewingMember) {
+            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          }
+          setEvents(eventsData);
+          setTasks(tasksData);
         }
-        setEvents(eventsData);
-        setTasks(tasksData);
       }
 
       if (smooth) {
@@ -2022,7 +2040,13 @@ const Planning = ({ user }) => {
   const loadTeam = async () => {
     try {
       const response = await apiCallWithRetry("/teams/my");
-      setTeam(response.data);
+      if (response.data && response.data.success === false) {
+        setErrorMessage(response.data.error);
+      } else if (response.data && response.data.team == null) {
+        setTeam(null);
+      } else {
+        setTeam(response.data);
+      }
     } catch (error) {
       console.error("Error loading team:", error);
       setErrorMessage("Erreur lors du chargement de l'équipe");
@@ -2032,7 +2056,13 @@ const Planning = ({ user }) => {
   const loadUserRate = async () => {
     try {
       const response = await apiCallWithRetry("/auth/me");
-      setHourlyRate(response.data.hourly_rate || 50);
+      if (response.data && response.data.success === false) {
+        setErrorMessage(response.data.error);
+      } else if (response.data && response.data.user == null) {
+        setHourlyRate(50);
+      } else {
+        setHourlyRate(response.data.hourly_rate || 50);
+      }
     } catch (error) {
       console.error("Error loading user rate:", error);
       setErrorMessage("Erreur lors du chargement des informations utilisateur");
@@ -2073,6 +2103,11 @@ const Planning = ({ user }) => {
         method: "POST",
         data: eventToCreate,
       });
+
+      if (response.data && response.data.success === false) {
+        // Error already shown in apiCall
+        return;
+      }
 
       // Save to offline storage
       await offlineStorage.saveEvent(response.data);
