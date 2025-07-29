@@ -1566,27 +1566,51 @@ const Planning = ({ user }) => {
       }
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
+      const ownerId = viewingMember ? viewingMember.uid : user.uid;
+
       if (view === "week") {
-        const response = await apiCallWithRetry(
+        const eventsResponse = await apiCallWithRetry(
+          `/planning/events/${ownerId}/${currentYear}/${currentWeek}`
+        );
+        let eventsData = [];
+        if (
+          eventsResponse.data &&
+          eventsResponse.data.success &&
+          Array.isArray(eventsResponse.data.events)
+        ) {
+          eventsData = eventsResponse.data.events.map(parseEvent);
+        } else if (eventsResponse.data && eventsResponse.data.success === false) {
+          setErrorMessage(eventsResponse.data.error || "Erreur serveur");
+        }
+
+        const tasksResponse = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`
         );
-        if (response.data && response.data.success === false) {
-          setErrorMessage(response.data.error || "Erreur serveur");
-          setEvents([]);
-          setTasks([]);
-        } else {
-          let eventsData = Array.isArray(response.data.events)
-            ? response.data.events.map(parseEvent)
-            : [];
-          let tasksData = Array.isArray(response.data.tasks)
-            ? response.data.tasks
-            : [];
+        let tasksData = [];
+        if (
+          tasksResponse.data &&
+          tasksResponse.data.success &&
+          Array.isArray(tasksResponse.data.tasks)
+        ) {
+          tasksData = tasksResponse.data.tasks;
           if (viewingMember) {
-            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
             tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
           }
-          setEvents(eventsData);
-          setTasks(tasksData);
+        } else if (tasksResponse.data && tasksResponse.data.success === false) {
+          setErrorMessage(tasksResponse.data.error || "Erreur serveur");
+        }
+
+        if (viewingMember) {
+          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+        }
+
+        setEvents(eventsData);
+        setTasks(tasksData);
+
+        // Save retrieved events to IndexedDB for offline usage
+        await offlineStorage.clearWeekEvents(ownerId, currentYear, currentWeek);
+        for (const evt of eventsData) {
+          await offlineStorage.saveEvent({ ...evt, uid: ownerId });
         }
       } else {
         const response = await apiCallWithRetry(
