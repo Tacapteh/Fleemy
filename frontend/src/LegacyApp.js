@@ -1598,11 +1598,22 @@ const Planning = ({ user }) => {
     if (typeof dayIndex === "string") {
       dayIndex = backendDayNames.indexOf(dayIndex.toLowerCase());
     }
+    const start =
+      evt.start_time || evt.start || evt.startTime || "00:00";
+    const end = evt.end_time || evt.end || evt.endTime || "00:00";
     return {
       ...evt,
       day: dayIndex,
-      start: evt.start_time || evt.start,
-      end: evt.end_time || evt.end,
+      // Normalized fields used by the UI
+      start,
+      end,
+      start_time: start,
+      end_time: end,
+      startTime: start,
+      endTime: end,
+      title: evt.title || evt.description || "",
+      // Default color if none provided
+      color: evt.color || "#3b82f6",
       type: evt.status || evt.type,
     };
   };
@@ -1703,6 +1714,7 @@ const Planning = ({ user }) => {
           const eventsResponse = await apiCallWithRetry(
             `/planning/events/${ownerId}/${currentYear}/${currentWeek}`,
           );
+          console.log("/planning/events response", eventsResponse.data);
           if (
             eventsResponse.data &&
             eventsResponse.data.success &&
@@ -1743,6 +1755,7 @@ const Planning = ({ user }) => {
         const tasksResponse = await apiCallWithRetry(
           `/planning/week/${currentYear}/${currentWeek}${teamParam}`,
         );
+        console.log("/planning/week response", tasksResponse.data);
         if (
           tasksResponse.data &&
           tasksResponse.data.success &&
