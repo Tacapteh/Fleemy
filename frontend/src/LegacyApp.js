@@ -38,7 +38,7 @@ const formatDate = (date) => {
 
 const getWeekNumber = (date) => {
   const d = new Date(
-    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
   );
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
@@ -350,15 +350,15 @@ const Dashboard = ({ user }) => {
                       todo.priority === "urgent"
                         ? "bg-red-100 text-red-700"
                         : todo.priority === "normal"
-                        ? "bg-yellow-100 text-yellow-700"
-                        : "bg-green-100 text-green-700"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-green-100 text-green-700"
                     }`}
                   >
                     {todo.priority === "urgent"
                       ? "Urgent"
                       : todo.priority === "normal"
-                      ? "Normal"
-                      : "Faible"}
+                        ? "Normal"
+                        : "Faible"}
                   </div>
                 </div>
               ))
@@ -562,7 +562,7 @@ const EventModal = ({
       let dayIndex = event.day;
       if (typeof dayIndex === "string") {
         dayIndex = dayNames.findIndex(
-          (d) => d.toLowerCase() === dayIndex.toLowerCase()
+          (d) => d.toLowerCase() === dayIndex.toLowerCase(),
         );
         if (dayIndex === -1) dayIndex = 0;
       }
@@ -815,10 +815,10 @@ const DayEventsModal = ({
                   event.type === "paid"
                     ? "meeting"
                     : event.type === "unpaid"
-                    ? "task"
-                    : event.type === "pending"
-                    ? "break"
-                    : "notworked"
+                      ? "task"
+                      : event.type === "pending"
+                        ? "break"
+                        : "notworked"
                 }`;
 
                 return (
@@ -1327,18 +1327,17 @@ class PlanningOfflineStorage {
   }
 
   async init() {
+    if (this.db) return;
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version);
 
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
+      request.onerror = () => {
+        console.error("IndexedDB open error", request.error);
+        reject(request.error);
       };
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-
         if (!db.objectStoreNames.contains("events")) {
           const store = db.createObjectStore("events", { keyPath: "id" });
           store.createIndex("week_year", ["week", "year"]);
@@ -1350,99 +1349,203 @@ class PlanningOfflineStorage {
           store.createIndex("uid", "uid");
         }
       };
+
+      request.onsuccess = () => {
+        this.db = request.result;
+
+        const missingStores = [];
+        if (!this.db.objectStoreNames.contains("events"))
+          missingStores.push("events");
+        if (!this.db.objectStoreNames.contains("tasks"))
+          missingStores.push("tasks");
+
+        if (missingStores.length === 0) {
+          resolve();
+        } else {
+          // Reopen DB with higher version to create missing stores
+          const newVersion = this.db.version + 1;
+          this.db.close();
+          const upgradeRequest = indexedDB.open(this.dbName, newVersion);
+
+          upgradeRequest.onerror = () => {
+            console.error("IndexedDB upgrade error", upgradeRequest.error);
+            reject(upgradeRequest.error);
+          };
+
+          upgradeRequest.onupgradeneeded = (e) => {
+            const upgradeDb = e.target.result;
+            if (!upgradeDb.objectStoreNames.contains("events")) {
+              const store = upgradeDb.createObjectStore("events", {
+                keyPath: "id",
+              });
+              store.createIndex("week_year", ["week", "year"]);
+              store.createIndex("uid", "uid");
+            }
+            if (!upgradeDb.objectStoreNames.contains("tasks")) {
+              const store = upgradeDb.createObjectStore("tasks", {
+                keyPath: "id",
+              });
+              store.createIndex("week_year", ["week", "year"]);
+              store.createIndex("uid", "uid");
+            }
+          };
+
+          upgradeRequest.onsuccess = () => {
+            this.db = upgradeRequest.result;
+            this.version = newVersion;
+            resolve();
+          };
+        }
+      };
     });
   }
 
   async saveEvent(event) {
-    if (!this.db) await this.init();
-    const transaction = this.db.transaction(["events"], "readwrite");
-    const store = transaction.objectStore("events");
-    await store.put(event);
+    try {
+      if (!this.db) await this.init();
+      const transaction = this.db.transaction(["events"], "readwrite");
+      const store = transaction.objectStore("events");
+      await store.put(event);
+    } catch (err) {
+      console.error("IndexedDB saveEvent error", err);
+    }
   }
 
   async getEvents(uid, year, week) {
-    if (!this.db) await this.init();
-    const transaction = this.db.transaction(["events"], "readonly");
-    const store = transaction.objectStore("events");
-    const request = store.getAll();
+    try {
+      if (!this.db) await this.init();
+      const transaction = this.db.transaction(["events"], "readonly");
+      const store = transaction.objectStore("events");
+      const request = store.getAll();
 
-    return new Promise((resolve) => {
-      request.onsuccess = () => {
-        const results = Array.isArray(request.result) ? request.result : [];
-        const events = results.filter(
-          (e) => e.uid === uid && e.year === year && e.week === week
-        );
-        resolve(events);
-      };
-    });
+      return await new Promise((resolve) => {
+        request.onsuccess = () => {
+          const results = Array.isArray(request.result) ? request.result : [];
+          const events = results.filter(
+            (e) => e.uid === uid && e.year === year && e.week === week,
+          );
+          resolve(events);
+        };
+        request.onerror = () => {
+          console.error("IndexedDB getEvents error", request.error);
+          resolve([]);
+        };
+      });
+    } catch (err) {
+      console.error("IndexedDB getEvents error", err);
+      return [];
+    }
   }
 
   async deleteEvent(eventId) {
-    if (!this.db) await this.init();
-    const transaction = this.db.transaction(["events"], "readwrite");
-    const store = transaction.objectStore("events");
-    await store.delete(eventId);
+    try {
+      if (!this.db) await this.init();
+      const transaction = this.db.transaction(["events"], "readwrite");
+      const store = transaction.objectStore("events");
+      await store.delete(eventId);
+    } catch (err) {
+      console.error("IndexedDB deleteEvent error", err);
+    }
   }
 
   async saveTask(task) {
-    if (!this.db) await this.init();
-    const tx = this.db.transaction(["tasks"], "readwrite");
-    const store = tx.objectStore("tasks");
-    await store.put(task);
+    try {
+      if (!this.db) await this.init();
+      const tx = this.db.transaction(["tasks"], "readwrite");
+      const store = tx.objectStore("tasks");
+      await store.put(task);
+    } catch (err) {
+      console.error("IndexedDB saveTask error", err);
+    }
   }
 
   async getTasks(uid, year, week) {
-    if (!this.db) await this.init();
-    const tx = this.db.transaction(["tasks"], "readonly");
-    const store = tx.objectStore("tasks");
-    const request = store.getAll();
-    return new Promise((resolve) => {
-      request.onsuccess = () => {
-        const results = Array.isArray(request.result) ? request.result : [];
-        const tasks = results.filter(
-          (t) => t.uid === uid && t.year === year && t.week === week
-        );
-        resolve(tasks);
-      };
-    });
+    try {
+      if (!this.db) await this.init();
+      const tx = this.db.transaction(["tasks"], "readonly");
+      const store = tx.objectStore("tasks");
+      const request = store.getAll();
+      return await new Promise((resolve) => {
+        request.onsuccess = () => {
+          const results = Array.isArray(request.result) ? request.result : [];
+          const tasks = results.filter(
+            (t) => t.uid === uid && t.year === year && t.week === week,
+          );
+          resolve(tasks);
+        };
+        request.onerror = () => {
+          console.error("IndexedDB getTasks error", request.error);
+          resolve([]);
+        };
+      });
+    } catch (err) {
+      console.error("IndexedDB getTasks error", err);
+      return [];
+    }
   }
 
   async deleteTask(taskId) {
-    if (!this.db) await this.init();
-    const tx = this.db.transaction(["tasks"], "readwrite");
-    const store = tx.objectStore("tasks");
-    await store.delete(taskId);
+    try {
+      if (!this.db) await this.init();
+      const tx = this.db.transaction(["tasks"], "readwrite");
+      const store = tx.objectStore("tasks");
+      await store.delete(taskId);
+    } catch (err) {
+      console.error("IndexedDB deleteTask error", err);
+    }
   }
 
   async clearWeekEvents(uid, year, week) {
-    if (!this.db) await this.init();
-    const transaction = this.db.transaction(["events", "tasks"], "readwrite");
-    const eventStore = transaction.objectStore("events");
-    const taskStore = transaction.objectStore("tasks");
-    const requestEvents = eventStore.getAll();
-    const requestTasks = taskStore.getAll();
+    try {
+      if (!this.db) await this.init();
+      const transaction = this.db.transaction(["events", "tasks"], "readwrite");
+      const eventStore = transaction.objectStore("events");
+      const taskStore = transaction.objectStore("tasks");
+      const requestEvents = eventStore.getAll();
+      const requestTasks = taskStore.getAll();
 
-    return new Promise((resolve) => {
-      let done = 0;
-      const checkDone = () => {
-        done += 1;
-        if (done === 2) resolve();
-      };
-      requestEvents.onsuccess = () => {
-        const results = Array.isArray(requestEvents.result) ? requestEvents.result : [];
-        results
-          .filter((e) => e.uid === uid && e.year === year && e.week === week)
-          .forEach((e) => eventStore.delete(e.id));
-        checkDone();
-      };
-      requestTasks.onsuccess = () => {
-        const results = Array.isArray(requestTasks.result) ? requestTasks.result : [];
-        results
-          .filter((t) => t.uid === uid && t.year === year && t.week === week)
-          .forEach((t) => taskStore.delete(t.id));
-        checkDone();
-      };
-    });
+      return await new Promise((resolve) => {
+        let done = 0;
+        const checkDone = () => {
+          done += 1;
+          if (done === 2) resolve();
+        };
+        requestEvents.onsuccess = () => {
+          const results = Array.isArray(requestEvents.result)
+            ? requestEvents.result
+            : [];
+          results
+            .filter((e) => e.uid === uid && e.year === year && e.week === week)
+            .forEach((e) => eventStore.delete(e.id));
+          checkDone();
+        };
+        requestEvents.onerror = () => {
+          console.error(
+            "IndexedDB clearWeekEvents (events) error",
+            requestEvents.error,
+          );
+          checkDone();
+        };
+        requestTasks.onsuccess = () => {
+          const results = Array.isArray(requestTasks.result)
+            ? requestTasks.result
+            : [];
+          results
+            .filter((t) => t.uid === uid && t.year === year && t.week === week)
+            .forEach((t) => taskStore.delete(t.id));
+          checkDone();
+        };
+        requestTasks.onerror = () => {
+          console.error(
+            "IndexedDB clearWeekEvents (tasks) error",
+            requestTasks.error,
+          );
+          checkDone();
+        };
+      });
+    } catch (err) {
+      console.error("IndexedDB clearWeekEvents error", err);
+    }
   }
 }
 
@@ -1555,6 +1658,8 @@ const Planning = ({ user }) => {
   };
 
   const loadEvents = async (smooth = false) => {
+    let eventsData = [];
+    let tasksData = [];
     try {
       setErrorMessage(null);
       if (smooth) {
@@ -1570,23 +1675,24 @@ const Planning = ({ user }) => {
 
       if (view === "week") {
         const eventsResponse = await apiCallWithRetry(
-          `/planning/events/${ownerId}/${currentYear}/${currentWeek}`
+          `/planning/events/${ownerId}/${currentYear}/${currentWeek}`,
         );
-        let eventsData = [];
         if (
           eventsResponse.data &&
           eventsResponse.data.success &&
           Array.isArray(eventsResponse.data.events)
         ) {
           eventsData = eventsResponse.data.events.map(parseEvent);
-        } else if (eventsResponse.data && eventsResponse.data.success === false) {
+        } else if (
+          eventsResponse.data &&
+          eventsResponse.data.success === false
+        ) {
           setErrorMessage(eventsResponse.data.error || "Erreur serveur");
         }
 
         const tasksResponse = await apiCallWithRetry(
-          `/planning/week/${currentYear}/${currentWeek}${teamParam}`
+          `/planning/week/${currentYear}/${currentWeek}${teamParam}`,
         );
-        let tasksData = [];
         if (
           tasksResponse.data &&
           tasksResponse.data.success &&
@@ -1614,17 +1720,17 @@ const Planning = ({ user }) => {
         }
       } else {
         const response = await apiCallWithRetry(
-          `/planning/month/${currentYear}/${currentMonth}${teamParam}`
+          `/planning/month/${currentYear}/${currentMonth}${teamParam}`,
         );
         if (response.data && response.data.success === false) {
           setErrorMessage(response.data.error || "Erreur serveur");
           setEvents([]);
           setTasks([]);
         } else {
-          let eventsData = Array.isArray(response.data.events)
+          eventsData = Array.isArray(response.data.events)
             ? response.data.events.map(parseEvent)
             : [];
-          let tasksData = Array.isArray(response.data.tasks)
+          tasksData = Array.isArray(response.data.tasks)
             ? response.data.tasks
             : [];
           if (viewingMember) {
@@ -1642,22 +1748,27 @@ const Planning = ({ user }) => {
       }
     } catch (error) {
       console.error("Error loading events:", error);
-      setErrorMessage("Erreur lors du chargement du planning");
-      showToast("Erreur lors du chargement du planning", true);
-      if (!isOnline) {
-        // Load from offline storage
+      try {
         const offlineEvents = await offlineStorage.getEvents(
-          user.uid,
+          ownerId,
           currentYear,
-          currentWeek
+          currentWeek,
         );
         const offlineTasks = await offlineStorage.getTasks(
-          user.uid,
+          ownerId,
           currentYear,
-          currentWeek
+          currentWeek,
         );
-        setEvents(offlineEvents.map(parseEvent));
-        setTasks(offlineTasks);
+        eventsData = offlineEvents.map(parseEvent);
+        tasksData = offlineTasks;
+        setEvents(eventsData);
+        setTasks(tasksData);
+      } catch (idbError) {
+        console.error("Fallback IndexedDB error", idbError);
+        eventsData = [];
+        tasksData = [];
+        setEvents([]);
+        setTasks([]);
       }
       if (smooth) {
         setTransitioning(false);
@@ -1667,6 +1778,7 @@ const Planning = ({ user }) => {
         setLoading(false);
       }
     }
+    return { success: true, events: eventsData };
   };
 
   // Revenue Summary Component - Colorized Cards
@@ -1681,10 +1793,10 @@ const Planning = ({ user }) => {
       const safeEvents = Array.isArray(events) ? events : [];
       const safeTasks = Array.isArray(tasks) ? tasks : [];
       const weekEvents = safeEvents.filter(
-        (e) => e.week === currentWeek && e.year === currentYear
+        (e) => e.week === currentWeek && e.year === currentYear,
       );
       const weekTasks = safeTasks.filter(
-        (t) => t.week === currentWeek && t.year === currentYear
+        (t) => t.week === currentWeek && t.year === currentYear,
       );
       const revenue = { paid: 0, unpaid: 0, pending: 0 };
 
@@ -1842,10 +1954,10 @@ const Planning = ({ user }) => {
       eventType === "paid"
         ? "event-meeting"
         : eventType === "unpaid"
-        ? "event-task"
-        : eventType === "pending"
-        ? "event-break"
-        : "event-notworked"
+          ? "event-task"
+          : eventType === "pending"
+            ? "event-break"
+            : "event-notworked"
     }`;
 
     return (
@@ -1971,7 +2083,7 @@ const Planning = ({ user }) => {
           event.day === day &&
           (event.start_time || event.start) === time &&
           event.week === currentWeek &&
-          event.year === currentYear
+          event.year === currentYear,
       );
     };
 
@@ -1991,8 +2103,8 @@ const Planning = ({ user }) => {
           task.week === currentWeek &&
           task.year === currentYear &&
           task.time_slots?.some(
-            (slot) => slot.day === dayName && slot.start === time
-          )
+            (slot) => slot.day === dayName && slot.start === time,
+          ),
       );
     };
 
@@ -2031,10 +2143,10 @@ const Planning = ({ user }) => {
                         (event.status || event.type) === "paid"
                           ? "event-meeting"
                           : (event.status || event.type) === "unpaid"
-                          ? "event-task"
-                          : (event.status || event.type) === "pending"
-                          ? "event-break"
-                          : "event-notworked"
+                            ? "event-task"
+                            : (event.status || event.type) === "pending"
+                              ? "event-break"
+                              : "event-notworked"
                       } ${transitioning ? "" : "new-event"}`}
                     >
                       <div className="planning-event-description">
@@ -2251,7 +2363,7 @@ const Planning = ({ user }) => {
       console.error("Error creating event:", error);
       showToast(
         `Erreur: ${error.response?.data?.detail || error.message}`,
-        true
+        true,
       );
       // If offline, save locally only
       if (!isOnline) {
@@ -2288,16 +2400,19 @@ const Planning = ({ user }) => {
         status: eventData.type,
       };
 
-      const response = await apiCall(`/planning/events/${eventModal.event.id}`, {
-        method: "PUT",
-        data: updateData,
-      });
+      const response = await apiCall(
+        `/planning/events/${eventModal.event.id}`,
+        {
+          method: "PUT",
+          data: updateData,
+        },
+      );
       if (response.data && response.data.success === false) {
         return;
       }
       const updatedEvent = response.data.event;
       console.log(
-        `Élément enregistré avec succès (ID: ${eventModal.event.id})`
+        `Élément enregistré avec succès (ID: ${eventModal.event.id})`,
       );
       showToast(`Élément enregistré avec succès (ID: ${eventModal.event.id})`);
 
@@ -2314,8 +2429,8 @@ const Planning = ({ user }) => {
                 start: eventData.start, // Keep both formats for compatibility
                 end: eventData.end,
               }
-            : event
-        )
+            : event,
+        ),
       );
 
       setEventModal({
@@ -2328,7 +2443,7 @@ const Planning = ({ user }) => {
       console.error("Error updating event:", error);
       showToast(
         `Erreur: ${error.response?.data?.detail || error.message}`,
-        true
+        true,
       );
     }
   };
@@ -2346,7 +2461,7 @@ const Planning = ({ user }) => {
 
       // Update local state immediately
       setEvents((prevEvents) =>
-        prevEvents.filter((event) => event.id !== eventId)
+        prevEvents.filter((event) => event.id !== eventId),
       );
       setEventModal({
         isOpen: false,
@@ -2391,7 +2506,7 @@ const Planning = ({ user }) => {
       console.error("Error creating task:", error);
       showToast(
         `Erreur: ${error.response?.data?.detail || error.message}`,
-        true
+        true,
       );
       if (!isOnline) {
         const localTask = {
@@ -2433,8 +2548,8 @@ const Planning = ({ user }) => {
       // Update local state immediately
       setTasks((prevTasks) =>
         prevTasks.map((task) =>
-          task.id === taskModal.task.id ? { ...task, ...taskData } : task
-        )
+          task.id === taskModal.task.id ? { ...task, ...taskData } : task,
+        ),
       );
 
       setTaskModal({ isOpen: false, task: null });
@@ -2442,7 +2557,7 @@ const Planning = ({ user }) => {
       console.error("Error updating task:", error);
       showToast(
         `Erreur: ${error.response?.data?.detail || error.message}`,
-        true
+        true,
       );
       if (!isOnline) {
         const localTask = {
@@ -2452,7 +2567,7 @@ const Planning = ({ user }) => {
         };
         await offlineStorage.saveTask(localTask);
         setTasks((prev) =>
-          prev.map((t) => (t.id === localTask.id ? localTask : t))
+          prev.map((t) => (t.id === localTask.id ? localTask : t)),
         );
         setTaskModal({ isOpen: false, task: null });
       }
@@ -2480,47 +2595,47 @@ const Planning = ({ user }) => {
   const handleClearWeek = async () => {
     if (
       window.confirm(
-        "Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?"
+        "Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?",
       )
     ) {
       try {
         // Delete all events for current week
         const safeEvents = Array.isArray(events) ? events : [];
         const weekEvents = safeEvents.filter(
-          (e) => e.week === currentWeek && e.year === currentYear
+          (e) => e.week === currentWeek && e.year === currentYear,
         );
         await Promise.all(
           weekEvents.map((event) =>
-            apiCall(`/planning/events/${event.id}`, { method: "DELETE" })
-          )
+            apiCall(`/planning/events/${event.id}`, { method: "DELETE" }),
+          ),
         );
         const safeTasks = Array.isArray(tasks) ? tasks : [];
         const weekTasks = safeTasks.filter(
-          (t) => t.week === currentWeek && t.year === currentYear
+          (t) => t.week === currentWeek && t.year === currentYear,
         );
         await Promise.all(
           weekTasks.map((task) =>
-            apiCall(`/planning/tasks/${task.id}`, { method: "DELETE" })
-          )
+            apiCall(`/planning/tasks/${task.id}`, { method: "DELETE" }),
+          ),
         );
 
         await offlineStorage.clearWeekEvents(
           user.uid,
           currentYear,
-          currentWeek
+          currentWeek,
         );
 
         // Update local state immediately
         setEvents((prevEvents) =>
           prevEvents.filter(
             (event) =>
-              !(event.week === currentWeek && event.year === currentYear)
-          )
+              !(event.week === currentWeek && event.year === currentYear),
+          ),
         );
         setTasks((prevTasks) =>
           prevTasks.filter(
-            (task) => !(task.week === currentWeek && task.year === currentYear)
-          )
+            (task) => !(task.week === currentWeek && task.year === currentYear),
+          ),
         );
       } catch (error) {
         console.error("Error clearing week:", error);
@@ -2548,7 +2663,7 @@ const Planning = ({ user }) => {
       setErrorMessage(null);
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       const response = await apiCallWithRetry(
-        `/planning/week/${newYear}/${newWeek}${teamParam}`
+        `/planning/week/${newYear}/${newWeek}${teamParam}`,
       );
       let eventsData = Array.isArray(response.data.events)
         ? response.data.events.map(parseEvent)
@@ -2592,7 +2707,7 @@ const Planning = ({ user }) => {
       setErrorMessage(null);
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       const response = await apiCallWithRetry(
-        `/planning/month/${newYear}/${newMonth}${teamParam}`
+        `/planning/month/${newYear}/${newMonth}${teamParam}`,
       );
       let eventsData = Array.isArray(response.data.events)
         ? response.data.events.map(parseEvent)
@@ -2733,7 +2848,7 @@ const Planning = ({ user }) => {
                   setViewingMember(null);
                 } else {
                   const member = team.members.find(
-                    (m) => m.uid === e.target.value
+                    (m) => m.uid === e.target.value,
                   );
                   setViewingMember(member);
                 }
@@ -2858,8 +2973,8 @@ const Planning = ({ user }) => {
                 ? "transitioning"
                 : "transitioning-reverse"
               : transitionDirection === "backward"
-              ? "entering-reverse"
-              : ""
+                ? "entering-reverse"
+                : ""
           }`}
         >
           <div className="planning-layout">
@@ -2891,8 +3006,8 @@ const Planning = ({ user }) => {
                 ? "transitioning"
                 : "transitioning-reverse"
               : transitionDirection === "backward"
-              ? "entering-reverse"
-              : ""
+                ? "entering-reverse"
+                : ""
           }`}
         >
           <div className="planning-layout">
@@ -3439,8 +3554,8 @@ const Quotes = ({ user }) => {
         showToast(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
         setQuotes((prevQuotes) =>
           prevQuotes.map((q) =>
-            q.id === editingQuote.id ? { ...q, ...quoteData } : q
-          )
+            q.id === editingQuote.id ? { ...q, ...quoteData } : q,
+          ),
         );
       } else {
         const response = await apiCall("/quotes", {
@@ -3456,7 +3571,7 @@ const Quotes = ({ user }) => {
       console.error("Error saving quote:", error);
       showToast(
         `Erreur: ${error.response?.data?.detail || error.message}`,
-        true
+        true,
       );
     }
   };
@@ -3468,7 +3583,7 @@ const Quotes = ({ user }) => {
         data: { status },
       });
       setQuotes((prevQuotes) =>
-        prevQuotes.map((q) => (q.id === quoteId ? { ...q, status } : q))
+        prevQuotes.map((q) => (q.id === quoteId ? { ...q, status } : q)),
       );
     } catch (error) {
       console.error("Error updating quote status:", error);
@@ -3620,7 +3735,7 @@ const Quotes = ({ user }) => {
                       </h3>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          quote.status
+                          quote.status,
                         )}`}
                       >
                         {getStatusText(quote.status)}
@@ -4016,7 +4131,7 @@ const InvoiceModal = ({
                         handleItemChange(
                           index,
                           "quantity",
-                          parseFloat(e.target.value) || 0
+                          parseFloat(e.target.value) || 0,
                         )
                       }
                       className="form-input"
@@ -4033,7 +4148,7 @@ const InvoiceModal = ({
                         handleItemChange(
                           index,
                           "unit_price",
-                          parseFloat(e.target.value) || 0
+                          parseFloat(e.target.value) || 0,
                         )
                       }
                       className="form-input"
@@ -4187,13 +4302,13 @@ const Invoices = ({ user }) => {
           data: invoiceData,
         });
         console.log(
-          `Élément enregistré avec succès (ID: ${editingInvoice.id})`
+          `Élément enregistré avec succès (ID: ${editingInvoice.id})`,
         );
         showToast(`Élément enregistré avec succès (ID: ${editingInvoice.id})`);
         setInvoices((prevInvoices) =>
           prevInvoices.map((i) =>
-            i.id === editingInvoice.id ? { ...i, ...invoiceData } : i
-          )
+            i.id === editingInvoice.id ? { ...i, ...invoiceData } : i,
+          ),
         );
       } else {
         const response = await apiCall("/invoices", {
@@ -4209,7 +4324,7 @@ const Invoices = ({ user }) => {
       console.error("Error saving invoice:", error);
       showToast(
         `Erreur: ${error.response?.data?.detail || error.message}`,
-        true
+        true,
       );
     }
   };
@@ -4221,7 +4336,7 @@ const Invoices = ({ user }) => {
         data: { status },
       });
       setInvoices((prevInvoices) =>
-        prevInvoices.map((i) => (i.id === invoiceId ? { ...i, status } : i))
+        prevInvoices.map((i) => (i.id === invoiceId ? { ...i, status } : i)),
       );
     } catch (error) {
       console.error("Error updating invoice status:", error);
@@ -4366,7 +4481,7 @@ const Invoices = ({ user }) => {
                       </h3>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          invoice.status
+                          invoice.status,
                         )}`}
                       >
                         {getStatusText(invoice.status)}
