@@ -319,6 +319,16 @@ def team_col(team_id: str, name: str):
     return db.collection("teams").document(team_id).collection(name)
 
 
+def global_event_doc(year: int, week: int, event_id: str):
+    """Return document reference for event stored by year and week."""
+    return (
+        db.collection("events")
+        .document(str(year))
+        .collection(str(week))
+        .document(event_id)
+    )
+
+
 async def stream_docs(query):
     docs = await asyncio.to_thread(lambda: list(query.stream()))
     return [d.to_dict() for d in docs]
@@ -478,6 +488,10 @@ async def list_events(
     week: Optional[int] = None,
     user: Dict[str, Any] = Depends(verify_token),
 ):
+    if year is not None and week is not None:
+        events_ref = db.collection("events").document(str(year)).collection(str(week))
+        events = await stream_docs(events_ref)
+        return events
     events_ref = user_col(user["uid"], "events")
     if year is not None:
         events_ref = events_ref.where("year", "==", year)
@@ -500,13 +514,16 @@ async def create_event(
         await asyncio.to_thread(
             user_col(user["uid"], "events").document(event.id).set, event.dict()
         )
+        await asyncio.to_thread(
+            global_event_doc(year, week, event.id).set, event.dict()
+        )
         user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
         team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
         if team_id:
             await asyncio.to_thread(
                 team_col(team_id, "events").document(event.id).set, event.dict()
             )
-        return event
+        return {"success": True, "event": event.dict()}
     except Exception as e:
         logger.error("create_event error: %s", e, exc_info=True)
         return {"success": False, "error": str(e)}
@@ -518,9 +535,20 @@ async def update_event(
     event_request: EventCreateRequest,
     user: Dict[str, Any] = Depends(verify_token),
 ):
+    snap = await asyncio.to_thread(
+        user_col(user["uid"], "events").document(event_id).get
+    )
+    if not snap.exists:
+        return {"success": False, "error": "Event not found"}
+
+    existing = snap.to_dict()
     update_data = {**event_request.dict(), "updated_at": datetime.utcnow()}
     await asyncio.to_thread(
         user_col(user["uid"], "events").document(event_id).update, update_data
+    )
+    await asyncio.to_thread(
+        global_event_doc(existing["year"], existing["week"], event_id).set,
+        {**existing, **update_data},
     )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
@@ -531,7 +559,7 @@ async def update_event(
     updated = await asyncio.to_thread(
         user_col(user["uid"], "events").document(event_id).get
     )
-    return updated.to_dict()
+    return {"success": True, "event": updated.to_dict()}
 
 
 @api_router.delete("/planning/events/{event_id}")
@@ -540,12 +568,16 @@ async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_toke
     snap = await asyncio.to_thread(doc_ref.get)
     if not snap.exists:
         raise HTTPException(status_code=404, detail="Event not found")
+    data = snap.to_dict()
     await asyncio.to_thread(doc_ref.delete)
+    await asyncio.to_thread(
+        global_event_doc(data["year"], data["week"], event_id).delete
+    )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
     if team_id:
         await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
-    return {"message": "Event deleted"}
+    return {"success": True, "event": None}
 
 
 @api_router.get("/planning/earnings/{year}/{week}")

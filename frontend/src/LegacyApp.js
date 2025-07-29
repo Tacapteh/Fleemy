@@ -1129,9 +1129,9 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
                 marginTop: "8px",
               }}
             >
-              {availableColors.map((color) => (
+              {availableColors.map((color, index) => (
                 <button
-                  key={color}
+                  key={`${color}-${index}`}
                   type="button"
                   onClick={() => handleInputChange("color", color)}
                   style={{
@@ -1162,9 +1162,9 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
                 overflowY: "auto",
               }}
             >
-              {availableIcons.map((icon) => (
+              {availableIcons.map((icon, index) => (
                 <button
-                  key={icon}
+                  key={`${icon}-${index}`}
                   type="button"
                   onClick={() => handleInputChange("icon", icon)}
                   style={{
@@ -1539,6 +1539,7 @@ const Planning = ({ user }) => {
     } catch (error) {
       console.error("Error loading events:", error);
       setErrorMessage("Erreur lors du chargement du planning");
+      showToast("Erreur lors du chargement du planning", true);
       if (!isOnline) {
         // Load from offline storage
         const offlineEvents = await offlineStorage.getEvents(
@@ -2109,19 +2110,21 @@ const Planning = ({ user }) => {
         return;
       }
 
+      const createdEvent = response.data.event;
+
       // Save to offline storage
-      await offlineStorage.saveEvent(response.data);
+      await offlineStorage.saveEvent(createdEvent);
 
       // Update local state immediately
       const newEvent = {
-        ...response.data,
+        ...createdEvent,
         day: eventData.day, // Keep day as number for local filtering
         start: eventData.start, // Keep both formats for compatibility
         end: eventData.end,
       };
 
-      console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
-      showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
+      console.log(`Élément enregistré avec succès (ID: ${createdEvent.id})`);
+      showToast(`Élément enregistré avec succès (ID: ${createdEvent.id})`);
 
       setEvents((prevEvents) => [...prevEvents, newEvent]);
       setEventModal({
