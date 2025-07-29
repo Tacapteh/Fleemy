@@ -1694,6 +1694,8 @@ const Planning = ({ user }) => {
           eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
         }
         setEvents(eventsData);
+        // Display immediately the preloaded events
+        if (!smooth) setLoading(false);
 
         let apiEvents = [];
         let apiSuccess = false;
@@ -1720,10 +1722,12 @@ const Planning = ({ user }) => {
               true
             );
             console.log("Firestore fetch failed, staying in offline mode");
+            showToast("Mode hors ligne", true);
           }
         } catch (err) {
           console.error("Event API error", err);
           console.log("Firestore fetch threw an error, using offline data");
+          showToast("Mode hors ligne", true);
         }
 
         if (apiSuccess) {
