@@ -111,7 +111,8 @@ async def error_handling_middleware(request: Request, call_next):
         return JSONResponse(status_code=status, content={"error": exc.detail})
     except Exception as exc:
         logger.error("Unhandled server error on %s: %s", request.url.path, exc, exc_info=True)
-        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+        # Never expose raw 500 errors to the client
+        return JSONResponse(status_code=200, content={"success": False, "error": str(exc)})
 
 
 # Create a router with the /api prefix
@@ -328,10 +329,11 @@ async def stream_docs(query):
 
 
 @api_router.get("/auth/me")
-async def get_me(user: Dict[str, Any] = Depends(verify_token)):
+async def get_me(request: Request):
     """Return the authenticated user's info and create the DB entry if missing."""
-    logger.info("/auth/me called for %s", user.get("uid"))
     try:
+        user = await verify_token(request)
+        logger.info("/auth/me called for %s", user.get("uid"))
         user_ref = user_doc(user["uid"])
         snapshot = await asyncio.to_thread(user_ref.get)
         db_user = snapshot.to_dict() if snapshot.exists else None
