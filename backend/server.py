@@ -522,6 +522,7 @@ async def list_events(
     events = await stream_docs(events_ref)
     events = events if isinstance(events, list) else []
     logger.info("Returning %d events for user %s", len(events), user["uid"])
+    logger.debug("Events payload: %s", events)
     return {"success": True, "events": events}
 
 
@@ -547,6 +548,7 @@ async def list_events_by_owner(owner_id: str, year: int, week: int):
             week,
             year,
         )
+        logger.debug("Events payload: %s", events)
         return {"success": True, "events": events}
     except Exception as e:
         logger.error("list_events_by_owner error: %s", e, exc_info=True)

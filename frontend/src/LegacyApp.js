@@ -1680,6 +1680,21 @@ const Planning = ({ user }) => {
       const ownerId = viewingMember ? viewingMember.uid : user.uid;
 
       if (view === "week") {
+        // Load events from IndexedDB first so the UI is populated immediately
+        const preEvents = await offlineStorage.getEvents(
+          ownerId,
+          currentYear,
+          currentWeek,
+        );
+        console.log(
+          `[IndexedDB] Preloaded ${preEvents.length} events before API call`,
+        );
+        eventsData = preEvents.map(parseEvent);
+        if (viewingMember) {
+          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+        }
+        setEvents(eventsData);
+
         let apiEvents = [];
         let apiSuccess = false;
         try {
@@ -1704,25 +1719,20 @@ const Planning = ({ user }) => {
                 "Erreur lors du chargement des événements",
               true
             );
+            console.log("Firestore fetch failed, staying in offline mode");
           }
         } catch (err) {
           console.error("Event API error", err);
+          console.log("Firestore fetch threw an error, using offline data");
         }
-
-        const offlineEvents = await offlineStorage.getEvents(
-          ownerId,
-          currentYear,
-          currentWeek,
-        );
-        console.log(`Loaded ${offlineEvents.length} events from IndexedDB`);
 
         if (apiSuccess) {
           const eventMap = new Map();
-          offlineEvents.map(parseEvent).forEach((e) => eventMap.set(e.id, e));
+          preEvents.map(parseEvent).forEach((e) => eventMap.set(e.id, e));
           apiEvents.forEach((e) => eventMap.set(e.id, e));
           eventsData = Array.from(eventMap.values());
         } else {
-          eventsData = offlineEvents.map(parseEvent);
+          eventsData = preEvents.map(parseEvent);
           console.log("Using IndexedDB fallback for events");
         }
 
@@ -1768,7 +1778,9 @@ const Planning = ({ user }) => {
           for (const evt of eventsData) {
             await offlineStorage.saveEvent({ ...evt, uid: ownerId });
           }
-          console.log("IndexedDB updated after Firestore fetch");
+          console.log(
+            "Firestore succeeded - IndexedDB synchronized with latest events",
+          );
         }
       } else {
         const response = await apiCallWithRetry(
