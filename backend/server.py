@@ -319,13 +319,27 @@ def team_col(team_id: str, name: str):
     return db.collection("teams").document(team_id).collection(name)
 
 
-def global_event_doc(year: int, week: int, event_id: str):
-    """Return document reference for event stored by year and week."""
+def global_event_doc(year: int, week: int, owner_id: str, event_id: str):
+    """Return document reference for event stored by year, week and owner."""
     return (
         db.collection("events")
         .document(str(year))
         .collection(str(week))
+        .document(owner_id)
+        .collection("items")
         .document(event_id)
+    )
+
+
+def global_task_doc(year: int, week: int, owner_id: str, task_id: str):
+    """Return document reference for task stored by year, week and owner."""
+    return (
+        db.collection("tasks")
+        .document(str(year))
+        .collection(str(week))
+        .document(owner_id)
+        .collection("items")
+        .document(task_id)
     )
 
 
@@ -424,11 +438,11 @@ async def get_week_planning(
             events, tasks = [], []
 
         logger.info("Found %d events and %d tasks", len(events), len(tasks))
-        return {"events": events or [], "tasks": tasks or []}
+        return {"success": True, "events": events or [], "tasks": tasks or []}
 
     except Exception as e:
         logger.error("get_week_planning error: %s", e, exc_info=True)
-        return {"events": [], "tasks": []}
+        return {"success": False, "error": str(e), "events": [], "tasks": []}
 
 
 # Simple test endpoint to validate CORS on planning routes
@@ -444,42 +458,45 @@ async def get_month_planning(
     team_id: Optional[str] = None,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    last_day = calendar.monthrange(year, month)[1]
-    pairs = {
-        (
-            datetime(year, month, day).isocalendar().year,
-            datetime(year, month, day).isocalendar().week,
-        )
-        for day in range(1, last_day + 1)
-    }
-    or_filters = [{"year": y, "week": w} for y, w in pairs]
+    try:
+        last_day = calendar.monthrange(year, month)[1]
+        pairs = {
+            (
+                datetime(year, month, day).isocalendar().year,
+                datetime(year, month, day).isocalendar().week,
+            )
+            for day in range(1, last_day + 1)
+        }
 
-    if team_id:
-        team_snap = await asyncio.to_thread(
-            db.collection("teams").document(team_id).get
-        )
-        team = team_snap.to_dict() if team_snap.exists else None
-        if not team or user["uid"] not in (
-            team.get("members", []) + [team.get("created_by")]
-        ):
-            raise HTTPException(status_code=403, detail="Not authorized for this team")
-        events_ref = team_col(team_id, "events")
-        tasks_ref = team_col(team_id, "tasks")
-    else:
-        events_ref = user_col(user["uid"], "events")
-        tasks_ref = user_col(user["uid"], "tasks")
+        if team_id:
+            team_snap = await asyncio.to_thread(
+                db.collection("teams").document(team_id).get
+            )
+            team = team_snap.to_dict() if team_snap.exists else None
+            if not team or user["uid"] not in (
+                team.get("members", []) + [team.get("created_by")]
+            ):
+                raise HTTPException(status_code=403, detail="Not authorized for this team")
+            events_ref = team_col(team_id, "events")
+            tasks_ref = team_col(team_id, "tasks")
+        else:
+            events_ref = user_col(user["uid"], "events")
+            tasks_ref = user_col(user["uid"], "tasks")
 
-    events: List[Dict[str, Any]] = []
-    tasks: List[Dict[str, Any]] = []
-    for y, w in pairs:
-        events += await stream_docs(
-            events_ref.where("year", "==", y).where("week", "==", w)
-        )
-        tasks += await stream_docs(
-            tasks_ref.where("year", "==", y).where("week", "==", w)
-        )
+        events: List[Dict[str, Any]] = []
+        tasks: List[Dict[str, Any]] = []
+        for y, w in pairs:
+            events += await stream_docs(
+                events_ref.where("year", "==", y).where("week", "==", w)
+            )
+            tasks += await stream_docs(
+                tasks_ref.where("year", "==", y).where("week", "==", w)
+            )
 
-    return {"events": events, "tasks": tasks}
+        return {"success": True, "events": events, "tasks": tasks}
+    except Exception as e:
+        logger.error("get_month_planning error: %s", e, exc_info=True)
+        return {"success": False, "error": str(e), "events": [], "tasks": []}
 
 
 @api_router.get("/planning/events")
@@ -491,14 +508,14 @@ async def list_events(
     if year is not None and week is not None:
         events_ref = db.collection("events").document(str(year)).collection(str(week))
         events = await stream_docs(events_ref)
-        return events
+        return {"success": True, "events": events}
     events_ref = user_col(user["uid"], "events")
     if year is not None:
         events_ref = events_ref.where("year", "==", year)
     if week is not None:
         events_ref = events_ref.where("week", "==", week)
     events = await stream_docs(events_ref)
-    return events
+    return {"success": True, "events": events}
 
 
 @api_router.post("/planning/events")
@@ -514,11 +531,15 @@ async def create_event(
         await asyncio.to_thread(
             user_col(user["uid"], "events").document(event.id).set, event.dict()
         )
-        await asyncio.to_thread(
-            global_event_doc(year, week, event.id).set, event.dict()
-        )
+        owner_id = user["uid"]
         user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
         team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+        if team_id:
+            owner_id = team_id
+        await asyncio.to_thread(
+            global_event_doc(year, week, owner_id, event.id).set,
+            {**event.dict(), "owner_id": owner_id},
+        )
         if team_id:
             await asyncio.to_thread(
                 team_col(team_id, "events").document(event.id).set, event.dict()
@@ -546,12 +567,15 @@ async def update_event(
     await asyncio.to_thread(
         user_col(user["uid"], "events").document(event_id).update, update_data
     )
-    await asyncio.to_thread(
-        global_event_doc(existing["year"], existing["week"], event_id).set,
-        {**existing, **update_data},
-    )
+    owner_id = user["uid"]
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    if team_id:
+        owner_id = team_id
+    await asyncio.to_thread(
+        global_event_doc(existing["year"], existing["week"], owner_id, event_id).set,
+        {**existing, **update_data, "owner_id": owner_id},
+    )
     if team_id:
         await asyncio.to_thread(
             team_col(team_id, "events").document(event_id).update, update_data
@@ -570,14 +594,15 @@ async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_toke
         raise HTTPException(status_code=404, detail="Event not found")
     data = snap.to_dict()
     await asyncio.to_thread(doc_ref.delete)
-    await asyncio.to_thread(
-        global_event_doc(data["year"], data["week"], event_id).delete
-    )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    owner_id = team_id if team_id else user["uid"]
+    await asyncio.to_thread(
+        global_event_doc(data["year"], data["week"], owner_id, event_id).delete
+    )
     if team_id:
         await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
-    return {"success": True, "event": None}
+    return {"success": True, "message": "deleted"}
 
 
 @api_router.get("/planning/earnings/{year}/{week}")
@@ -657,7 +682,7 @@ async def get_earnings(
 
     earnings["total"] = earnings["paid"] + earnings["unpaid"] + earnings["pending"]
 
-    return earnings
+    return {"success": True, "earnings": earnings}
 
 
 # Tasks endpoints
@@ -673,7 +698,7 @@ async def list_tasks(
     if week is not None:
         tasks_ref = tasks_ref.where("week", "==", week)
     tasks = await stream_docs(tasks_ref)
-    return tasks
+    return {"success": True, "tasks": tasks}
 
 
 # Tasks endpoints
@@ -691,11 +716,16 @@ async def create_task(
     )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    owner_id = team_id if team_id else user["uid"]
+    await asyncio.to_thread(
+        global_task_doc(year, week, owner_id, task.id).set,
+        {**task.dict(), "owner_id": owner_id},
+    )
     if team_id:
         await asyncio.to_thread(
             team_col(team_id, "tasks").document(task.id).set, task.dict()
         )
-    return task
+    return {"success": True, "task": task.dict()}
 
 
 @api_router.put("/planning/tasks/{task_id}")
@@ -704,12 +734,24 @@ async def update_task(
     task_request: TaskCreateRequest,
     user: Dict[str, Any] = Depends(verify_token),
 ):
+    snap = await asyncio.to_thread(
+        user_col(user["uid"], "tasks").document(task_id).get
+    )
+    if not snap.exists:
+        return {"success": False, "error": "Task not found"}
+
+    existing = snap.to_dict()
     update_data = {**task_request.dict(), "updated_at": datetime.utcnow()}
     await asyncio.to_thread(
         user_col(user["uid"], "tasks").document(task_id).update, update_data
     )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    owner_id = team_id if team_id else user["uid"]
+    await asyncio.to_thread(
+        global_task_doc(existing["year"], existing["week"], owner_id, task_id).set,
+        {**existing, **update_data, "owner_id": owner_id},
+    )
     if team_id:
         await asyncio.to_thread(
             team_col(team_id, "tasks").document(task_id).update, update_data
@@ -717,7 +759,7 @@ async def update_task(
     updated = await asyncio.to_thread(
         user_col(user["uid"], "tasks").document(task_id).get
     )
-    return updated.to_dict()
+    return {"success": True, "task": updated.to_dict()}
 
 
 @api_router.delete("/planning/tasks/{task_id}")
@@ -729,9 +771,14 @@ async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)
     await asyncio.to_thread(doc_ref.delete)
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
+    owner_id = team_id if team_id else user["uid"]
+    data = snap.to_dict()
+    await asyncio.to_thread(
+        global_task_doc(data["year"], data["week"], owner_id, task_id).delete
+    )
     if team_id:
         await asyncio.to_thread(team_col(team_id, "tasks").document(task_id).delete)
-    return {"message": "Task deleted"}
+    return {"success": True, "message": "deleted"}
 
 
 @api_router.get("/todos")
