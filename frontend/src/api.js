@@ -25,6 +25,7 @@ api.interceptors.request.use(async (config) => {
     try {
       const token = await currentUser.getIdToken();
       config.headers.Authorization = `Bearer ${token}`;
+      config.headers['X-User-Id'] = currentUser.uid;
     } catch (e) {
       console.warn("Erreur lors de la récupération du token Firebase :", e);
     }
