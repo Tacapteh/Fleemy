@@ -1638,6 +1638,7 @@ const Planning = ({ user }) => {
   const currentYear = currentDate.getFullYear();
   const currentWeek = getWeekNumber(currentDate);
   const currentMonth = currentDate.getMonth();
+  const weekKey = `${currentYear}-W${currentWeek}`;
 
   useEffect(() => {
     const key = `${currentDate.getFullYear()}-W${getWeekNumber(currentDate)}`;
@@ -1701,6 +1702,10 @@ const Planning = ({ user }) => {
   const loadEvents = async (smooth = false, date = currentDate) => {
     let eventsData = [];
     let tasksData = [];
+    const year = date.getFullYear();
+    const week = getWeekNumber(date);
+    const month = date.getMonth();
+    const weekKey = `${year}-W${week}`;
     try {
       setErrorMessage(null);
       if (smooth) {
@@ -1711,12 +1716,8 @@ const Planning = ({ user }) => {
         setLoading(true);
       }
 
-      const year = date.getFullYear();
-      const week = getWeekNumber(date);
-      const month = date.getMonth();
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       const ownerId = viewingMember ? viewingMember.uid : user.uid;
-      const weekKey = `${year}-W${week}`;
       eventsData = allEvents[weekKey] ? allEvents[weekKey].map((e) => ({ ...e })) : [];
 
       if (view === "week") {
