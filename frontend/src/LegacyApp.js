@@ -1597,6 +1597,7 @@ const Planning = ({ user }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineStorage] = useState(new PlanningOfflineStorage());
   const [errorMessage, setErrorMessage] = useState(null);
+  const [allEvents, setAllEvents] = useState({});
 
   const backendDayNames = [
     "monday",
@@ -1637,6 +1638,13 @@ const Planning = ({ user }) => {
   const currentYear = currentDate.getFullYear();
   const currentWeek = getWeekNumber(currentDate);
   const currentMonth = currentDate.getMonth();
+
+  useEffect(() => {
+    const key = `${currentDate.getFullYear()}-W${getWeekNumber(currentDate)}`;
+    if (allEvents[key]) {
+      setEvents(allEvents[key]);
+    }
+  }, [allEvents, currentDate]);
 
   useEffect(() => {
     // Initialize offline storage
@@ -1690,7 +1698,7 @@ const Planning = ({ user }) => {
     }
   };
 
-  const loadEvents = async (smooth = false) => {
+  const loadEvents = async (smooth = false, date = currentDate) => {
     let eventsData = [];
     let tasksData = [];
     try {
@@ -1703,20 +1711,28 @@ const Planning = ({ user }) => {
         setLoading(true);
       }
 
+      const year = date.getFullYear();
+      const week = getWeekNumber(date);
+      const month = date.getMonth();
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       const ownerId = viewingMember ? viewingMember.uid : user.uid;
+      const weekKey = `${year}-W${week}`;
+      eventsData = allEvents[weekKey] ? allEvents[weekKey].map((e) => ({ ...e })) : [];
 
       if (view === "week") {
         // Load events from IndexedDB first so the UI is populated immediately
         const preEvents = await offlineStorage.getEvents(
           ownerId,
-          currentYear,
-          currentWeek,
+          year,
+          week,
         );
         console.log(
           `[IndexedDB] Preloaded ${preEvents.length} events before API call`,
         );
-        eventsData = preEvents.map(parseEvent);
+        const preParsed = preEvents.map(parseEvent);
+        const mapEv = new Map(eventsData.map((e) => [e.id, e]));
+        preParsed.forEach((e) => mapEv.set(e.id, e));
+        eventsData = Array.from(mapEv.values());
         if (viewingMember) {
           eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
         }
@@ -1728,7 +1744,7 @@ const Planning = ({ user }) => {
         let apiSuccess = false;
         try {
           const eventsResponse = await apiCallWithRetry(
-            `/planning/events/${ownerId}/${currentYear}/${currentWeek}`,
+            `/planning/events/${ownerId}/${year}/${week}`,
           );
           console.log("/planning/events response", eventsResponse.data);
           if (
@@ -1780,7 +1796,7 @@ const Planning = ({ user }) => {
         }
 
         const tasksResponse = await apiCallWithRetry(
-          `/planning/week/${currentYear}/${currentWeek}${teamParam}`,
+          `/planning/week/${year}/${week}${teamParam}`,
         );
         console.log("/planning/week response", tasksResponse.data);
         if (
@@ -1803,8 +1819,8 @@ const Planning = ({ user }) => {
           );
           const offlineTasks = await offlineStorage.getTasks(
             ownerId,
-            currentYear,
-            currentWeek,
+            year,
+            week,
           );
           tasksData = offlineTasks;
         }
@@ -1818,11 +1834,7 @@ const Planning = ({ user }) => {
 
         if (apiSuccess) {
           // Synchronize IndexedDB with data from Firestore and local events
-          await offlineStorage.clearWeekEvents(
-            ownerId,
-            currentYear,
-            currentWeek,
-          );
+          await offlineStorage.clearWeekEvents(ownerId, year, week);
           for (const evt of eventsData) {
             await offlineStorage.saveEvent({ ...evt, uid: ownerId });
           }
@@ -1833,7 +1845,7 @@ const Planning = ({ user }) => {
         }
       } else {
         const response = await apiCallWithRetry(
-          `/planning/month/${currentYear}/${currentMonth}${teamParam}`,
+          `/planning/month/${year}/${month}${teamParam}`,
         );
         if (response.data && response.data.success === false) {
           console.error("Month load failed:", response.data.error);
@@ -1868,13 +1880,13 @@ const Planning = ({ user }) => {
       try {
         const offlineEvents = await offlineStorage.getEvents(
           ownerId,
-          currentYear,
-          currentWeek,
+          year,
+          week,
         );
         const offlineTasks = await offlineStorage.getTasks(
           ownerId,
-          currentYear,
-          currentWeek,
+          year,
+          week,
         );
         eventsData = offlineEvents.map(parseEvent);
         tasksData = offlineTasks;
@@ -1896,6 +1908,7 @@ const Planning = ({ user }) => {
         setLoading(false);
       }
     }
+    setAllEvents((prev) => ({ ...prev, [weekKey]: eventsData }));
     console.log("[loadEvents] final events", eventsData);
     return { success: true, events: eventsData };
   };
@@ -2859,38 +2872,7 @@ const Planning = ({ user }) => {
     newDate.setDate(newDate.getDate() + direction * 7);
     setCurrentDate(newDate);
 
-    // Load events and tasks for the new week smoothly
-    const newWeek = getWeekNumber(newDate);
-    const newYear = newDate.getFullYear();
-
-    try {
-      setErrorMessage(null);
-      const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      const response = await apiCallWithRetry(
-        `/planning/week/${newYear}/${newWeek}${teamParam}`,
-      );
-      let eventsData = Array.isArray(response.data.events)
-        ? response.data.events.map(parseEvent)
-        : [];
-      let tasksData = Array.isArray(response.data.tasks)
-        ? response.data.tasks
-        : [];
-      if (viewingMember) {
-        eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-        tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
-      }
-
-      // Longer delay for smoother animation
-      setTimeout(() => {
-        setEvents(eventsData);
-        setTasks(tasksData);
-        setTransitioning(false);
-      }, 300);
-    } catch (error) {
-      console.error("Error loading week events:", error);
-      setErrorMessage("Erreur lors du chargement du planning");
-      setTransitioning(false);
-    }
+    await loadEvents(true, newDate);
   };
 
   const navigateMonth = async (direction) => {
@@ -2903,38 +2885,7 @@ const Planning = ({ user }) => {
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
 
-    // Load events and tasks for the new month smoothly
-    const newMonth = newDate.getMonth();
-    const newYear = newDate.getFullYear();
-
-    try {
-      setErrorMessage(null);
-      const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      const response = await apiCallWithRetry(
-        `/planning/month/${newYear}/${newMonth}${teamParam}`,
-      );
-      let eventsData = Array.isArray(response.data.events)
-        ? response.data.events.map(parseEvent)
-        : [];
-      let tasksData = Array.isArray(response.data.tasks)
-        ? response.data.tasks
-        : [];
-      if (viewingMember) {
-        eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-        tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
-      }
-
-      // Longer delay for smoother animation
-      setTimeout(() => {
-        setEvents(eventsData);
-        setTasks(tasksData);
-        setTransitioning(false);
-      }, 300);
-    } catch (error) {
-      console.error("Error loading month events:", error);
-      setErrorMessage("Erreur lors du chargement du planning");
-      setTransitioning(false);
-    }
+    await loadEvents(true, newDate);
   };
 
   // Unified smooth navigation handler
