@@ -3707,58 +3707,364 @@ const Clients = () => (
   </div>
 );
 
-// Simplified Quote modal used by the Quotes module
+// Quote modal with dynamic lines and automatic calculations
 const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
   const [formData, setFormData] = useState({
-    client_id: quote?.client_id || "",
-    client_name: quote?.client_name || "",
-    title: quote?.title || "",
-    items: quote?.items || [],
-    tax_rate: quote?.tax_rate || 20,
-    valid_until:
-      quote?.valid_until?.split("T")[0] ||
-      new Date().toISOString().split("T")[0],
+    client_id: "",
+    client_name: "",
+    title: "",
+    items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
+    tax_rate: 20.0,
+    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0],
+    subtotal: 0,
+    tax_amount: 0,
+    total: 0,
   });
+
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (quote) {
+      setFormData({
+        client_id: quote.client_id || "",
+        client_name: quote.client_name || "",
+        title: quote.title || "",
+        items:
+          quote.items?.length > 0
+            ? quote.items
+            : [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: quote.tax_rate || 20.0,
+        valid_until: quote.valid_until
+          ? quote.valid_until.split("T")[0]
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
+        subtotal: quote.subtotal || 0,
+        tax_amount: quote.tax_amount || 0,
+        total: quote.total || 0,
+      });
+    } else {
+      setFormData({
+        client_id: "",
+        client_name: "",
+        title: "",
+        items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
+        tax_rate: 20.0,
+        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0],
+        subtotal: 0,
+        tax_amount: 0,
+        total: 0,
+      });
+    }
+    setErrors({});
+  }, [quote, isOpen]);
+
+  const handleClientChange = (clientId) => {
+    const selectedClient = clients.find((c) => c.id === clientId);
+    setFormData((prev) => ({
+      ...prev,
+      client_id: clientId,
+      client_name: selectedClient ? selectedClient.name : "",
+    }));
+  };
+
+  const calculateTotals = (items) => {
+    const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
+    const tax_amount = subtotal * (formData.tax_rate / 100);
+    const total = subtotal + tax_amount;
+
+    setFormData((prev) => ({
+      ...prev,
+      subtotal,
+      tax_amount,
+      total,
+    }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...formData.items];
+    newItems[index][field] = value;
+
+    if (field === "quantity" || field === "unit_price") {
+      newItems[index].total =
+        (parseFloat(newItems[index].quantity) || 0) *
+        (parseFloat(newItems[index].unit_price) || 0);
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      items: newItems,
+    }));
+
+    calculateTotals(newItems);
+  };
+
+  const addItem = () => {
+    const newItems = [
+      ...formData.items,
+      { description: "", quantity: 1, unit_price: 0, total: 0 },
+    ];
+    setFormData((prev) => ({
+      ...prev,
+      items: newItems,
+    }));
+  };
+
+  const removeItem = (index) => {
+    if (formData.items.length > 1) {
+      const newItems = formData.items.filter((_, i) => i !== index);
+      setFormData((prev) => ({
+        ...prev,
+        items: newItems,
+      }));
+      calculateTotals(newItems);
+    }
+  };
+
+  const handleTaxRateChange = (rate) => {
+    setFormData((prev) => ({
+      ...prev,
+      tax_rate: rate,
+    }));
+    calculateTotals(formData.items);
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+
+    if (!formData.client_name.trim()) {
+      newErrors.client_name = "Le client est obligatoire";
+    }
+
+    if (!formData.title.trim()) {
+      newErrors.title = "Le titre est obligatoire";
+    }
+
+    if (formData.items.length === 0 || !formData.items[0].description.trim()) {
+      newErrors.items = "Au moins un élément est obligatoire";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    onSave({
+      ...formData,
+      valid_until: formData.valid_until + "T23:59:59.999Z",
+    });
+  };
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-lg space-y-4">
-        <h2 className="text-lg font-bold">
-          {quote ? "Modifier le devis" : "Nouveau devis"}
+    <div className="modal-overlay">
+      <div
+        className="modal-content"
+        style={{ maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}
+      >
+        <h2 className="modal-header">
+          {quote ? "✏️ Modifier le devis" : "➕ Nouveau devis"}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <input
-            className="w-full p-2 border rounded"
-            placeholder="Client"
-            value={formData.client_name}
-            onChange={(e) =>
-              setFormData({ ...formData, client_name: e.target.value })
-            }
-          />
-          <input
-            className="w-full p-2 border rounded"
-            placeholder="Titre"
-            value={formData.title}
-            onChange={(e) =>
-              setFormData({ ...formData, title: e.target.value })
-            }
-          />
-          <div className="flex justify-end gap-2">
-            <button type="button" className="btn" onClick={onClose}>
-              Annuler
-            </button>
-            <button type="submit" className="btn btn-primary">
-              Enregistrer
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Client *</label>
+            <select
+              value={formData.client_id}
+              onChange={(e) => handleClientChange(e.target.value)}
+              className={`form-input ${errors.client_name ? "error" : ""}`}
+              style={{ borderColor: errors.client_name ? "#dc3545" : "" }}
+            >
+              <option value="">Sélectionner un client</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client?.name ?? ""}
+                </option>
+              ))}
+            </select>
+            {errors.client_name && (
+              <div
+                style={{ color: "#dc3545", fontSize: "12px", marginTop: "4px" }}
+              >
+                {errors.client_name}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Titre du devis *</label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, title: e.target.value }))
+              }
+              className={`form-input ${errors.title ? "error" : ""}`}
+              placeholder="Ex: Prestation développement web"
+              style={{ borderColor: errors.title ? "#dc3545" : "" }}
+            />
+            {errors.title && (
+              <div
+                style={{ color: "#dc3545", fontSize: "12px", marginTop: "4px" }}
+              >
+                {errors.title}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Items Section */}
+        <div className="form-group">
+          <div className="flex justify-between items-center mb-3">
+            <label className="form-label">Éléments du devis</label>
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn btn-outline btn-sm"
+            >
+              + Ajouter une ligne
             </button>
           </div>
-        </form>
+
+          <div className="space-y-3">
+            {formData.items.map((item, index) => (
+              <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-5">
+                    <input
+                      type="text"
+                      placeholder="Description"
+                      value={item.description}
+                      onChange={(e) =>
+                        handleItemChange(index, "description", e.target.value)
+                      }
+                      className="form-input"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Qté"
+                      value={item.quantity}
+                      onChange={(e) =>
+                        handleItemChange(
+                          index,
+                          "quantity",
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
+                      className="form-input"
+                      min="0"
+                      step="0.25"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="number"
+                      placeholder="Prix unitaire"
+                      value={item.unit_price}
+                      onChange={(e) =>
+                        handleItemChange(
+                          index,
+                          "unit_price",
+                          parseFloat(e.target.value) || 0
+                        )
+                      }
+                      className="form-input"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={`${item.total.toFixed(2)}€`}
+                      readOnly
+                      className="form-input bg-gray-100"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                      disabled={formData.items.length === 1}
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {errors.items && (
+            <div
+              style={{ color: "#dc3545", fontSize: "12px", marginTop: "4px" }}
+            >
+              {errors.items}
+            </div>
+          )}
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Taux TVA (%)</label>
+            <select
+              value={formData.tax_rate}
+              onChange={(e) => handleTaxRateChange(parseFloat(e.target.value))}
+              className="form-input"
+            >
+              <option value={0}>0% (Exonéré)</option>
+              <option value={5.5}>5.5% (Réduit)</option>
+              <option value={10}>10% (Intermédiaire)</option>
+              <option value={20}>20% (Normal)</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Valide jusqu'au</label>
+            <input
+              type="date"
+              value={formData.valid_until}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, valid_until: e.target.value }))
+              }
+              className="form-input"
+            />
+          </div>
+        </div>
+
+        {/* Totals */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <div className="space-y-2 text-right">
+            <div className="flex justify-between">
+              <span>Sous-total:</span>
+              <span>{formData.subtotal.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between">
+              <span>TVA ({formData.tax_rate}%):</span>
+              <span>{formData.tax_amount.toFixed(2)}€</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg border-t pt-2">
+              <span>Total:</span>
+              <span>{formData.total.toFixed(2)}€</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button onClick={onClose} className="btn btn-outline">
+            Annuler
+          </button>
+          <button onClick={handleSubmit} className="btn btn-primary">
+            {quote ? "Modifier" : "Créer le devis"}
+          </button>
+        </div>
       </div>
     </div>
   );
