@@ -2484,6 +2484,14 @@ const Planning = ({ user }) => {
         };
         await offlineStorage.saveEvent(localEvent);
         setEvents((prev) => [...prev, localEvent]);
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: [...(prev[wk]?.events || []), localEvent],
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2510,6 +2518,14 @@ const Planning = ({ user }) => {
       showToast(`Élément enregistré avec succès (ID: ${createdEvent.id})`);
 
       setEvents((prevEvents) => [...prevEvents, newEvent]);
+      const wk = `${currentYear}-W${currentWeek}`;
+      setWeekData((prev) => ({
+        ...prev,
+        [wk]: {
+          ...(prev[wk] || {}),
+          events: [...(prev[wk]?.events || []), newEvent],
+        },
+      }));
       setEventModal({
         isOpen: false,
         event: null,
@@ -2540,6 +2556,14 @@ const Planning = ({ user }) => {
         };
         await offlineStorage.saveEvent(eventToCreateLocal);
         setEvents((prevEvents) => [...prevEvents, eventToCreateLocal]);
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: [...(prev[wk]?.events || []), eventToCreateLocal],
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2589,6 +2613,24 @@ const Planning = ({ user }) => {
               : evt,
           ),
         );
+        const wk = `${eventModal.event.year}-W${eventModal.event.week}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).map((evt) =>
+              evt.id === eventModal.event.id
+                ? {
+                    ...evt,
+                    ...updateData,
+                    day: eventData.day,
+                    start: eventData.start,
+                    end: eventData.end,
+                  }
+                : evt,
+            ),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2619,6 +2661,24 @@ const Planning = ({ user }) => {
             : event,
         ),
       );
+      const wk = `${eventModal.event.year}-W${eventModal.event.week}`;
+      setWeekData((prev) => ({
+        ...prev,
+        [wk]: {
+          ...(prev[wk] || {}),
+          events: (prev[wk]?.events || []).map((evt) =>
+            evt.id === eventModal.event.id
+              ? {
+                  ...evt,
+                  ...updateData,
+                  day: eventData.day,
+                  start: eventData.start,
+                  end: eventData.end,
+                }
+              : evt,
+          ),
+        },
+      }));
 
       setEventModal({
         isOpen: false,
@@ -2646,6 +2706,16 @@ const Planning = ({ user }) => {
             evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt,
           ),
         );
+        const wk = `${offlineUpdate.year}-W${offlineUpdate.week}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).map((evt) =>
+              evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt,
+            ),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2667,6 +2737,14 @@ const Planning = ({ user }) => {
         setEvents((prevEvents) =>
           prevEvents.filter((event) => event.id !== eventId),
         );
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).filter((e) => e.id !== eventId),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2676,17 +2754,25 @@ const Planning = ({ user }) => {
         return;
       }
 
-      await offlineStorage.deleteEvent(eventId);
+        await offlineStorage.deleteEvent(eventId);
 
-      // Update local state immediately
-      setEvents((prevEvents) =>
-        prevEvents.filter((event) => event.id !== eventId),
-      );
-      setEventModal({
-        isOpen: false,
-        event: null,
-        timeSlot: null,
-        selectedDate: null,
+        // Update local state immediately
+        setEvents((prevEvents) =>
+          prevEvents.filter((event) => event.id !== eventId),
+        );
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).filter((e) => e.id !== eventId),
+          },
+        }));
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
       });
     } catch (error) {
       console.error("Error deleting event:", error);
@@ -2695,6 +2781,14 @@ const Planning = ({ user }) => {
         setEvents((prevEvents) =>
           prevEvents.filter((event) => event.id !== eventId),
         );
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).filter((e) => e.id !== eventId),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
