@@ -536,15 +536,31 @@ const getWeekDates = (year, week) => {
 };
 
 const getMonthDays = (year, month) => {
-  // Only return the days of the current month
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay = new Date(year, month, 1).getDay();
+  // Adjust so Monday = 0
+  const offsetStart = (firstDay + 6) % 7;
+
   const days = [];
+
+  // Fill leading empty cells
+  for (let i = 0; i < offsetStart; i++) {
+    days.push(null);
+  }
+
+  // Days of current month
   for (let i = 1; i <= daysInMonth; i++) {
     days.push({
       date: new Date(year, month, i),
       isCurrentMonth: true,
     });
   }
+
+  // Fill trailing empty cells so total is multiple of 7
+  while (days.length % 7 !== 0) {
+    days.push(null);
+  }
+
   return days;
 };
 
@@ -2139,6 +2155,10 @@ const Planning = ({ user }) => {
         {rows.map((week, weekIndex) => (
           <div key={weekIndex} className="month-week">
             {week.map((day, dayIndex) => {
+              if (!day) {
+                return <div key={dayIndex} className="month-day empty" />;
+              }
+
               const dayEvents = getEventsForDate(day.date);
               const visibleEvents = dayEvents.slice(0, 2);
               const remainingCount = dayEvents.length - visibleEvents.length;

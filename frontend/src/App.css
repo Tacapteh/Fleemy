@@ -678,6 +678,12 @@ button:active {
   color: #6b7280;
 }
 
+.month-day.empty {
+  background: #f8f9fa;
+  pointer-events: none;
+  cursor: default;
+}
+
 .month-day.today {
   background: #eff6ff;
   border-color: #3b82f6;
