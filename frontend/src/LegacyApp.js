@@ -1640,12 +1640,15 @@ const Planning = ({ user }) => {
   const currentMonth = currentDate.getMonth();
   const weekKey = `${currentYear}-W${currentWeek}`;
 
-  useEffect(() => {
-    const key = `${currentDate.getFullYear()}-W${getWeekNumber(currentDate)}`;
-    if (allEvents[key]) {
-      setEvents(allEvents[key]);
+  const renderPlanning = () => {
+    if (allEvents[weekKey]) {
+      setEvents(allEvents[weekKey]);
     }
-  }, [allEvents, currentDate]);
+  };
+
+  useEffect(() => {
+    renderPlanning();
+  }, [allEvents, weekKey]);
 
   useEffect(() => {
     // Initialize offline storage
