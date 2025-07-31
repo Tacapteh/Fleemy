@@ -1597,7 +1597,7 @@ const Planning = ({ user }) => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineStorage] = useState(new PlanningOfflineStorage());
   const [errorMessage, setErrorMessage] = useState(null);
-  const [allEvents, setAllEvents] = useState({});
+  const [weekData, setWeekData] = useState({});
 
   const backendDayNames = [
     "monday",
@@ -1660,16 +1660,17 @@ const Planning = ({ user }) => {
   const currentWeek = getWeekNumber(currentDate);
   const currentMonth = currentDate.getMonth();
   const weekKey = `${currentYear}-W${currentWeek}`;
+  const currentWeekEvents = weekData?.[weekKey]?.events || [];
 
   const renderPlanning = () => {
-    if (allEvents[weekKey]) {
-      setEvents(allEvents[weekKey]);
+    if (weekData[weekKey]) {
+      setEvents(weekData[weekKey].events || []);
     }
   };
 
   useEffect(() => {
     renderPlanning();
-  }, [allEvents, weekKey]);
+  }, [weekData, weekKey]);
 
   useEffect(() => {
     // Initialize offline storage
@@ -1723,26 +1724,20 @@ const Planning = ({ user }) => {
     }
   };
 
-  const loadEvents = async (smooth = false, date = currentDate) => {
+  const loadEvents = async (year, week) => {
     let eventsData = [];
     let tasksData = [];
-    const year = date.getFullYear();
-    const week = getWeekNumber(date);
-    const month = date.getMonth();
+    const month = new Date(year, 0, 1 + (week - 1) * 7).getMonth();
     const weekKey = `${year}-W${week}`;
     try {
       setErrorMessage(null);
-      if (smooth) {
-        setTransitioning(true);
-        // Small delay to show transition
-        await new Promise((resolve) => setTimeout(resolve, 150));
-      } else {
-        setLoading(true);
-      }
+      setLoading(true);
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       const ownerId = viewingMember ? viewingMember.uid : user.uid;
-      eventsData = allEvents[weekKey] ? allEvents[weekKey].map((e) => ({ ...e })) : [];
+      eventsData = weekData[weekKey]?.events
+        ? weekData[weekKey].events.map((e) => ({ ...e }))
+        : [];
 
       if (view === "week") {
         // Load events from IndexedDB first so the UI is populated immediately
@@ -1762,8 +1757,6 @@ const Planning = ({ user }) => {
           eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
         }
         setEvents(eventsData);
-        // Display immediately the preloaded events
-        if (!smooth) setLoading(false);
 
         let apiEvents = [];
         let apiSuccess = false;
@@ -1896,10 +1889,7 @@ const Planning = ({ user }) => {
         }
       }
 
-      if (smooth) {
-        // Add slight delay for smooth animation
-        setTimeout(() => setTransitioning(false), 100);
-      }
+      setTransitioning(false);
     } catch (error) {
       console.error("Error loading events:", error);
       try {
@@ -1925,15 +1915,14 @@ const Planning = ({ user }) => {
         setEvents([]);
         setTasks([]);
       }
-      if (smooth) {
-        setTransitioning(false);
-      }
+      setTransitioning(false);
     } finally {
-      if (!smooth) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
-    setAllEvents((prev) => ({ ...prev, [weekKey]: eventsData }));
+    setWeekData((prev) => ({
+      ...prev,
+      [weekKey]: { ...(prev[weekKey] || {}), events: eventsData },
+    }));
     console.log("[loadEvents] final events", eventsData);
     return { success: true, events: eventsData };
   };
@@ -2452,7 +2441,7 @@ const Planning = ({ user }) => {
     // Only load events on initial mount and when viewing member changes
     // Navigation will handle loading events directly
     if (!transitioning && events.length === 0) {
-      loadEvents();
+      loadEvents(currentYear, currentWeek);
     }
   }, [viewingMember]);
 
@@ -2495,6 +2484,14 @@ const Planning = ({ user }) => {
         };
         await offlineStorage.saveEvent(localEvent);
         setEvents((prev) => [...prev, localEvent]);
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: [...(prev[wk]?.events || []), localEvent],
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2521,6 +2518,14 @@ const Planning = ({ user }) => {
       showToast(`Élément enregistré avec succès (ID: ${createdEvent.id})`);
 
       setEvents((prevEvents) => [...prevEvents, newEvent]);
+      const wk = `${currentYear}-W${currentWeek}`;
+      setWeekData((prev) => ({
+        ...prev,
+        [wk]: {
+          ...(prev[wk] || {}),
+          events: [...(prev[wk]?.events || []), newEvent],
+        },
+      }));
       setEventModal({
         isOpen: false,
         event: null,
@@ -2551,6 +2556,14 @@ const Planning = ({ user }) => {
         };
         await offlineStorage.saveEvent(eventToCreateLocal);
         setEvents((prevEvents) => [...prevEvents, eventToCreateLocal]);
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: [...(prev[wk]?.events || []), eventToCreateLocal],
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2600,6 +2613,24 @@ const Planning = ({ user }) => {
               : evt,
           ),
         );
+        const wk = `${eventModal.event.year}-W${eventModal.event.week}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).map((evt) =>
+              evt.id === eventModal.event.id
+                ? {
+                    ...evt,
+                    ...updateData,
+                    day: eventData.day,
+                    start: eventData.start,
+                    end: eventData.end,
+                  }
+                : evt,
+            ),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2630,6 +2661,24 @@ const Planning = ({ user }) => {
             : event,
         ),
       );
+      const wk = `${eventModal.event.year}-W${eventModal.event.week}`;
+      setWeekData((prev) => ({
+        ...prev,
+        [wk]: {
+          ...(prev[wk] || {}),
+          events: (prev[wk]?.events || []).map((evt) =>
+            evt.id === eventModal.event.id
+              ? {
+                  ...evt,
+                  ...updateData,
+                  day: eventData.day,
+                  start: eventData.start,
+                  end: eventData.end,
+                }
+              : evt,
+          ),
+        },
+      }));
 
       setEventModal({
         isOpen: false,
@@ -2657,6 +2706,16 @@ const Planning = ({ user }) => {
             evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt,
           ),
         );
+        const wk = `${offlineUpdate.year}-W${offlineUpdate.week}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).map((evt) =>
+              evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt,
+            ),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2678,6 +2737,14 @@ const Planning = ({ user }) => {
         setEvents((prevEvents) =>
           prevEvents.filter((event) => event.id !== eventId),
         );
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).filter((e) => e.id !== eventId),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2687,17 +2754,25 @@ const Planning = ({ user }) => {
         return;
       }
 
-      await offlineStorage.deleteEvent(eventId);
+        await offlineStorage.deleteEvent(eventId);
 
-      // Update local state immediately
-      setEvents((prevEvents) =>
-        prevEvents.filter((event) => event.id !== eventId),
-      );
-      setEventModal({
-        isOpen: false,
-        event: null,
-        timeSlot: null,
-        selectedDate: null,
+        // Update local state immediately
+        setEvents((prevEvents) =>
+          prevEvents.filter((event) => event.id !== eventId),
+        );
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).filter((e) => e.id !== eventId),
+          },
+        }));
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
       });
     } catch (error) {
       console.error("Error deleting event:", error);
@@ -2706,6 +2781,14 @@ const Planning = ({ user }) => {
         setEvents((prevEvents) =>
           prevEvents.filter((event) => event.id !== eventId),
         );
+        const wk = `${currentYear}-W${currentWeek}`;
+        setWeekData((prev) => ({
+          ...prev,
+          [wk]: {
+            ...(prev[wk] || {}),
+            events: (prev[wk]?.events || []).filter((e) => e.id !== eventId),
+          },
+        }));
         setEventModal({
           isOpen: false,
           event: null,
@@ -2897,7 +2980,7 @@ const Planning = ({ user }) => {
     newDate.setDate(newDate.getDate() + direction * 7);
     setCurrentDate(newDate);
 
-    await loadEvents(true, newDate);
+    await loadEvents(newDate.getFullYear(), getWeekNumber(newDate));
   };
 
   const navigateMonth = async (direction) => {
@@ -2910,7 +2993,7 @@ const Planning = ({ user }) => {
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
 
-    await loadEvents(true, newDate);
+    await loadEvents(newDate.getFullYear(), getWeekNumber(newDate));
   };
 
   // Unified smooth navigation handler
@@ -3164,7 +3247,7 @@ const Planning = ({ user }) => {
               <GridBody
                 timeSlots={timeSlots}
                 dayNames={dayNames}
-                events={events}
+                events={currentWeekEvents}
                 tasks={tasks}
                 currentWeek={currentWeek}
                 currentYear={currentYear}
