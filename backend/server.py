@@ -253,6 +253,8 @@ class EventCreateRequest(BaseModel):
     end_time: str
     status: str = "pending"
     hourly_rate: Optional[float] = 50.0
+    year: Optional[int] = None
+    week: Optional[int] = None
 
 
 class TaskCreateRequest(BaseModel):
@@ -598,18 +600,28 @@ async def create_event(
 ):
     try:
         now = datetime.now()
-        year = now.year
-        week = now.isocalendar()[1]
+        year = event_request.year or now.year
+        week = event_request.week or now.isocalendar()[1]
 
-        event = PlanningEvent(uid=user["uid"], week=week, year=year, **event_request.dict())
+        event = PlanningEvent(
+            uid=user["uid"],
+            week=week,
+            year=year,
+            description=event_request.description,
+            client_id=event_request.client_id,
+            client_name=event_request.client_name,
+            day=event_request.day,
+            start_time=event_request.start_time,
+            end_time=event_request.end_time,
+            status=event_request.status,
+            hourly_rate=event_request.hourly_rate if event_request.hourly_rate is not None else 50.0,
+        )
         await asyncio.to_thread(
             user_col(user["uid"], "events").document(event.id).set, event.dict()
         )
         owner_id = user["uid"]
         user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
         team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-        if team_id:
-            owner_id = team_id
         await asyncio.to_thread(
             global_event_doc(year, week, event.id).set,
             {**event.dict(), "owner_id": owner_id},
@@ -641,11 +653,9 @@ async def update_event(
     await asyncio.to_thread(
         user_col(user["uid"], "events").document(event_id).update, update_data
     )
-    owner_id = user["uid"]
+    owner_id = existing.get("owner_id", user["uid"])
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    if team_id:
-        owner_id = team_id
     await asyncio.to_thread(
         global_event_doc(existing["year"], existing["week"], event_id).set,
         {**existing, **update_data, "owner_id": owner_id},
