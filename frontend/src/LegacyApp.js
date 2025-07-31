@@ -53,6 +53,19 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+// Ensure time strings are always HH:MM with leading zeroes
+const normalizeTime = (time) => {
+  if (!time) return "00:00";
+  if (time.includes("T")) {
+    const d = new Date(time);
+    const h = d.getHours().toString().padStart(2, "0");
+    const m = d.getMinutes().toString().padStart(2, "0");
+    return `${h}:${m}`;
+  }
+  const [h = "00", m = "00"] = time.split(":");
+  return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+};
+
 const getCurrentWeek = () => {
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 1);
@@ -1614,21 +1627,11 @@ const Planning = ({ user }) => {
 
     let dayIndex = clone.day;
 
-    // Convert start/end ISO strings to simple HH:MM format
-    let start =
-      clone.start_time || clone.start || clone.startTime || "00:00";
+    // Convert and normalize start/end to HH:MM format
+    let start = clone.start_time || clone.start || clone.startTime || "00:00";
     let end = clone.end_time || clone.end || clone.endTime || "00:00";
-
-    const toTime = (value) => {
-      if (typeof value === "string" && value.includes("T")) {
-        const d = new Date(value);
-        return d.toISOString().substring(11, 16);
-      }
-      return value;
-    };
-
-    start = toTime(start);
-    end = toTime(end);
+    start = normalizeTime(start);
+    end = normalizeTime(end);
 
     if (dayIndex == null && clone.start) {
       const d = new Date(clone.start);
