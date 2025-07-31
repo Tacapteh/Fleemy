@@ -1414,6 +1414,11 @@ class PlanningOfflineStorage {
       await store.put(event);
     } catch (err) {
       console.error("IndexedDB saveEvent error", err);
+      if (err.name === "NotFoundError") {
+        this.db = null;
+        await this.init();
+        return this.saveEvent(event);
+      }
     }
   }
 
@@ -1439,6 +1444,11 @@ class PlanningOfflineStorage {
       });
     } catch (err) {
       console.error("IndexedDB getEvents error", err);
+      if (err.name === "NotFoundError") {
+        this.db = null;
+        await this.init();
+        return this.getEvents(uid, year, week);
+      }
       return [];
     }
   }
@@ -1551,6 +1561,11 @@ class PlanningOfflineStorage {
       });
     } catch (err) {
       console.error("IndexedDB clearWeekEvents error", err);
+      if (err.name === "NotFoundError") {
+        this.db = null;
+        await this.init();
+        return this.clearWeekEvents(uid, year, week);
+      }
     }
   }
 }
@@ -1598,8 +1613,7 @@ const Planning = ({ user }) => {
     if (typeof dayIndex === "string") {
       dayIndex = backendDayNames.indexOf(dayIndex.toLowerCase());
     }
-    const start =
-      evt.start_time || evt.start || evt.startTime || "00:00";
+    const start = evt.start_time || evt.start || evt.startTime || "00:00";
     const end = evt.end_time || evt.end || evt.endTime || "00:00";
     return {
       ...evt,
@@ -1614,6 +1628,8 @@ const Planning = ({ user }) => {
       title: evt.title || evt.description || "",
       // Default color if none provided
       color: evt.color || "#3b82f6",
+      icon: evt.icon || "",
+      revenue: evt.revenue || 0,
       type: evt.status || evt.type,
     };
   };
@@ -1720,18 +1736,28 @@ const Planning = ({ user }) => {
             eventsResponse.data.success &&
             Array.isArray(eventsResponse.data.events)
           ) {
-            apiEvents = eventsResponse.data.events.map(parseEvent);
+            apiEvents = eventsResponse.data.events
+              .filter(
+                (ev) =>
+                  ev &&
+                  ev.id &&
+                  (ev.startTime || ev.start_time) &&
+                  (ev.endTime || ev.end_time),
+              )
+              .map(parseEvent);
             apiSuccess = true;
-            console.log(`Loaded ${apiEvents.length} events from Firestore`);
+            console.log(
+              `Loaded ${apiEvents.length} valid events from Firestore`,
+            );
           } else {
             console.error(
               "Event load failed:",
-              eventsResponse.data?.error || eventsResponse.status
+              eventsResponse.data?.error || eventsResponse.status,
             );
             showToast(
               eventsResponse.data?.error ||
                 "Erreur lors du chargement des événements",
-              true
+              true,
             );
             console.log("Firestore fetch failed, staying in offline mode");
             showToast("Mode hors ligne", true);
@@ -1747,9 +1773,10 @@ const Planning = ({ user }) => {
           preEvents.map(parseEvent).forEach((e) => eventMap.set(e.id, e));
           apiEvents.forEach((e) => eventMap.set(e.id, e));
           eventsData = Array.from(eventMap.values());
+          console.log(`[API] Events after merge`, eventsData);
         } else {
           eventsData = preEvents.map(parseEvent);
-          console.log("Using IndexedDB fallback for events");
+          console.log("Using IndexedDB fallback for events", eventsData);
         }
 
         const tasksResponse = await apiCallWithRetry(
@@ -1768,16 +1795,16 @@ const Planning = ({ user }) => {
         } else {
           console.error(
             "Task load failed:",
-            tasksResponse.data?.error || tasksResponse.status
+            tasksResponse.data?.error || tasksResponse.status,
           );
           showToast(
             tasksResponse.data?.error || "Erreur lors du chargement des tâches",
-            true
+            true,
           );
           const offlineTasks = await offlineStorage.getTasks(
             ownerId,
             currentYear,
-            currentWeek
+            currentWeek,
           );
           tasksData = offlineTasks;
         }
@@ -1791,13 +1818,18 @@ const Planning = ({ user }) => {
 
         if (apiSuccess) {
           // Synchronize IndexedDB with data from Firestore and local events
-          await offlineStorage.clearWeekEvents(ownerId, currentYear, currentWeek);
+          await offlineStorage.clearWeekEvents(
+            ownerId,
+            currentYear,
+            currentWeek,
+          );
           for (const evt of eventsData) {
             await offlineStorage.saveEvent({ ...evt, uid: ownerId });
           }
           console.log(
             "Firestore succeeded - IndexedDB synchronized with latest events",
           );
+          console.log("[IndexedDB] Stored events", eventsData);
         }
       } else {
         const response = await apiCallWithRetry(
@@ -1807,7 +1839,7 @@ const Planning = ({ user }) => {
           console.error("Month load failed:", response.data.error);
           showToast(
             response.data.error || "Erreur lors du chargement du planning",
-            true
+            true,
           );
           setEvents([]);
           setTasks([]);
@@ -1848,7 +1880,7 @@ const Planning = ({ user }) => {
         tasksData = offlineTasks;
         setEvents(eventsData);
         setTasks(tasksData);
-        console.log("Using IndexedDB fallback for events");
+        console.log("Using IndexedDB fallback for events", eventsData);
       } catch (idbError) {
         console.error("Fallback IndexedDB error", idbError);
         eventsData = [];
@@ -1864,6 +1896,7 @@ const Planning = ({ user }) => {
         setLoading(false);
       }
     }
+    console.log("[loadEvents] final events", eventsData);
     return { success: true, events: eventsData };
   };
 
@@ -2519,11 +2552,22 @@ const Planning = ({ user }) => {
         setEvents((prevEvents) =>
           prevEvents.map((evt) =>
             evt.id === eventModal.event.id
-              ? { ...evt, ...updateData, day: eventData.day, start: eventData.start, end: eventData.end }
-              : evt
-          )
+              ? {
+                  ...evt,
+                  ...updateData,
+                  day: eventData.day,
+                  start: eventData.start,
+                  end: eventData.end,
+                }
+              : evt,
+          ),
         );
-        setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
+        });
         return;
       }
       const updatedEvent = response.data.event;
@@ -2572,10 +2616,15 @@ const Planning = ({ user }) => {
         await offlineStorage.saveEvent(offlineUpdate);
         setEvents((prevEvents) =>
           prevEvents.map((evt) =>
-            evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt
-          )
+            evt.id === offlineUpdate.id ? { ...evt, ...offlineUpdate } : evt,
+          ),
         );
-        setEventModal({ isOpen: false, event: null, timeSlot: null, selectedDate: null });
+        setEventModal({
+          isOpen: false,
+          event: null,
+          timeSlot: null,
+          selectedDate: null,
+        });
       }
     }
   };
@@ -2589,7 +2638,7 @@ const Planning = ({ user }) => {
         showToast(response.data.error || "Erreur serveur", true);
         await offlineStorage.deleteEvent(eventId);
         setEvents((prevEvents) =>
-          prevEvents.filter((event) => event.id !== eventId)
+          prevEvents.filter((event) => event.id !== eventId),
         );
         setEventModal({
           isOpen: false,
@@ -2617,7 +2666,7 @@ const Planning = ({ user }) => {
       if (!isOnline) {
         await offlineStorage.deleteEvent(eventId);
         setEvents((prevEvents) =>
-          prevEvents.filter((event) => event.id !== eventId)
+          prevEvents.filter((event) => event.id !== eventId),
         );
         setEventModal({
           isOpen: false,
