@@ -1610,28 +1610,49 @@ const Planning = ({ user }) => {
   ];
 
   const parseEvent = (evt) => {
-    let dayIndex = evt.day;
-    if (typeof dayIndex === "string") {
+    const clone = { ...evt };
+
+    let dayIndex = clone.day;
+
+    // Convert start/end ISO strings to simple HH:MM format
+    let start =
+      clone.start_time || clone.start || clone.startTime || "00:00";
+    let end = clone.end_time || clone.end || clone.endTime || "00:00";
+
+    const toTime = (value) => {
+      if (typeof value === "string" && value.includes("T")) {
+        const d = new Date(value);
+        return d.toISOString().substring(11, 16);
+      }
+      return value;
+    };
+
+    start = toTime(start);
+    end = toTime(end);
+
+    if (dayIndex == null && clone.start) {
+      const d = new Date(clone.start);
+      dayIndex = d.getDay() === 0 ? 6 : d.getDay() - 1;
+      clone.week = clone.week ?? getWeekNumber(d);
+      clone.year = clone.year ?? d.getFullYear();
+    } else if (typeof dayIndex === "string") {
       dayIndex = backendDayNames.indexOf(dayIndex.toLowerCase());
     }
-    const start = evt.start_time || evt.start || evt.startTime || "00:00";
-    const end = evt.end_time || evt.end || evt.endTime || "00:00";
+
     return {
-      ...evt,
+      ...clone,
       day: dayIndex,
-      // Normalized fields used by the UI
       start,
       end,
       start_time: start,
       end_time: end,
       startTime: start,
       endTime: end,
-      title: evt.title || evt.description || "",
-      // Default color if none provided
-      color: evt.color || "#3b82f6",
-      icon: evt.icon || "",
-      revenue: evt.revenue || 0,
-      type: evt.status || evt.type,
+      title: clone.title || clone.description || "",
+      color: clone.color || "#3b82f6",
+      icon: clone.icon || "",
+      revenue: clone.revenue || 0,
+      type: clone.status || clone.type,
     };
   };
 
