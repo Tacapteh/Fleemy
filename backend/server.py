@@ -186,9 +186,14 @@ class Todo(BaseModel):
 class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     uid: str
+    first_name: str
+    last_name: str
     name: str
     email: Optional[str] = ""
     phone: Optional[str] = ""
+    hourly_rate: float = 0.0
+    color: Optional[str] = "#3b82f6"
+    icon: Optional[str] = "👤"
     address: Optional[str] = ""
     company: Optional[str] = ""
     notes: Optional[str] = ""
@@ -273,12 +278,13 @@ class TodoCreateRequest(BaseModel):
 
 
 class ClientCreateRequest(BaseModel):
-    name: str
+    first_name: str
+    last_name: str
     email: Optional[str] = ""
     phone: Optional[str] = ""
-    address: Optional[str] = ""
-    company: Optional[str] = ""
-    notes: Optional[str] = ""
+    hourly_rate: Optional[float] = 0.0
+    color: Optional[str] = "#3b82f6"
+    icon: Optional[str] = "👤"
 
 
 class QuoteCreateRequest(BaseModel):
@@ -952,7 +958,10 @@ async def get_clients(user: Dict[str, Any] = Depends(verify_token)):
 async def create_client(
     client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
-    client = Client(uid=user["uid"], **client_request.dict())
+    data = client_request.dict()
+    full_name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+    data["name"] = full_name
+    client = Client(uid=user["uid"], **data)
 
     await asyncio.to_thread(
         user_col(user["uid"], "clients").document(client.id).set, client.dict()
@@ -964,11 +973,19 @@ async def create_client(
 async def update_client(
     client_id: str,
     client_request: ClientCreateRequest,
+    apply_rate: Optional[bool] = False,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    update_data = {**client_request.dict(), "updated_at": datetime.utcnow()}
+    data = client_request.dict()
+    data["name"] = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+    update_data = {**data, "updated_at": datetime.utcnow()}
     doc_ref = user_col(user["uid"], "clients").document(client_id)
     await asyncio.to_thread(doc_ref.update, update_data)
+    if apply_rate and data.get("hourly_rate") is not None:
+        events_query = user_col(user["uid"], "events").where("client_id", "==", client_id)
+        events = await asyncio.to_thread(lambda: list(events_query.stream()))
+        for ev in events:
+            await asyncio.to_thread(ev.reference.update, {"hourly_rate": data["hourly_rate"]})
     updated = await asyncio.to_thread(doc_ref.get)
     return updated.to_dict()
 
