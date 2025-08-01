@@ -1756,14 +1756,16 @@ const Planning = ({ user }) => {
     let tasksData = [];
     const month = new Date(year, 0, 1 + (week - 1) * 7).getMonth();
     const weekKey = `${year}-W${week}`;
+
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+
     try {
       setErrorMessage(null);
       setLoading(true);
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
       // ✅ FIXED for production: safe ownerId retrieval
-      const user = getAuth().currentUser;
-      const ownerId = user?.uid;
       if (!ownerId) {
         console.error("ownerId non défini");
         return;
