@@ -202,10 +202,14 @@ const Dashboard = ({ user }) => {
   const [loading, setLoading] = useState(true);
 
   const apiCall = async (url, options = {}) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const token = user ? await user.getIdToken() : null;
     return await api({
       url,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,
@@ -1709,11 +1713,15 @@ const Planning = ({ user }) => {
   }, []);
 
   const apiCall = async (url, options = {}) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const token = user ? await user.getIdToken() : null;
     try {
       const resp = await api({
         url,
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...options.headers,
         },
         ...options,
@@ -1753,13 +1761,14 @@ const Planning = ({ user }) => {
       setLoading(true);
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      // ✅ FIXED pour production: récupération sûre de l'ownerId
+      // ✅ FIXED for production: safe ownerId retrieval
       const user = getAuth().currentUser;
       const ownerId = user?.uid;
       if (!ownerId) {
-        console.error("ownerId est indéfini");
+        console.error("ownerId non défini");
         return;
       }
+      const token = await user.getIdToken();
       eventsData = weekData[weekKey]?.events
         ? weekData[weekKey].events.map((e) => ({ ...e }))
         : [];
@@ -1788,6 +1797,7 @@ const Planning = ({ user }) => {
         try {
           const eventsResponse = await apiCallWithRetry(
             `/planning/events/${ownerId}/${year}/${week}`,
+            { headers: { Authorization: `Bearer ${token}` } },
           );
           console.log("/planning/events response", eventsResponse.data);
           if (
@@ -1840,6 +1850,7 @@ const Planning = ({ user }) => {
 
         const tasksResponse = await apiCallWithRetry(
           `/planning/week/${year}/${week}${teamParam}`,
+          { headers: { Authorization: `Bearer ${token}` } },
         );
         console.log("/planning/week response", tasksResponse.data);
         if (
@@ -2481,6 +2492,13 @@ const Planning = ({ user }) => {
   }, []);
 
   const handleCreateEvent = async (eventData) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      console.error("ownerId non défini");
+      return;
+    }
     try {
       const eventToCreate = {
         description: eventData.description || "", // Description facultative
@@ -2490,7 +2508,7 @@ const Planning = ({ user }) => {
         start_time: eventData.start,
         end_time: eventData.end,
         status: eventData.type,
-        uid: user.uid,
+        uid: ownerId,
         week: currentWeek,
         year: currentYear,
       };
@@ -2505,7 +2523,7 @@ const Planning = ({ user }) => {
         showToast(response.data.error || "Erreur serveur", true);
         const localEvent = {
           ...eventData,
-          uid: user.uid,
+          uid: ownerId,
           week: currentWeek,
           year: currentYear,
           id: Date.now().toString(),
@@ -2577,7 +2595,7 @@ const Planning = ({ user }) => {
         const eventToCreateLocal = {
           ...eventData,
           description: eventData.description || "",
-          uid: user.uid,
+          uid: ownerId,
           week: currentWeek,
           year: currentYear,
           id: Date.now().toString(),
@@ -2604,6 +2622,13 @@ const Planning = ({ user }) => {
   };
 
   const handleUpdateEvent = async (eventData) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      console.error("ownerId non défini");
+      return;
+    }
     try {
       const updateData = {
         description: eventData.description,
@@ -2756,6 +2781,13 @@ const Planning = ({ user }) => {
   };
 
   const handleDeleteEvent = async (eventId) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      console.error("ownerId non défini");
+      return;
+    }
     try {
       const response = await apiCall(`/planning/events/${eventId}`, {
         method: "DELETE",
@@ -2833,6 +2865,13 @@ const Planning = ({ user }) => {
   };
 
   const handleCreateTask = async (taskData) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      console.error("ownerId non défini");
+      return;
+    }
     try {
       const response = await apiCall("/planning/tasks", {
         method: "POST",
@@ -2866,7 +2905,7 @@ const Planning = ({ user }) => {
         const localTask = {
           ...taskData,
           id: Date.now().toString(),
-          uid: user.uid,
+          uid: ownerId,
           week: currentWeek,
           year: currentYear,
           created_at: new Date().toISOString(),
@@ -2879,6 +2918,13 @@ const Planning = ({ user }) => {
   };
 
   const handleUpdateTask = async (taskData) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      console.error("ownerId non défini");
+      return;
+    }
     try {
       const response = await apiCall(`/planning/tasks/${taskModal.task.id}`, {
         method: "PUT",
@@ -2929,6 +2975,13 @@ const Planning = ({ user }) => {
   };
 
   const handleDeleteTask = async (taskId) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const ownerId = user?.uid;
+    if (!ownerId) {
+      console.error("ownerId non défini");
+      return;
+    }
     try {
       const response = await apiCall(`/planning/tasks/${taskId}`, {
         method: "DELETE",
@@ -2952,6 +3005,13 @@ const Planning = ({ user }) => {
         "Êtes-vous sûr de vouloir supprimer tous les événements de cette semaine ?",
       )
     ) {
+      // ✅ FIXED for production
+      const user = getAuth().currentUser;
+      const ownerId = user?.uid;
+      if (!ownerId) {
+        console.error("ownerId non défini");
+        return;
+      }
       try {
         // Delete all events for current week
         const safeEvents = Array.isArray(events) ? events : [];
@@ -2973,11 +3033,7 @@ const Planning = ({ user }) => {
           ),
         );
 
-        await offlineStorage.clearWeekEvents(
-          user.uid,
-          currentYear,
-          currentWeek,
-        );
+        await offlineStorage.clearWeekEvents(ownerId, currentYear, currentWeek);
 
         // Update local state immediately
         setEvents((prevEvents) =>
@@ -3416,10 +3472,14 @@ const TodoList = () => {
   });
 
   const apiCall = async (url, options = {}) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const token = user ? await user.getIdToken() : null;
     return await api({
       url,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,
@@ -4106,10 +4166,14 @@ const Quotes = ({ user }) => {
   const [quoteTemplates, setQuoteTemplates] = useState([]);
 
   const apiCall = async (url, options = {}) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const token = user ? await user.getIdToken() : null;
     return await api({
       url,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,
@@ -4854,10 +4918,14 @@ const Invoices = ({ user }) => {
   const [editingInvoice, setEditingInvoice] = useState(null);
 
   const apiCall = async (url, options = {}) => {
+    // ✅ FIXED for production
+    const user = getAuth().currentUser;
+    const token = user ? await user.getIdToken() : null;
     return await api({
       url,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options.headers,
       },
       ...options,
