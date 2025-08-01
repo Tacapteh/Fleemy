@@ -1650,7 +1650,7 @@ const Planning = ({ user }) => {
   });
   const { team } = useTeam();
   const [selectedMemberUid, setSelectedMemberUid] = useState(() =>
-    localStorage.getItem("selectedMemberUid") || user?.uid,
+    localStorage.getItem("selectedMemberUid") || "",
   );
   const [hourlyRate, setHourlyRate] = useState(50);
   const [showRateModal, setShowRateModal] = useState(false);
@@ -1718,7 +1718,9 @@ const Planning = ({ user }) => {
   const currentWeek = getWeekNumber(currentDate);
   const currentMonth = currentDate.getMonth();
   const weekKey = `${currentYear}-W${currentWeek}`;
-  const currentWeekEvents = weekData?.[weekKey]?.events || [];
+  const currentWeekEvents = (weekData?.[weekKey]?.events || []).filter(
+    (e) => e.uid === selectedMemberUid,
+  );
 
   const renderPlanning = () => {
     if (weekData[weekKey]) {
@@ -1752,6 +1754,12 @@ const Planning = ({ user }) => {
       localStorage.setItem("selectedMemberUid", selectedMemberUid);
     }
   }, [selectedMemberUid]);
+
+  useEffect(() => {
+    if (user && !selectedMemberUid) {
+      setSelectedMemberUid(user.uid);
+    }
+  }, [user, selectedMemberUid]);
 
   useEffect(() => {
     if (team) {
@@ -1819,21 +1827,21 @@ const Planning = ({ user }) => {
     }
   };
 
-  const loadEvents = async (year, week) => {
+  const loadEvents = async (year, week, uid = selectedMemberUid) => {
     let eventsData = [];
     let tasksData = [];
     const month = new Date(year, 0, 1 + (week - 1) * 7).getMonth();
     const weekKey = `${year}-W${week}`;
 
     // Use selected member when viewing a teammate's planning
-    const ownerId = selectedMemberUid || user?.uid;
+    const ownerId = uid || user?.uid;
 
     try {
       setErrorMessage(null);
       setLoading(true);
 
       const teamParam =
-        selectedMemberUid !== user?.uid && team
+        uid !== user?.uid && team
           ? `?team_id=${team.id || team.team_id}`
           : "";
       // ✅ FIXED for production: safe ownerId retrieval
@@ -1861,8 +1869,8 @@ const Planning = ({ user }) => {
         const mapEv = new Map(eventsData.map((e) => [e.id, e]));
         preParsed.forEach((e) => mapEv.set(e.id, e));
         eventsData = Array.from(mapEv.values());
-        if (selectedMemberUid !== user?.uid) {
-          eventsData = eventsData.filter((e) => e.uid === selectedMemberUid);
+        if (uid !== user?.uid) {
+          eventsData = eventsData.filter((e) => e.uid === uid);
         }
         setEvents(eventsData);
 
@@ -1930,8 +1938,8 @@ const Planning = ({ user }) => {
         if (tasksResponse.data && tasksResponse.data.success) {
           if (Array.isArray(tasksResponse.data.tasks)) {
             tasksData = tasksResponse.data.tasks;
-            if (selectedMemberUid !== user?.uid) {
-              tasksData = tasksData.filter((t) => t.uid === selectedMemberUid);
+            if (uid !== user?.uid) {
+              tasksData = tasksData.filter((t) => t.uid === uid);
             }
           }
           if (Array.isArray(tasksResponse.data.events)) {
@@ -1957,8 +1965,8 @@ const Planning = ({ user }) => {
           tasksData = offlineTasks;
         }
 
-        if (selectedMemberUid !== user?.uid) {
-          eventsData = eventsData.filter((e) => e.uid === selectedMemberUid);
+        if (uid !== user?.uid) {
+          eventsData = eventsData.filter((e) => e.uid === uid);
         }
 
         setEvents(eventsData);
@@ -1994,9 +2002,9 @@ const Planning = ({ user }) => {
           tasksData = Array.isArray(response.data.tasks)
             ? response.data.tasks
             : [];
-          if (selectedMemberUid !== user?.uid) {
-            eventsData = eventsData.filter((e) => e.uid === selectedMemberUid);
-            tasksData = tasksData.filter((t) => t.uid === selectedMemberUid);
+          if (uid !== user?.uid) {
+            eventsData = eventsData.filter((e) => e.uid === uid);
+            tasksData = tasksData.filter((t) => t.uid === uid);
           }
           setEvents(eventsData);
           setTasks(tasksData);
@@ -2339,9 +2347,12 @@ const Planning = ({ user }) => {
     onTaskClick,
     viewingMember,
     transitioning,
+    selectedMemberUid,
   }) => {
     const getEventsForTimeSlot = (day, time) => {
-      const safeEvents = Array.isArray(events) ? events : [];
+      const safeEvents = Array.isArray(events)
+        ? events.filter((e) => e.uid === selectedMemberUid)
+        : [];
       return safeEvents.filter(
         (event) =>
           event.day === day &&
@@ -2541,18 +2552,10 @@ const Planning = ({ user }) => {
   };
 
   useEffect(() => {
-    // Only load events on initial mount and when viewing member changes
-    // Navigation will handle loading events directly
-    if (!transitioning && events.length === 0 && user) {
-      loadEvents(currentYear, currentWeek);
+    if (user && selectedMemberUid && !transitioning) {
+      loadEvents(currentYear, currentWeek, selectedMemberUid);
     }
-  }, [selectedMemberUid, user]);
-
-  useEffect(() => {
-    if (user && events.length === 0 && !transitioning) {
-      loadEvents(currentYear, currentWeek);
-    }
-  }, [user, currentYear, currentWeek, transitioning]);
+  }, [user, selectedMemberUid, currentYear, currentWeek, transitioning]);
 
   useEffect(() => {
     // Load user rate only on mount
@@ -3119,7 +3122,7 @@ const Planning = ({ user }) => {
     newDate.setDate(newDate.getDate() + direction * 7);
     setCurrentDate(newDate);
 
-    await loadEvents(newDate.getFullYear(), getWeekNumber(newDate));
+    await loadEvents(newDate.getFullYear(), getWeekNumber(newDate), selectedMemberUid);
   };
 
   const navigateMonth = async (direction) => {
@@ -3132,7 +3135,7 @@ const Planning = ({ user }) => {
     newDate.setMonth(newDate.getMonth() + direction);
     setCurrentDate(newDate);
 
-    await loadEvents(newDate.getFullYear(), getWeekNumber(newDate));
+    await loadEvents(newDate.getFullYear(), getWeekNumber(newDate), selectedMemberUid);
   };
 
   // Unified smooth navigation handler
@@ -3152,7 +3155,9 @@ const Planning = ({ user }) => {
 
     if (adjustedDay >= 5) return []; // Weekend
 
-    const safeEvents = Array.isArray(events) ? events : [];
+    const safeEvents = Array.isArray(events)
+      ? events.filter((e) => e.uid === selectedMemberUid)
+      : [];
     return safeEvents.filter((event) => {
       const eventDate = new Date(currentYear, 0, 1);
       eventDate.setDate(eventDate.getDate() + (event.week - 1) * 7 + event.day);
@@ -3223,6 +3228,8 @@ const Planning = ({ user }) => {
       </div>
     );
   }
+
+  console.log("Rendering planning for", selectedMemberUid);
 
   return (
     <div className="space-y-6">
@@ -3391,6 +3398,7 @@ const Planning = ({ user }) => {
                 onTaskClick={handleTaskClick}
                 viewingMember={viewingMember}
                 transitioning={transitioning}
+                selectedMemberUid={selectedMemberUid}
               />
             </div>
           </div>
