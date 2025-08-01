@@ -204,7 +204,12 @@ const Dashboard = ({ user }) => {
   const apiCall = async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
-    const token = user ? await user.getIdToken() : null;
+    if (!user) {
+      console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
+      return api({ url, ...options });
+    }
+    const token = await user.getIdToken(); // ✅ CHECKED auth
+    console.log("token apiCall", token); // ✅ CHECKED auth
     return await api({
       url,
       headers: {
@@ -1715,7 +1720,12 @@ const Planning = ({ user }) => {
   const apiCall = async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
-    const token = user ? await user.getIdToken() : null;
+    if (!user) {
+      console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
+      return api({ url, ...options });
+    }
+    const token = await user.getIdToken(); // ✅ CHECKED auth
+    console.log("token apiCall", token); // ✅ CHECKED auth
     try {
       const resp = await api({
         url,
@@ -1770,7 +1780,8 @@ const Planning = ({ user }) => {
         console.error("ownerId non défini");
         return;
       }
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(); // ✅ CHECKED auth
+      console.log("token loadEvents", token); // ✅ CHECKED auth
       eventsData = weekData[weekKey]?.events
         ? weekData[weekKey].events.map((e) => ({ ...e }))
         : [];
@@ -3476,7 +3487,12 @@ const TodoList = () => {
   const apiCall = async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
-    const token = user ? await user.getIdToken() : null;
+    if (!user) {
+      console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
+      return api({ url, ...options });
+    }
+    const token = await user.getIdToken(); // ✅ CHECKED auth
+    console.log("token apiCall", token); // ✅ CHECKED auth
     return await api({
       url,
       headers: {
@@ -4170,7 +4186,12 @@ const Quotes = ({ user }) => {
   const apiCall = async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
-    const token = user ? await user.getIdToken() : null;
+    if (!user) {
+      console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
+      return api({ url, ...options });
+    }
+    const token = await user.getIdToken(); // ✅ CHECKED auth
+    console.log("token apiCall", token); // ✅ CHECKED auth
     return await api({
       url,
       headers: {
@@ -4922,7 +4943,12 @@ const Invoices = ({ user }) => {
   const apiCall = async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
-    const token = user ? await user.getIdToken() : null;
+    if (!user) {
+      console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
+      return api({ url, ...options });
+    }
+    const token = await user.getIdToken(); // ✅ CHECKED auth
+    console.log("token apiCall", token); // ✅ CHECKED auth
     return await api({
       url,
       headers: {

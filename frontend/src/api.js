@@ -24,7 +24,8 @@ api.interceptors.request.use(async (config) => {
   const currentUser = auth.currentUser;
   if (currentUser) {
     try {
-      const token = await currentUser.getIdToken();
+      const token = await currentUser.getIdToken(); // ✅ CHECKED auth
+      console.log("token interceptor", token); // ✅ CHECKED auth
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     } catch (e) {
