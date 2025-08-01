@@ -1,5 +1,5 @@
 // ✅ FIXED for production
 export const API_URL =
-  import.meta.env.MODE === "development"
+  process.env.NODE_ENV === "development"
     ? "http://localhost:8000"
     : "https://fleemy.onrender.com";
