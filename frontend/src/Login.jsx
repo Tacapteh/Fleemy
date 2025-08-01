@@ -9,7 +9,8 @@ export default function Login({ onLogin }) {
       const user = result.user;
 
       // Récupérer le token Firebase pour les requêtes API
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(); // ✅ CHECKED auth
+      console.log("token login", token); // ✅ CHECKED auth
       localStorage.setItem("authToken", token);
 
       onLogin(user); // Informe App.js que l'utilisateur est connecté

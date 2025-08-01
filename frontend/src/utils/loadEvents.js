@@ -11,7 +11,8 @@ export async function loadEvents(year, week) {
   }
 
   try {
-    const token = await user.getIdToken();
+    const token = await user.getIdToken(); // ✅ CHECKED auth
+    console.log("Token loadEvents", token); // ✅ CHECKED auth
     const { data } = await api.get(`/planning/week/${year}/${week}`, {
       headers: { Authorization: `Bearer ${token}` },
     });

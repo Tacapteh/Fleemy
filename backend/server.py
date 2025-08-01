@@ -74,7 +74,7 @@ from google.cloud import firestore
 
 
 async def verify_token(request: Request):
-    """Validate the Firebase token sent in the Authorization header."""
+    """Validate the Firebase token sent in the Authorization header."""  # ✅ CHECKED auth
     auth_header = request.headers.get("Authorization")
     logger.info("Header Authorization reçu: %s", auth_header)
 
@@ -88,6 +88,7 @@ async def verify_token(request: Request):
 
     try:
         decoded = firebase_auth.verify_id_token(token)
+        print(decoded)  # ✅ CHECKED auth
         request.state.user = decoded
         logger.info("Token validé pour UID: %s", decoded.get("uid"))
         return decoded
@@ -420,7 +421,7 @@ async def get_week_planning(
     year: int,
     week: int,
     team_id: Optional[str] = None,
-    user: Dict[str, Any] = Depends(verify_token),
+    user: Dict[str, Any] = Depends(verify_token),  # ✅ CHECKED auth
 ):
     logger.info("/planning/week/%s/%s called", year, week)
     try:
