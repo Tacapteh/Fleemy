@@ -97,6 +97,7 @@ __all__ = ["db", "InMemoryFirestore", "initialize_firestore"]
 
 
 def initialize_firestore():
+    env_project = os.environ.get("FIREBASE_PROJECT_ID")
     try:
         if cred_path and Path(cred_path).exists():
             with open(cred_path) as f:
@@ -117,6 +118,22 @@ def initialize_firestore():
         raise FileNotFoundError("Credential file not found")
     except Exception as e:
         logger.error(f"Failed to initialize Firestore: {e}")
+        if not firebase_admin._apps and env_project:
+            try:
+                firebase_admin.initialize_app(options={"projectId": env_project})
+                logger.warning(
+                    "Initialized Firebase app with project_id=%s but using InMemoryFirestore",
+                    env_project,
+                )
+            except Exception as init_exc:
+                logger.error(
+                    "Failed to initialize Firebase app without credentials: %s",
+                    init_exc,
+                )
+        elif not firebase_admin._apps:
+            logger.warning(
+                "No Firebase credentials found and FIREBASE_PROJECT_ID not set"
+            )
         return InMemoryFirestore()
 
 

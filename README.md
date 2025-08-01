@@ -12,9 +12,10 @@ Fleemy is a planning and invoicing application built with React and FastAPI.
 cp backend/.env.example backend/.env
 ```
 
-The variable is:
+The variables are:
 
-- `FIREBASE_CREDENTIALS` – path to your Firebase service account JSON file
+- `FIREBASE_CREDENTIALS` – path to your Firebase service account JSON file. You can copy `backend/serviceAccountKey.json.example` and replace the values with your own credentials.
+- `FIREBASE_PROJECT_ID` – project ID used when no credentials file is available to allow token verification (data will be stored in memory).
 - `CORS_ALLOW_ORIGINS` – comma separated list of origins allowed to access the API (defaults to `http://localhost:3000`)
 
 2. Install dependencies:
