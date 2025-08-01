@@ -42,7 +42,10 @@ app = FastAPI()
 # Configurer CORS (après app et après dotenv)
 from fastapi.middleware.cors import CORSMiddleware
 
-allowed_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+allowed_origins = os.getenv(
+    "CORS_ALLOW_ORIGINS",
+    "https://fleemy.web.app,http://localhost:5173",
+)
 origin_list = [o.strip() for o in allowed_origins.split(",")]
 
 logger.info("CORS activé pour : %s", origin_list)
@@ -1350,13 +1353,13 @@ async def translate_html(payload: Dict[str, Any]):
 
 # Health check route
 @api_router.get("/ping")
-async def ping():
+async def ping(user: Dict[str, Any] = Depends(verify_token)):
     if isinstance(db, InMemoryFirestore):
         return {"status": "error", "message": "running in mock mode"}
     try:
         test_ref = db.collection("_ping").document("ping")
         await asyncio.to_thread(test_ref.set, {"ok": True})
-        return {"status": "ok"}
+        return {"status": "ok", "uid": user.get("uid")}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

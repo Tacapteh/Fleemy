@@ -11,7 +11,10 @@ logger = logging.getLogger(__name__)
 # Définir le chemin vers le fichier de clé de service
 cred_path = os.environ.get(
     "FIREBASE_CREDENTIALS",
-    str(Path(__file__).parent / "serviceAccountKey.json"),
+    os.environ.get(
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        str(Path(__file__).parent / "serviceAccountKey.json"),
+    ),
 )
 
 
