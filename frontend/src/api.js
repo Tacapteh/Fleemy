@@ -1,8 +1,9 @@
 import axios from "axios";
 import { auth } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { API_URL } from "./config";
 
-const base = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const base = API_URL;
 
 const api = axios.create({
   baseURL: `${base.replace(/\/$/, "")}/api`,
@@ -24,8 +25,9 @@ api.interceptors.request.use(async (config) => {
   if (currentUser) {
     try {
       const token = await currentUser.getIdToken();
+      config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
-      config.headers['X-User-Id'] = currentUser.uid;
+      config.headers["X-User-Id"] = currentUser.uid;
     } catch (e) {
       console.warn("Erreur lors de la récupération du token Firebase :", e);
     }

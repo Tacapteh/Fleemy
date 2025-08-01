@@ -78,7 +78,7 @@ const getCurrentWeek = () => {
 };
 
 // Authentication Screen
-import { signInWithPopup } from "firebase/auth";
+import { signInWithPopup, getAuth } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 
 const AuthScreen = ({ onLogin }) => {
@@ -1753,7 +1753,12 @@ const Planning = ({ user }) => {
       setLoading(true);
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      const ownerId = viewingMember ? viewingMember.uid : user.uid;
+      const ownerId = viewingMember
+        ? viewingMember.uid
+        : getAuth().currentUser?.uid;
+      if (!ownerId) {
+        console.error("ownerId is undefined in loadEvents");
+      }
       eventsData = weekData[weekKey]?.events
         ? weekData[weekKey].events.map((e) => ({ ...e }))
         : [];
