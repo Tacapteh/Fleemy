@@ -1896,14 +1896,18 @@ const Planning = ({ user }) => {
           { headers: { Authorization: `Bearer ${token}` } },
         );
         console.log("/planning/week response", tasksResponse.data);
-        if (
-          tasksResponse.data &&
-          tasksResponse.data.success &&
-          Array.isArray(tasksResponse.data.tasks)
-        ) {
-          tasksData = tasksResponse.data.tasks;
-          if (viewingMember) {
-            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+        if (tasksResponse.data && tasksResponse.data.success) {
+          if (Array.isArray(tasksResponse.data.tasks)) {
+            tasksData = tasksResponse.data.tasks;
+            if (viewingMember) {
+              tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+            }
+          }
+          if (Array.isArray(tasksResponse.data.events)) {
+            const weekEvents = tasksResponse.data.events.map(parseEvent);
+            const map = new Map(eventsData.map((e) => [e.id, e]));
+            weekEvents.forEach((e) => map.set(e.id, e));
+            eventsData = Array.from(map.values());
           }
         } else {
           console.error(
