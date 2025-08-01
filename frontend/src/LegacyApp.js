@@ -2527,10 +2527,16 @@ const Planning = ({ user }) => {
   useEffect(() => {
     // Only load events on initial mount and when viewing member changes
     // Navigation will handle loading events directly
-    if (!transitioning && events.length === 0) {
+    if (!transitioning && events.length === 0 && user) {
       loadEvents(currentYear, currentWeek);
     }
-  }, [viewingMember]);
+  }, [viewingMember, user]);
+
+  useEffect(() => {
+    if (user && events.length === 0 && !transitioning) {
+      loadEvents(currentYear, currentWeek);
+    }
+  }, [user, currentYear, currentWeek, transitioning]);
 
   useEffect(() => {
     // Load team and user rate only on mount
