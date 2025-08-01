@@ -53,11 +53,16 @@ logger.info("CORS activé pour : %s", origin_list)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origin_list,
+    allow_origins=[
+        "http://localhost:5173",
+        "https://fleemy.web.app",
+        "https://fleemy-21118.web.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 if isinstance(db, InMemoryFirestore):
     logger.warning("Using InMemoryFirestore (no credentials found)")
