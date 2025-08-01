@@ -115,6 +115,8 @@ def initialize_firestore():
                     cred_data["client_email"] = env_email
             cred = credentials.Certificate(cred_data)
             if not firebase_admin._apps:
+                print(f"🟩 Clé Firebase utilisée : {cred_path}")
+
                 firebase_admin.initialize_app(cred)
             logger.info("Initialized Firestore with provided credentials")
             return firestore.client()

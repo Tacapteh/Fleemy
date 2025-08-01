@@ -29,6 +29,7 @@ pip install -r backend/requirements.txt
 ```bash
 uvicorn backend.server:app --host 0.0.0.0 --port ${PORT:-8000}
 ```
+
 Render will automatically provide the `PORT` environment variable when deploying the backend.
 
 ### Frontend
