@@ -6,8 +6,8 @@ import {
   Navigate,
   Outlet,
 } from "react-router-dom";
-import { signOut, onAuthStateChanged } from "firebase/auth";
-import { auth } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, logout } from "./firebase";
 
 import Login from "./Login";
 import Dashboard from "./pages/Dashboard";
@@ -48,7 +48,7 @@ function App() {
   }, []);
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await logout();
     setUser(null);
   };
 
