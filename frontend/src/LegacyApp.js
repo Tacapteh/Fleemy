@@ -1753,11 +1753,12 @@ const Planning = ({ user }) => {
       setLoading(true);
 
       const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
-      const ownerId = viewingMember
-        ? viewingMember.uid
-        : getAuth().currentUser?.uid;
+      // ✅ FIXED pour production: récupération sûre de l'ownerId
+      const user = getAuth().currentUser;
+      const ownerId = user?.uid;
       if (!ownerId) {
-        console.error("ownerId is undefined in loadEvents");
+        console.error("ownerId est indéfini");
+        return;
       }
       eventsData = weekData[weekKey]?.events
         ? weekData[weekKey].events.map((e) => ({ ...e }))

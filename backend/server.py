@@ -42,11 +42,12 @@ app = FastAPI()
 # Configurer CORS (après app et après dotenv)
 from fastapi.middleware.cors import CORSMiddleware
 
-allowed_origins = os.getenv(
-    "CORS_ALLOW_ORIGINS",
-    "https://fleemy.web.app,http://localhost:5173",
-)
-origin_list = [o.strip() for o in allowed_origins.split(",")]
+# ✅ FIXED pour production: CORS origins explicit
+origin_list = [
+    "http://localhost:5173",
+    "https://fleemy.web.app",
+    "https://fleemy-21118.web.app",
+]
 
 logger.info("CORS activé pour : %s", origin_list)
 

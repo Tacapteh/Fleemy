@@ -1,5 +1,5 @@
-const API_URL = window.location.hostname === 'localhost'
-  ? 'http://localhost:8000'
-  : 'https://fleemy.onrender.com';
-
-export { API_URL };
+// ✅ FIXED pour production
+export const API_URL =
+  import.meta.env.MODE === "development"
+    ? "http://localhost:8000"
+    : "https://fleemy.onrender.com";
