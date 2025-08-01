@@ -18,7 +18,7 @@ let firebaseReady = new Promise((resolve) => {
 });
 
 api.interceptors.request.use(async (config) => {
-  // ✅ FIXED pour production: injection du token Firebase dans les headers
+  // ✅ FIXED for production: inject Firebase token into headers
   await firebaseReady; // on attend l'initialisation de Firebase
 
   const currentUser = auth.currentUser;
