@@ -206,19 +206,36 @@ const Dashboard = ({ user }) => {
     const user = getAuth().currentUser;
     if (!user) {
       console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
-      return api({ url, ...options });
+      try {
+        return await api({ url, ...options });
+      } catch (err) {
+        console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+        throw err;
+      }
     }
-    const token = await user.getIdToken(); // ✅ CHECKED auth
-    console.log("token apiCall", token); // ✅ CHECKED auth
-    return await api({
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-      ...options,
-    });
+
+    let token;
+    try {
+      token = await user.getIdToken(); // ✅ FIXED token/projectId/trace
+    } catch (err) {
+      console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
+    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
+    try {
+      return await api({
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options.headers,
+        },
+        ...options,
+      });
+    } catch (err) {
+      console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
   };
 
   const loadDashboard = async () => {
@@ -1722,10 +1739,22 @@ const Planning = ({ user }) => {
     const user = getAuth().currentUser;
     if (!user) {
       console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
-      return api({ url, ...options });
+      try {
+        return await api({ url, ...options });
+      } catch (err) {
+        console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+        throw err;
+      }
     }
-    const token = await user.getIdToken(); // ✅ CHECKED auth
-    console.log("token apiCall", token); // ✅ CHECKED auth
+
+    let token;
+    try {
+      token = await user.getIdToken(); // ✅ FIXED token/projectId/trace
+    } catch (err) {
+      console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
+    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       const resp = await api({
         url,
@@ -1744,6 +1773,7 @@ const Planning = ({ user }) => {
       if (!isOnline) {
         throw new Error("Offline mode");
       }
+      console.error(`[apiCall] échec appel ${url}:`, error); // ✅ FIXED token/projectId/trace
       throw error;
     }
   };
@@ -3489,19 +3519,36 @@ const TodoList = () => {
     const user = getAuth().currentUser;
     if (!user) {
       console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
-      return api({ url, ...options });
+      try {
+        return await api({ url, ...options });
+      } catch (err) {
+        console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+        throw err;
+      }
     }
-    const token = await user.getIdToken(); // ✅ CHECKED auth
-    console.log("token apiCall", token); // ✅ CHECKED auth
-    return await api({
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-      ...options,
-    });
+
+    let token;
+    try {
+      token = await user.getIdToken(); // ✅ FIXED token/projectId/trace
+    } catch (err) {
+      console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
+    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
+    try {
+      return await api({
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options.headers,
+        },
+        ...options,
+      });
+    } catch (err) {
+      console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
   };
 
   const loadTodos = async () => {
@@ -4188,19 +4235,36 @@ const Quotes = ({ user }) => {
     const user = getAuth().currentUser;
     if (!user) {
       console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
-      return api({ url, ...options });
+      try {
+        return await api({ url, ...options });
+      } catch (err) {
+        console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+        throw err;
+      }
     }
-    const token = await user.getIdToken(); // ✅ CHECKED auth
-    console.log("token apiCall", token); // ✅ CHECKED auth
-    return await api({
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-      ...options,
-    });
+
+    let token;
+    try {
+      token = await user.getIdToken(); // ✅ FIXED token/projectId/trace
+    } catch (err) {
+      console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
+    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
+    try {
+      return await api({
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options.headers,
+        },
+        ...options,
+      });
+    } catch (err) {
+      console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
   };
 
   const loadQuotes = async () => {
@@ -4945,19 +5009,36 @@ const Invoices = ({ user }) => {
     const user = getAuth().currentUser;
     if (!user) {
       console.error("[apiCall] utilisateur non connecté"); // ✅ CHECKED auth
-      return api({ url, ...options });
+      try {
+        return await api({ url, ...options });
+      } catch (err) {
+        console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+        throw err;
+      }
     }
-    const token = await user.getIdToken(); // ✅ CHECKED auth
-    console.log("token apiCall", token); // ✅ CHECKED auth
-    return await api({
-      url,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-      ...options,
-    });
+
+    let token;
+    try {
+      token = await user.getIdToken(); // ✅ FIXED token/projectId/trace
+    } catch (err) {
+      console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
+    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
+    try {
+      return await api({
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...options.headers,
+        },
+        ...options,
+      });
+    } catch (err) {
+      console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
+      throw err;
+    }
   };
 
   const loadInvoices = async () => {

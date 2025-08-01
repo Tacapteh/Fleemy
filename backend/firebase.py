@@ -125,15 +125,15 @@ def initialize_firestore():
             try:
                 firebase_admin.initialize_app(options={"projectId": env_project})
                 logger.warning(
-                    "Initialized Firebase app with project_id=%s but using InMemoryFirestore",
-                    env_project,
-                )
+                    "Initialized Firebase app with project_id=%s", env_project
+                )  # ✅ FIXED token/projectId/trace
+                return firestore.client()
             except Exception as init_exc:
                 logger.error(
-                    "Failed to initialize Firebase app without credentials: %s",
+                    "Failed to initialize Firebase app with project ID: %s",
                     init_exc,
                 )
-        elif not firebase_admin._apps:
+        if not firebase_admin._apps:
             logger.warning(
                 "No Firebase credentials found and FIREBASE_PROJECT_ID not set"
             )

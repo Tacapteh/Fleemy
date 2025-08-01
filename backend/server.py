@@ -88,13 +88,25 @@ async def verify_token(request: Request):
 
     try:
         decoded = firebase_auth.verify_id_token(token)
-        print(decoded)  # ✅ CHECKED auth
+        print(decoded)  # ✅ FIXED token/projectId/trace
+        logger.info("Decoded token: %s", decoded)
         request.state.user = decoded
         logger.info("Token validé pour UID: %s", decoded.get("uid"))
         return decoded
     except Exception as e:
-        logger.error("Erreur de validation du token: %s", e, exc_info=True)
-        raise HTTPException(status_code=401, detail="Invalid token")
+        msg = str(e).lower()
+        if "expired" in msg:
+            reason = "expired"
+        elif "signature" in msg:
+            reason = "signature"
+        elif "project" in msg or "audience" in msg:
+            reason = "project"
+        else:
+            reason = "unknown"
+        logger.error(
+            "Erreur de validation du token (%s): %s", reason, e, exc_info=True
+        )  # ✅ FIXED token/projectId/trace
+        raise HTTPException(status_code=401, detail=f"Invalid token ({reason})")
 
 
 # Global exception handler to always return JSON and keep CORS headers
