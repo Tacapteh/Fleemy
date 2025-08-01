@@ -1,6 +1,7 @@
 // ✅ FIXED auth/token/ownerId
 import api from "../api";
 import { getAuth } from "firebase/auth";
+import normalizeEvent from "./normalizeEvent";
 
 export async function loadEvents(year, week) {
   const user = getAuth().currentUser;
@@ -24,7 +25,8 @@ export async function loadEvents(year, week) {
       headers: { Authorization: `Bearer ${token}` },
     });
     console.log("[loadEvents] réponse API", data);
-    return data.events || [];
+    const events = Array.isArray(data.events) ? data.events.map(normalizeEvent) : [];
+    return events;
   } catch (error) {
     console.error("[loadEvents] appel API échoué", error); // ✅ FIXED token/projectId/trace
     return [];
