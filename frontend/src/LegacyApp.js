@@ -1797,7 +1797,6 @@ const Planning = ({ user }) => {
     const month = new Date(year, 0, 1 + (week - 1) * 7).getMonth();
     const weekKey = `${year}-W${week}`;
 
-    const user = getAuth().currentUser;
     const ownerId = user?.uid;
 
     try {
@@ -2546,7 +2545,6 @@ const Planning = ({ user }) => {
 
   const handleCreateEvent = async (eventData) => {
     // ✅ FIXED for production
-    const user = getAuth().currentUser;
     const ownerId = user?.uid;
     if (!ownerId) {
       console.error("ownerId non défini");
@@ -2676,12 +2674,6 @@ const Planning = ({ user }) => {
 
   const handleUpdateEvent = async (eventData) => {
     // ✅ FIXED for production
-    const user = getAuth().currentUser;
-    const ownerId = user?.uid;
-    if (!ownerId) {
-      console.error("ownerId non défini");
-      return;
-    }
     try {
       const updateData = {
         description: eventData.description,
@@ -2835,12 +2827,6 @@ const Planning = ({ user }) => {
 
   const handleDeleteEvent = async (eventId) => {
     // ✅ FIXED for production
-    const user = getAuth().currentUser;
-    const ownerId = user?.uid;
-    if (!ownerId) {
-      console.error("ownerId non défini");
-      return;
-    }
     try {
       const response = await apiCall(`/planning/events/${eventId}`, {
         method: "DELETE",
@@ -3059,7 +3045,6 @@ const Planning = ({ user }) => {
       )
     ) {
       // ✅ FIXED for production
-      const user = getAuth().currentUser;
       const ownerId = user?.uid;
       if (!ownerId) {
         console.error("ownerId non défini");
