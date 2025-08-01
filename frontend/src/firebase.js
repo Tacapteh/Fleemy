@@ -16,10 +16,10 @@ const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 const db = getFirestore(app);
 
-export async function logout() {
+const logout = async () => {
   await signOut(auth);
   localStorage.removeItem("authToken");
-}
+};
 
 export { auth, googleProvider, db, logout };
 
