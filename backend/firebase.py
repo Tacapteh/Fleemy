@@ -1,6 +1,4 @@
 import os
-import json
-
 import logging
 from pathlib import Path
 import firebase_admin
@@ -8,14 +6,22 @@ from firebase_admin import credentials, firestore
 
 logger = logging.getLogger(__name__)
 
-# Définir le chemin vers le fichier de clé de service
-cred_path = os.environ.get(
-    "FIREBASE_CREDENTIALS",
-    os.environ.get(
-        "GOOGLE_APPLICATION_CREDENTIALS",
-        str(Path(__file__).parent / "serviceAccountKey.json"),
-    ),
-)
+# Déterminer le chemin vers la clé Firebase
+cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+
+if not cred_path:
+    fallback = Path(__file__).parent / "serviceAccountKey.json"
+    cred_path = str(fallback)
+    logger.warning(f"⚠️ Variable GOOGLE_APPLICATION_CREDENTIALS absente, fallback local : {cred_path}")
+else:
+    logger.info(f"🟢 Clé Firebase détectée depuis l'env : {cred_path}")
+
+# Initialisation de Firebase Admin si ce n’est pas déjà fait
+if not firebase_admin._apps:
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
+    logger.info("✅ Firebase Admin initialisé")
+
 
 
 class InMemoryDocument(dict):
