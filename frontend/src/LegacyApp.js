@@ -1825,7 +1825,8 @@ const Planning = ({ user }) => {
     const month = new Date(year, 0, 1 + (week - 1) * 7).getMonth();
     const weekKey = `${year}-W${week}`;
 
-    const ownerId = user?.uid;
+    // Use selected member when viewing a teammate's planning
+    const ownerId = selectedMemberUid || user?.uid;
 
     try {
       setErrorMessage(null);
