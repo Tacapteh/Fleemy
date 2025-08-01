@@ -18,8 +18,8 @@ let firebaseReady = new Promise((resolve) => {
 });
 
 api.interceptors.request.use(async (config) => {
-  // On attend la fin de l'initialisation Firebase
-  await firebaseReady;
+  // ✅ FIXED pour production: injection du token Firebase dans les headers
+  await firebaseReady; // on attend l'initialisation de Firebase
 
   const currentUser = auth.currentUser;
   if (currentUser) {
@@ -27,7 +27,6 @@ api.interceptors.request.use(async (config) => {
       const token = await currentUser.getIdToken();
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
-      config.headers["X-User-Id"] = currentUser.uid;
     } catch (e) {
       console.warn("Erreur lors de la récupération du token Firebase :", e);
     }
