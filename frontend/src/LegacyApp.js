@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import useTeam from "./hooks/useTeam";
 import "./App.css";
 import api from "./api";
 import { showToast } from "./utils/toast";
@@ -919,12 +920,14 @@ const DayEventsModal = ({
           <button onClick={onClose} className="btn btn-outline">
             Fermer
           </button>
-          <button
-            onClick={() => onCreateEvent(date)}
-            className="btn btn-primary"
-          >
-            + Nouvel événement
-          </button>
+          {onCreateEvent && (
+            <button
+              onClick={() => onCreateEvent(date)}
+              className="btn btn-primary"
+            >
+              + Nouvel événement
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1645,14 +1648,24 @@ const Planning = ({ user }) => {
     events: [],
     date: null,
   });
-  const [team, setTeam] = useState(null);
-  const [viewingMember, setViewingMember] = useState(null);
+  const { team } = useTeam();
+  const [selectedMemberUid, setSelectedMemberUid] = useState(() =>
+    localStorage.getItem("selectedMemberUid") || user?.uid,
+  );
   const [hourlyRate, setHourlyRate] = useState(50);
   const [showRateModal, setShowRateModal] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlineStorage] = useState(new PlanningOfflineStorage());
   const [errorMessage, setErrorMessage] = useState(null);
   const [weekData, setWeekData] = useState({});
+
+  const viewingMember =
+    selectedMemberUid && selectedMemberUid !== user?.uid
+      ? team?.members?.find((m) => m.uid === selectedMemberUid) || {
+          uid: selectedMemberUid,
+        }
+      : null;
+  const isReadOnly = selectedMemberUid !== user?.uid;
 
   const backendDayNames = [
     "monday",
@@ -1734,6 +1747,21 @@ const Planning = ({ user }) => {
     };
   }, []);
 
+  useEffect(() => {
+    if (selectedMemberUid) {
+      localStorage.setItem("selectedMemberUid", selectedMemberUid);
+    }
+  }, [selectedMemberUid]);
+
+  useEffect(() => {
+    if (team) {
+      const exists = team.members.some((m) => m.uid === selectedMemberUid);
+      if (!exists) {
+        setSelectedMemberUid(user?.uid);
+      }
+    }
+  }, [team]);
+
   const apiCall = async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
@@ -1803,7 +1831,10 @@ const Planning = ({ user }) => {
       setErrorMessage(null);
       setLoading(true);
 
-      const teamParam = viewingMember && team ? `?team_id=${team.team_id}` : "";
+      const teamParam =
+        selectedMemberUid !== user?.uid && team
+          ? `?team_id=${team.id || team.team_id}`
+          : "";
       // ✅ FIXED for production: safe ownerId retrieval
       if (!ownerId) {
         console.error("ownerId non défini");
@@ -1829,8 +1860,8 @@ const Planning = ({ user }) => {
         const mapEv = new Map(eventsData.map((e) => [e.id, e]));
         preParsed.forEach((e) => mapEv.set(e.id, e));
         eventsData = Array.from(mapEv.values());
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+        if (selectedMemberUid !== user?.uid) {
+          eventsData = eventsData.filter((e) => e.uid === selectedMemberUid);
         }
         setEvents(eventsData);
 
@@ -1898,8 +1929,8 @@ const Planning = ({ user }) => {
         if (tasksResponse.data && tasksResponse.data.success) {
           if (Array.isArray(tasksResponse.data.tasks)) {
             tasksData = tasksResponse.data.tasks;
-            if (viewingMember) {
-              tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+            if (selectedMemberUid !== user?.uid) {
+              tasksData = tasksData.filter((t) => t.uid === selectedMemberUid);
             }
           }
           if (Array.isArray(tasksResponse.data.events)) {
@@ -1925,8 +1956,8 @@ const Planning = ({ user }) => {
           tasksData = offlineTasks;
         }
 
-        if (viewingMember) {
-          eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
+        if (selectedMemberUid !== user?.uid) {
+          eventsData = eventsData.filter((e) => e.uid === selectedMemberUid);
         }
 
         setEvents(eventsData);
@@ -1962,9 +1993,9 @@ const Planning = ({ user }) => {
           tasksData = Array.isArray(response.data.tasks)
             ? response.data.tasks
             : [];
-          if (viewingMember) {
-            eventsData = eventsData.filter((e) => e.uid === viewingMember.uid);
-            tasksData = tasksData.filter((t) => t.uid === viewingMember.uid);
+          if (selectedMemberUid !== user?.uid) {
+            eventsData = eventsData.filter((e) => e.uid === selectedMemberUid);
+            tasksData = tasksData.filter((t) => t.uid === selectedMemberUid);
           }
           setEvents(eventsData);
           setTasks(tasksData);
@@ -2357,10 +2388,10 @@ const Planning = ({ user }) => {
                 <div
                   key={dayIndex}
                   className={`planning-grid-cell ${
-                    viewingMember ? "readonly" : ""
+                    selectedMemberUid !== user?.uid ? "readonly" : ""
                   }`}
                   onClick={() =>
-                    !viewingMember && onTimeSlotClick(dayIndex, time)
+                    !isReadOnly && onTimeSlotClick(dayIndex, time)
                   }
                 >
                   {/* Display events */}
@@ -2491,21 +2522,6 @@ const Planning = ({ user }) => {
     );
   };
 
-  const loadTeam = async () => {
-    try {
-      const response = await apiCallWithRetry("/teams/my");
-      if (response.data && response.data.success === false) {
-        setErrorMessage(response.data.error);
-      } else if (response.data && response.data.team == null) {
-        setTeam(null);
-      } else {
-        setTeam(response.data);
-      }
-    } catch (error) {
-      console.error("Error loading team:", error);
-      setErrorMessage("Erreur lors du chargement de l'équipe");
-    }
-  };
 
   const loadUserRate = async () => {
     try {
@@ -2529,7 +2545,7 @@ const Planning = ({ user }) => {
     if (!transitioning && events.length === 0 && user) {
       loadEvents(currentYear, currentWeek);
     }
-  }, [viewingMember, user]);
+  }, [selectedMemberUid, user]);
 
   useEffect(() => {
     if (user && events.length === 0 && !transitioning) {
@@ -2538,8 +2554,7 @@ const Planning = ({ user }) => {
   }, [user, currentYear, currentWeek, transitioning]);
 
   useEffect(() => {
-    // Load team and user rate only on mount
-    loadTeam();
+    // Load user rate only on mount
     loadUserRate();
   }, []);
 
@@ -3145,7 +3160,7 @@ const Planning = ({ user }) => {
   };
 
   const handleTimeSlotClick = (day, start) => {
-    if (!viewingMember) {
+    if (!isReadOnly) {
       const startIndex = timeSlots.indexOf(start);
       const endTime = timeSlots[startIndex + 1] || "18:00";
       setEventModal({
@@ -3163,7 +3178,7 @@ const Planning = ({ user }) => {
   };
 
   const handleEventClick = (event) => {
-    if (!viewingMember) {
+    if (!isReadOnly) {
       // Only allow editing own events
       setEventModal({
         isOpen: true,
@@ -3210,6 +3225,11 @@ const Planning = ({ user }) => {
 
   return (
     <div className="space-y-6">
+      {selectedMemberUid !== user?.uid && viewingMember && (
+        <div className="bg-yellow-100 text-yellow-800 text-center p-2 rounded">
+          Planning de {viewingMember.name || viewingMember.uid} (lecture seule)
+        </div>
+      )}
       {/* Planning Header */}
       <div className="planning-header">
         <div className="flex items-center space-x-4">
@@ -3228,26 +3248,17 @@ const Planning = ({ user }) => {
           {/* Team member selector */}
           {team && (
             <select
-              value={viewingMember ? viewingMember.uid : "own"}
-              onChange={(e) => {
-                if (e.target.value === "own") {
-                  setViewingMember(null);
-                } else {
-                  const member = team.members.find(
-                    (m) => m.uid === e.target.value,
-                  );
-                  setViewingMember(member);
-                }
-              }}
+              value={selectedMemberUid}
+              onChange={(e) => setSelectedMemberUid(e.target.value)}
               className="form-input"
               style={{ width: "auto", minWidth: "200px" }}
             >
-              <option value="own">Mon planning</option>
+              <option value={user.uid}>Mon planning</option>
               {team.members
                 .filter((m) => m.uid !== user.uid)
                 .map((member) => (
                   <option key={member.uid} value={member.uid}>
-                    {member?.name ?? ""} (lecture seule)
+                    {member?.name || member.uid}
                   </option>
                 ))}
             </select>
@@ -3268,7 +3279,7 @@ const Planning = ({ user }) => {
           </button>
 
           {/* Actions */}
-          {!viewingMember && (
+          {!isReadOnly && (
             <>
               <button
                 onClick={() => setShowRateModal(true)}
@@ -3277,7 +3288,7 @@ const Planning = ({ user }) => {
                 {hourlyRate}€/h
               </button>
 
-              {!viewingMember && (
+              {!isReadOnly && (
                 <button
                   onClick={handleClearWeek}
                   className="btn btn-outline btn-danger"
@@ -3333,7 +3344,7 @@ const Planning = ({ user }) => {
       )}
 
       {/* Revenue Summary - Only show for personal view */}
-      {view === "week" && !viewingMember && (
+      {view === "week" && selectedMemberUid === user?.uid && (
         <RevenueSummary
           events={events}
           tasks={tasks}
@@ -3437,7 +3448,7 @@ const Planning = ({ user }) => {
         events={dayEventsModal.events}
         date={dayEventsModal.date}
         onEventClick={handleEventClick}
-        onCreateEvent={handleCreateFromDay}
+        onCreateEvent={!isReadOnly ? handleCreateFromDay : undefined}
       />
 
       <TaskModal
