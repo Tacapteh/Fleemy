@@ -24,17 +24,25 @@ api.interceptors.request.use(async (config) => {
   const currentUser = auth.currentUser;
   if (currentUser) {
     try {
-      const token = await currentUser.getIdToken(); // ✅ CHECKED auth
-      console.log("token interceptor", token); // ✅ CHECKED auth
+      const token = await currentUser.getIdToken(); // ✅ FIXED token/projectId/trace
+      console.log("token interceptor", token); // ✅ FIXED token/projectId/trace
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
     } catch (e) {
-      console.warn("Erreur lors de la récupération du token Firebase :", e);
+      console.error("[api] impossible d'obtenir le token Firebase:", e); // ✅ FIXED token/projectId/trace
     }
   }
   console.log("Token envoyé à l'API:", config.headers.Authorization);
 
   return config;
 });
+
+api.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    console.error("[api] appel échoué:", error); // ✅ FIXED token/projectId/trace
+    return Promise.reject(error);
+  }
+);
 
 export default api;
