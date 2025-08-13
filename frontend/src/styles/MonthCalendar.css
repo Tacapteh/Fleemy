@@ -26,3 +26,21 @@
   background: #fafafa;
   pointer-events: none;
 }
+
+.month-event {
+  width: 100%;
+  background: #bfdbfe;
+  border-radius: 2px;
+  padding: 1px 2px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* hotfix interactivité – sans impact visuel */
+.calendar-cell.cell--active {
+  background: rgba(59,130,246,0.3);
+  transition: background 0.2s;
+}
