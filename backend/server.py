@@ -591,23 +591,28 @@ async def list_events_by_owner(owner_id: str, year: int, week: int):
             db.collection("events")
             .document(str(year))
             .collection(str(week))
-            .where("owner_id", "==", owner_id)
         )
+        # Fetch all events for the week then filter locally. This keeps
+        # compatibility with older events that only have the ``uid`` field.
         events_raw = await stream_docs(events_ref)
         events_raw = events_raw if isinstance(events_raw, list) else []
-        formatted = []
+        filtered = []
         for ev in events_raw:
-            formatted.append(
-                {
-                    **ev,
-                    "id": ev.get("id"),
-                    "title": ev.get("description", ""),
-                    "color": ev.get("color", ""),
-                    "startTime": ev.get("start_time"),
-                    "endTime": ev.get("end_time"),
-                    "status": ev.get("status"),
-                }
-            )
+            owner = ev.get("owner_id")
+            if owner == owner_id or (not owner and ev.get("uid") == owner_id):
+                filtered.append(ev)
+        formatted = [
+            {
+                **ev,
+                "id": ev.get("id"),
+                "title": ev.get("description", ""),
+                "color": ev.get("color", ""),
+                "startTime": ev.get("start_time"),
+                "endTime": ev.get("end_time"),
+                "status": ev.get("status"),
+            }
+            for ev in filtered
+        ]
         logger.info(
             "Returning %d events for owner %s week %s/%s",
             len(formatted),
