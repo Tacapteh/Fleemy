@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import WeeklyGrid from '../components/WeeklyGrid';
 import MonthCalendar from '../components/MonthCalendar';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
+
 import EventModal from '../components/EventModal';
+
 import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
 
@@ -14,7 +16,9 @@ export default function Planning() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
+
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null });
+
 
   function normalizeEvent(evt) {
     const toDate = (v) =>
@@ -187,6 +191,7 @@ export default function Planning() {
     }
   };
 
+
   if (loadingEvents) {
     return <div>Chargement des événements...</div>;
   }
@@ -201,6 +206,7 @@ export default function Planning() {
         view={view}
         onViewChange={setView}
       />
+
       <div className="flex justify-end mb-2">
         <button
           onClick={() => openDate(new Date(currentDate))}
@@ -211,11 +217,15 @@ export default function Planning() {
       </div>
       {view === 'week' ? (
         <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} />
+
+      {view === 'week' ? (
+        <WeeklyGrid events={weekEvents} />
+
       ) : (
         <MonthCalendar
           year={currentDate.getFullYear()}
           month={currentDate.getMonth()}
-          events={monthEvents}
+
           onDateSelect={openDate}
         />
       )}
@@ -228,6 +238,10 @@ export default function Planning() {
         timeSlot={modal.timeSlot}
         selectedDate={modal.selectedDate}
       />
+
+        />
+      )}
+
     </>
   );
 }

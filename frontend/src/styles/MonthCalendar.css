@@ -39,8 +39,10 @@
   margin-top: 2px;
 }
 
+
 /* hotfix interactivité – sans impact visuel */
 .calendar-cell.cell--active {
   background: rgba(59,130,246,0.3);
   transition: background 0.2s;
 }
+

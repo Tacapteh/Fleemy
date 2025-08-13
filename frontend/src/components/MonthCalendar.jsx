@@ -1,7 +1,9 @@
 import React from 'react';
 import '../styles/MonthCalendar.css';
 
+
 function MonthCalendar({ year, month, events = [], onDateSelect }) {
+
   const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -43,6 +45,7 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
             <div key={wi} className="calendar-row">
               {week.map((value, di) => (
                 value ? (
+
                   <div
                     key={di}
                     className="calendar-cell"
@@ -59,6 +62,9 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
                       }
                     }}
                   >
+
+                  <div key={di} className="calendar-cell">
+
                     <div>{value}</div>
                     {events
                       .filter(
