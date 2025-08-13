@@ -35,7 +35,9 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   return days;
 }
 
-export default function WeeklyGrid({ events = [] }) {
+
+export default function WeeklyGrid({ events = [], onSlotSelect }) {
+
   const layerRef = useRef(null);
   const normalized = events.map(normalizeEvent);
   const layout = placeEventsByDay(normalized, 9, 18);
@@ -69,9 +71,11 @@ export default function WeeklyGrid({ events = [] }) {
 
     const onPointerDown = (e) => {
       dragging = true;
+
+      layer.setPointerCapture(e.pointerId);
       const cell = getCell(e.clientX, e.clientY);
       if (cell) activate(cell);
-      layer.setPointerCapture(e.pointerId);
+
       e.preventDefault();
     };
 
@@ -81,8 +85,21 @@ export default function WeeklyGrid({ events = [] }) {
       if (cell) activate(cell);
     };
 
+
+    const onPointerUp = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      const cell = getCell(e.clientX, e.clientY);
+      if (cell) {
+        activate(cell);
+        if (onSlotSelect) {
+          onSlotSelect(cell.dataset.day, cell.dataset.hour);
+        }
+      }
+
     const endDrag = (e) => {
       dragging = false;
+
       layer.releasePointerCapture(e.pointerId);
     };
 
@@ -91,6 +108,9 @@ export default function WeeklyGrid({ events = [] }) {
         const cell = e.target.closest('.wg-cell');
         if (cell) {
           activate(cell);
+          if (onSlotSelect) {
+            onSlotSelect(cell.dataset.day, cell.dataset.hour);
+          }
           e.preventDefault();
         }
       }
@@ -98,17 +118,29 @@ export default function WeeklyGrid({ events = [] }) {
 
     layer.addEventListener('pointerdown', onPointerDown, { passive: false });
     layer.addEventListener('pointermove', onPointerMove, { passive: false });
+
+    layer.addEventListener('pointerup', onPointerUp);
+    layer.addEventListener('pointercancel', onPointerUp);
+    layer.addEventListener('pointerleave', onPointerUp);
+
     layer.addEventListener('pointerup', endDrag);
     layer.addEventListener('pointercancel', endDrag);
     layer.addEventListener('pointerleave', endDrag);
+
     layer.addEventListener('keydown', onKeyDown);
 
     return () => {
       layer.removeEventListener('pointerdown', onPointerDown);
       layer.removeEventListener('pointermove', onPointerMove);
+
+      layer.removeEventListener('pointerup', onPointerUp);
+      layer.removeEventListener('pointercancel', onPointerUp);
+      layer.removeEventListener('pointerleave', onPointerUp);
+
       layer.removeEventListener('pointerup', endDrag);
       layer.removeEventListener('pointercancel', endDrag);
       layer.removeEventListener('pointerleave', endDrag);
+
       layer.removeEventListener('keydown', onKeyDown);
     };
   }, []);

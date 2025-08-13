@@ -1,7 +1,9 @@
 import React from 'react';
 import '../styles/MonthCalendar.css';
 
-function MonthCalendar({ year, month, events = [] }) {
+
+function MonthCalendar({ year, month, events = [], onDateSelect }) {
+
   const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -23,6 +25,12 @@ function MonthCalendar({ year, month, events = [] }) {
     rows.push(cells.slice(i * 7, i * 7 + 7));
   }
 
+  const activate = (el) => {
+    el.classList.add('cell--active');
+    console.log('click OK');
+    setTimeout(() => el.classList.remove('cell--active'), 200);
+  };
+
   return (
     <div className="month-calendar">
       <div className="calendar-header">
@@ -37,7 +45,26 @@ function MonthCalendar({ year, month, events = [] }) {
             <div key={wi} className="calendar-row">
               {week.map((value, di) => (
                 value ? (
+
+                  <div
+                    key={di}
+                    className="calendar-cell"
+                    tabIndex="0"
+                    onClick={(e) => {
+                      activate(e.currentTarget);
+                      onDateSelect && onDateSelect(new Date(year, month, value));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        activate(e.currentTarget);
+                        onDateSelect && onDateSelect(new Date(year, month, value));
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+
                   <div key={di} className="calendar-cell">
+
                     <div>{value}</div>
                     {events
                       .filter(
