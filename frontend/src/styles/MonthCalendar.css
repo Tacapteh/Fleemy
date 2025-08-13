@@ -26,3 +26,15 @@
   background: #fafafa;
   pointer-events: none;
 }
+
+.month-event {
+  width: 100%;
+  background: #bfdbfe;
+  border-radius: 2px;
+  padding: 1px 2px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}

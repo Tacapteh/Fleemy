@@ -1,7 +1,7 @@
 import React from 'react';
 import '../styles/MonthCalendar.css';
 
-function MonthCalendar({ year, month }) {
+function MonthCalendar({ year, month, events = [] }) {
   const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -32,21 +32,35 @@ function MonthCalendar({ year, month }) {
           </div>
         ))}
       </div>
-      <div className="calendar-grid">
-        {rows.map((week, wi) => (
-          <div key={wi} className="calendar-row">
-            {week.map((value, di) => (
-              value ? (
-                <div key={di} className="calendar-cell">{value}</div>
-              ) : (
-                <div key={di} className="calendar-cell empty" />
-              )
-            ))}
-          </div>
-        ))}
+        <div className="calendar-grid">
+          {rows.map((week, wi) => (
+            <div key={wi} className="calendar-row">
+              {week.map((value, di) => (
+                value ? (
+                  <div key={di} className="calendar-cell">
+                    <div>{value}</div>
+                    {events
+                      .filter(
+                        (e) =>
+                          e.start.getFullYear() === year &&
+                          e.start.getMonth() === month &&
+                          e.start.getDate() === value,
+                      )
+                      .map((e) => (
+                        <div key={e.id} className="month-event">
+                          {e.description || e.title || 'Événement'}
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <div key={di} className="calendar-cell empty" />
+                )
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 export default MonthCalendar;
