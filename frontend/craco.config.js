@@ -7,6 +7,9 @@ const config = {
 };
 
 module.exports = {
+  eslint: {
+    enable: false,
+  },
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

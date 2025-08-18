@@ -217,17 +217,8 @@ export default function Planning() {
       </div>
       {view === 'week' ? (
         <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} />
-
-      {view === 'week' ? (
-        <WeeklyGrid events={weekEvents} />
-
       ) : (
-        <MonthCalendar
-          year={currentDate.getFullYear()}
-          month={currentDate.getMonth()}
-
-          onDateSelect={openDate}
-        />
+        <MonthCalendar events={monthEvents} />
       )}
       <EventModal
         isOpen={modal.open}
@@ -238,10 +229,6 @@ export default function Planning() {
         timeSlot={modal.timeSlot}
         selectedDate={modal.selectedDate}
       />
-
-        />
-      )}
-
     </>
   );
 }
