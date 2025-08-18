@@ -97,6 +97,8 @@ export default function WeeklyGrid({ events = [], onSlotSelect }) {
         }
       }
 
+    };
+
     const endDrag = (e) => {
       dragging = false;
 
