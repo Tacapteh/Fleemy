@@ -3,7 +3,7 @@ import api from "../api";
 import { getAuth } from "firebase/auth";
 import normalizeEvent from "./normalizeEvent";
 
-export async function loadEvents(year, week) {
+export async function loadEvents(year, week, teamId) {
   const user = getAuth().currentUser;
   const ownerId = user?.uid;
   if (!ownerId) {
@@ -21,7 +21,11 @@ export async function loadEvents(year, week) {
 
   try {
     console.log("Token loadEvents", token); // ✅ FIXED token/projectId/trace
-    const { data } = await api.get(`/planning/week/${year}/${week}`, {
+    let url = `/planning/week/${year}/${week}`;
+    if (teamId) {
+      url += `?team_id=${teamId}`;
+    }
+    const { data } = await api.get(url, {
       headers: { Authorization: `Bearer ${token}` },
     });
     console.log("[loadEvents] réponse API", data);
