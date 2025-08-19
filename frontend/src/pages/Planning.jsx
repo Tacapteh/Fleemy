@@ -218,7 +218,7 @@ export default function Planning() {
         </button>
       </div>
       {view === 'week' ? (
-        <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} />
+        <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} weekStart={weekStart} />
       ) : (
         <MonthCalendar
           year={currentDate.getFullYear()}
