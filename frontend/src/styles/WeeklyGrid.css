@@ -1,12 +1,13 @@
 .weekly-grid {
-  position: relative;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: #fff;
-}
+   position: relative;
+   border: 1px solid #e5e7eb;
+   border-radius: 0.5rem;
+   overflow: hidden;
+   background: #fff;
+   --slot-height: 64px;
+ }
 
-.weekly-grid .grid-layer {
+.week-grid-body .grid-layer {
   /*
     The grid layer was previously absolutely positioned which
     caused the parent container to collapse to zero height. As a
@@ -20,13 +21,13 @@
   color: #374151;
 }
 
-.grid-header,
+
 .grid-row {
   display: flex;
 }
 
-.hour-col {
-  width: 60px;
+.time-col {
+  width: var(--time-col-width, 60px);
   box-sizing: border-box;
   border-left: none;
   border-right: 1px solid #e5e7eb;
@@ -35,54 +36,52 @@
 }
 
 .day-col {
-  flex: 1;
   padding: 0.5rem 0;
   text-align: center;
   font-weight: 600;
   background: #f9fafb;
-  border-left: 1px solid #e5e7eb;
+  border: none;
 }
 
-.grid-row .cell {
+.week-grid-body .grid-row .cell {
   flex: 1;
   border-top: 1px solid #e5e7eb;
   border-left: 1px solid #e5e7eb;
-  min-height: 64px;
+  min-height: var(--slot-height);
 }
 
 .hour-label {
-  padding-top: 0.5rem;
   font-size: 0.75rem;
   color: #6b7280;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
 }
 
-.weekly-grid .interactive-layer {
+.week-grid-body .interactive-layer {
   position: absolute;
   inset: 0;
   pointer-events: auto;
 }
 
-.weekly-grid .interactive-layer .row {
+.week-grid-body .interactive-layer .row {
   display: flex;
 }
 
-.weekly-grid .interactive-layer .hour-placeholder {
-  width: 60px;
+.week-grid-body .interactive-layer .hour-placeholder {
+  width: var(--time-col-width, 60px);
 }
 
-.weekly-grid .interactive-layer .wg-cell {
+.week-grid-body .interactive-layer .wg-cell {
   flex: 1;
-  min-height: 64px;
+  min-height: var(--slot-height);
   border-top: 1px solid #e5e7eb;
   border-left: 1px solid #e5e7eb;
   background: transparent;
   cursor: pointer;
 }
 
-.weekly-grid .interactive-layer .wg-cell:hover,
-.weekly-grid .interactive-layer .wg-cell:focus {
+.week-grid-body .interactive-layer .wg-cell:hover,
+.week-grid-body .interactive-layer .wg-cell:focus {
   background: rgba(59,130,246,0.1);
   outline: none;
 }

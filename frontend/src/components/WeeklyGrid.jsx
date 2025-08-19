@@ -38,7 +38,28 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
 export default function WeeklyGrid({ events = [], onSlotSelect }) {
   const normalized = events.map(normalizeEvent);
   const layout = placeEventsByDay(normalized, 9, 18);
-  const hourWidth = 60; // must match CSS .hour-placeholder width
+  const wrapperRef = React.useRef(null);
+  const timeColRef = React.useRef(null);
+
+  React.useLayoutEffect(() => {
+    const updateWidth = () => {
+      const width = timeColRef.current?.offsetWidth || 0;
+      if (wrapperRef.current) {
+        wrapperRef.current.style.setProperty('--time-col-width', `${width}px`);
+      }
+    };
+    updateWidth();
+    let t;
+    const handleResize = () => {
+      clearTimeout(t);
+      t = setTimeout(updateWidth, 50);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(t);
+    };
+  }, []);
 
   const handleSelect = (day, time) => {
     if (onSlotSelect) {
@@ -47,71 +68,83 @@ export default function WeeklyGrid({ events = [], onSlotSelect }) {
   };
 
   return (
-    <div className="weekly-grid border rounded-md overflow-hidden">
-      <div className="grid-layer">
-        <div className="grid-header">
-          <div className="hour-col"></div>
-          {DAYS.map((d) => (
-            <div key={d} className="day-col">
-              {d}
-            </div>
-          ))}
-        </div>
-        {HOURS.map((time) => (
-          <div key={time} className="grid-row">
-            <div className="hour-col hour-label">{time}</div>
-            {DAYS.map((day) => (
-              <div key={day} className="cell" />
-            ))}
+    <div
+      ref={wrapperRef}
+      className="weekly-grid border rounded-md overflow-hidden"
+      style={{ '--col-count': DAYS.length }}
+    >
+      <div className="week-day-header">
+        <div className="time-col" />
+        {DAYS.map((d) => (
+          <div key={d} className="day-col">
+            {d}
           </div>
         ))}
       </div>
 
-      <div className="interactive-layer">
-        {layout.map((dayEvents, di) => (
-          <div
-            key={di}
-            className="events-col"
-            style={{
-              left: `calc(${hourWidth}px + ${di} * ((100% - ${hourWidth}px) / ${DAYS.length}))`,
-              width: `calc((100% - ${hourWidth}px) / ${DAYS.length})`,
-            }}
-          >
-            {dayEvents.map((e) => (
+      <div className="week-grid-body">
+        <div className="grid-layer">
+          {HOURS.map((time, idx) => (
+            <div key={time} className="grid-row">
               <div
-                key={e.id}
-                className="event"
-                style={{
-                  left: `${(e.col * 100) / e.colCount}%`,
-                  width: `${100 / e.colCount}%`,
-                  top: `${e.top}%`,
-                  height: `${e.height}%`,
-                }}
+                ref={idx === 0 ? timeColRef : null}
+                className="time-col hour-label"
               >
-                {e.description || e.title || 'Événement'}
+                {time}
               </div>
-            ))}
-          </div>
-        ))}
-        {HOURS.map((time) => (
-          <div key={time} className="row">
-            <div className="hour-placeholder"></div>
-            {DAYS.map((day) => (
-              <button
-                key={day}
-                type="button"
-                className="wg-cell"
-                onClick={() => handleSelect(day, time)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    handleSelect(day, time);
-                  }
-                }}
-              />
-            ))}
-          </div>
-        ))}
+              {DAYS.map((day) => (
+                <div key={day} className="cell" />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div className="interactive-layer">
+          {layout.map((dayEvents, di) => (
+            <div
+              key={di}
+              className="events-col"
+              style={{
+                left: `calc(var(--time-col-width) + ${di} * ((100% - var(--time-col-width)) / ${DAYS.length}))`,
+                width: `calc((100% - var(--time-col-width)) / ${DAYS.length})`,
+              }}
+            >
+              {dayEvents.map((e) => (
+                <div
+                  key={e.id}
+                  className="event"
+                  style={{
+                    left: `${(e.col * 100) / e.colCount}%`,
+                    width: `${100 / e.colCount}%`,
+                    top: `${e.top}%`,
+                    height: `${e.height}%`,
+                  }}
+                >
+                  {e.description || e.title || 'Événement'}
+                </div>
+              ))}
+            </div>
+          ))}
+          {HOURS.map((time) => (
+            <div key={time} className="row">
+              <div className="time-col hour-placeholder" />
+              {DAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  className="wg-cell"
+                  onClick={() => handleSelect(day, time)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelect(day, time);
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
