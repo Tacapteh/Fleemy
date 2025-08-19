@@ -29,21 +29,21 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
     }
   };
 
-  return (
-    <div className="month-calendar">
-      <div className="calendar-header">
-        {daysOfWeek.map((day) => (
-          <div key={day} className="calendar-header-cell">
-            {day}
-          </div>
-        ))}
-      </div>
-      <div className="calendar-grid">
-        {rows.map((week, wi) => (
-          <div key={wi} className="calendar-row">
-            {week.map((value, di) => (
-              value ? (
-                <button
+    return (
+      <div className="month-calendar">
+        <div className="month-day-header">
+          {daysOfWeek.map((day) => (
+            <div key={day} className="calendar-header-cell">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="month-grid">
+          {rows.map((week, wi) => (
+            <div key={wi} className="calendar-row">
+              {week.map((value, di) => (
+                value ? (
+                  <button
                   key={di}
                   type="button"
                   className="calendar-cell"

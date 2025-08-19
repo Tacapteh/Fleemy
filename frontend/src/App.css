@@ -1932,3 +1932,28 @@ body {
     gap: 12px;
   }
 }
+
+.week-day-header,
+.week-grid-body {
+  display: grid;
+  grid-template-columns: var(--time-col-width, 60px) repeat(var(--col-count), 1fr);
+}
+
+.week-day-header {
+  background: #f9fafb;
+  pointer-events: none;
+  z-index: 1;
+  border: none;
+}
+
+.week-grid-body {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.time-col .hour-label {
+  height: var(--slot-height);
+  display: flex;
+  align-items: center;
+}
