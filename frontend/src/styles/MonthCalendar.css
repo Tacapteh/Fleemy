@@ -1,25 +1,45 @@
 .month-calendar {
   display: flex;
   flex-direction: column;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
 }
 
-.calendar-header, .calendar-row {
+.calendar-header,
+.calendar-row {
   display: flex;
 }
 
-.calendar-header-cell, .calendar-cell {
+.calendar-header-cell,
+.calendar-cell {
   flex: 1;
-  height: 80px;
+  height: 96px;
   border: 1px solid #e5e7eb;
   box-sizing: border-box;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 4px;
 }
 
 .calendar-header-cell {
+  justify-content: center;
   font-weight: 600;
   background: #f9fafb;
+  align-items: center;
+}
+
+.calendar-cell {
+  background: #fff;
+  cursor: pointer;
+}
+
+.calendar-cell:hover,
+.calendar-cell:focus {
+  background: rgba(59,130,246,0.1);
+  outline: none;
 }
 
 .calendar-cell.empty {
@@ -30,7 +50,7 @@
 .month-event {
   width: 100%;
   background: #bfdbfe;
-  border-radius: 2px;
+  border-radius: 0.25rem;
   padding: 1px 2px;
   font-size: 12px;
   white-space: nowrap;
@@ -38,11 +58,3 @@
   text-overflow: ellipsis;
   margin-top: 2px;
 }
-
-
-/* hotfix interactivité – sans impact visuel */
-.calendar-cell.cell--active {
-  background: rgba(59,130,246,0.3);
-  transition: background 0.2s;
-}
-

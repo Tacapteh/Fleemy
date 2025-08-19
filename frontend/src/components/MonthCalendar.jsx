@@ -1,13 +1,11 @@
 import React from 'react';
 import '../styles/MonthCalendar.css';
 
-
 function MonthCalendar({ year, month, events = [], onDateSelect }) {
-
   const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  const offset = (firstDay + 6) % 7; // adjust so Monday=0
+  const offset = (firstDay + 6) % 7; // Monday = 0
   const cells = [];
 
   for (let i = 0; i < offset; i++) {
@@ -25,10 +23,10 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
     rows.push(cells.slice(i * 7, i * 7 + 7));
   }
 
-  const activate = (el) => {
-    el.classList.add('cell--active');
-    console.log('click OK');
-    setTimeout(() => el.classList.remove('cell--active'), 200);
+  const handleSelect = (value) => {
+    if (onDateSelect && value) {
+      onDateSelect(new Date(year, month, value));
+    }
   };
 
   return (
@@ -40,50 +38,46 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
           </div>
         ))}
       </div>
-        <div className="calendar-grid">
-          {rows.map((week, wi) => (
-            <div key={wi} className="calendar-row">
-              {week.map((value, di) => (
-                value ? (
-                  <div
-                    key={di}
-                    className="calendar-cell"
-                    tabIndex="0"
-                    onClick={(e) => {
-                      activate(e.currentTarget);
-                      onDateSelect && onDateSelect(new Date(year, month, value));
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        activate(e.currentTarget);
-                        onDateSelect && onDateSelect(new Date(year, month, value));
-                        e.preventDefault();
-                      }
-                    }}
-                  >
-                    <div>{value}</div>
-                    {events
-                      .filter(
-                        (e) =>
-                          e.start.getFullYear() === year &&
-                          e.start.getMonth() === month &&
-                          e.start.getDate() === value,
-                      )
-                      .map((e) => (
-                        <div key={e.id} className="month-event">
-                          {e.description || e.title || 'Événement'}
-                        </div>
-                      ))}
-                  </div>
-                ) : (
-                  <div key={di} className="calendar-cell empty" />
-                )
-              ))}
-            </div>
-          ))}
-        </div>
+      <div className="calendar-grid">
+        {rows.map((week, wi) => (
+          <div key={wi} className="calendar-row">
+            {week.map((value, di) => (
+              value ? (
+                <button
+                  key={di}
+                  type="button"
+                  className="calendar-cell"
+                  onClick={() => handleSelect(value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleSelect(value);
+                    }
+                  }}
+                >
+                  <div>{value}</div>
+                  {events
+                    .filter(
+                      (e) =>
+                        e.start.getFullYear() === year &&
+                        e.start.getMonth() === month &&
+                        e.start.getDate() === value,
+                    )
+                    .map((e) => (
+                      <div key={e.id} className="month-event">
+                        {e.description || e.title || 'Événement'}
+                      </div>
+                    ))}
+                </button>
+              ) : (
+                <div key={di} className="calendar-cell empty" />
+              )
+            ))}
+          </div>
+        ))}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
 export default MonthCalendar;
