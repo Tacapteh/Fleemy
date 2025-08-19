@@ -218,7 +218,12 @@ export default function Planning() {
       {view === 'week' ? (
         <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} />
       ) : (
-        <MonthCalendar events={monthEvents} />
+        <MonthCalendar
+          year={currentDate.getFullYear()}
+          month={currentDate.getMonth()}
+          events={monthEvents}
+          onDateSelect={openDate}
+        />
       )}
       <EventModal
         isOpen={modal.open}
