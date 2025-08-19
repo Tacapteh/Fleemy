@@ -85,8 +85,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
   return (
     <div
       ref={wrapperRef}
-      className="weekly-grid border rounded-md overflow-hidden"
-      style={{ '--col-count': DAYS.length }}
+      className="week-shell"
     >
       <div className="week-day-header">
         <div className="time-col" />
@@ -97,7 +96,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
         ))}
       </div>
 
-      <div className="week-grid-body">
+      <div className="week-grid-body border rounded-md overflow-hidden">
         <div className="grid-layer">
           {HOURS.map((time, idx) => (
             <div key={time} className="grid-row">

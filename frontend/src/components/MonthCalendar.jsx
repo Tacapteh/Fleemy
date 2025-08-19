@@ -38,7 +38,7 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
             </div>
           ))}
         </div>
-        <div className="month-grid">
+        <div className="month-grid border rounded-md overflow-hidden">
           {rows.map((week, wi) => (
             <div key={wi} className="calendar-row">
               {week.map((value, di) => (

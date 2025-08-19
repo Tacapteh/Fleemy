@@ -1,10 +1,6 @@
 .month-calendar {
   display: flex;
   flex-direction: column;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  background: #fff;
 }
 
 .calendar-row {
@@ -21,7 +17,7 @@
   justify-content: center;
   padding: 4px;
   font-weight: 600;
-  background: #f9fafb;
+  background: transparent;
   border: none;
 }
 
@@ -64,9 +60,10 @@
 .month-day-header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  background: #f9fafb;
+  background: transparent;
   border: none;
   pointer-events: none;
+  margin-bottom: 6px;
   z-index: 1;
 }
 
@@ -74,4 +71,8 @@
   position: relative;
   z-index: 2;
   pointer-events: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
 }
