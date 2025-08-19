@@ -1,11 +1,14 @@
-.weekly-grid {
-   position: relative;
-   border: 1px solid #e5e7eb;
-   border-radius: 0.5rem;
-   overflow: hidden;
-   background: #fff;
-   --slot-height: 64px;
- }
+.week-shell {
+  position: relative;
+  --slot-height: 64px;
+}
+
+.week-grid-body {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #fff;
+}
 
 .week-grid-body .grid-layer {
   /*

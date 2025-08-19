@@ -1936,14 +1936,15 @@ body {
 .week-day-header,
 .week-grid-body {
   display: grid;
-  grid-template-columns: var(--time-col-width, 60px) repeat(var(--col-count), 1fr);
+  grid-template-columns: var(--time-col-width) repeat(7, 1fr);
 }
 
 .week-day-header {
-  background: #f9fafb;
-  pointer-events: none;
-  z-index: 1;
+  background: transparent;
   border: none;
+  pointer-events: none;
+  margin-bottom: 6px;
+  z-index: 1;
 }
 
 .week-grid-body {
