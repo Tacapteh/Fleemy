@@ -3,7 +3,8 @@ import normalizeEvent from '../utils/normalizeEvent';
 import '../styles/WeeklyGrid.css';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-const HOURS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+// Generate a full day of hour markers
+const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
 
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
@@ -35,9 +36,17 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   return days;
 }
 
-export default function WeeklyGrid({ events = [], onSlotSelect }) {
+export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new Date() }) {
   const normalized = events.map(normalizeEvent);
-  const layout = placeEventsByDay(normalized, 9, 18);
+  const layout = placeEventsByDay(normalized, 0, 24);
+  const daysWithDates = React.useMemo(() => {
+    const start = new Date(weekStart);
+    return DAYS.map((name, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return { name, date: d };
+    });
+  }, [weekStart]);
   const wrapperRef = React.useRef(null);
   const timeColRef = React.useRef(null);
 
@@ -75,9 +84,9 @@ export default function WeeklyGrid({ events = [], onSlotSelect }) {
     >
       <div className="week-day-header">
         <div className="time-col" />
-        {DAYS.map((d) => (
-          <div key={d} className="day-col">
-            {d}
+        {daysWithDates.map((d) => (
+          <div key={d.name} className="day-col">
+            {d.name} {d.date.getDate()}
           </div>
         ))}
       </div>
