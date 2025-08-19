@@ -3,8 +3,14 @@ import normalizeEvent from '../utils/normalizeEvent';
 import '../styles/WeeklyGrid.css';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-// Generate a full day of hour markers
-const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+
+// Hour range displayed in the weekly grid
+const DAY_START = 9;
+const DAY_END = 18;
+const HOURS = Array.from(
+  { length: DAY_END - DAY_START },
+  (_, i) => `${String(DAY_START + i).padStart(2, '0')}:00`,
+);
 
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
@@ -38,7 +44,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
 
 export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new Date() }) {
   const normalized = events.map(normalizeEvent);
-  const layout = placeEventsByDay(normalized, 0, 24);
+  const layout = placeEventsByDay(normalized, DAY_START, DAY_END);
   const daysWithDates = React.useMemo(() => {
     const start = new Date(weekStart);
     return DAYS.map((name, i) => {
