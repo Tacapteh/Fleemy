@@ -7,8 +7,14 @@
 }
 
 .weekly-grid .grid-layer {
-  position: absolute;
-  inset: 0;
+  /*
+    The grid layer was previously absolutely positioned which
+    caused the parent container to collapse to zero height. As a
+    result, the weekly planning table was invisible in "Vue semaine".
+    By letting the layer participate in the normal document flow we
+    allow it to define the height of the container while still
+    disabling pointer events so the interactive layer can sit on top.
+  */
   pointer-events: none;
   font-size: 0.875rem;
   color: #374151;
