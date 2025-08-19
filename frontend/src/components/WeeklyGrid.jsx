@@ -4,6 +4,7 @@ import '../styles/WeeklyGrid.css';
 
 const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const HOURS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+const ROW_HEIGHT = 64; // pixel height per hour row
 
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
@@ -39,6 +40,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect }) {
   const normalized = events.map(normalizeEvent);
   const layout = placeEventsByDay(normalized, 9, 18);
   const hourWidth = 60; // must match CSS .hour-placeholder width
+  const gridHeight = ROW_HEIGHT * HOURS.length;
 
   const handleSelect = (day, time) => {
     if (onSlotSelect) {
@@ -47,7 +49,10 @@ export default function WeeklyGrid({ events = [], onSlotSelect }) {
   };
 
   return (
-    <div className="weekly-grid border rounded-md overflow-hidden">
+    <div
+      className="weekly-grid border rounded-md overflow-hidden"
+      style={{ height: gridHeight }}
+    >
       <div className="grid-layer">
         <div className="grid-header">
           <div className="hour-col"></div>
