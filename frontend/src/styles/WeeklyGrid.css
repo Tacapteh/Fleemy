@@ -71,6 +71,8 @@
 
 .week-grid-body .interactive-layer .hour-placeholder {
   width: var(--time-col-width, 60px);
+  background: transparent;
+  pointer-events: none;
 }
 
 .week-grid-body .interactive-layer .wg-cell {
