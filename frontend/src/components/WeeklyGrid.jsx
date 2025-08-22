@@ -76,9 +76,14 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
     };
   }, []);
 
-  const handleSelect = (day, time) => {
+  const handleSelect = (date, time) => {
     if (onSlotSelect) {
-      onSlotSelect(day, time);
+      const [h, m] = time.split(':').map(Number);
+      const start = new Date(date);
+      start.setHours(h, m, 0, 0);
+      const end = new Date(start);
+      end.setHours(start.getHours() + 1);
+      onSlotSelect(start, end);
     }
   };
 
@@ -142,16 +147,16 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
           {HOURS.map((time) => (
             <div key={time} className="row">
               <div className="time-col hour-placeholder" />
-              {DAYS.map((day) => (
+              {daysWithDates.map((d) => (
                 <button
-                  key={day}
+                  key={d.name}
                   type="button"
                   className="wg-cell"
-                  onClick={() => handleSelect(day, time)}
+                  onClick={() => handleSelect(d.date, time)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      handleSelect(day, time);
+                      handleSelect(d.date, time);
                     }
                   }}
                 />
