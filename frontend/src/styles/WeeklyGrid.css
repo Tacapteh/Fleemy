@@ -5,6 +5,7 @@
 
 .week-grid-body {
   border: 1px solid #e5e7eb;
+  border-left: none;
   border-radius: 0.5rem;
   overflow: hidden;
   background: #fff;
@@ -32,11 +33,10 @@
 .time-col {
   width: var(--time-col-width, 60px);
   box-sizing: border-box;
-  border-left: none;
-  border-right: 1px solid #e5e7eb;
   text-align: right;
   padding-right: 0.5rem;
   background: transparent;
+  border: none;
 }
 
 .day-col {
