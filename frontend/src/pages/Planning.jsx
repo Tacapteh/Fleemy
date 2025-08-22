@@ -123,10 +123,15 @@ export default function Planning() {
   const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-  const openSlot = (dayName, hour) => {
-    const dayIndex = DAYS.indexOf(dayName);
-    const nextHour = `${String(parseInt(hour.split(':')[0]) + 1).padStart(2, '0')}:00`;
-    setModal({ open: true, timeSlot: { day: dayIndex, start: hour, end: nextHour }, selectedDate: null, event: null });
+  const openSlot = (start, end) => {
+    const dayIndex = (start.getDay() + 6) % 7;
+    const format = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    setModal({
+      open: true,
+      timeSlot: { day: dayIndex, start: format(start), end: format(end) },
+      selectedDate: start,
+      event: null,
+    });
   };
 
   const openDate = (date) => {
