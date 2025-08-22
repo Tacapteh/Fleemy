@@ -785,7 +785,7 @@ button:active {
   width: 80px;
   min-width: 80px;
   padding: 12px 8px;
-  background: #ffffff;
+  background: transparent;
   font-size: 14px;
   color: transparent;
   font-weight: 500;
@@ -816,7 +816,7 @@ button:active {
 .planning-hours-sidebar {
   width: 80px;
   min-width: 80px;
-  background: #ffffff;
+  background: transparent;
   border: none;
   display: flex;
   flex-direction: column;
@@ -836,7 +836,7 @@ button:active {
   color: #6b7280;
   font-weight: 500;
   border: none;
-  background: #ffffff;
+  background: transparent;
   position: relative;
   padding-top: 0;
   margin-top: 0;
@@ -889,7 +889,7 @@ button:active {
 }
 
 .planning-grid-row:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .planning-grid-cell {
