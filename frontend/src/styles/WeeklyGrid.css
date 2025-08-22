@@ -4,7 +4,9 @@
 }
 
 .week-grid-body {
-  border: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-top: none;
+  border-bottom: none;
   border-left: none;
   border-radius: 0.5rem;
   overflow: hidden;
@@ -52,6 +54,16 @@
   border-top: 1px solid #e5e7eb;
   border-left: 1px solid #e5e7eb;
   min-height: var(--slot-height);
+}
+
+.week-grid-body .grid-row .cell:first-of-type,
+.week-grid-body .interactive-layer .row .wg-cell:first-of-type {
+  border-left: none;
+}
+
+.week-grid-body .grid-layer .grid-row:first-child .cell,
+.week-grid-body .interactive-layer .row:first-child .wg-cell {
+  border-top: none;
 }
 
 .hour-label {
