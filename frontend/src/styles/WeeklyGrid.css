@@ -56,6 +56,11 @@
   min-height: var(--slot-height);
 }
 
+.week-grid-body .grid-row:last-child .cell,
+.week-grid-body .interactive-layer .row:last-child .wg-cell {
+  border-bottom: 1px solid #e5e7eb;
+}
+
 .week-grid-body .grid-row .cell:first-of-type,
 .week-grid-body .interactive-layer .row .wg-cell:first-of-type {
   border-left: none;
