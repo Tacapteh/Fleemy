@@ -1,18 +1,26 @@
-import React from 'react';
-import normalizeEvent from '../utils/normalizeEvent';
-import '../styles/WeeklyGrid.css';
+import React from "react";
+import normalizeEvent from "../utils/normalizeEvent";
+import "../styles/WeeklyGrid.css";
 
-const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+const DAYS = [
+  "Lundi",
+  "Mardi",
+  "Mercredi",
+  "Jeudi",
+  "Vendredi",
+  "Samedi",
+  "Dimanche",
+];
 
 // Hour range displayed in the weekly grid
 const DAY_START = 9;
-const DAY_END = 18;
+const DAY_END = 19;
 const HOURS = Array.from(
   { length: DAY_END - DAY_START },
-  (_, i) => `${String(DAY_START + i).padStart(2, '0')}:00`,
+  (_, i) => `${String(DAY_START + i).padStart(2, "0")}:00`,
 );
 
-function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
+function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
   const startMinutes = dayStartHour * 60;
   const totalMinutes = (dayEndHour - dayStartHour) * 60;
   const days = Array.from({ length: 7 }, () => []);
@@ -21,7 +29,10 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
     const start = new Date(e.start);
     const end = new Date(e.end);
     const day = (start.getDay() + 6) % 7; // Monday = 0
-    const top = ((start.getHours() * 60 + start.getMinutes() - startMinutes) / totalMinutes) * 100;
+    const top =
+      ((start.getHours() * 60 + start.getMinutes() - startMinutes) /
+        totalMinutes) *
+      100;
     const height = ((end - start) / 60000 / totalMinutes) * 100;
     days[day].push({ ...e, start, end, top, height });
   });
@@ -42,7 +53,11 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   return days;
 }
 
-export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new Date() }) {
+export default function WeeklyGrid({
+  events = [],
+  onSlotSelect,
+  weekStart = new Date(),
+}) {
   const normalized = events.map(normalizeEvent);
   const layout = placeEventsByDay(normalized, DAY_START, DAY_END);
   const daysWithDates = React.useMemo(() => {
@@ -60,7 +75,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
     const updateWidth = () => {
       const width = timeColRef.current?.offsetWidth || 0;
       if (wrapperRef.current) {
-        wrapperRef.current.style.setProperty('--time-col-width', `${width}px`);
+        wrapperRef.current.style.setProperty("--time-col-width", `${width}px`);
       }
     };
     updateWidth();
@@ -69,16 +84,16 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
       clearTimeout(t);
       t = setTimeout(updateWidth, 50);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
       clearTimeout(t);
     };
   }, []);
 
   const handleSelect = (date, time) => {
     if (onSlotSelect) {
-      const [h, m] = time.split(':').map(Number);
+      const [h, m] = time.split(":").map(Number);
       const start = new Date(date);
       start.setHours(h, m, 0, 0);
       const end = new Date(start);
@@ -88,10 +103,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
   };
 
   return (
-    <div
-      ref={wrapperRef}
-      className="week-shell"
-    >
+    <div ref={wrapperRef} className="week-shell">
       <div className="week-day-header">
         <div className="time-col" />
         {daysWithDates.map((d) => (
@@ -139,7 +151,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
                     height: `${e.height}%`,
                   }}
                 >
-                  {e.description || e.title || 'Événement'}
+                  {e.description || e.title || "Événement"}
                 </div>
               ))}
             </div>
@@ -154,7 +166,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
                   className="wg-cell"
                   onClick={() => handleSelect(d.date, time)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+                    if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       handleSelect(d.date, time);
                     }
