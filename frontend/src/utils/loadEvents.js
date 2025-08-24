@@ -1,20 +1,13 @@
-// ✅ FIXED auth/token/ownerId
 import { getAuth } from "firebase/auth";
 import normalizeEvent from "./normalizeEvent";
 
-// Simple in-memory cache so that navigating between weeks is instant.
-// Key format: `${teamId || 'default'}-${year}-${week}`
+// In-memory cache keyed by "from:to"
 const cache = new Map();
 
-export function getCachedEvents(year, week, teamId) {
-  const key = `${teamId || "default"}-${year}-${week}`;
-  return cache.get(key);
-}
-
-export async function loadEvents(year, week, teamId, signal) {
-  const cacheKey = `${teamId || "default"}-${year}-${week}`;
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey);
+export async function loadEvents(from, to, teamId, signal) {
+  const key = `${from}:${to}`;
+  if (cache.has(key)) {
+    return cache.get(key);
   }
 
   const user = getAuth().currentUser;
@@ -25,15 +18,14 @@ export async function loadEvents(year, week, teamId, signal) {
 
   let token;
   try {
-    token = await user.getIdToken(); // ✅ FIXED token/projectId/trace
+    token = await user.getIdToken();
   } catch (err) {
     throw new Error("[loadEvents] impossible d'obtenir le token");
   }
 
-  console.log("Token loadEvents", token); // ✅ FIXED token/projectId/trace
-  let url = `/api/planning/week/${year}/${week}`;
+  let url = `/api/planning/events?from=${from}&to=${to}`;
   if (teamId) {
-    url += `?team_id=${teamId}`;
+    url += `&team_id=${teamId}`;
   }
 
   const res = await fetch(url, {
@@ -50,8 +42,9 @@ export async function loadEvents(year, week, teamId, signal) {
     : Array.isArray(data?.events)
     ? data.events
     : [];
-  console.log("[loadEvents] réponse API", data);
-  const normalized = Array.isArray(events) ? events.map(normalizeEvent) : [];
-  cache.set(cacheKey, normalized);
+  const normalized = Array.isArray(events)
+    ? events.map(normalizeEvent)
+    : [];
+  cache.set(key, normalized);
   return normalized;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import WeeklyGrid from '../components/WeeklyGrid';
 import MonthCalendar from '../components/MonthCalendar';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
@@ -7,17 +7,44 @@ import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
-import { loadEvents, getCachedEvents } from '../utils/loadEvents';
+import { loadEvents } from '../utils/loadEvents';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
   const { team } = useTeam();
   const teamId = team?.id;
-  const [events, setEvents] = useState([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
-  const [error, setError] = useState(null);
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const initialState = { loading: true, error: null, events: [] };
+  function reducer(state, action) {
+    switch (action.type) {
+      case 'loading':
+        return { ...state, loading: true, error: null };
+      case 'events':
+        return { ...state, events: action.events };
+      case 'error':
+        return { ...state, error: action.error, events: [] };
+      case 'done':
+        return { ...state, loading: false };
+      case 'add':
+        return { ...state, events: [...state.events, action.event] };
+      case 'remove':
+        return {
+          ...state,
+          events: state.events.filter((e) => e.id !== action.id),
+        };
+      default:
+        return state;
+    }
+  }
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowSkeleton(false), 300);
+    return () => clearTimeout(t);
+  }, []);
 
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null });
 
@@ -42,36 +69,20 @@ export default function Planning() {
   useEffect(() => {
     if (!authReady || !user) return;
 
-    const year = currentDate.getFullYear();
-    const week = getWeekNumber(currentDate);
-    const cached = getCachedEvents(year, week, teamId);
-    if (cached) {
-      const weekStart = startOfWeek(currentDate);
-      const data = cached.map((evt) => {
-        const dayIdx = DAY_INDEX[evt.day?.toLowerCase()] ?? 0;
-        const startDate = new Date(weekStart);
-        startDate.setDate(weekStart.getDate() + dayIdx);
-        const [sh, sm] = (evt.start_time || '').split(':').map(Number);
-        startDate.setHours(sh || 0, sm || 0, 0, 0);
-        const endDate = new Date(weekStart);
-        endDate.setDate(weekStart.getDate() + dayIdx);
-        const [eh, em] = (evt.end_time || '').split(':').map(Number);
-        endDate.setHours(eh || 0, em || 0, 0, 0);
-        return { ...evt, start: startDate, end: endDate };
-      });
-      setEvents(data);
-      setLoadingEvents(false);
-      return;
-    }
-
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-    setLoadingEvents(true);
-    setError(null);
+    dispatch({ type: 'loading' });
+
+    const weekStart = startOfWeek(currentDate);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const format = (d) => d.toISOString().slice(0, 10);
+    const from = format(weekStart);
+    const to = format(weekEnd);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     (async () => {
       try {
-        const weekStart = startOfWeek(currentDate);
-        const list = await loadEvents(year, week, teamId, controller.signal);
+        const list = await loadEvents(from, to, teamId, controller.signal);
         const data = list.map((evt) => {
           const dayIdx = DAY_INDEX[evt.day?.toLowerCase()] ?? 0;
           const startDate = new Date(weekStart);
@@ -84,17 +95,21 @@ export default function Planning() {
           endDate.setHours(eh || 0, em || 0, 0, 0);
           return { ...evt, start: startDate, end: endDate };
         });
-        if (!controller.signal.aborted) setEvents(data);
+        if (!controller.signal.aborted) {
+          dispatch({ type: 'events', events: data });
+        }
       } catch (e) {
         if (!controller.signal.aborted) {
-          setError(e.message || 'Erreur de chargement');
-          setEvents([]);
+          dispatch({ type: 'error', error: e.message || 'Erreur de chargement' });
         }
       } finally {
         clearTimeout(timeoutId);
-        if (!controller.signal.aborted) setLoadingEvents(false);
+        if (!controller.signal.aborted) {
+          dispatch({ type: 'done' });
+        }
       }
     })();
+
     return () => {
       controller.abort();
       clearTimeout(timeoutId);
@@ -146,10 +161,9 @@ export default function Planning() {
     view === 'week' ? weekLabel(currentDate) : monthLabel(currentDate);
 
   const weekStart = startOfWeek(currentDate);
-  const weekEvents = events;
-  const monthEvents = events;
+  const weekEvents = state.events;
+  const monthEvents = state.events;
 
-  const DAYS = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
   const openSlot = (start, end) => {
@@ -200,10 +214,10 @@ export default function Planning() {
       });
       const result = await res.json();
       if (result.event) {
-        setEvents((prev) => [
-          ...prev,
-          { ...result.event, start: startDate, end: endDate },
-        ]);
+        dispatch({
+          type: 'add',
+          event: { ...result.event, start: startDate, end: endDate },
+        });
       }
     } catch (e) {
       console.error('save event', e);
@@ -219,7 +233,7 @@ export default function Planning() {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      setEvents((prev) => prev.filter((e) => e.id !== id));
+      dispatch({ type: 'remove', id });
     } catch (e) {
       console.error('delete event', e);
     } finally {
@@ -228,18 +242,13 @@ export default function Planning() {
   };
 
 
-  if (error) {
-    return <div className="bg-red-100 text-red-700 p-2 rounded">Impossible de charger les événements</div>;
-  }
-  if (loadingEvents) {
-    return <div>Chargement des événements...</div>;
-  }
-  if (events.length === 0) {
-    return <div>Aucun événement</div>;
-  }
-
   return (
     <>
+      {state.error && (
+        <div className="bg-red-100 text-red-700 p-2 rounded">
+          Impossible de charger les événements
+        </div>
+      )}
       <WeekNavigationHeader
         currentLabel={currentLabel}
         onPrev={onPrev}
@@ -257,7 +266,9 @@ export default function Planning() {
           +
         </button>
       </div>
-      {view === 'week' ? (
+      {state.loading && showSkeleton ? (
+        <div>Chargement des événements...</div>
+      ) : view === 'week' ? (
         <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} weekStart={weekStart} />
       ) : (
         <MonthCalendar

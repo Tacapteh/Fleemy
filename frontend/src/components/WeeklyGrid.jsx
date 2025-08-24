@@ -1,8 +1,7 @@
 import React from "react";
-import normalizeEvent from "../utils/normalizeEvent";
 import "../styles/WeeklyGrid.css";
 
-const DAYS = [
+const DAY_NAMES = [
   "Lundi",
   "Mardi",
   "Mercredi",
@@ -12,15 +11,11 @@ const DAYS = [
   "Dimanche",
 ];
 
-// Hour range displayed in the weekly grid
 const DAY_START = 9;
-const DAY_END = 19;
-const HOURS = Array.from(
-  { length: DAY_END - DAY_START },
-  (_, i) => `${String(DAY_START + i).padStart(2, "0")}:00`,
-);
+const DAY_END = 18; // exclusive
+const SLOT_HEIGHT = 64;
 
-function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
+function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
   const totalMinutes = (dayEndHour - dayStartHour) * 60;
   const days = Array.from({ length: 7 }, () => []);
@@ -28,7 +23,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
   events.forEach((e) => {
     const start = new Date(e.start);
     const end = new Date(e.end);
-    const day = (start.getDay() + 6) % 7; // Monday = 0
+    const day = (start.getDay() + 6) % 7;
     const top =
       ((start.getHours() * 60 + start.getMinutes() - startMinutes) /
         totalMinutes) *
@@ -53,21 +48,122 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
   return days;
 }
 
-export default function WeeklyGrid({
-  events = [],
-  onSlotSelect,
-  weekStart = new Date(),
+const GridCell = React.memo(() => <div className="cell" />);
+
+const GridRow = React.memo(({ time, first, days }) => (
+  <div className="grid-row">
+    <div ref={first} className="time-col hour-label">
+      {time}
+    </div>
+    {days.map((d) => (
+      <GridCell key={d.name} />
+    ))}
+  </div>
+));
+
+const InteractiveCell = React.memo(({ onClick }) => (
+  <button type="button" className="wg-cell" onClick={onClick} />
+));
+
+const InteractiveRow = React.memo(({ time, days, onCellClick }) => (
+  <div className="row">
+    <div className="time-col hour-placeholder" />
+    {days.map((d) => (
+      <InteractiveCell key={d.name} onClick={() => onCellClick(d.date, time)} />
+    ))}
+  </div>
+));
+
+const GridLayer = React.memo(({ hours, days, timeColRef }) => (
+  <div className="grid-layer">
+    {hours.map((time, idx) => (
+      <GridRow key={time} time={time} first={idx === 0 ? timeColRef : null} days={days} />
+    ))}
+  </div>
+));
+
+const InteractiveLayer = React.memo(function InteractiveLayer({
+  layout,
+  hours,
+  days,
+  onCellClick,
 }) {
-  const normalized = events.map(normalizeEvent);
-  const layout = placeEventsByDay(normalized, DAY_START, DAY_END);
-  const daysWithDates = React.useMemo(() => {
+  const [draggingId, setDraggingId] = React.useState(null);
+  return (
+    <div className="interactive-layer">
+      {layout.map((dayEvents, di) => (
+        <div
+          key={di}
+          className="events-col"
+          style={{
+            left: `calc(var(--time-col-width) + ${di} * ((100% - var(--time-col-width)) / ${days.length}))`,
+            width: `calc((100% - var(--time-col-width)) / ${days.length})`,
+          }}
+        >
+          {dayEvents.map((e) => (
+            <div
+              key={e.id}
+              draggable
+              onDragStart={() => setDraggingId(e.id)}
+              onDragEnd={() => setDraggingId(null)}
+              className={`event${draggingId === e.id ? " dragging" : ""}`}
+              style={{
+                left: `${(e.col * 100) / e.colCount}%`,
+                width: `${100 / e.colCount}%`,
+                top: `${e.top}%`,
+                height: `${e.height}%`,
+              }}
+            >
+              {e.description || e.title || "Événement"}
+            </div>
+          ))}
+        </div>
+      ))}
+      {hours.map((time) => (
+        <InteractiveRow
+          key={time}
+          time={time}
+          days={days}
+          onCellClick={onCellClick}
+        />
+      ))}
+    </div>
+  );
+});
+
+export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new Date() }) {
+  const hours = React.useMemo(
+    () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
+    [],
+  );
+
+  const days = React.useMemo(() => {
     const start = new Date(weekStart);
-    return DAYS.map((name, i) => {
+    return DAY_NAMES.map((name, i) => {
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       return { name, date: d };
     });
   }, [weekStart]);
+
+  const onCellClick = React.useCallback(
+    (date, time) => {
+      if (!onSlotSelect) return;
+      const [h, m] = time.split(":").map(Number);
+      const start = new Date(date);
+      start.setHours(h, m, 0, 0);
+      const end = new Date(start);
+      end.setHours(start.getHours() + 1);
+      onSlotSelect(start, end);
+    },
+    [onSlotSelect],
+  );
+
+  const layout = React.useMemo(
+    () => placeEventsByDay(events, DAY_START, DAY_END),
+    [events],
+  );
+
   const wrapperRef = React.useRef(null);
   const timeColRef = React.useRef(null);
 
@@ -79,103 +175,44 @@ export default function WeeklyGrid({
       }
     };
     updateWidth();
-    let t;
     const handleResize = () => {
-      clearTimeout(t);
-      t = setTimeout(updateWidth, 50);
+      clearTimeout(handleResize.t);
+      handleResize.t = setTimeout(updateWidth, 50);
     };
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
-      clearTimeout(t);
+      clearTimeout(handleResize.t);
     };
   }, []);
 
-  const handleSelect = (date, time) => {
-    if (onSlotSelect) {
-      const [h, m] = time.split(":").map(Number);
-      const start = new Date(date);
-      start.setHours(h, m, 0, 0);
-      const end = new Date(start);
-      end.setHours(start.getHours() + 1);
-      onSlotSelect(start, end);
-    }
-  };
+  const containerHeight = React.useMemo(
+    () => hours.length * SLOT_HEIGHT,
+    [hours],
+  );
 
   return (
     <div ref={wrapperRef} className="week-shell">
       <div className="week-day-header">
         <div className="time-col" />
-        {daysWithDates.map((d) => (
+        {days.map((d) => (
           <div key={d.name} className="day-col">
             {d.name} {d.date.getDate()}
           </div>
         ))}
       </div>
 
-      <div className="week-grid-body border rounded-md overflow-hidden">
-        <div className="grid-layer">
-          {HOURS.map((time, idx) => (
-            <div key={time} className="grid-row">
-              <div
-                ref={idx === 0 ? timeColRef : null}
-                className="time-col hour-label"
-              >
-                {time}
-              </div>
-              {DAYS.map((day) => (
-                <div key={day} className="cell" />
-              ))}
-            </div>
-          ))}
-        </div>
-
-        <div className="interactive-layer">
-          {layout.map((dayEvents, di) => (
-            <div
-              key={di}
-              className="events-col"
-              style={{
-                left: `calc(var(--time-col-width) + ${di} * ((100% - var(--time-col-width)) / ${DAYS.length}))`,
-                width: `calc((100% - var(--time-col-width)) / ${DAYS.length})`,
-              }}
-            >
-              {dayEvents.map((e) => (
-                <div
-                  key={e.id}
-                  className="event"
-                  style={{
-                    left: `${(e.col * 100) / e.colCount}%`,
-                    width: `${100 / e.colCount}%`,
-                    top: `${e.top}%`,
-                    height: `${e.height}%`,
-                  }}
-                >
-                  {e.description || e.title || "Événement"}
-                </div>
-              ))}
-            </div>
-          ))}
-          {HOURS.map((time) => (
-            <div key={time} className="row">
-              <div className="time-col hour-placeholder" />
-              {daysWithDates.map((d) => (
-                <button
-                  key={d.name}
-                  type="button"
-                  className="wg-cell"
-                  onClick={() => handleSelect(d.date, time)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleSelect(d.date, time);
-                    }
-                  }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
+      <div
+        className="week-grid-body border rounded-md overflow-hidden"
+        style={{ height: containerHeight, "--slot-height": `${SLOT_HEIGHT}px` }}
+      >
+        <GridLayer hours={hours} days={days} timeColRef={timeColRef} />
+        <InteractiveLayer
+          layout={layout}
+          hours={hours}
+          days={days}
+          onCellClick={onCellClick}
+        />
       </div>
     </div>
   );
