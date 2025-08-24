@@ -87,6 +87,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   hours,
   days,
   onCellClick,
+  onEventClick,
 }) {
   const [draggingId, setDraggingId] = React.useState(null);
   return (
@@ -106,6 +107,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               draggable
               onDragStart={() => setDraggingId(e.id)}
               onDragEnd={() => setDraggingId(null)}
+              onClick={() => onEventClick && onEventClick(e)}
               className={`event${draggingId === e.id ? " dragging" : ""}`}
               style={{
                 left: `${(e.col * 100) / e.colCount}%`,
@@ -131,7 +133,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   );
 });
 
-export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new Date() }) {
+export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, weekStart = new Date() }) {
   const hours = React.useMemo(
     () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
     [],
@@ -212,6 +214,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
           hours={hours}
           days={days}
           onCellClick={onCellClick}
+          onEventClick={onEventClick}
         />
       </div>
     </div>

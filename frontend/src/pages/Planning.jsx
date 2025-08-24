@@ -181,6 +181,10 @@ export default function Planning() {
     setModal({ open: true, selectedDate: date, timeSlot: null, event: null });
   };
 
+  const openEvent = (event) => {
+    setModal({ open: true, event, timeSlot: null, selectedDate: null });
+  };
+
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null });
 
   const handleSaveEvent = async (data) => {
@@ -269,13 +273,19 @@ export default function Planning() {
       {state.loading && showSkeleton ? (
         <div>Chargement des événements...</div>
       ) : view === 'week' ? (
-        <WeeklyGrid events={weekEvents} onSlotSelect={openSlot} weekStart={weekStart} />
+        <WeeklyGrid
+          events={weekEvents}
+          onSlotSelect={openSlot}
+          onEventClick={openEvent}
+          weekStart={weekStart}
+        />
       ) : (
         <MonthCalendar
           year={currentDate.getFullYear()}
           month={currentDate.getMonth()}
           events={monthEvents}
           onDateSelect={openDate}
+          onEventClick={openEvent}
         />
       )}
       <EventModal

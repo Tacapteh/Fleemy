@@ -1,7 +1,7 @@
 import React from 'react';
 import '../styles/MonthCalendar.css';
 
-function MonthCalendar({ year, month, events = [], onDateSelect }) {
+function MonthCalendar({ year, month, events = [], onDateSelect, onEventClick }) {
   const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -56,23 +56,30 @@ function MonthCalendar({ year, month, events = [], onDateSelect }) {
                   }}
                 >
                   <div>{value}</div>
-                  {events
-                    .filter(
-                      (e) =>
-                        e.start.getFullYear() === year &&
-                        e.start.getMonth() === month &&
-                        e.start.getDate() === value,
-                    )
-                    .map((e) => (
-                      <div key={e.id} className="month-event">
-                        {e.description || e.title || 'Événement'}
-                      </div>
-                    ))}
-                </button>
-              ) : (
-                <div key={di} className="calendar-cell empty" />
-              )
-            ))}
+                    {events
+                      .filter(
+                        (e) =>
+                          e.start.getFullYear() === year &&
+                          e.start.getMonth() === month &&
+                          e.start.getDate() === value,
+                      )
+                      .map((e) => (
+                        <div
+                          key={e.id}
+                          className="month-event"
+                          onClick={(evt) => {
+                            evt.stopPropagation();
+                            onEventClick && onEventClick(e);
+                          }}
+                        >
+                          {e.description || e.title || 'Événement'}
+                        </div>
+                      ))}
+                  </button>
+                ) : (
+                  <div key={di} className="calendar-cell empty" />
+                )
+              ))}
           </div>
         ))}
       </div>
