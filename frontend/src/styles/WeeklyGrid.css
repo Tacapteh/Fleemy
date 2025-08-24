@@ -142,10 +142,10 @@
   will-change: transform;
 }
 
-/* Aucune bordure/ombre ni fond pour la colonne des heures et son placeholder */
+/* Ensure the hour column matches the grid background */
 .time-col,
 .week-grid-body .interactive-layer .hour-placeholder {
-  background: transparent !important;
+  background: #fff !important;
   border: 0 !important;
   box-shadow: none !important;
 }
