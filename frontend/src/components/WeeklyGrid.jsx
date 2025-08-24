@@ -203,7 +203,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, weekStart = new 
       </div>
 
       <div
-        className="week-grid-body border rounded-md overflow-hidden"
+        className="week-grid-body rounded-md overflow-hidden"
         style={{ height: containerHeight, "--slot-height": `${SLOT_HEIGHT}px` }}
       >
         <GridLayer hours={hours} days={days} timeColRef={timeColRef} />

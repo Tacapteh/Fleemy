@@ -49,10 +49,6 @@
   border: none;
 }
 
-/* Lignes verticales entre les en-têtes de jour */
-.week-day-header .day-col + .day-col {
-  border-left: 1px solid #e5e7eb;
-}
 
 .week-grid-body .grid-row .cell {
   flex: 1;
@@ -66,10 +62,6 @@
   border-left: 1px solid #e5e7eb;
 }
 
-/* Annule la bordure à gauche de la toute 1re colonne jour (après la colonne des heures) */
-.week-grid-body .grid-row > .time-col + .cell {
-  border-left: 0 !important;
-}
 
 .week-grid-body .grid-row:last-child .cell,
 .week-grid-body .interactive-layer .row:last-child .wg-cell {
@@ -121,9 +113,9 @@
   border-left: 1px solid #e5e7eb;
 }
 
-/* Au cas où : annule la bordure du 1er slot interactif après le placeholder d’heure */
+/* Ajoute une bordure gauche au premier slot interactif pour éviter une "barre" grise */
 .week-grid-body .interactive-layer .row > .hour-placeholder + .wg-cell {
-  border-left: 0 !important;
+  border-left: 1px solid #e5e7eb;
 }
 
 .week-grid-body .interactive-layer .wg-cell:hover,
