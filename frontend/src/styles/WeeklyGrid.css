@@ -63,7 +63,7 @@
 
 .week-grid-body .grid-row .cell:first-of-type,
 .week-grid-body .interactive-layer .row .wg-cell:first-of-type {
-  border-left: none;
+  border-left: none !important;
 }
 
 .week-grid-body .grid-layer .grid-row:first-child .cell,
@@ -98,6 +98,7 @@
 .week-grid-body .interactive-layer .wg-cell {
   flex: 1;
   min-height: var(--slot-height);
+  border: none;
   border-top: 1px solid #e5e7eb;
   border-left: 1px solid #e5e7eb;
   background: transparent;
