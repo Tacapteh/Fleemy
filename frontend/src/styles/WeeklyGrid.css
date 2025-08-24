@@ -4,6 +4,7 @@
 }
 
 .week-grid-body {
+  position: relative;
   border-right: 1px solid #e5e7eb;
   border-top: none;
   border-bottom: none;
@@ -129,6 +130,7 @@
   top: 0;
   bottom: 0;
   content-visibility: auto;
+  pointer-events: none;
 }
 
 .event {
@@ -138,6 +140,7 @@
   font-size: 0.75rem;
   overflow: hidden;
   padding: 2px;
+  pointer-events: auto;
 }
 
 .event.dragging {
