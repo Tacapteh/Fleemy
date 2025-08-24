@@ -7,7 +7,7 @@ import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
-import { loadEvents } from '../utils/loadEvents';
+import { loadEvents, getCachedEvents } from '../utils/loadEvents';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
@@ -41,14 +41,35 @@ export default function Planning() {
 
   useEffect(() => {
     if (!authReady || !user) return;
+
+    const year = currentDate.getFullYear();
+    const week = getWeekNumber(currentDate);
+    const cached = getCachedEvents(year, week, teamId);
+    if (cached) {
+      const weekStart = startOfWeek(currentDate);
+      const data = cached.map((evt) => {
+        const dayIdx = DAY_INDEX[evt.day?.toLowerCase()] ?? 0;
+        const startDate = new Date(weekStart);
+        startDate.setDate(weekStart.getDate() + dayIdx);
+        const [sh, sm] = (evt.start_time || '').split(':').map(Number);
+        startDate.setHours(sh || 0, sm || 0, 0, 0);
+        const endDate = new Date(weekStart);
+        endDate.setDate(weekStart.getDate() + dayIdx);
+        const [eh, em] = (evt.end_time || '').split(':').map(Number);
+        endDate.setHours(eh || 0, em || 0, 0, 0);
+        return { ...evt, start: startDate, end: endDate };
+      });
+      setEvents(data);
+      setLoadingEvents(false);
+      return;
+    }
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     setLoadingEvents(true);
     setError(null);
     (async () => {
       try {
-        const year = currentDate.getFullYear();
-        const week = getWeekNumber(currentDate);
         const weekStart = startOfWeek(currentDate);
         const list = await loadEvents(year, week, teamId, controller.signal);
         const data = list.map((evt) => {

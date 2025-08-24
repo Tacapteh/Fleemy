@@ -2,7 +2,21 @@
 import { getAuth } from "firebase/auth";
 import normalizeEvent from "./normalizeEvent";
 
+// Simple in-memory cache so that navigating between weeks is instant.
+// Key format: `${teamId || 'default'}-${year}-${week}`
+const cache = new Map();
+
+export function getCachedEvents(year, week, teamId) {
+  const key = `${teamId || "default"}-${year}-${week}`;
+  return cache.get(key);
+}
+
 export async function loadEvents(year, week, teamId, signal) {
+  const cacheKey = `${teamId || "default"}-${year}-${week}`;
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey);
+  }
+
   const user = getAuth().currentUser;
   const ownerId = user?.uid;
   if (!ownerId) {
@@ -37,5 +51,7 @@ export async function loadEvents(year, week, teamId, signal) {
     ? data.events
     : [];
   console.log("[loadEvents] réponse API", data);
-  return Array.isArray(events) ? events.map(normalizeEvent) : [];
+  const normalized = Array.isArray(events) ? events.map(normalizeEvent) : [];
+  cache.set(cacheKey, normalized);
+  return normalized;
 }
