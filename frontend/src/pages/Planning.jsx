@@ -7,7 +7,7 @@ import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
-import { loadEvents } from '../utils/loadEvents';
+import { loadEvents, clearEventsCache } from '../utils/loadEvents';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
@@ -227,6 +227,7 @@ export default function Planning() {
       console.error('save event', e);
     } finally {
       closeModal();
+      clearEventsCache();
     }
   };
 
@@ -242,6 +243,7 @@ export default function Planning() {
       console.error('delete event', e);
     } finally {
       closeModal();
+      clearEventsCache();
     }
   };
 

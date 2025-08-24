@@ -4,6 +4,10 @@ import normalizeEvent from "./normalizeEvent";
 // In-memory cache keyed by "from:to"
 const cache = new Map();
 
+export function clearEventsCache() {
+  cache.clear();
+}
+
 export async function loadEvents(from, to, teamId, signal) {
   const key = `${from}:${to}`;
   if (cache.has(key)) {
