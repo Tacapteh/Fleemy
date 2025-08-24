@@ -114,11 +114,6 @@
   border-left: 1px solid #e5e7eb;
 }
 
-/* Ajoute une bordure gauche au premier slot interactif pour éviter une "barre" grise */
-.week-grid-body .interactive-layer .row > .hour-placeholder + .wg-cell {
-  border-left: 1px solid #e5e7eb;
-}
-
 .week-grid-body .interactive-layer .wg-cell:hover,
 .week-grid-body .interactive-layer .wg-cell:focus {
   background: rgba(59, 130, 246, 0.1);
