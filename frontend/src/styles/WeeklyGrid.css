@@ -8,6 +8,7 @@
   border-top: none;
   border-bottom: none;
   border-left: none;
+
   border-radius: 0.5rem;
   overflow: hidden;
   background: #fff;
@@ -51,24 +52,23 @@
 .week-grid-body .grid-row .cell {
   flex: 1;
   border-top: 1px solid #e5e7eb;
-  border-left: 1px solid #e5e7eb;
+  border-left: 0;
   min-height: var(--slot-height);
 }
 
-/* Retire la bordure gauche de la première colonne jour (couche grille)
-   -> la 1re colonne jour est le 2e enfant, car le 1er est la colonne des heures */
-.week-grid-body .grid-row > .cell:nth-child(2) {
+/* Lignes verticales à partir de la 2e cellule (évite la “barre” à gauche) */
+.week-grid-body .grid-row .cell + .cell {
+  border-left: 1px solid #e5e7eb;
+}
+
+/* Annule la bordure à gauche de la toute 1re colonne jour (après la colonne des heures) */
+.week-grid-body .grid-row > .time-col + .cell {
   border-left: 0 !important;
 }
 
 .week-grid-body .grid-row:last-child .cell,
 .week-grid-body .interactive-layer .row:last-child .wg-cell {
   border-bottom: 1px solid #e5e7eb;
-}
-
-.week-grid-body .grid-row .cell:first-of-type,
-.week-grid-body .interactive-layer .row .wg-cell:first-of-type {
-  border-left: none !important;
 }
 
 .week-grid-body .grid-layer .grid-row:first-child .cell,
@@ -105,13 +105,14 @@
   min-height: var(--slot-height);
   border: none;
   border-top: 1px solid #e5e7eb;
-  border-left: 1px solid #e5e7eb;
+  border-left: 0;
+
   background: transparent;
   cursor: pointer;
 }
 
-/* Retire la bordure gauche de la première colonne jour (couche interactive) */
-.week-grid-body .interactive-layer .row > .wg-cell:nth-child(2) {
+/* Au cas où : annule la bordure du 1er slot interactif après le placeholder d’heure */
+.week-grid-body .interactive-layer .row > .hour-placeholder + .wg-cell {
   border-left: 0 !important;
 }
 
@@ -134,4 +135,46 @@
   font-size: 0.75rem;
   overflow: hidden;
   padding: 2px;
+}
+
+/* Aucune bordure/ombre ni fond pour la colonne des heures et son placeholder */
+.time-col,
+.week-grid-body .interactive-layer .hour-placeholder {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* ————— OVERRIDES FINAUX : pas de “colonne grise” à gauche ————— */
+.week-grid-body {
+  border-left: 0 !important;
+}
+
+/* Grille visible : aucune bordure sur la 1re cellule jour (celle qui suit la colonne des heures) */
+.week-grid-body .grid-layer .grid-row > .time-col + .cell {
+  border-left: 0 !important;
+}
+
+/* Grille visible : remettre les séparateurs UNIQUEMENT entre cellules jour suivantes */
+.week-grid-body .grid-layer .grid-row .cell {
+  border-left: 0 !important;
+}
+.week-grid-body .grid-layer .grid-row .cell + .cell {
+  border-left: 1px solid #e5e7eb !important;
+}
+
+/* Couche interactive : ne jamais redessiner une bordure verticale */
+.week-grid-body .interactive-layer .wg-cell {
+  border-left: 0 !important;
+}
+.week-grid-body .interactive-layer .row > .hour-placeholder + .wg-cell {
+  border-left: 0 !important;
+}
+
+/* Sécurité : aucun fond/ombre sur la colonne des heures et son placeholder */
+.week-grid-body .grid-layer .time-col,
+.week-grid-body .interactive-layer .hour-placeholder {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
