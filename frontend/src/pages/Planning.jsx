@@ -15,6 +15,7 @@ export default function Planning() {
   const teamId = team?.id;
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [error, setError] = useState(null);
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -40,14 +41,16 @@ export default function Planning() {
 
   useEffect(() => {
     if (!authReady || !user) return;
-    let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     setLoadingEvents(true);
+    setError(null);
     (async () => {
       try {
         const year = currentDate.getFullYear();
         const week = getWeekNumber(currentDate);
         const weekStart = startOfWeek(currentDate);
-        const list = await loadEvents(year, week, teamId);
+        const list = await loadEvents(year, week, teamId, controller.signal);
         const data = list.map((evt) => {
           const dayIdx = DAY_INDEX[evt.day?.toLowerCase()] ?? 0;
           const startDate = new Date(weekStart);
@@ -60,15 +63,20 @@ export default function Planning() {
           endDate.setHours(eh || 0, em || 0, 0, 0);
           return { ...evt, start: startDate, end: endDate };
         });
-        if (!cancelled) setEvents(data);
+        if (!controller.signal.aborted) setEvents(data);
       } catch (e) {
-        if (!cancelled) setEvents([]);
+        if (!controller.signal.aborted) {
+          setError(e.message || 'Erreur de chargement');
+          setEvents([]);
+        }
       } finally {
-        if (!cancelled) setLoadingEvents(false);
+        clearTimeout(timeoutId);
+        if (!controller.signal.aborted) setLoadingEvents(false);
       }
     })();
     return () => {
-      cancelled = true;
+      controller.abort();
+      clearTimeout(timeoutId);
     };
   }, [authReady, user, teamId, currentDate]);
 
@@ -199,8 +207,14 @@ export default function Planning() {
   };
 
 
+  if (error) {
+    return <div className="bg-red-100 text-red-700 p-2 rounded">Impossible de charger les événements</div>;
+  }
   if (loadingEvents) {
     return <div>Chargement des événements...</div>;
+  }
+  if (events.length === 0) {
+    return <div>Aucun événement</div>;
   }
 
   return (

@@ -538,8 +538,33 @@ async def list_events(
     week: Optional[int] = None,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    if year is not None and week is not None:
-        events_ref = db.collection("events").document(str(year)).collection(str(week))
+    try:
+        if year is not None and week is not None:
+            events_ref = db.collection("events").document(str(year)).collection(str(week))
+            events_raw = await stream_docs(events_ref)
+            events_raw = events_raw if isinstance(events_raw, list) else []
+            formatted = [
+                {
+                    **ev,
+                    "id": ev.get("id"),
+                    "title": ev.get("description", ""),
+                    "color": ev.get("color", ""),
+                    "startTime": ev.get("start_time"),
+                    "endTime": ev.get("end_time"),
+                    "status": ev.get("status"),
+                }
+                for ev in events_raw
+            ]
+            logger.info("Returning %d events for %s/%s", len(formatted), week, year)
+            return JSONResponse(
+                {"success": True, "events": formatted},
+                media_type="application/json",
+            )
+        events_ref = user_col(user["uid"], "events")
+        if year is not None:
+            events_ref = events_ref.where("year", "==", year)
+        if week is not None:
+            events_ref = events_ref.where("week", "==", week)
         events_raw = await stream_docs(events_ref)
         events_raw = events_raw if isinstance(events_raw, list) else []
         formatted = [
@@ -554,30 +579,18 @@ async def list_events(
             }
             for ev in events_raw
         ]
-        logger.info("Returning %d events for %s/%s", len(formatted), week, year)
-        return {"success": True, "events": formatted}
-    events_ref = user_col(user["uid"], "events")
-    if year is not None:
-        events_ref = events_ref.where("year", "==", year)
-    if week is not None:
-        events_ref = events_ref.where("week", "==", week)
-    events_raw = await stream_docs(events_ref)
-    events_raw = events_raw if isinstance(events_raw, list) else []
-    formatted = [
-        {
-            **ev,
-            "id": ev.get("id"),
-            "title": ev.get("description", ""),
-            "color": ev.get("color", ""),
-            "startTime": ev.get("start_time"),
-            "endTime": ev.get("end_time"),
-            "status": ev.get("status"),
-        }
-        for ev in events_raw
-    ]
-    logger.info("Returning %d events for user %s", len(formatted), user["uid"])
-    logger.debug("Events payload: %s", formatted)
-    return {"success": True, "events": formatted}
+        logger.info("Returning %d events for user %s", len(formatted), user["uid"])
+        logger.debug("Events payload: %s", formatted)
+        return JSONResponse(
+            {"success": True, "events": formatted},
+            media_type="application/json",
+        )
+    except Exception as e:
+        logger.error("list_events error: %s", e, exc_info=True)
+        return JSONResponse(
+            {"success": False, "events": [], "error": str(e)},
+            media_type="application/json",
+        )
 
 
 @api_router.get("/planning/events/{owner_id}/{year}/{week}")
