@@ -136,6 +136,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
+  content-visibility: auto;
 }
 
 .event {
@@ -145,6 +146,10 @@
   font-size: 0.75rem;
   overflow: hidden;
   padding: 2px;
+}
+
+.event.dragging {
+  will-change: transform;
 }
 
 /* Aucune bordure/ombre ni fond pour la colonne des heures et son placeholder */
