@@ -27,7 +27,6 @@
   color: #374151;
 }
 
-
 .grid-row {
   display: flex;
 }
@@ -54,6 +53,12 @@
   border-top: 1px solid #e5e7eb;
   border-left: 1px solid #e5e7eb;
   min-height: var(--slot-height);
+}
+
+/* Retire la bordure gauche de la première colonne jour (couche grille)
+   -> la 1re colonne jour est le 2e enfant, car le 1er est la colonne des heures */
+.week-grid-body .grid-row > .cell:nth-child(2) {
+  border-left: 0 !important;
 }
 
 .week-grid-body .grid-row:last-child .cell,
@@ -105,9 +110,14 @@
   cursor: pointer;
 }
 
+/* Retire la bordure gauche de la première colonne jour (couche interactive) */
+.week-grid-body .interactive-layer .row > .wg-cell:nth-child(2) {
+  border-left: 0 !important;
+}
+
 .week-grid-body .interactive-layer .wg-cell:hover,
 .week-grid-body .interactive-layer .wg-cell:focus {
-  background: rgba(59,130,246,0.1);
+  background: rgba(59, 130, 246, 0.1);
   outline: none;
 }
 
