@@ -202,17 +202,20 @@ export default function WeeklyGrid({ onSlotSelect, onEventClick, weekStart = new
     return unsubscribe;
   }, [user, weekRange]);
 
-  const createEvent = useCallback(async (date, time) => {
-    if (!user) return;
+  const createEvent = useCallback(async (date, timeString) => {
+    if (!user) {
+      console.warn('Utilisateur non connecté, création événement bloquée');
+      return;
+    }
 
-    const [h, m] = time.split(":").map(Number);
+    // Corriger le bug getHours : reconstruire un Date avec setHours
+    const [hours, minutes] = timeString.split(':').map(Number);
     const start = new Date(date);
-    start.setHours(h, m, 0, 0);
+    start.setHours(hours, minutes, 0, 0);
     const end = new Date(start);
     end.setHours(start.getHours() + 1);
 
     const newEvent = {
-      id: `temp_${Date.now()}`,
       title: 'Nouvel événement',
       start,
       end,
@@ -221,15 +224,17 @@ export default function WeeklyGrid({ onSlotSelect, onEventClick, weekStart = new
     };
 
     // Optimistic UI
-    setEvents(prev => [...prev, newEvent]);
+    const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
+    setEvents(prev => [...prev, tempEvent]);
 
     try {
-      await saveEvent(newEvent);
-      // L'événement sera mis à jour par watchEvents
+      const savedEvent = await saveEvent(newEvent);
+      // Remplacer l'événement temporaire par le vrai
+      setEvents(prev => prev.map(e => e.id === tempEvent.id ? savedEvent : e));
     } catch (error) {
       console.error('Erreur lors de la création de l\'événement:', error);
       // Rollback optimistic UI
-      setEvents(prev => prev.filter(e => e.id !== newEvent.id));
+      setEvents(prev => prev.filter(e => e.id !== tempEvent.id));
     }
   }, [user]);
 
