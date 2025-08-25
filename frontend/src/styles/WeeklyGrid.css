@@ -93,21 +93,24 @@
 }
 
 .time-slot-cell {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  margin: 0;
-  padding: 0;
-  transition: background-color 0.1s ease;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: none;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
   height: var(--weekly-grid-row-h);
   min-height: var(--weekly-grid-row-h);
-  width: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  transition: background-color 0.1s ease;
 }
 
 .time-slot-cell:first-child {
-  border-top: none;
+  border-top: 1px solid #e5e7eb;
 }
 
 .time-slot-cell:hover {
