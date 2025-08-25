@@ -71,7 +71,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
     <div className="interactive-layer">
       {/* Zones cliquables pour chaque jour et chaque heure avec lignes horizontales */}
       {days.map((day, dayIndex) => (
-        <div key={dayIndex} className="day-column" style={{ gridColumn: dayIndex + 1 }}>
+        <div key={dayIndex} className="day-column" style={{ gridColumn: dayIndex + 1, gridRow: '1 / -1' }}>
           {hours.map((time, hourIndex) => (
             <button
               key={time}
