@@ -1,6 +1,6 @@
 .week-shell {
   position: relative;
-  --row-h: 60px;
+  --row-h: 64px;
 }
 
 .week-day-header {
