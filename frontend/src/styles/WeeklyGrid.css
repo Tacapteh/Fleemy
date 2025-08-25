@@ -3,32 +3,19 @@
   --row-h: 64px;
 }
 
-.week-day-header {
+/* Header des jours - en dehors de la grille */
+.week-day-headers {
   display: grid;
-  grid-template-columns: 64px repeat(7, 1fr);
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
-  position: sticky;
-  top: 0;
-  z-index: 4;
+  grid-template-columns: repeat(7, 1fr);
+  margin-left: 64px; /* Aligné avec la grille principale */
+  margin-bottom: 8px;
 }
 
-.time-gutter-header {
-  width: 64px;
-  background: #fff;
-  border-right: 1px solid #e5e7eb;
-}
-
-.day-header {
-  padding: 0.5rem;
+.day-header-label {
   text-align: center;
   font-weight: 600;
-  background: #fff;
-  border-right: 1px solid #e5e7eb;
-}
-
-.day-header:last-child {
-  border-right: none;
+  color: #374151;
+  padding: 0.5rem;
 }
 
 .week-grid-container {
