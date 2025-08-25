@@ -174,16 +174,12 @@ export default function WeeklyGrid({ onSlotSelect, onEventClick, weekStart = new
 
   const weekRange = useMemo(() => getWeekRange(weekStart), [weekStart]);
 
-  // Configuration du contexte utilisateur
+  // Watch events - seulement si user connecté
   useEffect(() => {
-    if (user) {
-      setUserContext(user);
+    if (!user) {
+      setEvents([]);
+      return;
     }
-  }, [user]);
-
-  // Watch events
-  useEffect(() => {
-    if (!user) return;
 
     const unsubscribe = watchEvents(weekRange, (newEvents) => {
       setEvents(newEvents);
@@ -192,9 +188,12 @@ export default function WeeklyGrid({ onSlotSelect, onEventClick, weekStart = new
     return unsubscribe;
   }, [user, weekRange]);
 
-  // Watch tasks
+  // Watch tasks - seulement si user connecté  
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setTasks([]);
+      return;
+    }
 
     const unsubscribe = watchTasks(weekRange, (newTasks) => {
       setTasks(newTasks);
