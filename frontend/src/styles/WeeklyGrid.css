@@ -3,43 +3,73 @@
   --slot-height: 64px;
 }
 
+.week-day-header {
+  display: grid;
+  grid-template-columns: [time] 64px [days] repeat(7, 1fr);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.time-header-placeholder {
+  width: 64px;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
+}
+
 .week-grid-body {
   position: relative;
+  display: grid;
+  grid-template-columns: [time] 64px [days] repeat(7, 1fr);
   border-right: 1px solid #e5e7eb;
   border-top: none;
   border-bottom: none;
   border-left: 0;
-
   border-radius: 0.5rem;
   overflow: hidden;
   background: #fff;
 }
 
 .week-grid-body .grid-layer {
-  /*
-    The grid layer was previously absolutely positioned which
-    caused the parent container to collapse to zero height. As a
-    result, the weekly planning table was invisible in "Vue semaine".
-    By letting the layer participate in the normal document flow we
-    allow it to define the height of the container while still
-    disabling pointer events so the interactive layer can sit on top.
-  */
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: [time] 64px [days] repeat(7, 1fr);
   pointer-events: none;
   font-size: 0.875rem;
   color: #374151;
 }
 
-.grid-row {
-  display: flex;
+.time-column {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  width: 64px;
+  background: #fff;
+  border-right: 1px solid #e5e7eb;
 }
 
-.time-col {
-  width: var(--time-col-width, 60px);
-  box-sizing: border-box;
-  text-align: right;
+.time-slot {
+  height: var(--slot-height);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   padding-right: 0.5rem;
-  background: transparent;
-  border: none;
+  font-size: 0.75rem;
+  color: #6b7280;
+  border-top: 1px solid #e5e7eb;
+  box-sizing: border-box;
+}
+
+.time-slot:first-child {
+  border-top: none;
+}
+
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.grid-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
 }
 
 .day-col {
