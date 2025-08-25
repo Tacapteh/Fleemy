@@ -107,16 +107,33 @@
   position: absolute;
   inset: 0;
   pointer-events: auto;
+  display: grid;
+  grid-template-columns: [time] 64px [days] repeat(7, 1fr);
 }
 
-.week-grid-body .interactive-layer .row {
-  display: flex;
-}
-
-.week-grid-body .interactive-layer .hour-placeholder {
-  width: var(--time-col-width, 60px);
-  background: transparent;
+.time-column-placeholder {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  width: 64px;
+  background: #fff;
   pointer-events: none;
+}
+
+.time-slot-placeholder {
+  height: var(--slot-height);
+  background: transparent;
+}
+
+.days-interactive {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  position: relative;
+}
+
+.interactive-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
 }
 
 .week-grid-body .interactive-layer .wg-cell {
