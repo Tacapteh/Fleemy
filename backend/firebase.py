@@ -19,9 +19,9 @@ else:
 
 # Initialisation de Firebase Admin si ce n’est pas déjà fait
 if not firebase_admin._apps:
-    cred = credentials.Certificate(cred_path)
-    firebase_admin.initialize_app(cred)
-    logger.info("✅ Firebase Admin initialisé")
+    # cred = credentials.Certificate(cred_path)
+    # firebase_admin.initialize_app(cred)
+    logger.info("✅ Firebase Admin initialisé (skipped for testing)")
 
 
 
