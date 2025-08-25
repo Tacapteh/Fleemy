@@ -69,14 +69,14 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   const [draggingId, setDraggingId] = React.useState(null);
   return (
     <div className="interactive-layer">
-      {/* Zones cliquables pour chaque jour et chaque heure */}
+      {/* Zones cliquables pour chaque jour et chaque heure avec lignes horizontales */}
       {days.map((day, dayIndex) => (
         <div key={dayIndex} className="day-column" style={{ gridColumn: dayIndex + 1 }}>
           {hours.map((time, hourIndex) => (
             <button
               key={time}
               type="button"
-              className="time-slot-button"
+              className="time-slot-cell"
               style={{ gridRow: hourIndex + 1 }}
               onClick={() => onCellClick(day.date, time)}
             />
