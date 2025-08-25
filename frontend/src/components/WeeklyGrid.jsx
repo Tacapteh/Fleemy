@@ -239,21 +239,30 @@ export default function WeeklyGrid({ onSlotSelect, onEventClick, weekStart = new
   }, [user]);
 
   const onCellClick = useCallback(
-    (date, time) => {
+    (date, timeString) => {
+      if (!user) {
+        console.warn('Utilisateur non connecté, clic cellule bloqué');
+        return;
+      }
+      
       if (onSlotSelect) {
-        onSlotSelect(date, time);
+        onSlotSelect(date, timeString);
       } else {
-        createEvent(date, time);
+        createEvent(date, timeString);
       }
     },
-    [onSlotSelect, createEvent],
+    [onSlotSelect, createEvent, user],
   );
 
   const onAddEvent = useCallback(
-    (date, time) => {
-      createEvent(date, time);
+    (date, timeString) => {
+      if (!user) {
+        console.warn('Utilisateur non connecté, ajout événement bloqué');
+        return;
+      }
+      createEvent(date, timeString);
     },
-    [createEvent],
+    [createEvent, user],
   );
 
   const layout = useMemo(
