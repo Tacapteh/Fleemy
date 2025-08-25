@@ -149,7 +149,6 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
   );
 
   const wrapperRef = React.useRef(null);
-  const timeColRef = React.useRef(null);
 
   const containerHeight = React.useMemo(
     () => hours.length * SLOT_HEIGHT,
