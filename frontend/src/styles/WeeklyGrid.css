@@ -49,16 +49,9 @@
   margin-left: 64px;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(9, var(--row-h));
-  background: 
-    repeating-linear-gradient(
-      to bottom,
-      transparent 0,
-      transparent calc(var(--row-h) - 1px),
-      #e5e7eb calc(var(--row-h) - 1px),
-      #e5e7eb var(--row-h)
-    ),
-    #fff;
+  grid-template-rows: repeat(10, var(--row-h)); /* 10 heures maintenant (09:00-18:00) */
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
   overflow: hidden;
 }
