@@ -76,9 +76,22 @@ const InteractiveRow = React.memo(({ time, days, onCellClick }) => (
 
 const GridLayer = React.memo(({ hours, days, timeColRef }) => (
   <div className="grid-layer">
-    {hours.map((time, idx) => (
-      <GridRow key={time} time={time} first={idx === 0 ? timeColRef : null} days={days} />
-    ))}
+    <div className="time-column" ref={timeColRef}>
+      {hours.map((time) => (
+        <div key={time} className="time-slot">
+          {time}
+        </div>
+      ))}
+    </div>
+    <div className="days-grid">
+      {hours.map((time) => (
+        <div key={time} className="grid-row">
+          {days.map((d) => (
+            <GridCell key={d.name} />
+          ))}
+        </div>
+      ))}
+    </div>
   </div>
 ));
 
