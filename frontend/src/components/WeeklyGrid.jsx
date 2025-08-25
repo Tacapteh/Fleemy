@@ -116,7 +116,11 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
     () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
     [],
   );
-  const timeLabels = React.useMemo(() => [...hours, "18:00"], [hours]);
+  const displayHours = React.useMemo(
+    () => hours.map((t) => t.replace(":", "h")),
+    [hours],
+  );
+  const timeLabels = React.useMemo(() => [...displayHours, "18h00"], [displayHours]);
 
   const days = React.useMemo(() => {
     const start = new Date(weekStart);
