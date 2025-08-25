@@ -93,15 +93,18 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
   }, [user, monthRange]);
 
   const createEvent = useCallback(async (date) => {
-    if (!user) return;
+    if (!user) {
+      console.warn('Utilisateur non connecté, création événement bloquée');
+      return;
+    }
 
+    // Créer de vrais Date objects avec setHours
     const start = new Date(date);
-    start.setHours(9, 0, 0, 0); // 09:00 par défaut
-    const end = new Date(start);
-    end.setHours(10, 0, 0, 0); // 10:00 par défaut
+    start.setHours(9, 0, 0, 0); // 09:00
+    const end = new Date(date);
+    end.setHours(10, 0, 0, 0); // 10:00
 
     const newEvent = {
-      id: `temp_${Date.now()}`,
       title: 'Nouvel événement',
       start,
       end,
@@ -110,21 +113,26 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
     };
 
     // Optimistic UI
+    const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
     const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
     setEventsByDay(prev => ({
       ...prev,
-      [dayKey]: [...(prev[dayKey] || []), newEvent]
+      [dayKey]: [...(prev[dayKey] || []), tempEvent]
     }));
 
     try {
-      await saveEvent(newEvent);
-      // L'événement sera mis à jour par watchEvents
+      const savedEvent = await saveEvent(newEvent);
+      // Remplacer l'événement temporaire par le vrai
+      setEventsByDay(prev => ({
+        ...prev,
+        [dayKey]: (prev[dayKey] || []).map(e => e.id === tempEvent.id ? savedEvent : e)
+      }));
     } catch (error) {
       console.error('Erreur lors de la création de l\'événement:', error);
       // Rollback optimistic UI
       setEventsByDay(prev => ({
         ...prev,
-        [dayKey]: (prev[dayKey] || []).filter(e => e.id !== newEvent.id)
+        [dayKey]: (prev[dayKey] || []).filter(e => e.id !== tempEvent.id)
       }));
     }
   }, [user]);
