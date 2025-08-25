@@ -22,7 +22,7 @@ import httpx
 
 # Firebase Admin
 from firebase_admin import auth as firebase_auth
-from .firebase import db, InMemoryFirestore
+from firebase import db, InMemoryFirestore
 
 # Charger les variables d'environnement AVANT toute config
 ENV_PATH = find_dotenv()
