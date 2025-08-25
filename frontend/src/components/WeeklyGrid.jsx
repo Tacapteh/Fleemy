@@ -48,11 +48,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   return days;
 }
 
-const GridCell = React.memo(() => <div className="cell" />);
 
-const InteractiveCell = React.memo(({ onClick }) => (
-  <button type="button" className="wg-cell" onClick={onClick} />
-));
 
 
 const GridLayer = React.memo(({ hours, days }) => (
