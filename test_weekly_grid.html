@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeeklyGrid CSS Test</title>
+    <style>
+        /* Copy the WeeklyGrid CSS with the fixed variables */
+        .week-shell {
+            position: relative;
+            --weekly-grid-row-h: 64px;
+            --weekly-grid-slot-height: 64px;
+        }
+
+        .week-day-headers {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            margin-left: 64px;
+            margin-bottom: 8px;
+        }
+
+        .day-header-label {
+            text-align: center;
+            font-weight: 600;
+            color: #374151;
+            padding: 0.5rem;
+        }
+
+        .week-grid-container {
+            position: relative;
+        }
+
+        .time-gutter {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            width: 64px;
+            background: #fff;
+            border-right: 1px solid #e5e7eb;
+            pointer-events: none;
+        }
+
+        .time-label {
+            position: absolute;
+            right: 0.5rem;
+            font-size: 0.75rem;
+            color: #6b7280;
+            line-height: 1;
+            transform: translateY(-50%);
+            background: #fff;
+            padding: 2px 0;
+        }
+
+        .week-grid-body {
+            position: relative;
+            margin-left: 64px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(10, var(--weekly-grid-row-h));
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            height: 640px; /* 10 * 64px */
+        }
+
+        .interactive-layer {
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(10, var(--weekly-grid-row-h));
+            pointer-events: auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .day-column {
+            display: grid;
+            grid-template-rows: repeat(10, var(--weekly-grid-row-h));
+            border-right: 1px solid #e5e7eb;
+            position: relative;
+        }
+
+        .day-column:last-child {
+            border-right: none;
+        }
+
+        .time-slot-cell {
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.1s ease;
+            border-top: 1px solid #e5e7eb;
+            border-bottom: none;
+            height: var(--weekly-grid-row-h);
+            min-height: var(--weekly-grid-row-h);
+            width: 100%;
+        }
+
+        .time-slot-cell:first-child {
+            border-top: none;
+        }
+
+        .time-slot-cell:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .time-slot-cell:focus {
+            outline: none;
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        /* Test styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f9fafb;
+        }
+
+        .test-info {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .test-result {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+
+        .test-pass {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #10b981;
+        }
+
+        .test-fail {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-info">
+        <h1>WeeklyGrid CSS Variables Test</h1>
+        <p>This page tests the fixed CSS variables for the WeeklyGrid component.</p>
+        <p><strong>Expected:</strong> 70 clickable cells (7 days × 10 hours) with 64px height and proper borders.</p>
+    </div>
+
+    <div id="test-results"></div>
+
+    <div class="week-shell">
+        <!-- Header des jours -->
+        <div class="week-day-headers">
+            <div class="day-header-label">Lundi 1</div>
+            <div class="day-header-label">Mardi 2</div>
+            <div class="day-header-label">Mercredi 3</div>
+            <div class="day-header-label">Jeudi 4</div>
+            <div class="day-header-label">Vendredi 5</div>
+            <div class="day-header-label">Samedi 6</div>
+            <div class="day-header-label">Dimanche 7</div>
+        </div>
+
+        <div class="week-grid-container">
+            <!-- Gouttière des heures -->
+            <div class="time-gutter">
+                <div class="time-label" style="top: calc(0 * var(--weekly-grid-row-h))">09:00</div>
+                <div class="time-label" style="top: calc(1 * var(--weekly-grid-row-h))">10:00</div>
+                <div class="time-label" style="top: calc(2 * var(--weekly-grid-row-h))">11:00</div>
+                <div class="time-label" style="top: calc(3 * var(--weekly-grid-row-h))">12:00</div>
+                <div class="time-label" style="top: calc(4 * var(--weekly-grid-row-h))">13:00</div>
+                <div class="time-label" style="top: calc(5 * var(--weekly-grid-row-h))">14:00</div>
+                <div class="time-label" style="top: calc(6 * var(--weekly-grid-row-h))">15:00</div>
+                <div class="time-label" style="top: calc(7 * var(--weekly-grid-row-h))">16:00</div>
+                <div class="time-label" style="top: calc(8 * var(--weekly-grid-row-h))">17:00</div>
+                <div class="time-label" style="top: calc(9 * var(--weekly-grid-row-h))">18:00</div>
+            </div>
+
+            <!-- Grille principale -->
+            <div class="week-grid-body">
+                <div class="interactive-layer">
+                    <!-- Generate 7 day columns with 10 time slots each -->
+                    <div class="day-column" style="grid-column: 1">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(0, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(0, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(0, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(0, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(0, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(0, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(0, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(0, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(0, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(0, 9)"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 2">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(1, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(1, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(1, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(1, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(1, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(1, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(1, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(1, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(1, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(1, 9)"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 3">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(2, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(2, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(2, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(2, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(2, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(2, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(2, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(2, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(2, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(2, 9)"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 4">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(3, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(3, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(3, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(3, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(3, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(3, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(3, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(3, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(3, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(3, 9)"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 5">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(4, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(4, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(4, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(4, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(4, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(4, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(4, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(4, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(4, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(4, 9)"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 6">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(5, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(5, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(5, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(5, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(5, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(5, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(5, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(5, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(5, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(5, 9)"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 7">
+                        <button class="time-slot-cell" style="grid-row: 1" onclick="cellClicked(6, 0)"></button>
+                        <button class="time-slot-cell" style="grid-row: 2" onclick="cellClicked(6, 1)"></button>
+                        <button class="time-slot-cell" style="grid-row: 3" onclick="cellClicked(6, 2)"></button>
+                        <button class="time-slot-cell" style="grid-row: 4" onclick="cellClicked(6, 3)"></button>
+                        <button class="time-slot-cell" style="grid-row: 5" onclick="cellClicked(6, 4)"></button>
+                        <button class="time-slot-cell" style="grid-row: 6" onclick="cellClicked(6, 5)"></button>
+                        <button class="time-slot-cell" style="grid-row: 7" onclick="cellClicked(6, 6)"></button>
+                        <button class="time-slot-cell" style="grid-row: 8" onclick="cellClicked(6, 7)"></button>
+                        <button class="time-slot-cell" style="grid-row: 9" onclick="cellClicked(6, 8)"></button>
+                        <button class="time-slot-cell" style="grid-row: 10" onclick="cellClicked(6, 9)"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function cellClicked(day, hour) {
+            const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+            const hours = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+            alert(`Cellule cliquée: ${days[day]} ${hours[hour]}`);
+        }
+
+        function runTests() {
+            const results = document.getElementById('test-results');
+            const tests = [];
+
+            // Test 1: Check CSS variables
+            const weekShell = document.querySelector('.week-shell');
+            const styles = getComputedStyle(weekShell);
+            const rowHeight = styles.getPropertyValue('--weekly-grid-row-h').trim();
+            const slotHeight = styles.getPropertyValue('--weekly-grid-slot-height').trim();
+            
+            tests.push({
+                name: 'CSS Variable --weekly-grid-row-h',
+                pass: rowHeight === '64px',
+                details: `Expected: 64px, Got: ${rowHeight}`
+            });
+
+            tests.push({
+                name: 'CSS Variable --weekly-grid-slot-height',
+                pass: slotHeight === '64px',
+                details: `Expected: 64px, Got: ${slotHeight}`
+            });
+
+            // Test 2: Check number of cells
+            const cells = document.querySelectorAll('.time-slot-cell');
+            tests.push({
+                name: 'Number of time slot cells',
+                pass: cells.length === 70,
+                details: `Expected: 70 cells (7 days × 10 hours), Got: ${cells.length}`
+            });
+
+            // Test 3: Check cell height
+            if (cells.length > 0) {
+                const firstCell = cells[0];
+                const cellStyles = getComputedStyle(firstCell);
+                const cellHeight = cellStyles.height;
+                tests.push({
+                    name: 'Cell height',
+                    pass: cellHeight === '64px',
+                    details: `Expected: 64px, Got: ${cellHeight}`
+                });
+
+                // Test 4: Check border-top
+                const borderTop = cellStyles.borderTop;
+                tests.push({
+                    name: 'Cell border-top',
+                    pass: borderTop.includes('1px') && borderTop.includes('solid'),
+                    details: `Expected: 1px solid, Got: ${borderTop}`
+                });
+            }
+
+            // Test 5: Check grid structure
+            const gridBody = document.querySelector('.week-grid-body');
+            const gridStyles = getComputedStyle(gridBody);
+            const gridTemplateColumns = gridStyles.gridTemplateColumns;
+            const gridTemplateRows = gridStyles.gridTemplateRows;
+            
+            tests.push({
+                name: 'Grid template columns (7 days)',
+                pass: gridTemplateColumns.split(' ').length === 7,
+                details: `Expected: 7 columns, Got: ${gridTemplateColumns.split(' ').length}`
+            });
+
+            tests.push({
+                name: 'Grid template rows (10 hours)',
+                pass: gridTemplateRows.includes('64px') && gridTemplateRows.split(' ').length === 10,
+                details: `Expected: 10 rows of 64px, Got: ${gridTemplateRows}`
+            });
+
+            // Display results
+            results.innerHTML = '<h2>Test Results</h2>';
+            tests.forEach(test => {
+                const div = document.createElement('div');
+                div.className = `test-result ${test.pass ? 'test-pass' : 'test-fail'}`;
+                div.innerHTML = `
+                    <strong>${test.pass ? '✅' : '❌'} ${test.name}</strong><br>
+                    ${test.details}
+                `;
+                results.appendChild(div);
+            });
+
+            const passedTests = tests.filter(t => t.pass).length;
+            const totalTests = tests.length;
+            const summary = document.createElement('div');
+            summary.className = `test-result ${passedTests === totalTests ? 'test-pass' : 'test-fail'}`;
+            summary.innerHTML = `<strong>Summary: ${passedTests}/${totalTests} tests passed</strong>`;
+            results.appendChild(summary);
+        }
+
+        // Run tests when page loads
+        window.addEventListener('load', runTests);
+    </script>
+</body>
+</html>
