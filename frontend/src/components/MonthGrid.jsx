@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import '../styles/MonthCalendar.css';
-import { saveEvent, watchEvents, watchTasks, getMonthRange, setUserContext } from '../firebase';
+import { saveEvent, watchEvents, watchTasks, getMonthRange } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase';
 
