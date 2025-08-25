@@ -84,6 +84,7 @@
 .day-column {
   display: grid;
   grid-template-rows: repeat(10, var(--weekly-grid-row-h)); /* 10 heures maintenant */
+  grid-row: 1 / -1;
   border-right: 1px solid #e5e7eb;
   position: relative;
 }
