@@ -4,8 +4,9 @@ from weasyprint import HTML
 
 def _quote_html(quote: dict) -> str:
     items = "".join(
-        f"<tr><td>{item['description']}</td><td>{item['quantity']}</td><td>{item['unit_price']}</td><td>{item['total']}</td></tr>"
+        f"<tr><td>{item.get('description', '')}</td><td>{item.get('quantity', '')}</td><td>{item.get('unit_price', '')}</td><td>{item.get('total', '')}</td></tr>"
         for item in quote.get('items', [])
+        if any(str(item.get(k, "")).strip() for k in ("description", "quantity", "unit_price", "total"))
     )
     return f"""
     <html>
@@ -26,8 +27,9 @@ def _quote_html(quote: dict) -> str:
 
 def _invoice_html(invoice: dict) -> str:
     items = "".join(
-        f"<tr><td>{item['description']}</td><td>{item['quantity']}</td><td>{item['unit_price']}</td><td>{item['total']}</td></tr>"
+        f"<tr><td>{item.get('description', '')}</td><td>{item.get('quantity', '')}</td><td>{item.get('unit_price', '')}</td><td>{item.get('total', '')}</td></tr>"
         for item in invoice.get('items', [])
+        if any(str(item.get(k, "")).strip() for k in ("description", "quantity", "unit_price", "total"))
     )
     return f"""
     <html>
