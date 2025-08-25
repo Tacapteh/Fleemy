@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeeklyGrid Test</title>
+    <style>
+        /* Copy the WeeklyGrid CSS for testing */
+        .week-shell {
+            position: relative;
+            --weekly-grid-row-h: 64px;
+            --weekly-grid-slot-height: 64px;
+        }
+
+        .week-day-headers {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            margin-left: 64px;
+            margin-bottom: 8px;
+        }
+
+        .day-header-label {
+            text-align: center;
+            font-weight: 600;
+            color: #374151;
+            padding: 0.5rem;
+        }
+
+        .week-grid-container {
+            position: relative;
+        }
+
+        .time-gutter {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            width: 64px;
+            background: #fff;
+            border-right: 1px solid #e5e7eb;
+            pointer-events: none;
+        }
+
+        .time-label {
+            position: absolute;
+            right: 0.5rem;
+            font-size: 0.75rem;
+            color: #6b7280;
+            line-height: 1;
+            transform: translateY(-50%);
+            background: #fff;
+            padding: 2px 0;
+        }
+
+        .week-grid-body {
+            position: relative;
+            margin-left: 64px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(10, var(--weekly-grid-row-h));
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            height: 640px; /* 10 * 64px */
+        }
+
+        .interactive-layer {
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(10, var(--weekly-grid-row-h));
+            pointer-events: auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .day-column {
+            display: grid;
+            grid-template-rows: repeat(10, var(--weekly-grid-row-h));
+            grid-row: 1 / -1;
+            border-right: 1px solid #e5e7eb;
+            position: relative;
+        }
+
+        .day-column:last-child {
+            border-right: none;
+        }
+
+        .time-slot-cell {
+            border: 0;
+            border-top: 1px solid #e5e7eb;
+            background: transparent;
+            cursor: pointer;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.1s ease;
+            height: var(--weekly-grid-row-h);
+            min-height: var(--weekly-grid-row-h);
+            width: 100%;
+        }
+
+        .time-slot-cell:first-child {
+            border-top: none;
+        }
+
+        .time-slot-cell:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .time-slot-cell:focus {
+            outline: none;
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        /* Test styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f9fafb;
+        }
+
+        .test-info {
+            background: #e0f2fe;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .test-info h2 {
+            margin: 0 0 10px 0;
+            color: #0277bd;
+        }
+
+        .test-checklist {
+            background: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .test-checklist h3 {
+            margin: 0 0 10px 0;
+            color: #374151;
+        }
+
+        .test-checklist ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .test-checklist li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-info">
+        <h2>WeeklyGrid Component Test</h2>
+        <p>This page tests the WeeklyGrid CSS corrections for cell alignment issues.</p>
+        <p><strong>Expected:</strong> 70 cells (7 days × 10 hours) should be visible with proper alignment and borders.</p>
+    </div>
+
+    <div class="test-checklist">
+        <h3>Test Checklist:</h3>
+        <ul>
+            <li>✅ Cellules visibles: Les 70 cellules (7 jours × 10 heures) doivent être visibles</li>
+            <li>✅ Couverage complet: Chaque .day-column doit couvrir toutes les 10 lignes (09:00→18:00)</li>
+            <li>✅ Bordures horizontales: Chaque cellule doit avoir sa bordure horizontale visible</li>
+            <li>✅ Alignement parfait: Les cellules alignées avec les heures de la gouttière</li>
+            <li>✅ Grille complète: Structure 7×10 entièrement fonctionnelle</li>
+            <li>✅ Interactivité: Cellules cliquables avec effets hover</li>
+        </ul>
+    </div>
+
+    <div class="week-shell">
+        <!-- Header des jours -->
+        <div class="week-day-headers">
+            <div class="day-header-label">Lundi 25</div>
+            <div class="day-header-label">Mardi 26</div>
+            <div class="day-header-label">Mercredi 27</div>
+            <div class="day-header-label">Jeudi 28</div>
+            <div class="day-header-label">Vendredi 29</div>
+            <div class="day-header-label">Samedi 30</div>
+            <div class="day-header-label">Dimanche 31</div>
+        </div>
+
+        <div class="week-grid-container">
+            <!-- Gouttière des heures -->
+            <div class="time-gutter">
+                <div class="time-label" style="top: calc(0 * var(--weekly-grid-row-h))">09:00</div>
+                <div class="time-label" style="top: calc(1 * var(--weekly-grid-row-h))">10:00</div>
+                <div class="time-label" style="top: calc(2 * var(--weekly-grid-row-h))">11:00</div>
+                <div class="time-label" style="top: calc(3 * var(--weekly-grid-row-h))">12:00</div>
+                <div class="time-label" style="top: calc(4 * var(--weekly-grid-row-h))">13:00</div>
+                <div class="time-label" style="top: calc(5 * var(--weekly-grid-row-h))">14:00</div>
+                <div class="time-label" style="top: calc(6 * var(--weekly-grid-row-h))">15:00</div>
+                <div class="time-label" style="top: calc(7 * var(--weekly-grid-row-h))">16:00</div>
+                <div class="time-label" style="top: calc(8 * var(--weekly-grid-row-h))">17:00</div>
+                <div class="time-label" style="top: calc(9 * var(--weekly-grid-row-h))">18:00</div>
+            </div>
+
+            <!-- Grille principale -->
+            <div class="week-grid-body">
+                <div class="interactive-layer">
+                    <!-- Day columns with time slots -->
+                    <div class="day-column" style="grid-column: 1; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 2; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 3; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 4; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 5; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 6; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                    <div class="day-column" style="grid-column: 7; grid-row: 1 / -1;">
+                        <button class="time-slot-cell" style="grid-row: 1;"></button>
+                        <button class="time-slot-cell" style="grid-row: 2;"></button>
+                        <button class="time-slot-cell" style="grid-row: 3;"></button>
+                        <button class="time-slot-cell" style="grid-row: 4;"></button>
+                        <button class="time-slot-cell" style="grid-row: 5;"></button>
+                        <button class="time-slot-cell" style="grid-row: 6;"></button>
+                        <button class="time-slot-cell" style="grid-row: 7;"></button>
+                        <button class="time-slot-cell" style="grid-row: 8;"></button>
+                        <button class="time-slot-cell" style="grid-row: 9;"></button>
+                        <button class="time-slot-cell" style="grid-row: 10;"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Add click handlers to test interactivity
+        document.querySelectorAll('.time-slot-cell').forEach((cell, index) => {
+            cell.addEventListener('click', function() {
+                const dayIndex = Math.floor(index / 10);
+                const hourIndex = index % 10;
+                const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+                const hour = 9 + hourIndex;
+                alert(`Clicked: ${dayNames[dayIndex]} ${hour}:00`);
+            });
+        });
+
+        // Count and display cells
+        const totalCells = document.querySelectorAll('.time-slot-cell').length;
+        console.log(`Total cells found: ${totalCells}`);
+        
+        // Add a status indicator
+        const statusDiv = document.createElement('div');
+        statusDiv.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #10b981; color: white; padding: 10px; border-radius: 5px; z-index: 1000;';
+        statusDiv.textContent = `✅ ${totalCells} cells loaded`;
+        document.body.appendChild(statusDiv);
+    </script>
+</body>
+</html>
