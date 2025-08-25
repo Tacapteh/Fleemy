@@ -15,7 +15,7 @@ const DAY_START = 9;
 const DAY_END = 19; // exclusive (pour inclure 18h00)
 const SLOT_HEIGHT = 64;
 
-function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
+function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
   const startMinutes = dayStartHour * 60;
   const totalMinutes = (dayEndHour - dayStartHour) * 60;
   const days = Array.from({ length: 7 }, () => []);
