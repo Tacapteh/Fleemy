@@ -13,6 +13,7 @@ import { loadEvents, clearEventsCache } from '../utils/loadEvents';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
+  const [firebaseUser] = useAuthState(auth);
   const { team } = useTeam();
   const teamId = team?.id;
   const [view, setView] = useState('week');
