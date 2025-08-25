@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, signOut } from "firebase/auth";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, orderBy, Timestamp } from "firebase/firestore";
+import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, where, orderBy, Timestamp } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBNNGQf0tz3mtnDL-E0dEYSi9ce34lZkDw",
@@ -22,20 +22,23 @@ const logout = async () => {
 };
 
 // Context utilisateur/équipe
-let currentUser = null;
-let currentTeam = null;
+let currentTeamId = null;
 
-export const setUserContext = (user) => {
-  currentUser = user;
-  // Détecter si l'utilisateur fait partie d'une équipe
-  // currentTeam = user?.teamId || null;
+export const setTeamContext = (teamId) => {
+  currentTeamId = teamId;
 };
 
 export const pathFor = (collectionName) => {
-  if (currentTeam) {
-    return `teams/${currentTeam}/${collectionName}`;
+  if (currentTeamId) {
+    console.log(`pathFor: teams/${currentTeamId}/${collectionName}`);
+    return `teams/${currentTeamId}/${collectionName}`;
   }
-  return `users/${currentUser?.uid}/${collectionName}`;
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
+    throw new Error('Utilisateur non authentifié');
+  }
+  console.log(`pathFor: users/${uid}/${collectionName}`);
+  return `users/${uid}/${collectionName}`;
 };
 
 // Utilitaire pour normaliser les dates
@@ -66,24 +69,34 @@ const toDate = (dateValue) => {
 
 // EVENTS
 export const saveEvent = async (eventData) => {
+  if (!auth.currentUser) {
+    throw new Error('Utilisateur non authentifié');
+  }
+
   try {
     const normalizedEvent = {
       ...eventData,
-      id: eventData.id || doc(collection(db, pathFor('events'))).id,
       start: normalizeDate(eventData.start),
       end: normalizeDate(eventData.end),
-      owner_id: currentUser?.uid,
-      team_id: currentTeam || null,
+      owner_id: auth.currentUser.uid, // Imposé
+      team_id: currentTeamId || null,
       createdAt: eventData.createdAt || new Date().toISOString(),
       title: eventData.title || 'Événement sans titre',
       color: eventData.color || '#3b82f6',
       description: eventData.description || ''
     };
 
-    const eventRef = doc(db, pathFor('events'), normalizedEvent.id);
-    await setDoc(eventRef, normalizedEvent);
-    
-    return normalizedEvent;
+    if (eventData.id) {
+      // Mise à jour
+      const eventRef = doc(db, pathFor('events'), eventData.id);
+      await setDoc(eventRef, normalizedEvent);
+      return { ...normalizedEvent, id: eventData.id };
+    } else {
+      // Création
+      const eventsRef = collection(db, pathFor('events'));
+      const docRef = await addDoc(eventsRef, normalizedEvent);
+      return { ...normalizedEvent, id: docRef.id };
+    }
   } catch (error) {
     console.error('Erreur saveEvent:', error);
     throw error;
@@ -91,13 +104,16 @@ export const saveEvent = async (eventData) => {
 };
 
 export const watchEvents = (range, callback) => {
-  if (!currentUser) {
-    console.warn('Aucun utilisateur connecté pour watchEvents');
+  if (!auth.currentUser) {
+    console.warn('Pas d\'utilisateur connecté, watchEvents ignoré');
     return () => {};
   }
 
   try {
-    const eventsRef = collection(db, pathFor('events'));
+    const eventsPath = pathFor('events');
+    console.log('watchEvents sur:', eventsPath);
+    
+    const eventsRef = collection(db, eventsPath);
     const rangeStart = normalizeDate(range.from);
     const rangeEnd = normalizeDate(range.to);
     
@@ -141,6 +157,10 @@ export const watchEvents = (range, callback) => {
 };
 
 export const deleteEvent = async (eventId) => {
+  if (!auth.currentUser) {
+    throw new Error('Utilisateur non authentifié');
+  }
+
   try {
     const eventRef = doc(db, pathFor('events'), eventId);
     await deleteDoc(eventRef);
@@ -152,14 +172,17 @@ export const deleteEvent = async (eventId) => {
 
 // TASKS
 export const saveTask = async (taskData) => {
+  if (!auth.currentUser) {
+    throw new Error('Utilisateur non authentifié');
+  }
+
   try {
     const normalizedTask = {
       ...taskData,
-      id: taskData.id || doc(collection(db, pathFor('tasks'))).id,
       start: normalizeDate(taskData.start),
       end: normalizeDate(taskData.end),
-      owner_id: currentUser?.uid,
-      team_id: currentTeam || null,
+      owner_id: auth.currentUser.uid, // Imposé
+      team_id: currentTeamId || null,
       createdAt: taskData.createdAt || new Date().toISOString(),
       title: taskData.title || 'Tâche sans titre',
       color: taskData.color || '#10b981',
@@ -168,10 +191,17 @@ export const saveTask = async (taskData) => {
       price: taskData.price || null
     };
 
-    const taskRef = doc(db, pathFor('tasks'), normalizedTask.id);
-    await setDoc(taskRef, normalizedTask);
-    
-    return normalizedTask;
+    if (taskData.id) {
+      // Mise à jour
+      const taskRef = doc(db, pathFor('tasks'), taskData.id);
+      await setDoc(taskRef, normalizedTask);
+      return { ...normalizedTask, id: taskData.id };
+    } else {
+      // Création
+      const tasksRef = collection(db, pathFor('tasks'));
+      const docRef = await addDoc(tasksRef, normalizedTask);
+      return { ...normalizedTask, id: docRef.id };
+    }
   } catch (error) {
     console.error('Erreur saveTask:', error);
     throw error;
@@ -179,13 +209,16 @@ export const saveTask = async (taskData) => {
 };
 
 export const watchTasks = (range, callback) => {
-  if (!currentUser) {
-    console.warn('Aucun utilisateur connecté pour watchTasks');
+  if (!auth.currentUser) {
+    console.warn('Pas d\'utilisateur connecté, watchTasks ignoré');
     return () => {};
   }
 
   try {
-    const tasksRef = collection(db, pathFor('tasks'));
+    const tasksPath = pathFor('tasks');
+    console.log('watchTasks sur:', tasksPath);
+    
+    const tasksRef = collection(db, tasksPath);
     const rangeStart = normalizeDate(range.from);
     const rangeEnd = normalizeDate(range.to);
     
@@ -229,6 +262,10 @@ export const watchTasks = (range, callback) => {
 };
 
 export const deleteTask = async (taskId) => {
+  if (!auth.currentUser) {
+    throw new Error('Utilisateur non authentifié');
+  }
+
   try {
     const taskRef = doc(db, pathFor('tasks'), taskId);
     await deleteDoc(taskRef);
@@ -259,6 +296,10 @@ export const getMonthRange = (year, month) => {
   
   return { from: start, to: end };
 };
+
+export { auth, googleProvider, db, logout };
+
+window.auth = auth;
 
 export { auth, googleProvider, db, logout };
 
