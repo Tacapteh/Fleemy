@@ -159,26 +159,46 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
   return (
     <div ref={wrapperRef} className="week-shell">
       <div className="week-day-header">
-        <div className="time-header-placeholder"></div>
+        <div className="time-gutter-header"></div>
         {days.map((d) => (
-          <div key={d.name} className="day-col">
+          <div key={d.name} className="day-header">
             {d.name} {d.date.getDate()}
           </div>
         ))}
       </div>
 
-      <div
-        className="week-grid-body rounded-md overflow-hidden"
-        style={{ height: containerHeight, "--slot-height": `${SLOT_HEIGHT}px` }}
-      >
-        <GridLayer hours={hours} days={days} timeColRef={timeColRef} />
-        <InteractiveLayer
-          layout={layout}
-          hours={hours}
-          days={days}
-          onCellClick={onCellClick}
-          onEventClick={onEventClick}
-        />
+      <div className="week-grid-container">
+        {/* Gouttière des heures - séparée et stickée */}
+        <div className="time-gutter">
+          {hours.map((time, index) => (
+            <div
+              key={time}
+              className="time-label"
+              style={{ top: `calc(${index} * var(--row-h))` }}
+            >
+              {time}
+            </div>
+          ))}
+        </div>
+
+        {/* Grille principale */}
+        <div
+          className="week-grid-body"
+          style={{ 
+            height: containerHeight, 
+            "--slot-height": `${SLOT_HEIGHT}px`,
+            "--row-h": `${SLOT_HEIGHT}px`
+          }}
+        >
+          <GridLayer hours={hours} days={days} />
+          <InteractiveLayer
+            layout={layout}
+            hours={hours}
+            days={days}
+            onCellClick={onCellClick}
+            onEventClick={onEventClick}
+          />
+        </div>
       </div>
     </div>
   );
