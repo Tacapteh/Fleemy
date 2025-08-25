@@ -187,11 +187,3 @@
   will-change: transform;
 }
 
-/* Ensure the hour column matches the grid background */
-.time-col,
-.week-grid-body .interactive-layer .hour-placeholder {
-  background: #fff !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
