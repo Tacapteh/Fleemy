@@ -136,24 +136,31 @@
   grid-template-columns: repeat(7, 1fr);
 }
 
-.week-grid-body .interactive-layer .wg-cell {
-  flex: 1;
-  min-height: var(--slot-height);
+.wg-cell {
+  height: var(--slot-height);
   border: none;
   border-top: 1px solid #e5e7eb;
   border-left: 0;
-
   background: transparent;
   cursor: pointer;
+  box-sizing: border-box;
 }
 
 /* Lignes verticales dans la couche interactive */
-.week-grid-body .interactive-layer .wg-cell + .wg-cell {
+.wg-cell + .wg-cell {
   border-left: 1px solid #e5e7eb;
 }
 
-.week-grid-body .interactive-layer .wg-cell:hover,
-.week-grid-body .interactive-layer .wg-cell:focus {
+.interactive-row:last-child .wg-cell {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.interactive-row:first-child .wg-cell {
+  border-top: none;
+}
+
+.wg-cell:hover,
+.wg-cell:focus {
   background: rgba(59, 130, 246, 0.1);
   outline: none;
 }
