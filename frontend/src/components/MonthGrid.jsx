@@ -138,6 +138,11 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
   }, [user]);
 
   const handleSelect = (value) => {
+    if (!user) {
+      console.warn('Utilisateur non connecté, sélection bloquée');
+      return;
+    }
+    
     if (value) {
       const selectedDate = new Date(year, month, value);
       if (onDateSelect) {
@@ -149,6 +154,11 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
   };
 
   const handleAddEvent = (value) => {
+    if (!user) {
+      console.warn('Utilisateur non connecté, ajout événement bloqué');
+      return;
+    }
+    
     const selectedDate = new Date(year, month, value);
     createEvent(selectedDate);
   };
