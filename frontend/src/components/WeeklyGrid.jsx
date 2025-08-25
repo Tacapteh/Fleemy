@@ -105,43 +105,49 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   const [draggingId, setDraggingId] = React.useState(null);
   return (
     <div className="interactive-layer">
-      {layout.map((dayEvents, di) => (
-        <div
-          key={di}
-          className="events-col"
-          style={{
-            left: `calc(var(--time-col-width) + ${di} * ((100% - var(--time-col-width)) / ${days.length}))`,
-            width: `calc((100% - var(--time-col-width)) / ${days.length})`,
-          }}
-        >
-          {dayEvents.map((e) => (
-            <div
-              key={e.id}
-              draggable
-              onDragStart={() => setDraggingId(e.id)}
-              onDragEnd={() => setDraggingId(null)}
-              onClick={() => onEventClick && onEventClick(e)}
-              className={`event${draggingId === e.id ? " dragging" : ""}`}
-              style={{
-                left: `${(e.col * 100) / e.colCount}%`,
-                width: `${100 / e.colCount}%`,
-                top: `${e.top}%`,
-                height: `${e.height}%`,
-              }}
-            >
-              {e.description || e.title || "Événement"}
-            </div>
-          ))}
-        </div>
-      ))}
-      {hours.map((time) => (
-        <InteractiveRow
-          key={time}
-          time={time}
-          days={days}
-          onCellClick={onCellClick}
-        />
-      ))}
+      <div className="time-column-placeholder">
+        {hours.map((time) => (
+          <div key={time} className="time-slot-placeholder"></div>
+        ))}
+      </div>
+      <div className="days-interactive">
+        {hours.map((time) => (
+          <div key={time} className="interactive-row">
+            {days.map((d) => (
+              <InteractiveCell key={d.name} onClick={() => onCellClick(d.date, time)} />
+            ))}
+          </div>
+        ))}
+        {layout.map((dayEvents, di) => (
+          <div
+            key={di}
+            className="events-col"
+            style={{
+              left: `${di * (100 / days.length)}%`,
+              width: `${100 / days.length}%`,
+            }}
+          >
+            {dayEvents.map((e) => (
+              <div
+                key={e.id}
+                draggable
+                onDragStart={() => setDraggingId(e.id)}
+                onDragEnd={() => setDraggingId(null)}
+                onClick={() => onEventClick && onEventClick(e)}
+                className={`event${draggingId === e.id ? " dragging" : ""}`}
+                style={{
+                  left: `${(e.col * 100) / e.colCount}%`,
+                  width: `${100 / e.colCount}%`,
+                  top: `${e.top}%`,
+                  height: `${e.height}%`,
+                }}
+              >
+                {e.description || e.title || "Événement"}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 });
