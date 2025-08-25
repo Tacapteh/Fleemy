@@ -82,10 +82,10 @@
 
 
 .week-grid-body .grid-row .cell {
-  flex: 1;
+  height: var(--slot-height);
   border-top: 1px solid #e5e7eb;
   border-left: 0;
-  min-height: var(--slot-height);
+  box-sizing: border-box;
 }
 
 /* Lignes verticales à partir de la 2e cellule (évite la “barre” à gauche) */
