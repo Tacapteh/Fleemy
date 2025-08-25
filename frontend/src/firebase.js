@@ -1,11 +1,11 @@
 import { initializeApp } from "firebase/app";
-import { useEffect, useState } from "react";
-import { getAuth, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signOut } from "firebase/auth";
 import {
   getFirestore,
   collection,
   doc,
   setDoc,
+  addDoc,
   deleteDoc,
   onSnapshot,
   query,
@@ -42,8 +42,25 @@ const logout = async () => {
   localStorage.removeItem("authToken");
 };
 
-// Contexte utilisateur (placeholder pour compatibilité)
-export const setUserContext = () => {};
+// Context utilisateur/équipe
+let currentTeamId = null;
+
+export const setTeamContext = (teamId) => {
+  currentTeamId = teamId;
+};
+
+export const pathFor = (collectionName) => {
+  if (currentTeamId) {
+    console.log(`pathFor: teams/${currentTeamId}/${collectionName}`);
+    return `teams/${currentTeamId}/${collectionName}`;
+  }
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
+    throw new Error("Utilisateur non authentifié");
+  }
+  console.log(`pathFor: users/${uid}/${collectionName}`);
+  return `users/${uid}/${collectionName}`;
+};
 
 // Utilitaire pour normaliser les dates
 const normalizeDate = (date) => {
@@ -54,7 +71,7 @@ const normalizeDate = (date) => {
   if (date instanceof Date) {
     return date.toISOString();
   }
-  if (typeof date === 'string') {
+  if (typeof date === "string") {
     return new Date(date).toISOString();
   }
   return date;
@@ -73,182 +90,226 @@ const toDate = (dateValue) => {
 
 // EVENTS
 export const saveEvent = async (eventData) => {
+  if (!auth.currentUser) {
+    throw new Error("Utilisateur non authentifié");
+  }
+
   try {
     const uid = auth.currentUser.uid;
-    const eventsCol = collection(db, 'users', uid, 'events');
+    const eventsCol = collection(db, "users", uid, "events");
     const id = eventData.id || doc(eventsCol).id;
 
     const normalizedEvent = {
       ...eventData,
-      id,
       start: normalizeDate(eventData.start),
       end: normalizeDate(eventData.end),
-      owner_id: uid,
+      owner_id: auth.currentUser.uid, // Imposé
+      team_id: currentTeamId || null,
       createdAt: eventData.createdAt || new Date().toISOString(),
-      title: eventData.title || 'Événement sans titre',
-      color: eventData.color || '#3b82f6',
-      description: eventData.description || ''
+      title: eventData.title || "Événement sans titre",
+      color: eventData.color || "#3b82f6",
+      description: eventData.description || "",
     };
 
-    await setDoc(doc(eventsCol, id), normalizedEvent);
-
-    return normalizedEvent;
+    if (eventData.id) {
+      // Mise à jour
+      const eventRef = doc(db, pathFor("events"), eventData.id);
+      await setDoc(eventRef, normalizedEvent);
+      return { ...normalizedEvent, id: eventData.id };
+    } else {
+      // Création
+      const eventsRef = collection(db, pathFor("events"));
+      const docRef = await addDoc(eventsRef, normalizedEvent);
+      return { ...normalizedEvent, id: docRef.id };
+    }
   } catch (error) {
-    console.error('Erreur saveEvent:', error);
+    console.error("Erreur saveEvent:", error);
     throw error;
   }
 };
 
 export const watchEvents = (range, callback) => {
-  const uid = auth.currentUser?.uid;
-  if (!uid) {
-    console.warn('Aucun utilisateur connecté pour watchEvents');
+  if (!auth.currentUser) {
+    console.warn("Pas d'utilisateur connecté, watchEvents ignoré");
     return () => {};
   }
 
   try {
-    const eventsRef = collection(db, 'users', uid, 'events');
+    const eventsPath = pathFor("events");
+    console.log("watchEvents sur:", eventsPath);
+
+    const eventsRef = collection(db, eventsPath);
     const rangeStart = normalizeDate(range.from);
     const rangeEnd = normalizeDate(range.to);
-    
+
     const q = query(
       eventsRef,
-      where('start', '<=', rangeEnd),
-      where('end', '>=', rangeStart),
-      orderBy('start')
+      where("start", "<=", rangeEnd),
+      where("end", ">=", rangeStart),
+      orderBy("start")
     );
 
     const seenIds = new Set();
-    
-    return onSnapshot(q, (snapshot) => {
-      const events = [];
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const eventId = doc.id;
-        
-        if (!seenIds.has(eventId)) {
-          seenIds.add(eventId);
-          
-          events.push({
-            ...data,
-            id: eventId,
-            start: toDate(data.start),
-            end: toDate(data.end)
-          });
-        }
-      });
-      
-      callback(events);
-    }, (error) => {
-      console.error('Erreur watchEvents:', error);
-      callback([]);
-    });
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const events = [];
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const eventId = doc.id;
+
+          if (!seenIds.has(eventId)) {
+            seenIds.add(eventId);
+
+            events.push({
+              ...data,
+              id: eventId,
+              start: toDate(data.start),
+              end: toDate(data.end),
+            });
+          }
+        });
+
+        callback(events);
+      },
+      (error) => {
+        console.error("Erreur watchEvents:", error);
+        callback([]);
+      }
+    );
   } catch (error) {
-    console.error('Erreur config watchEvents:', error);
+    console.error("Erreur config watchEvents:", error);
     return () => {};
   }
 };
 
 export const deleteEvent = async (eventId) => {
+  if (!auth.currentUser) {
+    throw new Error("Utilisateur non authentifié");
+  }
+
   try {
     const uid = auth.currentUser.uid;
-    const eventRef = doc(db, 'users', uid, 'events', eventId);
+    const eventRef = doc(db, "users", uid, "events", eventId);
     await deleteDoc(eventRef);
   } catch (error) {
-    console.error('Erreur deleteEvent:', error);
+    console.error("Erreur deleteEvent:", error);
     throw error;
   }
 };
 
 // TASKS
 export const saveTask = async (taskData) => {
+  if (!auth.currentUser) {
+    throw new Error("Utilisateur non authentifié");
+  }
+
   try {
     const uid = auth.currentUser.uid;
-    const tasksCol = collection(db, 'users', uid, 'tasks');
+    const tasksCol = collection(db, "users", uid, "tasks");
     const id = taskData.id || doc(tasksCol).id;
 
     const normalizedTask = {
       ...taskData,
-      id,
       start: normalizeDate(taskData.start),
       end: normalizeDate(taskData.end),
-      owner_id: uid,
+      owner_id: auth.currentUser.uid, // Imposé
+      team_id: currentTeamId || null,
       createdAt: taskData.createdAt || new Date().toISOString(),
-      title: taskData.title || 'Tâche sans titre',
-      color: taskData.color || '#10b981',
-      description: taskData.description || '',
-      icon: taskData.icon || '📋',
-      price: taskData.price || null
+      title: taskData.title || "Tâche sans titre",
+      color: taskData.color || "#10b981",
+      description: taskData.description || "",
+      icon: taskData.icon || "📋",
+      price: taskData.price || null,
     };
 
-    await setDoc(doc(tasksCol, id), normalizedTask);
-
-    return normalizedTask;
+    if (taskData.id) {
+      // Mise à jour
+      const taskRef = doc(db, pathFor("tasks"), taskData.id);
+      await setDoc(taskRef, normalizedTask);
+      return { ...normalizedTask, id: taskData.id };
+    } else {
+      // Création
+      const tasksRef = collection(db, pathFor("tasks"));
+      const docRef = await addDoc(tasksRef, normalizedTask);
+      return { ...normalizedTask, id: docRef.id };
+    }
   } catch (error) {
-    console.error('Erreur saveTask:', error);
+    console.error("Erreur saveTask:", error);
     throw error;
   }
 };
 
 export const watchTasks = (range, callback) => {
-  const uid = auth.currentUser?.uid;
-  if (!uid) {
-    console.warn('Aucun utilisateur connecté pour watchTasks');
+  if (!auth.currentUser) {
+    console.warn("Pas d'utilisateur connecté, watchTasks ignoré");
     return () => {};
   }
 
   try {
-    const tasksRef = collection(db, 'users', uid, 'tasks');
+    const tasksPath = pathFor("tasks");
+    console.log("watchTasks sur:", tasksPath);
+
+    const tasksRef = collection(db, tasksPath);
     const rangeStart = normalizeDate(range.from);
     const rangeEnd = normalizeDate(range.to);
-    
+
     const q = query(
       tasksRef,
-      where('start', '<=', rangeEnd),
-      where('end', '>=', rangeStart),
-      orderBy('start')
+      where("start", "<=", rangeEnd),
+      where("end", ">=", rangeStart),
+      orderBy("start")
     );
 
     const seenIds = new Set();
-    
-    return onSnapshot(q, (snapshot) => {
-      const tasks = [];
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const taskId = doc.id;
-        
-        if (!seenIds.has(taskId)) {
-          seenIds.add(taskId);
-          
-          tasks.push({
-            ...data,
-            id: taskId,
-            start: toDate(data.start),
-            end: toDate(data.end)
-          });
-        }
-      });
-      
-      callback(tasks);
-    }, (error) => {
-      console.error('Erreur watchTasks:', error);
-      callback([]);
-    });
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const tasks = [];
+
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const taskId = doc.id;
+
+          if (!seenIds.has(taskId)) {
+            seenIds.add(taskId);
+
+            tasks.push({
+              ...data,
+              id: taskId,
+              start: toDate(data.start),
+              end: toDate(data.end),
+            });
+          }
+        });
+
+        callback(tasks);
+      },
+      (error) => {
+        console.error("Erreur watchTasks:", error);
+        callback([]);
+      }
+    );
   } catch (error) {
-    console.error('Erreur config watchTasks:', error);
+    console.error("Erreur config watchTasks:", error);
     return () => {};
   }
 };
 
 export const deleteTask = async (taskId) => {
+  if (!auth.currentUser) {
+    throw new Error("Utilisateur non authentifié");
+  }
+
   try {
     const uid = auth.currentUser.uid;
-    const taskRef = doc(db, 'users', uid, 'tasks', taskId);
+    const taskRef = doc(db, "users", uid, "tasks", taskId);
     await deleteDoc(taskRef);
   } catch (error) {
-    console.error('Erreur deleteTask:', error);
+    console.error("Erreur deleteTask:", error);
     throw error;
   }
 };
@@ -257,21 +318,21 @@ export const deleteTask = async (taskId) => {
 export const getWeekRange = (weekStart) => {
   const start = new Date(weekStart);
   start.setHours(0, 0, 0, 0);
-  
+
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   end.setHours(23, 59, 59, 999);
-  
+
   return { from: start, to: end };
 };
 
 export const getMonthRange = (year, month) => {
   const start = new Date(year, month, 1);
   start.setHours(0, 0, 0, 0);
-  
+
   const end = new Date(year, month + 1, 0);
   end.setHours(23, 59, 59, 999);
-  
+
   return { from: start, to: end };
 };
 

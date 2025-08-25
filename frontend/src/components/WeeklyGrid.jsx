@@ -6,14 +6,9 @@ import React, {
   useRef,
 } from "react";
 import "../styles/WeeklyGrid.css";
-import {
-  saveEvent,
-  watchEvents,
-  watchTasks,
-  getWeekRange,
-  setUserContext,
-  useFirebaseUser,
-} from "../firebase";
+import { saveEvent, watchEvents, watchTasks, getWeekRange } from "../firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth } from "../firebase";
 
 const DAY_NAMES = [
   "Lundi",
@@ -204,16 +199,12 @@ export default function WeeklyGrid({
 
   const weekRange = useMemo(() => getWeekRange(weekStart), [weekStart]);
 
-  // Configuration du contexte utilisateur
+  // Watch events - seulement si user connecté
   useEffect(() => {
-    if (user) {
-      setUserContext(user);
+    if (!user) {
+      setEvents([]);
+      return;
     }
-  }, [user]);
-
-  // Watch events
-  useEffect(() => {
-    if (!user) return;
 
     const unsubscribe = watchEvents(weekRange, (newEvents) => {
       setEvents(newEvents);
@@ -222,9 +213,12 @@ export default function WeeklyGrid({
     return unsubscribe;
   }, [user, weekRange]);
 
-  // Watch tasks
+  // Watch tasks - seulement si user connecté
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setTasks([]);
+      return;
+    }
 
     const unsubscribe = watchTasks(weekRange, (newTasks) => {
       setTasks(newTasks);
@@ -234,60 +228,71 @@ export default function WeeklyGrid({
   }, [user, weekRange]);
 
   const createEvent = useCallback(
-    async (date, time) => {
-      if (!user) return;
+    async (date, timeString) => {
+      if (!user) {
+        console.warn("Utilisateur non connecté, création événement bloquée");
+        return;
+      }
 
-      const [h, m] = time.split(":").map(Number);
+      // Corriger le bug getHours : reconstruire un Date avec setHours
+      const [hours, minutes] = timeString.split(":").map(Number);
       const start = new Date(date);
-      start.setHours(h, m, 0, 0);
+      start.setHours(hours, minutes, 0, 0);
       const end = new Date(start);
       end.setHours(start.getHours() + 1);
 
       const newEvent = {
-        id: `temp_${Date.now()}`,
         title: "Nouvel événement",
         start,
         end,
         color: "#3b82f6",
         description: "",
-        owner_id: user.uid,
       };
 
       // Optimistic UI
-      setEvents((prev) => [...prev, newEvent]);
+      const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
+      setEvents((prev) => [...prev, tempEvent]);
 
       try {
-        await saveEvent(newEvent);
-        // L'événement sera mis à jour par watchEvents
+        const savedEvent = await saveEvent(newEvent);
+        // Remplacer l'événement temporaire par le vrai
+        setEvents((prev) =>
+          prev.map((e) => (e.id === tempEvent.id ? savedEvent : e))
+        );
       } catch (error) {
         console.error("Erreur lors de la création de l'événement:", error);
         // Rollback optimistic UI
-        setEvents((prev) => prev.filter((e) => e.id !== newEvent.id));
+        setEvents((prev) => prev.filter((e) => e.id !== tempEvent.id));
       }
     },
     [user]
   );
 
   const onCellClick = useCallback(
-    (date, time) => {
-      const [h, m] = time.split(":").map(Number);
-      const start = new Date(date);
-      start.setHours(h, m, 0, 0);
+    (date, timeString) => {
+      if (!user) {
+        console.warn("Utilisateur non connecté, clic cellule bloqué");
+        return;
+      }
 
       if (onSlotSelect) {
-        onSlotSelect(start);
+        onSlotSelect(date, timeString);
       } else {
-        createEvent(date, time);
+        createEvent(date, timeString);
       }
     },
-    [onSlotSelect, createEvent]
+    [onSlotSelect, createEvent, user]
   );
 
   const onAddEvent = useCallback(
-    (date, time) => {
-      createEvent(date, time);
+    (date, timeString) => {
+      if (!user) {
+        console.warn("Utilisateur non connecté, ajout événement bloqué");
+        return;
+      }
+      createEvent(date, timeString);
     },
-    [createEvent]
+    [createEvent, user]
   );
 
   const layout = useMemo(

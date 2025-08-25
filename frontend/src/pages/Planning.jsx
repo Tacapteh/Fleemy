@@ -1,16 +1,19 @@
 import { useState, useEffect, useReducer } from 'react';
 import WeeklyGrid from '../components/WeeklyGrid';
-import MonthCalendar from '../components/MonthCalendar';
+import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
 import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '../firebase';
 import { loadEvents, clearEventsCache } from '../utils/loadEvents';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
+  const [firebaseUser] = useAuthState(auth);
   const { team } = useTeam();
   const teamId = team?.id;
   const [view, setView] = useState('week');
@@ -284,10 +287,9 @@ export default function Planning() {
           weekStart={weekStart}
         />
       ) : (
-        <MonthCalendar
+        <MonthGrid
           year={currentDate.getFullYear()}
           month={currentDate.getMonth()}
-          events={monthEvents}
           onDateSelect={openDate}
           onEventClick={openEvent}
         />

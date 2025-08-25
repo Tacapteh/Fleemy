@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import '../styles/MonthCalendar.css';
-import { saveEvent, watchEvents, watchTasks, getMonthRange, setUserContext } from '../firebase';
+import { saveEvent, watchEvents, watchTasks, getMonthRange } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase';
 
@@ -34,16 +34,13 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
 
   const monthRange = useMemo(() => getMonthRange(year, month), [year, month]);
 
-  // Configuration du contexte utilisateur
+  // Watch events - seulement si user connecté
   useEffect(() => {
-    if (user) {
-      setUserContext(user);
+    if (!user) {
+      setEvents([]);
+      setEventsByDay({});
+      return;
     }
-  }, [user]);
-
-  // Watch events
-  useEffect(() => {
-    if (!user) return;
 
     const unsubscribe = watchEvents(monthRange, (newEvents) => {
       setEvents(newEvents);
@@ -66,9 +63,13 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
     return unsubscribe;
   }, [user, monthRange]);
 
-  // Watch tasks
+  // Watch tasks - seulement si user connecté
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setTasks([]);
+      setTasksByDay({});
+      return;
+    }
 
     const unsubscribe = watchTasks(monthRange, (newTasks) => {
       setTasks(newTasks);
@@ -92,15 +93,18 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
   }, [user, monthRange]);
 
   const createEvent = useCallback(async (date) => {
-    if (!user) return;
+    if (!user) {
+      console.warn('Utilisateur non connecté, création événement bloquée');
+      return;
+    }
 
+    // Créer de vrais Date objects avec setHours
     const start = new Date(date);
-    start.setHours(9, 0, 0, 0); // 09:00 par défaut
-    const end = new Date(start);
-    end.setHours(10, 0, 0, 0); // 10:00 par défaut
+    start.setHours(9, 0, 0, 0); // 09:00
+    const end = new Date(date);
+    end.setHours(10, 0, 0, 0); // 10:00
 
     const newEvent = {
-      id: `temp_${Date.now()}`,
       title: 'Nouvel événement',
       start,
       end,
@@ -109,26 +113,36 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
     };
 
     // Optimistic UI
+    const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
     const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
     setEventsByDay(prev => ({
       ...prev,
-      [dayKey]: [...(prev[dayKey] || []), newEvent]
+      [dayKey]: [...(prev[dayKey] || []), tempEvent]
     }));
 
     try {
-      await saveEvent(newEvent);
-      // L'événement sera mis à jour par watchEvents
+      const savedEvent = await saveEvent(newEvent);
+      // Remplacer l'événement temporaire par le vrai
+      setEventsByDay(prev => ({
+        ...prev,
+        [dayKey]: (prev[dayKey] || []).map(e => e.id === tempEvent.id ? savedEvent : e)
+      }));
     } catch (error) {
       console.error('Erreur lors de la création de l\'événement:', error);
       // Rollback optimistic UI
       setEventsByDay(prev => ({
         ...prev,
-        [dayKey]: (prev[dayKey] || []).filter(e => e.id !== newEvent.id)
+        [dayKey]: (prev[dayKey] || []).filter(e => e.id !== tempEvent.id)
       }));
     }
   }, [user]);
 
   const handleSelect = (value) => {
+    if (!user) {
+      console.warn('Utilisateur non connecté, sélection bloquée');
+      return;
+    }
+    
     if (value) {
       const selectedDate = new Date(year, month, value);
       if (onDateSelect) {
@@ -140,6 +154,11 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
   };
 
   const handleAddEvent = (value) => {
+    if (!user) {
+      console.warn('Utilisateur non connecté, ajout événement bloqué');
+      return;
+    }
+    
     const selectedDate = new Date(year, month, value);
     createEvent(selectedDate);
   };
