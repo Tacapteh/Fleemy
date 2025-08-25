@@ -1,6 +1,7 @@
 .week-shell {
   position: relative;
-  --row-h: 64px;
+  --weekly-grid-row-h: 64px;
+  --weekly-grid-slot-height: 64px;
 }
 
 /* Header des jours - en dehors de la grille */
