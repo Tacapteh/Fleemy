@@ -113,7 +113,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 
 export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, weekStart = new Date() }) {
   const hours = React.useMemo(
-    () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
+    () => Array.from({ length: 10 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
     [],
   );
 
