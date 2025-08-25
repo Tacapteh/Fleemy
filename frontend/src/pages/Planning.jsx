@@ -285,10 +285,9 @@ export default function Planning() {
           weekStart={weekStart}
         />
       ) : (
-        <MonthCalendar
+        <MonthGrid
           year={currentDate.getFullYear()}
           month={currentDate.getMonth()}
-          events={monthEvents}
           onDateSelect={openDate}
           onEventClick={openEvent}
         />
