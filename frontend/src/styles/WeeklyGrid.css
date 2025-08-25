@@ -94,13 +94,11 @@
 }
 
 
-.week-grid-body .grid-row:last-child .cell,
-.week-grid-body .interactive-layer .row:last-child .wg-cell {
+.week-grid-body .grid-row:last-child .cell {
   border-bottom: 1px solid #e5e7eb;
 }
 
-.week-grid-body .grid-layer .grid-row:first-child .cell,
-.week-grid-body .interactive-layer .row:first-child .wg-cell {
+.week-grid-body .grid-layer .grid-row:first-child .cell {
   border-top: none;
 }
 
