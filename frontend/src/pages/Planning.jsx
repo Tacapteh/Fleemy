@@ -1,13 +1,14 @@
 import { useState, useEffect, useReducer } from 'react';
 import WeeklyGrid from '../components/WeeklyGrid';
-import MonthCalendar from '../components/MonthCalendar';
+import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
 import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
-import { loadEvents, clearEventsCache } from '../utils/loadEvents';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '../firebase';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
