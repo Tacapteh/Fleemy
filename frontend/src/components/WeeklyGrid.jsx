@@ -181,8 +181,8 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
           className="week-grid-body"
           style={{ 
             height: containerHeight, 
-            "--slot-height": `${SLOT_HEIGHT}px`,
-            "--row-h": `${SLOT_HEIGHT}px`
+            "--weekly-grid-slot-height": `${SLOT_HEIGHT}px`,
+            "--weekly-grid-row-h": `${SLOT_HEIGHT}px`
           }}
         >
           <GridLayer hours={hours} days={days} />
