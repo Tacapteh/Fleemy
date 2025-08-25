@@ -250,6 +250,7 @@ export default function WeeklyGrid({
         end,
         color: "#3b82f6",
         description: "",
+        owner_id: user.uid,
       };
 
       // Optimistic UI
@@ -269,8 +270,12 @@ export default function WeeklyGrid({
 
   const onCellClick = useCallback(
     (date, time) => {
+      const [h, m] = time.split(":").map(Number);
+      const start = new Date(date);
+      start.setHours(h, m, 0, 0);
+
       if (onSlotSelect) {
-        onSlotSelect(date, time);
+        onSlotSelect(start);
       } else {
         createEvent(date, time);
       }
