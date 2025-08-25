@@ -102,13 +102,6 @@
   border-top: none;
 }
 
-.hour-label {
-  font-size: 0.75rem;
-  color: #6b7280;
-  border: none;
-  background: transparent;
-  display: block;
-}
 
 .week-grid-body .interactive-layer {
   position: absolute;
