@@ -94,14 +94,13 @@
 }
 
 .time-slot-cell {
-  border: none;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
   background: transparent;
   cursor: pointer;
   margin: 0;
   padding: 0;
   transition: background-color 0.1s ease;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: none;
   height: var(--weekly-grid-row-h);
   min-height: var(--weekly-grid-row-h);
   width: 100%;
