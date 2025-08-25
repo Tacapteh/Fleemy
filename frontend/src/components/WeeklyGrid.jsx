@@ -55,23 +55,10 @@ const InteractiveCell = React.memo(({ onClick }) => (
 ));
 
 
-const GridLayer = React.memo(({ hours, days, timeColRef }) => (
+const GridLayer = React.memo(({ hours, days }) => (
   <div className="grid-layer">
-    <div className="time-column" ref={timeColRef}>
-      {hours.map((time) => (
-        <div key={time} className="time-slot">
-          {time}
-        </div>
-      ))}
-    </div>
     <div className="days-grid">
-      {hours.map((time) => (
-        <div key={time} className="grid-row">
-          {days.map((d) => (
-            <GridCell key={d.name} />
-          ))}
-        </div>
-      ))}
+      {/* Les lignes horizontales sont créées via CSS repeating-linear-gradient */}
     </div>
   </div>
 ));
