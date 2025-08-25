@@ -169,7 +169,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
             <div
               key={time}
               className="time-label"
-              style={{ top: `calc(${index} * var(--row-h))` }}
+              style={{ top: `calc(${index} * var(--weekly-grid-row-h))` }}
             >
               {time}
             </div>
