@@ -9,6 +9,7 @@ import useTeam from '../hooks/useTeam';
 import useAuthUser from '../hooks/useAuthUser';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase';
+import { loadEvents, clearEventsCache } from '../utils/loadEvents';
 
 export default function Planning() {
   const { user, authReady } = useAuthUser();
