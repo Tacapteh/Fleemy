@@ -34,16 +34,13 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
 
   const monthRange = useMemo(() => getMonthRange(year, month), [year, month]);
 
-  // Configuration du contexte utilisateur
+  // Watch events - seulement si user connecté
   useEffect(() => {
-    if (user) {
-      setUserContext(user);
+    if (!user) {
+      setEvents([]);
+      setEventsByDay({});
+      return;
     }
-  }, [user]);
-
-  // Watch events
-  useEffect(() => {
-    if (!user) return;
 
     const unsubscribe = watchEvents(monthRange, (newEvents) => {
       setEvents(newEvents);
@@ -66,9 +63,13 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
     return unsubscribe;
   }, [user, monthRange]);
 
-  // Watch tasks
+  // Watch tasks - seulement si user connecté
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setTasks([]);
+      setTasksByDay({});
+      return;
+    }
 
     const unsubscribe = watchTasks(monthRange, (newTasks) => {
       setTasks(newTasks);
