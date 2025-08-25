@@ -166,7 +166,9 @@ export default function Planning() {
 
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-  const openSlot = (start, end) => {
+  const openSlot = (start) => {
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
     const dayIndex = (start.getDay() + 6) % 7;
     const format = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     setModal({

@@ -42,22 +42,8 @@ const logout = async () => {
   localStorage.removeItem("authToken");
 };
 
-// Context utilisateur/équipe
-let currentUser = null;
-let currentTeam = null;
-
-export const setUserContext = (user) => {
-  currentUser = user;
-  // Détecter si l'utilisateur fait partie d'une équipe
-  // currentTeam = user?.teamId || null;
-};
-
-export const pathFor = (collectionName) => {
-  if (currentTeam) {
-    return `teams/${currentTeam}/${collectionName}`;
-  }
-  return `users/${currentUser?.uid}/${collectionName}`;
-};
+// Contexte utilisateur (placeholder pour compatibilité)
+export const setUserContext = () => {};
 
 // Utilitaire pour normaliser les dates
 const normalizeDate = (date) => {
@@ -88,22 +74,24 @@ const toDate = (dateValue) => {
 // EVENTS
 export const saveEvent = async (eventData) => {
   try {
+    const uid = auth.currentUser.uid;
+    const eventsCol = collection(db, 'users', uid, 'events');
+    const id = eventData.id || doc(eventsCol).id;
+
     const normalizedEvent = {
       ...eventData,
-      id: eventData.id || doc(collection(db, pathFor('events'))).id,
+      id,
       start: normalizeDate(eventData.start),
       end: normalizeDate(eventData.end),
-      owner_id: auth.currentUser.uid,
-      team_id: currentTeam || null,
+      owner_id: uid,
       createdAt: eventData.createdAt || new Date().toISOString(),
       title: eventData.title || 'Événement sans titre',
       color: eventData.color || '#3b82f6',
       description: eventData.description || ''
     };
 
-    const eventRef = doc(db, pathFor('events'), normalizedEvent.id);
-    await setDoc(eventRef, normalizedEvent);
-    
+    await setDoc(doc(eventsCol, id), normalizedEvent);
+
     return normalizedEvent;
   } catch (error) {
     console.error('Erreur saveEvent:', error);
@@ -112,13 +100,14 @@ export const saveEvent = async (eventData) => {
 };
 
 export const watchEvents = (range, callback) => {
-  if (!currentUser) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
     console.warn('Aucun utilisateur connecté pour watchEvents');
     return () => {};
   }
 
   try {
-    const eventsRef = collection(db, pathFor('events'));
+    const eventsRef = collection(db, 'users', uid, 'events');
     const rangeStart = normalizeDate(range.from);
     const rangeEnd = normalizeDate(range.to);
     
@@ -163,7 +152,8 @@ export const watchEvents = (range, callback) => {
 
 export const deleteEvent = async (eventId) => {
   try {
-    const eventRef = doc(db, pathFor('events'), eventId);
+    const uid = auth.currentUser.uid;
+    const eventRef = doc(db, 'users', uid, 'events', eventId);
     await deleteDoc(eventRef);
   } catch (error) {
     console.error('Erreur deleteEvent:', error);
@@ -174,13 +164,16 @@ export const deleteEvent = async (eventId) => {
 // TASKS
 export const saveTask = async (taskData) => {
   try {
+    const uid = auth.currentUser.uid;
+    const tasksCol = collection(db, 'users', uid, 'tasks');
+    const id = taskData.id || doc(tasksCol).id;
+
     const normalizedTask = {
       ...taskData,
-      id: taskData.id || doc(collection(db, pathFor('tasks'))).id,
+      id,
       start: normalizeDate(taskData.start),
       end: normalizeDate(taskData.end),
-      owner_id: auth.currentUser.uid,
-      team_id: currentTeam || null,
+      owner_id: uid,
       createdAt: taskData.createdAt || new Date().toISOString(),
       title: taskData.title || 'Tâche sans titre',
       color: taskData.color || '#10b981',
@@ -189,9 +182,8 @@ export const saveTask = async (taskData) => {
       price: taskData.price || null
     };
 
-    const taskRef = doc(db, pathFor('tasks'), normalizedTask.id);
-    await setDoc(taskRef, normalizedTask);
-    
+    await setDoc(doc(tasksCol, id), normalizedTask);
+
     return normalizedTask;
   } catch (error) {
     console.error('Erreur saveTask:', error);
@@ -200,13 +192,14 @@ export const saveTask = async (taskData) => {
 };
 
 export const watchTasks = (range, callback) => {
-  if (!currentUser) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
     console.warn('Aucun utilisateur connecté pour watchTasks');
     return () => {};
   }
 
   try {
-    const tasksRef = collection(db, pathFor('tasks'));
+    const tasksRef = collection(db, 'users', uid, 'tasks');
     const rangeStart = normalizeDate(range.from);
     const rangeEnd = normalizeDate(range.to);
     
@@ -251,7 +244,8 @@ export const watchTasks = (range, callback) => {
 
 export const deleteTask = async (taskId) => {
   try {
-    const taskRef = doc(db, pathFor('tasks'), taskId);
+    const uid = auth.currentUser.uid;
+    const taskRef = doc(db, 'users', uid, 'tasks', taskId);
     await deleteDoc(taskRef);
   } catch (error) {
     console.error('Erreur deleteTask:', error);
