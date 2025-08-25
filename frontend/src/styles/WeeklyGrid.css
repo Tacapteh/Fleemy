@@ -51,9 +51,9 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(
-    10,
+    9,
     var(--weekly-grid-row-h)
-  ); /* 10 heures maintenant (09:00-18:00) */
+  ); /* 9 heures (09:00-18:00) */
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
@@ -70,9 +70,9 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(
-    10,
+    9,
     var(--weekly-grid-row-h)
-  ); /* 10 heures maintenant */
+  ); /* 9 heures */
   height: 100%;
 }
 
@@ -82,9 +82,9 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-template-rows: repeat(
-    10,
+    9,
     var(--weekly-grid-row-h)
-  ); /* 10 heures maintenant */
+  ); /* 9 heures */
   pointer-events: auto;
   position: relative;
   z-index: 1;
@@ -93,9 +93,9 @@
 .day-column {
   display: grid;
   grid-template-rows: repeat(
-    10,
+    9,
     var(--weekly-grid-row-h)
-  ); /* 10 heures maintenant */
+  ); /* 9 heures */
   grid-row: 1 / -1;
   border-right: 1px solid #e5e7eb;
   position: relative;

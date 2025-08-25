@@ -12,10 +12,10 @@ const DAY_NAMES = [
 ];
 
 const DAY_START = 9;
-const DAY_END = 19; // exclusive (pour inclure 18h00)
+const DAY_END = 18; // exclusive (fin à 18h00)
 const SLOT_HEIGHT = 64;
 
-function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
+function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
   const totalMinutes = (dayEndHour - dayStartHour) * 60;
   const days = Array.from({ length: 7 }, () => []);
@@ -113,9 +113,10 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 
 export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, weekStart = new Date() }) {
   const hours = React.useMemo(
-    () => Array.from({ length: 10 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
+    () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
     [],
   );
+  const timeLabels = React.useMemo(() => [...hours, "18:00"], [hours]);
 
   const days = React.useMemo(() => {
     const start = new Date(weekStart);
@@ -165,7 +166,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
       <div className="week-grid-container">
         {/* Gouttière des heures - séparée et stickée */}
         <div className="time-gutter">
-          {hours.map((time, index) => (
+          {timeLabels.map((time, index) => (
             <div
               key={time}
               className="time-label"
