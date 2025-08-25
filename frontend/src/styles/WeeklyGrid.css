@@ -65,7 +65,7 @@
 .days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(9, var(--row-h));
+  grid-template-rows: repeat(10, var(--row-h)); /* 10 heures maintenant */
   height: 100%;
 }
 
@@ -74,7 +74,7 @@
   grid-row: 1 / -1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(9, var(--row-h));
+  grid-template-rows: repeat(10, var(--row-h)); /* 10 heures maintenant */
   pointer-events: auto;
   position: relative;
   z-index: 1;
@@ -82,7 +82,7 @@
 
 .day-column {
   display: grid;
-  grid-template-rows: repeat(9, var(--row-h));
+  grid-template-rows: repeat(10, var(--row-h)); /* 10 heures maintenant */
   border-right: 1px solid #e5e7eb;
   position: relative;
 }
