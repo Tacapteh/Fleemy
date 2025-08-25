@@ -50,29 +50,6 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
 
 const GridCell = React.memo(() => <div className="cell" />);
 
-const GridRow = React.memo(({ time, first, days }) => (
-  <div className="grid-row">
-    <div ref={first} className="time-col hour-label">
-      {time}
-    </div>
-    {days.map((d) => (
-      <GridCell key={d.name} />
-    ))}
-  </div>
-));
-
-const InteractiveCell = React.memo(({ onClick }) => (
-  <button type="button" className="wg-cell" onClick={onClick} />
-));
-
-const InteractiveRow = React.memo(({ time, days, onCellClick }) => (
-  <div className="row">
-    <div className="time-col hour-placeholder" />
-    {days.map((d) => (
-      <InteractiveCell key={d.name} onClick={() => onCellClick(d.date, time)} />
-    ))}
-  </div>
-));
 
 const GridLayer = React.memo(({ hours, days, timeColRef }) => (
   <div className="grid-layer">
