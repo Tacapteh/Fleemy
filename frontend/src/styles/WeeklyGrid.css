@@ -91,20 +91,26 @@
   border-right: none;
 }
 
-.time-slot-button {
+.time-slot-cell {
   border: none;
   background: transparent;
   cursor: pointer;
   margin: 0;
   padding: 0;
   transition: background-color 0.1s ease;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: none;
 }
 
-.time-slot-button:hover {
+.time-slot-cell:first-child {
+  border-top: none;
+}
+
+.time-slot-cell:hover {
   background: rgba(59, 130, 246, 0.1);
 }
 
-.time-slot-button:focus {
+.time-slot-cell:focus {
   outline: none;
   background: rgba(59, 130, 246, 0.15);
 }
