@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import "../styles/WeeklyGrid.css";
+import { saveEvent, watchEvents, watchTasks, getWeekRange, setUserContext } from '../firebase';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '../firebase';
 
 const DAY_NAMES = [
   "Lundi",
@@ -48,30 +51,39 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 19) {
   return days;
 }
 
-
-
-
 const GridLayer = React.memo(({ hours, days }) => (
   <div className="grid-layer">
     <div className="days-grid">
-      {/* Les lignes horizontales sont créées via CSS repeating-linear-gradient */}
+      {/* Les lignes horizontales sont créées via CSS */}
     </div>
   </div>
 ));
 
 const InteractiveLayer = React.memo(function InteractiveLayer({
   layout,
+  tasks,
   hours,
   days,
   onCellClick,
   onEventClick,
+  onAddEvent,
 }) {
-  const [draggingId, setDraggingId] = React.useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+
   return (
     <div className="interactive-layer">
-      {/* Zones cliquables pour chaque jour et chaque heure avec lignes horizontales */}
+      {/* Zones cliquables pour chaque jour et chaque heure */}
       {days.map((day, dayIndex) => (
         <div key={dayIndex} className="day-column" style={{ gridColumn: dayIndex + 1, gridRow: '1 / -1' }}>
+          {/* Bouton + en haut de la colonne */}
+          <button
+            className="add-event-btn"
+            onClick={() => onAddEvent(day.date, "09:00")}
+            title="Ajouter un événement"
+          >
+            +
+          </button>
+
           {hours.map((time, hourIndex) => (
             <button
               key={time}
@@ -81,6 +93,35 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               onClick={() => onCellClick(day.date, time)}
             />
           ))}
+
+          {/* Affichage des tâches dans les cellules */}
+          {tasks.filter(task => {
+            const taskStart = new Date(task.start);
+            const dayStart = new Date(day.date);
+            dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayEnd.getDate() + 1);
+            return taskStart >= dayStart && taskStart < dayEnd;
+          }).map((task) => {
+            const taskStart = new Date(task.start);
+            const hourIndex = taskStart.getHours() - DAY_START;
+            
+            if (hourIndex < 0 || hourIndex >= hours.length) return null;
+
+            return (
+              <div
+                key={task.id}
+                className="task-indicator"
+                style={{ 
+                  gridRow: hourIndex + 1,
+                  backgroundColor: task.color || '#10b981'
+                }}
+                title={task.title}
+              >
+                <span className="task-icon">{task.icon || '📋'}</span>
+              </div>
+            );
+          })}
         </div>
       ))}
       
@@ -100,6 +141,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 width: `${100 / e.colCount}%`,
                 top: `${e.top}%`,
                 height: `${e.height}%`,
+                backgroundColor: e.color || '#3b82f6'
               }}
             >
               {e.description || e.title || "Événement"}
@@ -111,13 +153,17 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   );
 });
 
-export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, weekStart = new Date() }) {
-  const hours = React.useMemo(
+export default function WeeklyGrid({ onSlotSelect, onEventClick, weekStart = new Date() }) {
+  const [user] = useAuthState(auth);
+  const [events, setEvents] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  
+  const hours = useMemo(
     () => Array.from({ length: 10 }, (_, i) => `${String(9 + i).padStart(2, "0")}:00`),
     [],
   );
 
-  const days = React.useMemo(() => {
+  const days = useMemo(() => {
     const start = new Date(weekStart);
     return DAY_NAMES.map((name, i) => {
       const d = new Date(start);
@@ -126,27 +172,94 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
     });
   }, [weekStart]);
 
-  const onCellClick = React.useCallback(
+  const weekRange = useMemo(() => getWeekRange(weekStart), [weekStart]);
+
+  // Configuration du contexte utilisateur
+  useEffect(() => {
+    if (user) {
+      setUserContext(user);
+    }
+  }, [user]);
+
+  // Watch events
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = watchEvents(weekRange, (newEvents) => {
+      setEvents(newEvents);
+    });
+
+    return unsubscribe;
+  }, [user, weekRange]);
+
+  // Watch tasks
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubscribe = watchTasks(weekRange, (newTasks) => {
+      setTasks(newTasks);
+    });
+
+    return unsubscribe;
+  }, [user, weekRange]);
+
+  const createEvent = useCallback(async (date, time) => {
+    if (!user) return;
+
+    const [h, m] = time.split(":").map(Number);
+    const start = new Date(date);
+    start.setHours(h, m, 0, 0);
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
+
+    const newEvent = {
+      id: `temp_${Date.now()}`,
+      title: 'Nouvel événement',
+      start,
+      end,
+      color: '#3b82f6',
+      description: ''
+    };
+
+    // Optimistic UI
+    setEvents(prev => [...prev, newEvent]);
+
+    try {
+      await saveEvent(newEvent);
+      // L'événement sera mis à jour par watchEvents
+    } catch (error) {
+      console.error('Erreur lors de la création de l\'événement:', error);
+      // Rollback optimistic UI
+      setEvents(prev => prev.filter(e => e.id !== newEvent.id));
+    }
+  }, [user]);
+
+  const onCellClick = useCallback(
     (date, time) => {
-      if (!onSlotSelect) return;
-      const [h, m] = time.split(":").map(Number);
-      const start = new Date(date);
-      start.setHours(h, m, 0, 0);
-      const end = new Date(start);
-      end.setHours(start.getHours() + 1);
-      onSlotSelect(start, end);
+      if (onSlotSelect) {
+        onSlotSelect(date, time);
+      } else {
+        createEvent(date, time);
+      }
     },
-    [onSlotSelect],
+    [onSlotSelect, createEvent],
   );
 
-  const layout = React.useMemo(
+  const onAddEvent = useCallback(
+    (date, time) => {
+      createEvent(date, time);
+    },
+    [createEvent],
+  );
+
+  const layout = useMemo(
     () => placeEventsByDay(events, DAY_START, DAY_END),
     [events],
   );
 
-  const wrapperRef = React.useRef(null);
+  const wrapperRef = useRef(null);
 
-  const containerHeight = React.useMemo(
+  const containerHeight = useMemo(
     () => hours.length * SLOT_HEIGHT,
     [hours],
   );
@@ -188,10 +301,12 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
           <GridLayer hours={hours} days={days} />
           <InteractiveLayer
             layout={layout}
+            tasks={tasks}
             hours={hours}
             days={days}
             onCellClick={onCellClick}
             onEventClick={onEventClick}
+            onAddEvent={onAddEvent}
           />
         </div>
       </div>
