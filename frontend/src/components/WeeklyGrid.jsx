@@ -215,7 +215,7 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
   return (
     <div ref={wrapperRef} className="week-shell">
       <div className="week-day-header">
-        <div className="time-col" />
+        <div className="time-header-placeholder"></div>
         {days.map((d) => (
           <div key={d.name} className="day-col">
             {d.name} {d.date.getDate()}
