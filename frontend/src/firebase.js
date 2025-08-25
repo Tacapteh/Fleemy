@@ -1,6 +1,18 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signOut } from "firebase/auth";
-import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, query, where, orderBy, Timestamp } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { getAuth, GoogleAuthProvider, signOut, onAuthStateChanged } from "firebase/auth";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBNNGQf0tz3mtnDL-E0dEYSi9ce34lZkDw",
@@ -15,6 +27,15 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
 const db = getFirestore(app);
+
+export function useFirebaseUser() {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, setUser);
+    return () => unsub();
+  }, []);
+  return user;
+}
 
 const logout = async () => {
   await signOut(auth);
@@ -72,7 +93,7 @@ export const saveEvent = async (eventData) => {
       id: eventData.id || doc(collection(db, pathFor('events'))).id,
       start: normalizeDate(eventData.start),
       end: normalizeDate(eventData.end),
-      owner_id: currentUser?.uid,
+      owner_id: auth.currentUser.uid,
       team_id: currentTeam || null,
       createdAt: eventData.createdAt || new Date().toISOString(),
       title: eventData.title || 'Événement sans titre',
@@ -158,7 +179,7 @@ export const saveTask = async (taskData) => {
       id: taskData.id || doc(collection(db, pathFor('tasks'))).id,
       start: normalizeDate(taskData.start),
       end: normalizeDate(taskData.end),
-      owner_id: currentUser?.uid,
+      owner_id: auth.currentUser.uid,
       team_id: currentTeam || null,
       createdAt: taskData.createdAt || new Date().toISOString(),
       title: taskData.title || 'Tâche sans titre',

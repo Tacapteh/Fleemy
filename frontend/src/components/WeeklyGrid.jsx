@@ -12,9 +12,8 @@ import {
   watchTasks,
   getWeekRange,
   setUserContext,
+  useFirebaseUser,
 } from "../firebase";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../firebase";
 
 const DAY_NAMES = [
   "Lundi",
@@ -180,7 +179,7 @@ export default function WeeklyGrid({
   onEventClick,
   weekStart = new Date(),
 }) {
-  const [user] = useAuthState(auth);
+  const user = useFirebaseUser();
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
 
@@ -294,6 +293,10 @@ export default function WeeklyGrid({
   const wrapperRef = useRef(null);
 
   const containerHeight = useMemo(() => hours.length * SLOT_HEIGHT, [hours]);
+
+  if (!user) {
+    return <div>Chargement...</div>;
+  }
 
   return (
     <div ref={wrapperRef} className="week-shell">

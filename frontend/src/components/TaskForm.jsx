@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { saveTask } from '../firebase';
+import { saveTask, useFirebaseUser } from '../firebase';
 
 const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
   const [task, setTask] = useState({
@@ -14,6 +14,7 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const user = useFirebaseUser();
 
   const formatDateTimeLocal = (date) => {
     const d = new Date(date);
@@ -51,7 +52,8 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
         id: initialTask?.id || undefined,
         start: startDate,
         end: endDate,
-        price: task.price ? parseFloat(task.price) : null
+        price: task.price ? parseFloat(task.price) : null,
+        owner_id: user.uid
       };
 
       const savedTask = await saveTask(taskData);
