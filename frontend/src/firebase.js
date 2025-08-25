@@ -300,7 +300,3 @@ export const getMonthRange = (year, month) => {
 export { auth, googleProvider, db, logout };
 
 window.auth = auth;
-
-export { auth, googleProvider, db, logout };
-
-window.auth = auth;
