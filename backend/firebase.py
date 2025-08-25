@@ -149,4 +149,4 @@ def initialize_firestore():
         return InMemoryFirestore()
 
 
-db = initialize_firestore()
+db = InMemoryFirestore()
