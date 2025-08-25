@@ -12,7 +12,7 @@ const DAY_NAMES = [
 ];
 
 const DAY_START = 9;
-const DAY_END = 18; // exclusive
+const DAY_END = 19; // exclusive (pour inclure 18h00)
 const SLOT_HEIGHT = 64;
 
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
