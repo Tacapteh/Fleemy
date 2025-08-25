@@ -101,8 +101,8 @@
   transition: background-color 0.1s ease;
   border-top: 1px solid #e5e7eb;
   border-bottom: none;
-  height: var(--row-h);
-  min-height: var(--row-h);
+  height: var(--weekly-grid-row-h);
+  min-height: var(--weekly-grid-row-h);
   width: 100%;
 }
 
