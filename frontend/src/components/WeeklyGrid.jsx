@@ -169,25 +169,6 @@ export default function WeeklyGrid({ events = [], onSlotSelect, onEventClick, we
   const wrapperRef = React.useRef(null);
   const timeColRef = React.useRef(null);
 
-  React.useLayoutEffect(() => {
-    const updateWidth = () => {
-      const width = timeColRef.current?.offsetWidth || 0;
-      if (wrapperRef.current) {
-        wrapperRef.current.style.setProperty("--time-col-width", `${width}px`);
-      }
-    };
-    updateWidth();
-    const handleResize = () => {
-      clearTimeout(handleResize.t);
-      handleResize.t = setTimeout(updateWidth, 50);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      clearTimeout(handleResize.t);
-    };
-  }, []);
-
   const containerHeight = React.useMemo(
     () => hours.length * SLOT_HEIGHT,
     [hours],
