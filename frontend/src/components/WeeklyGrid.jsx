@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import "../styles/WeeklyGrid.css";
-import { saveEvent, watchEvents, watchTasks, getWeekRange, setUserContext } from '../firebase';
+import { saveEvent, watchEvents, watchTasks, getWeekRange } from '../firebase';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from '../firebase';
 
