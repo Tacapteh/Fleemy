@@ -6,9 +6,13 @@ import React, {
   useRef,
 } from "react";
 import "../styles/WeeklyGrid.css";
-import { saveEvent, watchEvents, watchTasks, getWeekRange } from "../firebase";
-import { useAuthState } from "react-firebase-hooks/auth";
-import { auth } from "../firebase";
+import {
+  saveEvent,
+  watchEvents,
+  watchTasks,
+  getWeekRange,
+  useFirebaseUser,
+} from "../firebase";
 
 const DAY_NAMES = [
   "Lundi",

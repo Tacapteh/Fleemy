@@ -1,5 +1,11 @@
+import { useEffect, useState } from "react";
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signOut } from "firebase/auth";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+} from "firebase/auth";
 import {
   getFirestore,
   collection,

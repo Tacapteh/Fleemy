@@ -6,14 +6,11 @@ import WeekNavigationHeader from '../components/WeekNavigationHeader';
 import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
-import useAuthUser from '../hooks/useAuthUser';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '../firebase';
+import { useFirebaseUser } from '../firebase';
 import { loadEvents, clearEventsCache } from '../utils/loadEvents';
 
 export default function Planning() {
-  const { user, authReady } = useAuthUser();
-  const [firebaseUser] = useAuthState(auth);
+  const user = useFirebaseUser();
   const { team } = useTeam();
   const teamId = team?.id;
   const [view, setView] = useState('week');
@@ -70,7 +67,7 @@ export default function Planning() {
   };
 
   useEffect(() => {
-    if (!authReady || !user) return;
+    if (!user) return;
 
     const controller = new AbortController();
     dispatch({ type: 'loading' });
@@ -117,7 +114,7 @@ export default function Planning() {
       controller.abort();
       clearTimeout(timeoutId);
     };
-  }, [authReady, user, teamId, currentDate]);
+  }, [user, teamId, currentDate]);
 
   const startOfWeek = (d) => {
     const date = new Date(d);
@@ -252,6 +249,9 @@ export default function Planning() {
     }
   };
 
+  if (!user) {
+    return <div>Chargement...</div>;
+  }
 
   return (
     <>
