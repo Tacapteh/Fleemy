@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer } from 'react';
+import { useState, useEffect, useMemo, useReducer } from 'react';
 import WeeklyGrid from '../components/WeeklyGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
@@ -6,8 +6,14 @@ import WeekNavigationHeader from '../components/WeekNavigationHeader';
 import EventModal from '../components/EventModal';
 
 import useTeam from '../hooks/useTeam';
-import { useFirebaseUser } from '../firebase';
-import { loadEvents, clearEventsCache } from '../utils/loadEvents';
+import {
+  useFirebaseUser,
+  watchEvents,
+  watchTasks,
+  saveEvent,
+  deleteEvent,
+  setTeamContext,
+} from '../firebase';
 
 export default function Planning() {
   const user = useFirebaseUser();
@@ -16,7 +22,7 @@ export default function Planning() {
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const initialState = { loading: true, error: null, events: [] };
+  const initialState = { loading: false, error: null, events: [] };
   function reducer(state, action) {
     switch (action.type) {
       case 'loading':
@@ -41,6 +47,7 @@ export default function Planning() {
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const [showSkeleton, setShowSkeleton] = useState(true);
+  const [tasks, setTasks] = useState([]);
   useEffect(() => {
     const t = setTimeout(() => setShowSkeleton(false), 300);
     return () => clearTimeout(t);
@@ -48,73 +55,7 @@ export default function Planning() {
 
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null });
 
-  const DAY_INDEX = {
-    monday: 0,
-    tuesday: 1,
-    wednesday: 2,
-    thursday: 3,
-    friday: 4,
-    saturday: 5,
-    sunday: 6,
-  };
 
-  const getWeekNumber = (d) => {
-    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const dayNum = date.getUTCDay() || 7;
-    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-    return Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
-  };
-
-  useEffect(() => {
-    if (!user) return;
-
-    const controller = new AbortController();
-    dispatch({ type: 'loading' });
-
-    const weekStart = startOfWeek(currentDate);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    const format = (d) => d.toISOString().slice(0, 10);
-    const from = format(weekStart);
-    const to = format(weekEnd);
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    (async () => {
-      try {
-        const list = await loadEvents(from, to, teamId, controller.signal);
-        const data = list.map((evt) => {
-          const dayIdx = DAY_INDEX[evt.day?.toLowerCase()] ?? 0;
-          const startDate = new Date(weekStart);
-          startDate.setDate(weekStart.getDate() + dayIdx);
-          const [sh, sm] = (evt.start_time || '').split(':').map(Number);
-          startDate.setHours(sh || 0, sm || 0, 0, 0);
-          const endDate = new Date(weekStart);
-          endDate.setDate(weekStart.getDate() + dayIdx);
-          const [eh, em] = (evt.end_time || '').split(':').map(Number);
-          endDate.setHours(eh || 0, em || 0, 0, 0);
-          return { ...evt, start: startDate, end: endDate };
-        });
-        if (!controller.signal.aborted) {
-          dispatch({ type: 'events', events: data });
-        }
-      } catch (e) {
-        if (!controller.signal.aborted) {
-          dispatch({ type: 'error', error: e.message || 'Erreur de chargement' });
-        }
-      } finally {
-        clearTimeout(timeoutId);
-        if (!controller.signal.aborted) {
-          dispatch({ type: 'done' });
-        }
-      }
-    })();
-
-    return () => {
-      controller.abort();
-      clearTimeout(timeoutId);
-    };
-  }, [user, teamId, currentDate]);
 
   const startOfWeek = (d) => {
     const date = new Date(d);
@@ -160,7 +101,44 @@ export default function Planning() {
   const currentLabel =
     view === 'week' ? weekLabel(currentDate) : monthLabel(currentDate);
 
-  const weekStart = startOfWeek(currentDate);
+  const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
+  const weekRange = useMemo(() => {
+    const from = new Date(weekStart);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(from);
+    to.setDate(from.getDate() + 6);
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
+  }, [weekStart]);
+
+  useEffect(() => {
+    if (!user) {
+      setTeamContext(null);
+      dispatch({ type: 'events', events: [] });
+      setTasks([]);
+      return () => {};
+    }
+
+    setTeamContext(teamId || null);
+    let { from, to } = weekRange || {};
+    if (!from || !to) return () => {};
+
+    if (typeof from === 'string') from = new Date(from);
+    if (typeof to === 'string') to = new Date(to);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) return () => {};
+
+    const unsubEvents = watchEvents({ from, to }, (evts) => {
+      dispatch({ type: 'events', events: evts });
+    });
+    const unsubTasks = watchTasks({ from, to }, (tsks) => {
+      setTasks(tsks);
+    });
+
+    return () => {
+      unsubEvents && unsubEvents();
+      unsubTasks && unsubTasks();
+    };
+  }, [user?.uid, teamId, weekRange]);
   const weekEvents = state.events;
   const monthEvents = state.events;
 
@@ -190,8 +168,8 @@ export default function Planning() {
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null });
 
   const handleSaveEvent = async (data) => {
+    if (!user) return;
     try {
-      const token = await user.getIdToken();
       const dayIndex = data.day;
       const startDate = new Date(weekStart);
       startDate.setDate(weekStart.getDate() + dayIndex);
@@ -201,51 +179,41 @@ export default function Planning() {
       endDate.setDate(weekStart.getDate() + dayIndex);
       const [eh, em] = data.end.split(':').map(Number);
       endDate.setHours(eh, em, 0, 0);
+
+      const { from, to } = weekRange;
+      if (startDate < from || endDate > to) {
+        console.warn('Event en dehors de la plage, création annulée');
+        return;
+      }
+
       const payload = {
+        id: data.id,
         description: data.description,
         client_id: data.client_id || '',
         client_name: data.client_name || '',
         day: DAY_KEYS[dayIndex] || 'monday',
-        start_time: data.start,
-        end_time: data.end,
+        start: startDate,
+        end: endDate,
         status: data.type || 'pending',
+        owner_id: user.uid,
+        team_id: teamId || null,
       };
-      const res = await fetch('/api/planning/events', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ ...payload, year: currentDate.getFullYear(), week: getWeekNumber(currentDate) }),
-      });
-      const result = await res.json();
-      if (result.event) {
-        dispatch({
-          type: 'add',
-          event: { ...result.event, start: startDate, end: endDate },
-        });
-      }
+      await saveEvent(payload);
     } catch (e) {
       console.error('save event', e);
     } finally {
       closeModal();
-      clearEventsCache();
     }
   };
 
   const handleDeleteEvent = async (id) => {
+    if (!user) return;
     try {
-      const token = await user.getIdToken();
-      await fetch(`/api/planning/events/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      dispatch({ type: 'remove', id });
+      await deleteEvent(id);
     } catch (e) {
       console.error('delete event', e);
     } finally {
       closeModal();
-      clearEventsCache();
     }
   };
 
@@ -282,6 +250,7 @@ export default function Planning() {
       ) : view === 'week' ? (
         <WeeklyGrid
           events={weekEvents}
+          tasks={tasks}
           onSlotSelect={openSlot}
           onEventClick={openEvent}
           weekStart={weekStart}
