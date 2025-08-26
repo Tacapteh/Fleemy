@@ -18,6 +18,7 @@ import {
   where,
   orderBy,
   Timestamp,
+  getDocs,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -37,7 +38,12 @@ const db = getFirestore(app);
 export function useFirebaseUser() {
   const [user, setUser] = useState(null);
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, setUser);
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      setUser(u);
+      if (u) {
+        await migrateOwnerId(u.uid);
+      }
+    });
     return () => unsub();
   }, []);
   return user;
@@ -54,6 +60,27 @@ let currentTeamId = null;
 // Garder les désabonnements pour éviter les doublons
 let unsubEvents = null;
 let unsubTasks = null;
+
+let ownerIdMigrationDone = false;
+const migrateOwnerId = async (uid) => {
+  if (ownerIdMigrationDone) return;
+  ownerIdMigrationDone = true;
+  try {
+    for (const coll of ["events", "tasks"]) {
+      const colRef = collection(db, "users", uid, coll);
+      const snap = await getDocs(colRef);
+      const ops = [];
+      snap.forEach((docSnap) => {
+        if (!docSnap.data().owner_id) {
+          ops.push(setDoc(docSnap.ref, { owner_id: uid }, { merge: true }));
+        }
+      });
+      await Promise.all(ops);
+    }
+  } catch (err) {
+    console.error("ownerId migration", err);
+  }
+};
 
 export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
@@ -142,6 +169,7 @@ export const watchEvents = (range, callback) => {
   }
 
   const eventsPath = pathFor("events");
+  console.log("watchEvents", eventsPath, auth.currentUser.uid);
 
   const fromDate = normalizeDate(range.from);
   const toDateVal = normalizeDate(range.to);
@@ -258,6 +286,7 @@ export const watchTasks = (range, callback) => {
   }
 
   const tasksPath = pathFor("tasks");
+  console.log("watchTasks", tasksPath, auth.currentUser.uid);
 
   const fromDate = normalizeDate(range.from);
   const toDateVal = normalizeDate(range.to);
