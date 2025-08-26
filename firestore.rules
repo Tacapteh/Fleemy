@@ -1,11 +1,11 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid}/{sub=**}/{doc} {
+    match /users/{uid}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
-    match /teams/{teamId}/{sub=**}/{doc} {
+    match /teams/{teamId}/{document=**} {
       allow read: if request.auth != null;
       allow write: if (request.resource.data.owner_id == request.auth.uid) ||
                    (resource.data.owner_id == request.auth.uid);
