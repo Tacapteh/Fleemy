@@ -1,57 +1,52 @@
 import { useEffect, useState } from 'react';
 import { auth, db } from '../firebase';
-import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
-export default function useTeam() {
-  const [team, setTeam] = useState(null);
+export default function useTeam(teamId) {
+  const [state, setState] = useState({ data: null, error: null });
   const [loading, setLoading] = useState(true);
+  const resolvedTeamId = teamId ?? localStorage.getItem('teamId');
 
   useEffect(() => {
-    let unsubscribeAuth;
-    const loadTeam = async (user) => {
-      if (!user) {
-        setTeam(null);
+    const loadTeam = async () => {
+      if (!auth.currentUser || !resolvedTeamId) {
+        setState({ data: null, error: null });
         setLoading(false);
         return;
       }
       try {
-        const q = query(collection(db, 'teams'), where('members', 'array-contains', user.uid));
-        const snap = await getDocs(q);
-        if (snap.empty) {
-          setTeam(null);
+        const teamPath = `teams/${resolvedTeamId}`;
+        console.log(`Reading path: ${teamPath}`);
+        const teamSnap = await getDoc(doc(db, teamPath));
+        if (!teamSnap.exists()) {
+          setState({ data: null, error: null });
           setLoading(false);
           return;
         }
-        const teamDoc = snap.docs[0];
-        const data = teamDoc.data();
-        const members = await Promise.all(
-          data.members.map(async (uid) => {
-            if (uid === user.uid && user.displayName) {
-              return { uid, name: user.displayName };
-            }
-            try {
-              const userSnap = await getDoc(doc(db, 'users', uid));
-              const userData = userSnap.data();
-              return { uid, name: userData?.name || uid };
-            } catch (e) {
-              return { uid };
-            }
-          })
-        );
-        setTeam({ id: teamDoc.id, name: data.name, ownerId: data.ownerId, members });
+        const data = teamSnap.data();
+        const members = (data.members || []).map((uid) => {
+          if (uid === auth.currentUser.uid && auth.currentUser.displayName) {
+            return { uid, name: auth.currentUser.displayName };
+          }
+          return { uid };
+        });
+        setState({
+          data: { id: resolvedTeamId, name: data.name, ownerId: data.ownerId, members },
+          error: null,
+        });
       } catch (e) {
-        console.error('useTeam error', e);
-        setTeam(null);
+        if (e.message?.includes('Missing or insufficient permissions')) {
+          setState({ error: 'no-access', data: null });
+        } else {
+          console.error('useTeam error', e);
+          setState({ data: null, error: e.message || 'unknown' });
+        }
       }
       setLoading(false);
     };
 
-    unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      loadTeam(user);
-    });
-    return () => unsubscribeAuth && unsubscribeAuth();
-  }, []);
+    loadTeam();
+  }, [resolvedTeamId]);
 
-  return { team, loading };
+  return { team: state.data, error: state.error, loading };
 }
