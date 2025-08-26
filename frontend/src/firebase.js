@@ -29,7 +29,8 @@ const firebaseConfig = {
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-console.log('FB projectId', getApp().options.projectId);
+const projectId = app.options.projectId;
+console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
@@ -67,7 +68,9 @@ export const pathFor = (collectionName) => {
   const path = currentTeamId
     ? `teams/${currentTeamId}/${collectionName}`
     : `users/${uid}/${collectionName}`;
-  console.log("pathFor:", path);
+  console.log(
+    `pathFor(${collectionName}) projectId=${projectId} uid=${uid} path=${path}`
+  );
   return path;
 };
 
@@ -118,13 +121,17 @@ export const saveEvent = async (eventData = {}) => {
 
 export const watchEvents = (range, callback) => {
   const currentUid = auth.currentUser?.uid;
+  if (!currentUid || !range?.from || !range?.to) {
+    if (unsubEvents) {
+      unsubEvents();
+      unsubEvents = null;
+    }
+    console.log("watchEvents skip: bad range/user");
+    return () => {};
+  }
   if (unsubEvents) {
     unsubEvents();
     unsubEvents = null;
-  }
-  if (!currentUid || !range?.from || !range?.to) {
-    console.log("watchEvents skip: bad range/user");
-    return () => {};
   }
 
   const eventsPath = pathFor("events");
@@ -217,11 +224,12 @@ export const saveTask = async (taskData = {}) => {
   baseData.owner_id = currentUid;
   if (currentTeamId) baseData.team_id = currentTeamId;
 
+  const data = baseData;
   const path = pathFor("tasks");
 
   try {
-    const ref = await addDoc(collection(db, path), baseData);
-    return { id: ref.id, ...baseData };
+    const ref = await addDoc(collection(db, path), data);
+    return { id: ref.id, ...data };
   } catch (error) {
     console.error("saveTask", path, error);
     return;
@@ -230,13 +238,17 @@ export const saveTask = async (taskData = {}) => {
 
 export const watchTasks = (range, callback) => {
   const currentUid = auth.currentUser?.uid;
+  if (!currentUid || !range?.from || !range?.to) {
+    if (unsubTasks) {
+      unsubTasks();
+      unsubTasks = null;
+    }
+    console.log("watchTasks skip: bad range/user");
+    return () => {};
+  }
   if (unsubTasks) {
     unsubTasks();
     unsubTasks = null;
-  }
-  if (!currentUid || !range?.from || !range?.to) {
-    console.log("watchTasks skip: bad range/user");
-    return () => {};
   }
 
   const tasksPath = pathFor("tasks");
