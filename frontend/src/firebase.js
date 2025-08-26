@@ -51,6 +51,10 @@ const logout = async () => {
 // Context utilisateur/équipe
 let currentTeamId = null;
 
+// Garder les désabonnements pour éviter les doublons
+let unsubEvents = null;
+let unsubTasks = null;
+
 export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
 };
@@ -81,17 +85,6 @@ const normalizeDate = (date) => {
     return new Date(date).toISOString();
   }
   return date;
-};
-
-const toDate = (dateValue) => {
-  if (!dateValue) return null;
-  if (dateValue instanceof Timestamp) {
-    return dateValue.toDate();
-  }
-  if (dateValue instanceof Date) {
-    return dateValue;
-  }
-  return new Date(dateValue);
 };
 
 // EVENTS
@@ -135,58 +128,59 @@ export const saveEvent = async (eventData) => {
 };
 
 export const watchEvents = (range, callback) => {
-  if (!auth.currentUser) {
-    console.warn("Pas d'utilisateur connecté, watchEvents ignoré");
+  if (!auth.currentUser || !range?.from || !range?.to) {
     return () => {};
   }
 
+  const eventsPath = pathFor("events");
+
+  const fromDate =
+    typeof range.from === "string" ? new Date(range.from) : range.from;
+  const toDateVal = typeof range.to === "string" ? new Date(range.to) : range.to;
+
+  if (isNaN(fromDate.getTime()) || isNaN(toDateVal.getTime())) {
+    return () => {};
+  }
+
+  const fromTimestamp = Timestamp.fromDate(fromDate);
+  const toTimestamp = Timestamp.fromDate(toDateVal);
+
+  const eventsRef = collection(db, eventsPath);
+
+  const q = query(
+    eventsRef,
+    where("owner_id", "==", auth.currentUser.uid),
+    where("start", "<=", toTimestamp),
+    where("end", ">=", fromTimestamp),
+    orderBy("start", "asc")
+  );
+
+  if (unsubEvents) unsubEvents();
+
   try {
-    const eventsPath = pathFor("events");
-    console.log("watchEvents sur:", eventsPath);
-
-    const eventsRef = collection(db, eventsPath);
-    const rangeStart = normalizeDate(range.from);
-    const rangeEnd = normalizeDate(range.to);
-
-    const q = query(
-      eventsRef,
-      where("start", "<=", rangeEnd),
-      where("end", ">=", rangeStart),
-      orderBy("start")
-    );
-
-    const seenIds = new Set();
-
-    return onSnapshot(
+    unsubEvents = onSnapshot(
       q,
       (snapshot) => {
         const events = [];
 
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const eventId = doc.id;
-
-          if (!seenIds.has(eventId)) {
-            seenIds.add(eventId);
-
-            events.push({
-              ...data,
-              id: eventId,
-              start: toDate(data.start),
-              end: toDate(data.end),
-            });
-          }
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const start =
+            data.start instanceof Timestamp ? data.start.toDate() : data.start;
+          const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
+          events.push({ ...data, id: docSnap.id, start, end });
         });
 
         callback(events);
       },
-      (error) => {
-        console.error("Erreur watchEvents:", error);
+      (err) => {
+        console.error("watchEvents", eventsPath, err.message);
         callback([]);
       }
     );
-  } catch (error) {
-    console.error("Erreur config watchEvents:", error);
+    return unsubEvents;
+  } catch (err) {
+    console.error("watchEvents", eventsPath, err.message);
     return () => {};
   }
 };
@@ -249,58 +243,59 @@ export const saveTask = async (taskData) => {
 };
 
 export const watchTasks = (range, callback) => {
-  if (!auth.currentUser) {
-    console.warn("Pas d'utilisateur connecté, watchTasks ignoré");
+  if (!auth.currentUser || !range?.from || !range?.to) {
     return () => {};
   }
 
+  const tasksPath = pathFor("tasks");
+
+  const fromDate =
+    typeof range.from === "string" ? new Date(range.from) : range.from;
+  const toDateVal = typeof range.to === "string" ? new Date(range.to) : range.to;
+
+  if (isNaN(fromDate.getTime()) || isNaN(toDateVal.getTime())) {
+    return () => {};
+  }
+
+  const fromTimestamp = Timestamp.fromDate(fromDate);
+  const toTimestamp = Timestamp.fromDate(toDateVal);
+
+  const tasksRef = collection(db, tasksPath);
+
+  const q = query(
+    tasksRef,
+    where("owner_id", "==", auth.currentUser.uid),
+    where("start", "<=", toTimestamp),
+    where("end", ">=", fromTimestamp),
+    orderBy("start", "asc")
+  );
+
+  if (unsubTasks) unsubTasks();
+
   try {
-    const tasksPath = pathFor("tasks");
-    console.log("watchTasks sur:", tasksPath);
-
-    const tasksRef = collection(db, tasksPath);
-    const rangeStart = normalizeDate(range.from);
-    const rangeEnd = normalizeDate(range.to);
-
-    const q = query(
-      tasksRef,
-      where("start", "<=", rangeEnd),
-      where("end", ">=", rangeStart),
-      orderBy("start")
-    );
-
-    const seenIds = new Set();
-
-    return onSnapshot(
+    unsubTasks = onSnapshot(
       q,
       (snapshot) => {
         const tasks = [];
 
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          const taskId = doc.id;
-
-          if (!seenIds.has(taskId)) {
-            seenIds.add(taskId);
-
-            tasks.push({
-              ...data,
-              id: taskId,
-              start: toDate(data.start),
-              end: toDate(data.end),
-            });
-          }
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const start =
+            data.start instanceof Timestamp ? data.start.toDate() : data.start;
+          const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
+          tasks.push({ ...data, id: docSnap.id, start, end });
         });
 
         callback(tasks);
       },
-      (error) => {
-        console.error("Erreur watchTasks:", error);
+      (err) => {
+        console.error("watchTasks", tasksPath, err.message);
         callback([]);
       }
     );
-  } catch (error) {
-    console.error("Erreur config watchTasks:", error);
+    return unsubTasks;
+  } catch (err) {
+    console.error("watchTasks", tasksPath, err.message);
     return () => {};
   }
 };
