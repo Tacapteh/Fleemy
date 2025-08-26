@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApp, getApps } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -10,7 +10,6 @@ import {
   getFirestore,
   collection,
   doc,
-  setDoc,
   addDoc,
   deleteDoc,
   onSnapshot,
@@ -18,7 +17,6 @@ import {
   where,
   orderBy,
   Timestamp,
-  getDocs,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -30,19 +28,17 @@ const firebaseConfig = {
   appId: "1:273204841300:web:15f50e65c64dd87cb556c1",
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+console.log('FB projectId', getApp().options.projectId);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const db = getFirestore(app);
 
 export function useFirebaseUser() {
   const [user, setUser] = useState(null);
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      if (u) {
-        await migrateOwnerId(u.uid);
-      }
     });
     return () => unsub();
   }, []);
@@ -61,42 +57,18 @@ let currentTeamId = null;
 let unsubEvents = null;
 let unsubTasks = null;
 
-let ownerIdMigrationDone = false;
-const migrateOwnerId = async (uid) => {
-  if (ownerIdMigrationDone) return;
-  ownerIdMigrationDone = true;
-  try {
-    for (const coll of ["events", "tasks"]) {
-      const colRef = collection(db, "users", uid, coll);
-      const snap = await getDocs(colRef);
-      const ops = [];
-      snap.forEach((docSnap) => {
-        if (!docSnap.data().owner_id) {
-          ops.push(setDoc(docSnap.ref, { owner_id: uid }, { merge: true }));
-        }
-      });
-      await Promise.all(ops);
-    }
-  } catch (err) {
-    console.error("ownerId migration", err);
-  }
-};
 
 export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
 };
 
 export const pathFor = (collectionName) => {
-  if (currentTeamId) {
-    console.log(`pathFor: teams/${currentTeamId}/${collectionName}`);
-    return `teams/${currentTeamId}/${collectionName}`;
-  }
   const uid = auth.currentUser?.uid;
-  if (!uid) {
-    throw new Error("Utilisateur non authentifié");
-  }
-  console.log(`pathFor: users/${uid}/${collectionName}`);
-  return `users/${uid}/${collectionName}`;
+  const path = currentTeamId
+    ? `teams/${currentTeamId}/${collectionName}`
+    : `users/${uid}/${collectionName}`;
+  console.log("pathFor:", path);
+  return path;
 };
 
 // Utilitaire pour normaliser les dates
@@ -114,92 +86,81 @@ const normalizeDate = (date) => {
   return date;
 };
 
-// Supprime le champ id et les clés undefined
-const scrub = (obj) => {
-  const { id, ...rest } = obj || {};
-  return Object.fromEntries(
-    Object.entries(rest).filter(([, v]) => v !== undefined)
-  );
-};
-
 // EVENTS
 export const saveEvent = async (eventData = {}) => {
-  if (!auth.currentUser) {
-    throw new Error("Utilisateur non authentifié");
+  const currentUid = auth.currentUser?.uid;
+  if (!currentUid) {
+    console.log("skip: no user");
+    return;
   }
 
+  const baseData = {
+    ...eventData,
+    start: normalizeDate(eventData.start),
+    end: normalizeDate(eventData.end),
+  };
+  delete baseData.id;
+  Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
+  baseData.owner_id = currentUid;
+  if (currentTeamId) baseData.team_id = currentTeamId;
+
+  const data = baseData;
+  const path = pathFor("events");
+
   try {
-    const baseData = {
-      ...eventData,
-      start: normalizeDate(eventData.start),
-      end: normalizeDate(eventData.end),
-      owner_id: auth.currentUser.uid,
-      title: eventData.title ?? "Événement sans titre",
-      color: eventData.color ?? "#3b82f6",
-      description: eventData.description ?? "",
-      createdAt: eventData.createdAt ?? new Date(),
-    };
-    if (currentTeamId) baseData.team_id = currentTeamId;
-    const data = scrub(baseData);
-
-    const colRef = collection(db, pathFor("events"));
-
-    if (eventData.id) {
-      const docRef = doc(colRef, eventData.id);
-      await setDoc(docRef, data, { merge: true });
-      return { id: eventData.id, ...data };
-    }
-
-    const docRef = await addDoc(colRef, data);
-    return { id: docRef.id, ...data };
+    const ref = await addDoc(collection(db, path), data);
+    return { id: ref.id, ...data };
   } catch (error) {
-    console.error("Erreur saveEvent:", error);
-    throw error;
+    console.error("saveEvent", path, error);
+    return;
   }
 };
 
 export const watchEvents = (range, callback) => {
+  const currentUid = auth.currentUser?.uid;
   if (unsubEvents) {
     unsubEvents();
     unsubEvents = null;
   }
-
-  if (!auth.currentUser || !range?.from || !range?.to) {
+  if (!currentUid || !range?.from || !range?.to) {
+    console.log("watchEvents skip: bad range/user");
     return () => {};
   }
 
   const eventsPath = pathFor("events");
-  console.log("watchEvents", eventsPath, auth.currentUser.uid);
+  let logged = false;
 
   const fromDate = normalizeDate(range.from);
   const toDateVal = normalizeDate(range.to);
-
   if (
-    !fromDate ||
-    !toDateVal ||
+    !(fromDate instanceof Date) ||
     isNaN(fromDate.getTime()) ||
+    !(toDateVal instanceof Date) ||
     isNaN(toDateVal.getTime())
   ) {
+    console.log("watchEvents skip: bad range/user");
     return () => {};
   }
 
   const fromTimestamp = Timestamp.fromDate(fromDate);
   const toTimestamp = Timestamp.fromDate(toDateVal);
 
-  const eventsRef = collection(db, eventsPath);
-
-  const constraints = [
-    where("owner_id", "==", auth.currentUser.uid),
-    toTimestamp && where("start", "<=", toTimestamp),
-    fromTimestamp && where("end", ">=", fromTimestamp),
-    orderBy("start", "asc"),
-  ].filter(Boolean);
-  const q = query(eventsRef, ...constraints);
+  const q = query(
+    collection(db, eventsPath),
+    where("owner_id", "==", currentUid),
+    where("start", "<=", toTimestamp),
+    where("end", ">=", fromTimestamp),
+    orderBy("start", "asc")
+  );
 
   try {
     unsubEvents = onSnapshot(
       q,
       (snapshot) => {
+        if (!logged) {
+          console.log("watchEvents OK", eventsPath);
+          logged = true;
+        }
         const events = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -223,13 +184,14 @@ export const watchEvents = (range, callback) => {
 };
 
 export const deleteEvent = async (eventId) => {
-  if (!auth.currentUser) {
-    throw new Error("Utilisateur non authentifié");
+  const currentUid = auth.currentUser?.uid;
+  if (!currentUid) {
+    console.log("skip: no user");
+    return;
   }
 
   try {
-    const uid = auth.currentUser.uid;
-    const eventRef = doc(db, "users", uid, "events", eventId);
+    const eventRef = doc(collection(db, pathFor("events")), eventId);
     await deleteDoc(eventRef);
   } catch (error) {
     console.error("Erreur deleteEvent:", error);
@@ -239,84 +201,78 @@ export const deleteEvent = async (eventId) => {
 
 // TASKS
 export const saveTask = async (taskData = {}) => {
-  if (!auth.currentUser) {
-    throw new Error("Utilisateur non authentifié");
+  const currentUid = auth.currentUser?.uid;
+  if (!currentUid) {
+    console.log("skip: no user");
+    return;
   }
 
+  const baseData = {
+    ...taskData,
+    start: normalizeDate(taskData.start),
+    end: normalizeDate(taskData.end),
+  };
+  delete baseData.id;
+  Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
+  baseData.owner_id = currentUid;
+  if (currentTeamId) baseData.team_id = currentTeamId;
+
+  const path = pathFor("tasks");
+
   try {
-    const baseData = {
-      ...taskData,
-      start: normalizeDate(taskData.start),
-      end: normalizeDate(taskData.end),
-      owner_id: auth.currentUser.uid,
-      title: taskData.title ?? "Tâche sans titre",
-      color: taskData.color ?? "#10b981",
-      description: taskData.description ?? "",
-      icon: taskData.icon ?? "📋",
-      price: taskData.price ?? null,
-      createdAt: taskData.createdAt ?? new Date(),
-    };
-    if (currentTeamId) baseData.team_id = currentTeamId;
-    const data = scrub(baseData);
-
-    const colRef = collection(db, pathFor("tasks"));
-
-    if (taskData.id) {
-      const docRef = doc(colRef, taskData.id);
-      await setDoc(docRef, data, { merge: true });
-      return { id: taskData.id, ...data };
-    }
-
-    const docRef = await addDoc(colRef, data);
-    return { id: docRef.id, ...data };
+    const ref = await addDoc(collection(db, path), baseData);
+    return { id: ref.id, ...baseData };
   } catch (error) {
-    console.error("Erreur saveTask:", error);
-    throw error;
+    console.error("saveTask", path, error);
+    return;
   }
 };
 
 export const watchTasks = (range, callback) => {
+  const currentUid = auth.currentUser?.uid;
   if (unsubTasks) {
     unsubTasks();
     unsubTasks = null;
   }
-
-  if (!auth.currentUser || !range?.from || !range?.to) {
+  if (!currentUid || !range?.from || !range?.to) {
+    console.log("watchTasks skip: bad range/user");
     return () => {};
   }
 
   const tasksPath = pathFor("tasks");
-  console.log("watchTasks", tasksPath, auth.currentUser.uid);
+  let logged = false;
 
   const fromDate = normalizeDate(range.from);
   const toDateVal = normalizeDate(range.to);
-
   if (
-    !fromDate ||
-    !toDateVal ||
+    !(fromDate instanceof Date) ||
     isNaN(fromDate.getTime()) ||
+    !(toDateVal instanceof Date) ||
     isNaN(toDateVal.getTime())
   ) {
+    console.log("watchTasks skip: bad range/user");
     return () => {};
   }
 
   const fromTimestamp = Timestamp.fromDate(fromDate);
   const toTimestamp = Timestamp.fromDate(toDateVal);
 
-  const tasksRef = collection(db, tasksPath);
-
-  const constraints = [
-    where("owner_id", "==", auth.currentUser.uid),
-    toTimestamp && where("start", "<=", toTimestamp),
-    fromTimestamp && where("end", ">=", fromTimestamp),
-    orderBy("start", "asc"),
-  ].filter(Boolean);
-  const q = query(tasksRef, ...constraints);
+  const q = query(
+    collection(db, tasksPath),
+    where("owner_id", "==", currentUid),
+    where("start", "<=", toTimestamp),
+    where("end", ">=", fromTimestamp),
+    orderBy("start", "asc")
+  );
 
   try {
     unsubTasks = onSnapshot(
       q,
       (snapshot) => {
+        if (!logged) {
+          console.log("watchTasks OK", tasksPath);
+          logged = true;
+        }
         const tasks = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -340,13 +296,14 @@ export const watchTasks = (range, callback) => {
 };
 
 export const deleteTask = async (taskId) => {
-  if (!auth.currentUser) {
-    throw new Error("Utilisateur non authentifié");
+  const currentUid = auth.currentUser?.uid;
+  if (!currentUid) {
+    console.log("skip: no user");
+    return;
   }
 
   try {
-    const uid = auth.currentUser.uid;
-    const taskRef = doc(db, "users", uid, "tasks", taskId);
+    const taskRef = doc(collection(db, pathFor("tasks")), taskId);
     await deleteDoc(taskRef);
   } catch (error) {
     console.error("Erreur deleteTask:", error);
@@ -376,6 +333,6 @@ export const getMonthRange = (year, month) => {
   return { from: start, to: end };
 };
 
-export { auth, googleProvider, db, logout };
+export { googleProvider, logout };
 
 window.auth = auth;
