@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import '../styles/MonthCalendar.css';
-import { saveEvent, watchEvents, watchTasks, getMonthRange } from '../firebase';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from '../firebase';
+import {
+  saveEvent,
+  watchEvents,
+  watchTasks,
+  getMonthRange,
+  useFirebaseUser,
+} from '../firebase';
 
 function MonthGrid({ year, month, onDateSelect, onEventClick }) {
-  const [user] = useAuthState(auth);
+  const user = useFirebaseUser();
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [eventsByDay, setEventsByDay] = useState({});

@@ -29,6 +29,10 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (!user) {
+      setError('Utilisateur non connecté');
+      return;
+    }
 
     // Validation
     if (!task.title.trim()) {
@@ -71,6 +75,10 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
 
   const iconOptions = ['📋', '✅', '🎯', '💼', '📝', '🔧', '💡', '📊', '🎨', '🚀'];
   const colorOptions = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+
+  if (!user) {
+    return <div>Chargement...</div>;
+  }
 
   return (
     <div className="task-form-overlay">
