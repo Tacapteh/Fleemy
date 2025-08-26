@@ -17,6 +17,8 @@ import {
   where,
   orderBy,
   Timestamp,
+  getDocs,
+  setDoc,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -40,6 +42,10 @@ export function useFirebaseUser() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
+      if (u && !ownerFixDone) {
+        ownerFixDone = true;
+        ensureOwnerId(u.uid);
+      }
     });
     return () => unsub();
   }, []);
@@ -58,6 +64,9 @@ let currentTeamId = null;
 let unsubEvents = null;
 let unsubTasks = null;
 
+// S'assurer que les anciens documents ont un owner_id
+let ownerFixDone = false;
+
 
 export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
@@ -72,6 +81,37 @@ export const pathFor = (collectionName) => {
     `pathFor(${collectionName}) projectId=${projectId} uid=${uid} path=${path}`
   );
   return path;
+};
+
+// Corrige les documents sans owner_id pour l'utilisateur courant
+const ensureOwnerId = async (uid) => {
+  const collectionsToCheck = ["events", "tasks"];
+  let fixed = 0;
+  for (const name of collectionsToCheck) {
+    try {
+      const snap = await getDocs(collection(db, `users/${uid}/${name}`));
+      const writes = [];
+      snap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.owner_id) {
+          writes.push(
+            setDoc(
+              doc(db, `users/${uid}/${name}`, docSnap.id),
+              { owner_id: uid },
+              { merge: true }
+            )
+          );
+          fixed++;
+        }
+      });
+      await Promise.all(writes);
+    } catch (err) {
+      console.error("ensureOwnerId", name, err);
+    }
+  }
+  if (fixed) {
+    console.log(`ensureOwnerId corrected ${fixed} docs`);
+  }
 };
 
 // Utilitaire pour normaliser les dates
