@@ -76,51 +76,55 @@ export const pathFor = (collectionName) => {
 const normalizeDate = (date) => {
   if (!date) return null;
   if (date instanceof Timestamp) {
-    return date.toDate().toISOString();
+    return date.toDate();
   }
   if (date instanceof Date) {
-    return date.toISOString();
+    return date;
   }
   if (typeof date === "string") {
-    return new Date(date).toISOString();
+    return new Date(date);
   }
   return date;
 };
 
+// Supprime le champ id et les clés undefined
+const scrub = (obj) => {
+  const { id, ...rest } = obj || {};
+  return Object.fromEntries(
+    Object.entries(rest).filter(([, v]) => v !== undefined)
+  );
+};
+
 // EVENTS
-export const saveEvent = async (eventData) => {
+export const saveEvent = async (eventData = {}) => {
   if (!auth.currentUser) {
     throw new Error("Utilisateur non authentifié");
   }
 
   try {
-    const uid = auth.currentUser.uid;
-    const eventsCol = collection(db, "users", uid, "events");
-    const id = eventData.id || doc(eventsCol).id;
-
-    const normalizedEvent = {
+    const baseData = {
       ...eventData,
       start: normalizeDate(eventData.start),
       end: normalizeDate(eventData.end),
-      owner_id: auth.currentUser.uid, // Imposé
-      team_id: currentTeamId || null,
-      createdAt: eventData.createdAt || new Date().toISOString(),
-      title: eventData.title || "Événement sans titre",
-      color: eventData.color || "#3b82f6",
-      description: eventData.description || "",
+      owner_id: auth.currentUser.uid,
+      title: eventData.title ?? "Événement sans titre",
+      color: eventData.color ?? "#3b82f6",
+      description: eventData.description ?? "",
+      createdAt: eventData.createdAt ?? new Date(),
     };
+    if (currentTeamId) baseData.team_id = currentTeamId;
+    const data = scrub(baseData);
+
+    const colRef = collection(db, pathFor("events"));
 
     if (eventData.id) {
-      // Mise à jour
-      const eventRef = doc(db, pathFor("events"), eventData.id);
-      await setDoc(eventRef, normalizedEvent);
-      return { ...normalizedEvent, id: eventData.id };
-    } else {
-      // Création
-      const eventsRef = collection(db, pathFor("events"));
-      const docRef = await addDoc(eventsRef, normalizedEvent);
-      return { ...normalizedEvent, id: docRef.id };
+      const docRef = doc(colRef, eventData.id);
+      await setDoc(docRef, data, { merge: true });
+      return { id: eventData.id, ...data };
     }
+
+    const docRef = await addDoc(colRef, data);
+    return { id: docRef.id, ...data };
   } catch (error) {
     console.error("Erreur saveEvent:", error);
     throw error;
@@ -128,17 +132,26 @@ export const saveEvent = async (eventData) => {
 };
 
 export const watchEvents = (range, callback) => {
+  if (unsubEvents) {
+    unsubEvents();
+    unsubEvents = null;
+  }
+
   if (!auth.currentUser || !range?.from || !range?.to) {
     return () => {};
   }
 
   const eventsPath = pathFor("events");
 
-  const fromDate =
-    typeof range.from === "string" ? new Date(range.from) : range.from;
-  const toDateVal = typeof range.to === "string" ? new Date(range.to) : range.to;
+  const fromDate = normalizeDate(range.from);
+  const toDateVal = normalizeDate(range.to);
 
-  if (isNaN(fromDate.getTime()) || isNaN(toDateVal.getTime())) {
+  if (
+    !fromDate ||
+    !toDateVal ||
+    isNaN(fromDate.getTime()) ||
+    isNaN(toDateVal.getTime())
+  ) {
     return () => {};
   }
 
@@ -147,22 +160,19 @@ export const watchEvents = (range, callback) => {
 
   const eventsRef = collection(db, eventsPath);
 
-  const q = query(
-    eventsRef,
+  const constraints = [
     where("owner_id", "==", auth.currentUser.uid),
-    where("start", "<=", toTimestamp),
-    where("end", ">=", fromTimestamp),
-    orderBy("start", "asc")
-  );
-
-  if (unsubEvents) unsubEvents();
+    toTimestamp && where("start", "<=", toTimestamp),
+    fromTimestamp && where("end", ">=", fromTimestamp),
+    orderBy("start", "asc"),
+  ].filter(Boolean);
+  const q = query(eventsRef, ...constraints);
 
   try {
     unsubEvents = onSnapshot(
       q,
       (snapshot) => {
         const events = [];
-
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           const start =
@@ -170,7 +180,6 @@ export const watchEvents = (range, callback) => {
           const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
           events.push({ ...data, id: docSnap.id, start, end });
         });
-
         callback(events);
       },
       (err) => {
@@ -201,41 +210,37 @@ export const deleteEvent = async (eventId) => {
 };
 
 // TASKS
-export const saveTask = async (taskData) => {
+export const saveTask = async (taskData = {}) => {
   if (!auth.currentUser) {
     throw new Error("Utilisateur non authentifié");
   }
 
   try {
-    const uid = auth.currentUser.uid;
-    const tasksCol = collection(db, "users", uid, "tasks");
-    const id = taskData.id || doc(tasksCol).id;
-
-    const normalizedTask = {
+    const baseData = {
       ...taskData,
       start: normalizeDate(taskData.start),
       end: normalizeDate(taskData.end),
-      owner_id: auth.currentUser.uid, // Imposé
-      team_id: currentTeamId || null,
-      createdAt: taskData.createdAt || new Date().toISOString(),
-      title: taskData.title || "Tâche sans titre",
-      color: taskData.color || "#10b981",
-      description: taskData.description || "",
-      icon: taskData.icon || "📋",
-      price: taskData.price || null,
+      owner_id: auth.currentUser.uid,
+      title: taskData.title ?? "Tâche sans titre",
+      color: taskData.color ?? "#10b981",
+      description: taskData.description ?? "",
+      icon: taskData.icon ?? "📋",
+      price: taskData.price ?? null,
+      createdAt: taskData.createdAt ?? new Date(),
     };
+    if (currentTeamId) baseData.team_id = currentTeamId;
+    const data = scrub(baseData);
+
+    const colRef = collection(db, pathFor("tasks"));
 
     if (taskData.id) {
-      // Mise à jour
-      const taskRef = doc(db, pathFor("tasks"), taskData.id);
-      await setDoc(taskRef, normalizedTask);
-      return { ...normalizedTask, id: taskData.id };
-    } else {
-      // Création
-      const tasksRef = collection(db, pathFor("tasks"));
-      const docRef = await addDoc(tasksRef, normalizedTask);
-      return { ...normalizedTask, id: docRef.id };
+      const docRef = doc(colRef, taskData.id);
+      await setDoc(docRef, data, { merge: true });
+      return { id: taskData.id, ...data };
     }
+
+    const docRef = await addDoc(colRef, data);
+    return { id: docRef.id, ...data };
   } catch (error) {
     console.error("Erreur saveTask:", error);
     throw error;
@@ -243,17 +248,26 @@ export const saveTask = async (taskData) => {
 };
 
 export const watchTasks = (range, callback) => {
+  if (unsubTasks) {
+    unsubTasks();
+    unsubTasks = null;
+  }
+
   if (!auth.currentUser || !range?.from || !range?.to) {
     return () => {};
   }
 
   const tasksPath = pathFor("tasks");
 
-  const fromDate =
-    typeof range.from === "string" ? new Date(range.from) : range.from;
-  const toDateVal = typeof range.to === "string" ? new Date(range.to) : range.to;
+  const fromDate = normalizeDate(range.from);
+  const toDateVal = normalizeDate(range.to);
 
-  if (isNaN(fromDate.getTime()) || isNaN(toDateVal.getTime())) {
+  if (
+    !fromDate ||
+    !toDateVal ||
+    isNaN(fromDate.getTime()) ||
+    isNaN(toDateVal.getTime())
+  ) {
     return () => {};
   }
 
@@ -262,22 +276,19 @@ export const watchTasks = (range, callback) => {
 
   const tasksRef = collection(db, tasksPath);
 
-  const q = query(
-    tasksRef,
+  const constraints = [
     where("owner_id", "==", auth.currentUser.uid),
-    where("start", "<=", toTimestamp),
-    where("end", ">=", fromTimestamp),
-    orderBy("start", "asc")
-  );
-
-  if (unsubTasks) unsubTasks();
+    toTimestamp && where("start", "<=", toTimestamp),
+    fromTimestamp && where("end", ">=", fromTimestamp),
+    orderBy("start", "asc"),
+  ].filter(Boolean);
+  const q = query(tasksRef, ...constraints);
 
   try {
     unsubTasks = onSnapshot(
       q,
       (snapshot) => {
         const tasks = [];
-
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
           const start =
@@ -285,7 +296,6 @@ export const watchTasks = (range, callback) => {
           const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
           tasks.push({ ...data, id: docSnap.id, start, end });
         });
-
         callback(tasks);
       },
       (err) => {
