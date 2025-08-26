@@ -1,18 +1,11 @@
 import React, {
   useState,
-  useEffect,
   useMemo,
   useCallback,
   useRef,
 } from "react";
 import "../styles/WeeklyGrid.css";
-import {
-  saveEvent,
-  watchEvents,
-  watchTasks,
-  getWeekRange,
-  useFirebaseUser,
-} from "../firebase";
+import { useFirebaseUser } from "../firebase";
 
 const DAY_NAMES = [
   "Lundi",
@@ -174,13 +167,13 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 });
 
 export default function WeeklyGrid({
+  events = [],
+  tasks = [],
   onSlotSelect,
   onEventClick,
   weekStart = new Date(),
 }) {
   const user = useFirebaseUser();
-  const [events, setEvents] = useState([]);
-  const [tasks, setTasks] = useState([]);
 
   const hours = useMemo(
     () =>
@@ -201,77 +194,6 @@ export default function WeeklyGrid({
     });
   }, [weekStart]);
 
-  const weekRange = useMemo(() => getWeekRange(weekStart), [weekStart]);
-
-  // Watch events - seulement si user connecté
-  useEffect(() => {
-    if (!user) {
-      setEvents([]);
-      return;
-    }
-
-    const unsubscribe = watchEvents(weekRange, (newEvents) => {
-      setEvents(newEvents);
-    });
-
-    return unsubscribe;
-  }, [user, weekRange]);
-
-  // Watch tasks - seulement si user connecté
-  useEffect(() => {
-    if (!user) {
-      setTasks([]);
-      return;
-    }
-
-    const unsubscribe = watchTasks(weekRange, (newTasks) => {
-      setTasks(newTasks);
-    });
-
-    return unsubscribe;
-  }, [user, weekRange]);
-
-  const createEvent = useCallback(
-    async (date, timeString) => {
-      if (!user) {
-        console.warn("Utilisateur non connecté, création événement bloquée");
-        return;
-      }
-
-      // Corriger le bug getHours : reconstruire un Date avec setHours
-      const [hours, minutes] = timeString.split(":").map(Number);
-      const start = new Date(date);
-      start.setHours(hours, minutes, 0, 0);
-      const end = new Date(start);
-      end.setHours(start.getHours() + 1);
-
-      const newEvent = {
-        title: "Nouvel événement",
-        start,
-        end,
-        color: "#3b82f6",
-        description: "",
-      };
-
-      // Optimistic UI
-      const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
-      setEvents((prev) => [...prev, tempEvent]);
-
-      try {
-        const savedEvent = await saveEvent(newEvent);
-        // Remplacer l'événement temporaire par le vrai
-        setEvents((prev) =>
-          prev.map((e) => (e.id === tempEvent.id ? savedEvent : e))
-        );
-      } catch (error) {
-        console.error("Erreur lors de la création de l'événement:", error);
-        // Rollback optimistic UI
-        setEvents((prev) => prev.filter((e) => e.id !== tempEvent.id));
-      }
-    },
-    [user]
-  );
-
   const onCellClick = useCallback(
     (date, timeString) => {
       if (!user) {
@@ -279,13 +201,15 @@ export default function WeeklyGrid({
         return;
       }
 
+      const [h, m] = timeString.split(":").map(Number);
+      const start = new Date(date);
+      start.setHours(h, m, 0, 0);
+
       if (onSlotSelect) {
-        onSlotSelect(date, timeString);
-      } else {
-        createEvent(date, timeString);
+        onSlotSelect(start);
       }
     },
-    [onSlotSelect, createEvent, user]
+    [onSlotSelect, user]
   );
 
   const onAddEvent = useCallback(
@@ -294,9 +218,14 @@ export default function WeeklyGrid({
         console.warn("Utilisateur non connecté, ajout événement bloqué");
         return;
       }
-      createEvent(date, timeString);
+      const [h, m] = timeString.split(":").map(Number);
+      const start = new Date(date);
+      start.setHours(h, m, 0, 0);
+      if (onSlotSelect) {
+        onSlotSelect(start);
+      }
     },
-    [createEvent, user]
+    [onSlotSelect, user]
   );
 
   const layout = useMemo(
