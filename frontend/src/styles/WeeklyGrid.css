@@ -53,7 +53,7 @@
   grid-template-rows: repeat(
     9,
     var(--weekly-grid-row-h)
-  ); /* 9 heures (09:00-18:00) */
+  ); /* Exactement 9 heures (09:00-18:00) */
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
