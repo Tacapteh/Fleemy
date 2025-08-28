@@ -414,3 +414,9 @@ export const watchWeekEvents = (
 export { googleProvider, logout };
 
 window.auth = auth;
+
+if (typeof window !== "undefined") {
+  window.auth = auth;
+  window.db = db;
+}
+
