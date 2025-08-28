@@ -524,17 +524,17 @@ const timeSlots = [
 const eventTypes = {
   paid: {
     label: "Payé",
-    color: "bg-green-100 border-green-300 text-green-800",
-    bgColor: "#dcfce7",
+    color: "bg-green-200 text-gray-800 border-gray-200",
+    bgColor: "#bbf7d0",
   },
   unpaid: {
-    label: "Non payé",
-    color: "bg-red-100 border-red-300 text-red-800",
-    bgColor: "#fee2e2",
+    label: "Impayé",
+    color: "bg-red-200 text-gray-800 border-gray-200",
+    bgColor: "#fecaca",
   },
   pending: {
     label: "En attente",
-    color: "bg-orange-100 border-orange-300 text-orange-800",
+    color: "bg-orange-200 text-gray-800 border-gray-200",
     bgColor: "#fed7aa",
   },
   not_worked: {
