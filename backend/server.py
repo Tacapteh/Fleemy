@@ -21,8 +21,8 @@ import calendar
 import httpx
 
 # Firebase Admin
-from firebase_admin import auth as firebase_auth
-from firebase import db, InMemoryFirestore
+import firebase_admin
+from firebase_admin import credentials, firestore, auth
 
 # Charger les variables d'environnement AVANT toute config
 ENV_PATH = find_dotenv()
@@ -35,6 +35,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.info("Loaded environment from %s", ENV_PATH)
+
+if not firebase_admin._apps:
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if not cred_path:
+        raise RuntimeError("Missing GOOGLE_APPLICATION_CREDENTIALS env var")
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
+
+db = firestore.client()
 
 # Créer l'application FastAPI
 app = FastAPI()
@@ -68,15 +77,6 @@ app.add_middleware(
 )
 
 
-if isinstance(db, InMemoryFirestore):
-    logger.warning("Using InMemoryFirestore (no credentials found)")
-else:
-    logger.info("Connected to Firestore")
-
-# Google Firestore
-from google.cloud import firestore
-
-
 async def verify_token(request: Request):
     """Validate the Firebase token sent in the Authorization header."""  # ✅ CHECKED auth
     auth_header = request.headers.get("Authorization")
@@ -91,7 +91,7 @@ async def verify_token(request: Request):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
 
     try:
-        decoded = firebase_auth.verify_id_token(token)
+        decoded = auth.verify_id_token(token)
         print(decoded)  # ✅ FIXED token/projectId/trace
         logger.info("Decoded token: %s", decoded)
         request.state.user = decoded
@@ -1395,8 +1395,6 @@ async def translate_html(payload: Dict[str, Any]):
 # Health check route
 @api_router.get("/ping")
 async def ping(user: Dict[str, Any] = Depends(verify_token)):
-    if isinstance(db, InMemoryFirestore):
-        return {"status": "error", "message": "running in mock mode"}
     try:
         test_ref = db.collection("_ping").document("ping")
         await asyncio.to_thread(test_ref.set, {"ok": True})
