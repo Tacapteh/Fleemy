@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
+    match /events/{eventId} {
       allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
       allow read: if request.auth != null && (
         resource.data.user_id == request.auth.uid ||
@@ -9,6 +9,23 @@ service cloud.firestore {
          resource.data.team_id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team_id)
       );
       allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
+    }
+
+    match /tasks/{taskId} {
+      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+      allow read: if request.auth != null && (
+        resource.data.user_id == request.auth.uid ||
+        (resource.data.team_id != null &&
+         resource.data.team_id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team_id)
+      );
+      allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
+    }
+
+    // Transitional support for legacy subcollection path
+    match /users/{userId}/events/{eventId} {
+      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.user_id == request.auth.uid;
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if request.auth != null && request.auth.uid == userId && resource.data.user_id == request.auth.uid;
     }
   }
 }
