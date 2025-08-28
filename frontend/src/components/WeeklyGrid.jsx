@@ -298,6 +298,9 @@ export default function WeeklyGrid({
 
   return (
     <div ref={wrapperRef} className="week-shell">
+      {/* Légende des statuts */}
+      <StatusLegend />
+      
       {/* Header des jours - en dehors de la grille */}
       <div className="week-day-headers">
         {days.map((d) => (
