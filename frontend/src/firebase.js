@@ -53,6 +53,7 @@ console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+const getUid = () => auth.currentUser?.uid || "demo-user";
 
 const recentErrors = new Map();
 
