@@ -54,7 +54,7 @@ The PDF export feature is temporarily disabled in `frontend/src/utils/pdf.js`.
 All other pages (Planning, Devis, Factures) work normally. To re-enable PDF
 generation later, implement the real functions in `pdf.js`.
 
-Create a `.env` file based on `.env.example` at the project root to configure both frontend and backend URLs.
+Create a `.env` file based on `.env.example` at the project root to configure both frontend and backend URLs. Make sure to fill in the `REACT_APP_FIREBASE_*` variables with the credentials of your Firebase web app; otherwise the login will fail with an `auth/api-key-not-valid` error.
 
 ## Project structure
 
