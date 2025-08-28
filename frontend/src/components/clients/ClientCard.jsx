@@ -1,8 +1,7 @@
 import React from 'react';
-import { isAuthDisabled } from '../../firebase';
 
 export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
-  const readonly = readOnly || isAuthDisabled;
+  const readonly = readOnly;
   return (
     <div
       className="bg-white border rounded shadow p-4 flex flex-col"

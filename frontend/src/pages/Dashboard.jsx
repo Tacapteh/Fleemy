@@ -1,5 +1,4 @@
 import { useOutletContext } from 'react-router-dom';
-import { isAuthDisabled } from '../firebase';
 
 export default function Dashboard() {
   const { user } = useOutletContext();
@@ -12,15 +11,6 @@ export default function Dashboard() {
         <p className="text-gray-600">
           Votre outil de gestion tout-en-un pour le planning, les devis et les factures.
         </p>
-        {isAuthDisabled && (
-          <a
-            href="#"
-            className="mt-4 block text-sm text-orange-700"
-            aria-readonly="true"
-          >
-            Mode démo activé: les actions d'édition sont désactivées
-          </a>
-        )}
         {user && (
           <div className="mt-4 p-4 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-800">
