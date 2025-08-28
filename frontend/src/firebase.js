@@ -20,10 +20,6 @@ import {
   getDocs,
   setDoc,
 } from "firebase/firestore";
-import { showToast } from "./utils/toast";
-
-export const isAuthDisabled =
-  (process.env.REACT_APP_DISABLE_GOOGLE_AUTH || "false") === "true";
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -45,19 +41,10 @@ export function useFirebaseUser() {
   const [user, setUser] = useState(null);
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
-      if (!u && isAuthDisabled) {
-        setUser({
-          uid: "demo-user",
-          email: "demo@emergent.test",
-          displayName: "Demo",
-          team_id: null,
-        });
-      } else {
-        setUser(u);
-        if (u && !ownerFixDone) {
-          ownerFixDone = true;
-          ensureOwnerId(u.uid);
-        }
+      setUser(u);
+      if (u && !ownerFixDone) {
+        ownerFixDone = true;
+        ensureOwnerId(u.uid);
       }
     });
     return () => unsub();
@@ -147,10 +134,6 @@ export const saveEvent = async (eventData = {}) => {
   const currentUid = auth.currentUser?.uid;
   if (!currentUid) {
     console.log("skip: no user");
-    return;
-  }
-  if (isAuthDisabled) {
-    showToast("Mode démo: lecture seule", true);
     return;
   }
 
@@ -253,10 +236,6 @@ export const deleteEvent = async (eventId) => {
     console.log("skip: no user");
     return;
   }
-  if (isAuthDisabled) {
-    showToast("Mode démo: lecture seule", true);
-    return;
-  }
 
   try {
     const eventRef = doc(collection(db, pathFor("events")), eventId);
@@ -272,10 +251,6 @@ export const saveTask = async (taskData = {}) => {
   const currentUid = auth.currentUser?.uid;
   if (!currentUid) {
     console.log("skip: no user");
-    return;
-  }
-  if (isAuthDisabled) {
-    showToast("Mode démo: lecture seule", true);
     return;
   }
 
@@ -376,10 +351,6 @@ export const deleteTask = async (taskId) => {
   const currentUid = auth.currentUser?.uid;
   if (!currentUid) {
     console.log("skip: no user");
-    return;
-  }
-  if (isAuthDisabled) {
-    showToast("Mode démo: lecture seule", true);
     return;
   }
 

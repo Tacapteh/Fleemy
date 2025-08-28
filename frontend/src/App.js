@@ -34,8 +34,6 @@ function Layout({ user, onLogout }) {
 function App() {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
-  const demoMode =
-    (process.env.REACT_APP_DISABLE_GOOGLE_AUTH || "false") === "true";
 
   useEffect(() => {
     let first = true;
@@ -58,15 +56,8 @@ function App() {
     return <div>Chargement du compte...</div>;
   }
 
-  if (!user && !demoMode) {
+  if (!user) {
     return <Login onLogin={setUser} />;
-  }
-  if (!user && demoMode) {
-    setUser({
-      uid: "demo-user",
-      email: "demo@emergent.test",
-      displayName: "Demo",
-    });
   }
 
   return (

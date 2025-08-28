@@ -3,8 +3,6 @@ import { apiFetch } from '../lib/api';
 import ClientCard from '../components/clients/ClientCard';
 import ClientForm from '../components/clients/ClientForm';
 import { useOutletContext } from 'react-router-dom';
-import { isAuthDisabled } from '../firebase';
-import { showToast } from '../utils/toast';
 
 export default function Clients() {
   const { user } = useOutletContext();
@@ -46,10 +44,6 @@ export default function Clients() {
 
   const handleDelete = async (client) => {
     if (!window.confirm('Supprimer ce client ?')) return;
-    if (isAuthDisabled) {
-      showToast('Mode démo: lecture seule', true);
-      return;
-    }
     try {
       await apiFetch(`/clients/${client.id}`, {
         method: 'DELETE',
@@ -62,10 +56,6 @@ export default function Clients() {
   };
 
   const handleSubmit = async (data, applyRate) => {
-    if (isAuthDisabled) {
-      showToast('Mode démo: lecture seule', true);
-      return;
-    }
     try {
       if (editing) {
         await apiFetch(`/clients/${editing.id}?apply_rate=${applyRate ? 1 : 0}`, {
@@ -91,11 +81,9 @@ export default function Clients() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Clients</h1>
-        {!isAuthDisabled && (
-          <button onClick={handleAdd} className="px-3 py-1 bg-blue-500 text-white rounded">
-            Nouveau client
-          </button>
-        )}
+        <button onClick={handleAdd} className="px-3 py-1 bg-blue-500 text-white rounded">
+          Nouveau client
+        </button>
       </div>
       {error && <div className="text-red-500 mb-2">{error}</div>}
       {loading ? (
@@ -108,7 +96,6 @@ export default function Clients() {
               client={c}
               onEdit={handleEdit}
               onDelete={handleDelete}
-              readOnly={isAuthDisabled}
             />
           ))}
         </div>
