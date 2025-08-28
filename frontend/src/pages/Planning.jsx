@@ -57,7 +57,7 @@ export default function Planning() {
     return () => clearTimeout(t);
   }, []);
 
-  const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null });
+  const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
 
 
@@ -182,21 +182,23 @@ export default function Planning() {
       timeSlot: { day: dayIndex, start: format(start), end: format(end) },
       selectedDate: start,
       event: null,
+      readOnly: false,
     });
   };
 
   const openDate = (date) => {
-    setModal({ open: true, selectedDate: date, timeSlot: null, event: null });
+    setModal({ open: true, selectedDate: date, timeSlot: null, event: null, readOnly: false });
   };
 
   const openEvent = (event) => {
-    setModal({ open: true, event, timeSlot: null, selectedDate: null });
+    const readOnly = event.readOnly || (event.user_id && event.user_id !== user.uid);
+    setModal({ open: true, event, timeSlot: null, selectedDate: null, readOnly });
   };
 
-  const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null });
+  const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
   const handleSaveEvent = async (data) => {
-    if (!user) return;
+    if (!user || modal.readOnly) return;
     try {
       const dayIndex = data.day;
       const startDate = new Date(weekStart);
@@ -248,7 +250,7 @@ export default function Planning() {
   };
 
   const handleDeleteEvent = async (id) => {
-    if (!user) return;
+    if (!user || modal.readOnly) return;
     try {
       // Trouver l'event pour obtenir sa date
       const event = state.events.find(e => e.id === id);
@@ -325,6 +327,7 @@ export default function Planning() {
         event={modal.event}
         timeSlot={modal.timeSlot}
         selectedDate={modal.selectedDate}
+        readOnly={modal.readOnly}
       />
     </>
   );

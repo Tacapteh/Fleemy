@@ -5,7 +5,8 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
       allow read: if request.auth != null && (
         resource.data.user_id == request.auth.uid ||
-        (resource.data.team_id != null && resource.data.team_id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team_id)
+        (resource.data.team_id != null &&
+         resource.data.team_id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team_id)
       );
       allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
     }

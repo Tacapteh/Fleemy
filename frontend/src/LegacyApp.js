@@ -600,6 +600,7 @@ const EventModal = ({
   event,
   timeSlot,
   selectedDate,
+  readOnly,
 }) => {
   const [formData, setFormData] = useState({
     description: "",
@@ -709,6 +710,7 @@ const EventModal = ({
         </h2>
 
         <form onSubmit={handleSubmit}>
+          <fieldset disabled={readOnly || loading}>
           <div className="form-group">
             <label className="form-label">Client *</label>
             <input
@@ -811,6 +813,7 @@ const EventModal = ({
               ))}
             </select>
           </div>
+          </fieldset>
 
           <div className="modal-actions">
             <button
@@ -819,9 +822,9 @@ const EventModal = ({
               className="btn btn-outline"
               disabled={loading}
             >
-              Annuler
+              {readOnly ? "Fermer" : "Annuler"}
             </button>
-            {event && (
+            {event && !readOnly && (
               <button
                 type="button"
                 onClick={handleDelete}
@@ -831,13 +834,15 @@ const EventModal = ({
                 {loading ? "..." : "Supprimer"}
               </button>
             )}
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              {loading ? "..." : event ? "Modifier" : "Créer"}
-            </button>
+            {!readOnly && (
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={loading}
+              >
+                {loading ? "..." : event ? "Modifier" : "Créer"}
+              </button>
+            )}
           </div>
         </form>
       </div>
