@@ -30,6 +30,17 @@ const firebaseConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
+const missingConfig = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (missingConfig.length) {
+  throw new Error(
+    `Missing Firebase configuration: ${missingConfig.join(", ")}. ` +
+      "Check your REACT_APP_FIREBASE_* environment variables."
+  );
+}
+
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const projectId = app.options.projectId;
 console.log("FB projectId", projectId);
