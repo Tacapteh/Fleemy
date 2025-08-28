@@ -131,6 +131,27 @@ export default function Planning() {
     }
 
     setTeamContext(teamId || null);
+    
+    // Utiliser les nouvelles fonctions Firebase pour une meilleure gestion
+    const weekStartISO = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD
+    const weekEndISO = weekEnd.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Nouvelle approche : utiliser watchWeekEvents pour la déduplication et le tri automatique
+    const unsubEvents = watchWeekEvents(
+      user.uid, 
+      weekStartISO, 
+      weekEndISO,
+      (events) => {
+        dispatch({ type: 'events', events });
+        dispatch({ type: 'done' });
+      },
+      (error) => {
+        console.error('Erreur watchWeekEvents:', error);
+        dispatch({ type: 'error', error: error.message });
+      }
+    );
+
+    // Garder l'ancien système pour les tâches pour l'instant
     let { from, to } = weekRange || {};
     if (!from || !to) return () => {};
 
@@ -138,9 +159,6 @@ export default function Planning() {
     if (typeof to === 'string') to = new Date(to);
     if (isNaN(from.getTime()) || isNaN(to.getTime())) return () => {};
 
-    const unsubEvents = watchEvents({ from, to }, (evts) => {
-      dispatch({ type: 'events', events: evts });
-    });
     const unsubTasks = watchTasks({ from, to }, (tsks) => {
       setTasks(tsks);
     });
@@ -149,7 +167,7 @@ export default function Planning() {
       unsubEvents && unsubEvents();
       unsubTasks && unsubTasks();
     };
-  }, [user?.uid, teamId, weekRange]);
+  }, [user?.uid, teamId, weekStart, weekEnd, weekRange]);
   const weekEvents = state.events;
   const monthEvents = state.events;
 
