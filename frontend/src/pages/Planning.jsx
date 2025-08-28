@@ -107,6 +107,12 @@ export default function Planning() {
     view === 'week' ? weekLabel(currentDate) : monthLabel(currentDate);
 
   const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
+  const weekEnd = useMemo(() => {
+    const end = new Date(weekStart);
+    end.setDate(weekStart.getDate() + 6);
+    return end;
+  }, [weekStart]);
+  
   const weekRange = useMemo(() => {
     const from = new Date(weekStart);
     from.setHours(0, 0, 0, 0);
