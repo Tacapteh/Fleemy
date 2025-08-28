@@ -232,7 +232,6 @@ export default function Planning() {
         client_id: data.client_id || '',
         client_name: data.client_name || '',
         day: DAY_KEYS[dayIndex] || 'monday',
-        owner_id: user.uid,
         user_id: user.uid,
         team_id: teamId || null,
       };
