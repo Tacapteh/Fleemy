@@ -219,21 +219,34 @@ export default function Planning() {
         return;
       }
 
-      const payload = {
-        id: data.id,
-        description: data.description,
+      // Utiliser la nouvelle structure avec saveEventNew
+      const dateISO = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      const duration = Math.round((endDate - startDate) / (1000 * 60)); // minutes
+
+      const eventData = {
+        id: data.id, // si c'est un update, sinon sera généré
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        client: data.client_name || data.description || '',
+        status: data.status || data.type || 'unpaid', // défaut unpaid
+        hourly_rate: data.hourly_rate || 50,
+        duration: duration,
+        task_id: data.task_id || null,
+        // Champs additionnels pour compatibilité
+        description: data.description || '',
         client_id: data.client_id || '',
         client_name: data.client_name || '',
         day: DAY_KEYS[dayIndex] || 'monday',
-        start: startDate,
-        end: endDate,
-        status: data.type || 'pending',
         owner_id: user.uid,
         team_id: teamId || null,
       };
-      await saveEvent(payload);
+
+      await saveEventNew(user.uid, dateISO, eventData);
+      showToast('Événement sauvegardé avec succès');
+
     } catch (e) {
       console.error('save event', e);
+      showToast('Erreur lors de la sauvegarde', true);
     } finally {
       closeModal();
     }
