@@ -20,6 +20,9 @@ import {
   getDocs,
   setDoc,
 } from "firebase/firestore";
+import { showToast } from "./utils/toast";
+
+const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -49,6 +52,29 @@ console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+
+const getUid = () => auth.currentUser?.uid || "demo-user";
+
+const recentErrors = new Map();
+
+const readOnlyGuard = () => {
+  if (DEMO_MODE) {
+    showToast("Mode démo : lecture seule");
+    return true;
+  }
+  return false;
+};
+
+const logPermissionError = (path, uid, err) => {
+  if (err?.code !== "permission-denied") return;
+  const key = `${path}|${err.message}`;
+  const now = Date.now();
+  if (!recentErrors.has(key) || now - recentErrors.get(key) > 3000) {
+    console.error(`Permission error path=${path} uid=${uid}:`, err.message);
+    showToast("Accès refusé : vérifiez vos règles ou l'UID du document", true);
+    recentErrors.set(key, now);
+  }
+};
 
 export function useFirebaseUser() {
   const [user, setUser] = useState(null);
@@ -144,11 +170,8 @@ const normalizeDate = (date) => {
 
 // EVENTS
 export const saveEvent = async (eventData = {}) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid) {
-    console.log("skip: no user");
-    return;
-  }
+  if (readOnlyGuard()) return;
+  const currentUid = getUid();
 
   const baseData = {
     ...eventData,
@@ -158,6 +181,7 @@ export const saveEvent = async (eventData = {}) => {
   delete baseData.id;
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
   baseData.owner_id = currentUid;
+  baseData.user_id = currentUid;
   if (currentTeamId) baseData.team_id = currentTeamId;
 
   const data = baseData;
@@ -244,12 +268,7 @@ export const watchEvents = (range, callback) => {
 };
 
 export const deleteEvent = async (eventId) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid) {
-    console.log("skip: no user");
-    return;
-  }
-
+  if (readOnlyGuard()) return;
   try {
     const eventRef = doc(collection(db, pathFor("events")), eventId);
     await deleteDoc(eventRef);
@@ -261,11 +280,8 @@ export const deleteEvent = async (eventId) => {
 
 // TASKS
 export const saveTask = async (taskData = {}) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid) {
-    console.log("skip: no user");
-    return;
-  }
+  if (readOnlyGuard()) return;
+  const currentUid = getUid();
 
   const baseData = {
     ...taskData,
@@ -275,10 +291,11 @@ export const saveTask = async (taskData = {}) => {
   delete baseData.id;
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
   baseData.owner_id = currentUid;
+  baseData.user_id = currentUid;
   if (currentTeamId) baseData.team_id = currentTeamId;
 
   const data = baseData;
-  const path = pathFor("tasks");
+  const path = "tasks";
 
   try {
     const ref = await addDoc(collection(db, path), data);
@@ -290,8 +307,8 @@ export const saveTask = async (taskData = {}) => {
 };
 
 export const watchTasks = (range, callback) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid || !range?.from || !range?.to) {
+  const currentUid = getUid();
+  if (!range?.from || !range?.to) {
     if (unsubTasks) {
       unsubTasks();
       unsubTasks = null;
@@ -304,7 +321,7 @@ export const watchTasks = (range, callback) => {
     unsubTasks = null;
   }
 
-  const tasksPath = pathFor("tasks");
+  const tasksPath = "tasks";
   let logged = false;
 
   const fromDate = normalizeDate(range.from);
@@ -349,26 +366,21 @@ export const watchTasks = (range, callback) => {
         callback(tasks);
       },
       (err) => {
-        console.error("watchTasks", tasksPath, err.message);
+        logPermissionError(tasksPath, currentUid, err);
         callback([]);
       }
     );
     return unsubTasks;
   } catch (err) {
-    console.error("watchTasks", tasksPath, err.message);
+    logPermissionError(tasksPath, currentUid, err);
     return () => {};
   }
 };
 
 export const deleteTask = async (taskId) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid) {
-    console.log("skip: no user");
-    return;
-  }
-
+  if (readOnlyGuard()) return;
   try {
-    const taskRef = doc(collection(db, pathFor("tasks")), taskId);
+    const taskRef = doc(collection(db, "tasks"), taskId);
     await deleteDoc(taskRef);
   } catch (error) {
     console.error("Erreur deleteTask:", error);
@@ -407,45 +419,45 @@ export const getMonthRange = (year, month) => {
  * @param {object} partial - Données partielles de l'event
  */
 export const saveEventNew = async (userId, dateISO, partial) => {
-  if (!userId || !dateISO) {
+  if (readOnlyGuard()) return;
+  const uid = userId || getUid();
+  if (!uid || !dateISO) {
     console.error('saveEventNew: userId et dateISO requis');
     return;
   }
 
   try {
-    // Générer un ID unique si pas fourni
-    const eventId = partial.id || `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Structure obligatoire avec valeurs par défaut
-    const eventData = {
+    const eventId =
+      partial.id || `ev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+
+    const slot = {
       id: eventId,
       start: partial.start || new Date().toISOString(),
-      end: partial.end || new Date(Date.now() + 3600000).toISOString(), // +1h par défaut
+      end: partial.end || new Date(Date.now() + 3600000).toISOString(),
       client: partial.client || '',
-      status: partial.status || 'unpaid', // défaut = unpaid
+      status: partial.status || 'unpaid',
       hourly_rate: partial.hourly_rate || 50,
       duration: partial.duration || 60,
       task_id: partial.task_id || null,
       updated_at: Timestamp.now(),
-      ...partial // permet d'écraser les valeurs par défaut
+      owner_id: uid,
+      user_id: uid,
+      ...partial
     };
 
-    // Document de planning pour cette date
-    const planningDocId = `${userId}_${dateISO}`;
+    const fixedSlots = { [eventId]: slot };
+    const planningDocId = `${uid}_${dateISO}`;
     const planningRef = doc(db, 'plannings', planningDocId);
 
-    // Utiliser merge pour ajouter/mettre à jour dans slots[]
-    await setDoc(planningRef, {
-      slots: {
-        [eventId]: eventData
-      }
-    }, { merge: true });
+    const payload = { owner_id: uid, user_id: uid, slots: fixedSlots };
+
+    await setDoc(planningRef, payload, { merge: true });
 
     console.log(`Event ${eventId} sauvegardé dans plannings/${planningDocId}`);
-    return eventData;
+    return slot;
 
   } catch (error) {
-    console.error('Erreur saveEventNew:', error);
+    logPermissionError(`plannings/${uid}_${dateISO}`, uid, error);
     throw error;
   }
 };
@@ -457,26 +469,31 @@ export const saveEventNew = async (userId, dateISO, partial) => {
  * @param {string} eventId - ID de l'event à supprimer
  */
 export const deleteEventNew = async (userId, dateISO, eventId) => {
-  if (!userId || !dateISO || !eventId) {
+  if (readOnlyGuard()) return;
+  const uid = userId || getUid();
+  if (!uid || !dateISO || !eventId) {
     console.error('deleteEventNew: tous les paramètres sont requis');
     return;
   }
 
   try {
-    const planningDocId = `${userId}_${dateISO}`;
+    const planningDocId = `${uid}_${dateISO}`;
     const planningRef = doc(db, 'plannings', planningDocId);
 
-    // Supprimer le champ de l'event dans slots
-    await setDoc(planningRef, {
-      slots: {
-        [eventId]: null // Firestore supprime les champs null
-      }
-    }, { merge: true });
+    await setDoc(
+      planningRef,
+      {
+        owner_id: uid,
+        user_id: uid,
+        slots: { [eventId]: null }
+      },
+      { merge: true }
+    );
 
     console.log(`Event ${eventId} supprimé de plannings/${planningDocId}`);
 
   } catch (error) {
-    console.error('Erreur deleteEventNew:', error);
+    logPermissionError(`plannings/${uid}_${dateISO}`, uid, error);
     throw error;
   }
 };
@@ -533,23 +550,26 @@ export const watchWeekEvents = (userId, weekStartISO, weekEndISO, onData, onErro
     dates.forEach(planningDocId => {
       const planningRef = doc(db, 'plannings', planningDocId);
       
-      const unsubscribe = onSnapshot(planningRef, (snapshot) => {
-        const data = snapshot.data();
-        
-        if (data && data.slots) {
-          // Ajouter/mettre à jour les events de ce document
-          Object.values(data.slots).forEach(event => {
-            if (event && event.id) {
-              eventsMap.set(event.id, event);
-            }
-          });
+      const unsubscribe = onSnapshot(
+        planningRef,
+        (snapshot) => {
+          const data = snapshot.data();
+
+          if (data && data.slots) {
+            Object.values(data.slots).forEach(event => {
+              if (event && event.id) {
+                eventsMap.set(event.id, event);
+              }
+            });
+          }
+
+          updateEvents();
+        },
+        (error) => {
+          logPermissionError(planningRef.path, userId, error);
+          if (onError) onError(error);
         }
-        
-        updateEvents();
-      }, (error) => {
-        console.error(`Erreur listener ${planningDocId}:`, error);
-        if (onError) onError(error);
-      });
+      );
 
       unsubscribes.push(unsubscribe);
     });
@@ -560,7 +580,7 @@ export const watchWeekEvents = (userId, weekStartISO, weekEndISO, onData, onErro
     };
 
   } catch (error) {
-    console.error('Erreur watchWeekEvents:', error);
+    logPermissionError('plannings', userId, error);
     if (onError) onError(error);
     return () => {};
   }
