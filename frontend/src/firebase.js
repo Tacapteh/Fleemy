@@ -18,6 +18,7 @@ import {
   orderBy,
   Timestamp,
   setDoc,
+  getDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
@@ -80,6 +81,23 @@ export function useFirebaseUser() {
   const [user, setUser] = useState(null);
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
+      if (u) {
+        try {
+          const userRef = doc(db, "users", u.uid);
+          const snap = await getDoc(userRef);
+          if (!snap.exists()) {
+            await setDoc(userRef, {
+              user_id: u.uid,
+              email: u.email,
+              name: u.displayName || null,
+              team_id: null,
+              created_at: serverTimestamp(),
+            });
+          }
+        } catch (err) {
+          console.error("ensure user doc", err);
+        }
+      }
       setUser(u);
     });
     return () => unsub();
@@ -190,9 +208,12 @@ export const watchEvents = (range, callback) => {
   const fromTimestamp = Timestamp.fromDate(fromDate);
   const toTimestamp = Timestamp.fromDate(toDateVal);
 
+  const field = currentTeamId ? "team_id" : "user_id";
+  const fieldValue = currentTeamId ? currentTeamId : currentUid;
+
   const q = query(
     collection(db, eventsPath),
-    where("user_id", "==", currentUid),
+    where(field, "==", fieldValue),
     where("start", "<=", toTimestamp),
     where("end", ">=", fromTimestamp),
     orderBy("start", "asc")
@@ -212,7 +233,8 @@ export const watchEvents = (range, callback) => {
           const start =
             data.start instanceof Timestamp ? data.start.toDate() : data.start;
           const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
-          events.push({ ...data, id: docSnap.id, start, end });
+          const readOnly = data.user_id !== currentUid;
+          events.push({ ...data, id: docSnap.id, start, end, readOnly });
         });
         callback(events);
       },
@@ -300,9 +322,12 @@ export const watchTasks = (range, callback) => {
   const fromTimestamp = Timestamp.fromDate(fromDate);
   const toTimestamp = Timestamp.fromDate(toDateVal);
 
+  const field = currentTeamId ? "team_id" : "user_id";
+  const fieldValue = currentTeamId ? currentTeamId : currentUid;
+
   const q = query(
     collection(db, tasksPath),
-    where("user_id", "==", currentUid),
+    where(field, "==", fieldValue),
     where("start", "<=", toTimestamp),
     where("end", ">=", fromTimestamp),
     orderBy("start", "asc")
@@ -322,7 +347,8 @@ export const watchTasks = (range, callback) => {
           const start =
             data.start instanceof Timestamp ? data.start.toDate() : data.start;
           const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
-          tasks.push({ ...data, id: docSnap.id, start, end });
+          const readOnly = data.user_id !== currentUid;
+          tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
         });
         callback(tasks);
       },
@@ -371,179 +397,26 @@ export const getMonthRange = (year, month) => {
   return { from: start, to: end };
 };
 
-// NOUVELLES FONCTIONS DEMANDÉES
-
-/**
- * Sauvegarde un event dans Firestore avec la structure plannings/${userId}_${YYYY-MM-DD}
- * @param {string} userId - UID de l'utilisateur
- * @param {string} dateISO - Date au format YYYY-MM-DD (local, sans heure)
- * @param {object} partial - Données partielles de l'event
- */
-export const saveEventNew = async (userId, dateISO, partial) => {
-  if (readOnlyGuard()) return;
-  const uid = userId || getUid();
-  if (!uid || !dateISO) {
-    console.error('saveEventNew: userId et dateISO requis');
-    return;
-  }
-
-  try {
-    const eventId =
-      partial.id || `ev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-
-    const slot = {
-      id: eventId,
-      start: partial.start || new Date().toISOString(),
-      end: partial.end || new Date(Date.now() + 3600000).toISOString(),
-      client: partial.client || '',
-      status: partial.status || 'unpaid',
-      hourly_rate: partial.hourly_rate || 50,
-      duration: partial.duration || 60,
-      task_id: partial.task_id || null,
-      updated_at: Timestamp.now(),
-      user_id: uid,
-      team_id: currentTeamId || null,
-      created_at: serverTimestamp(),
-      ...partial
-    };
-
-    const fixedSlots = { [eventId]: slot };
-    const planningDocId = `${uid}_${dateISO}`;
-    const planningRef = doc(db, 'plannings', planningDocId);
-
-    const payload = { user_id: uid, team_id: currentTeamId || null, created_at: serverTimestamp(), slots: fixedSlots };
-
-    await setDoc(planningRef, payload, { merge: true });
-
-    console.log(`Event ${eventId} sauvegardé dans plannings/${planningDocId}`);
-    return slot;
-
-  } catch (error) {
-    logPermissionError(`plannings/${uid}_${dateISO}`, uid, error);
-    throw error;
-  }
-};
-
-/**
- * Supprime un event de Firestore
- * @param {string} userId - UID de l'utilisateur
- * @param {string} dateISO - Date au format YYYY-MM-DD
- * @param {string} eventId - ID de l'event à supprimer
- */
-export const deleteEventNew = async (userId, dateISO, eventId) => {
-  if (readOnlyGuard()) return;
-  const uid = userId || getUid();
-  if (!uid || !dateISO || !eventId) {
-    console.error('deleteEventNew: tous les paramètres sont requis');
-    return;
-  }
-
-  try {
-    const planningDocId = `${uid}_${dateISO}`;
-    const planningRef = doc(db, 'plannings', planningDocId);
-
-    await setDoc(
-      planningRef,
-      {
-        user_id: uid,
-        team_id: currentTeamId || null,
-        created_at: serverTimestamp(),
-        slots: { [eventId]: null }
-      },
-      { merge: true }
-    );
-
-    console.log(`Event ${eventId} supprimé de plannings/${planningDocId}`);
-
-  } catch (error) {
-    logPermissionError(`plannings/${uid}_${dateISO}`, uid, error);
-    throw error;
-  }
-};
-
-/**
- * Écoute les events d'une semaine avec déduplication et tri
- * @param {string} userId - UID de l'utilisateur  
- * @param {string} weekStartISO - Date de début (YYYY-MM-DD)
- * @param {string} weekEndISO - Date de fin (YYYY-MM-DD)
- * @param {function} onData - Callback avec les events triés et dédupliqués
- * @param {function} onError - Callback d'erreur
- * @returns {function} Fonction unsubscribe
- */
-export const watchWeekEvents = (userId, weekStartISO, weekEndISO, onData, onError) => {
+// Nouvelles fonctions utilisant la collection "events"
+export const saveEventNew = saveEvent;
+export const deleteEventNew = deleteEvent;
+export const watchWeekEvents = (
+  userId,
+  weekStartISO,
+  weekEndISO,
+  onData,
+  onError
+) => {
   if (!userId || !weekStartISO || !weekEndISO) {
-    console.error('watchWeekEvents: tous les paramètres sont requis');
+    console.error("watchWeekEvents: tous les paramètres sont requis");
     return () => {};
   }
-
-  const currentUser = auth.currentUser;
-  if (!currentUser) {
-    console.error('watchWeekEvents: utilisateur non authentifié');
-    if (onError) onError(new Error('Utilisateur non authentifié'));
-    return () => {};
-  }
-
   try {
-    // Générer toutes les dates de la semaine
-    const startDate = new Date(weekStartISO + 'T00:00:00');
-    const endDate = new Date(weekEndISO + 'T23:59:59');
-    const dates = [];
-    
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
-      dates.push(`${userId}_${dateStr}`);
-    }
-
-    // Écouter tous les documents de planning de la semaine
-    const unsubscribes = [];
-    const eventsMap = new Map(); // Pour déduplication par ID
-
-    const updateEvents = () => {
-      // Convertir la Map en array, trier par start, et appeler onData
-      const allEvents = Array.from(eventsMap.values())
-        .sort((a, b) => new Date(a.start) - new Date(b.start));
-      
-      if (onData) {
-        onData(allEvents);
-      }
-    };
-
-    // Créer un listener pour chaque document de planning
-    dates.forEach(planningDocId => {
-      const planningRef = doc(db, 'plannings', planningDocId);
-      
-      const unsubscribe = onSnapshot(
-        planningRef,
-        (snapshot) => {
-          const data = snapshot.data();
-
-          if (data && data.slots) {
-            Object.values(data.slots).forEach(event => {
-              if (event && event.id) {
-                eventsMap.set(event.id, event);
-              }
-            });
-          }
-
-          updateEvents();
-        },
-        (error) => {
-          logPermissionError(planningRef.path, userId, error);
-          if (onError) onError(error);
-        }
-      );
-
-      unsubscribes.push(unsubscribe);
-    });
-
-    // Retourner fonction de désabonnement
-    return () => {
-      unsubscribes.forEach(unsub => unsub());
-    };
-
+    const from = new Date(weekStartISO + "T00:00:00");
+    const to = new Date(weekEndISO + "T23:59:59");
+    return watchEvents({ from, to }, onData);
   } catch (error) {
-    logPermissionError('plannings', userId, error);
-    if (onError) onError(error);
+    onError && onError(error);
     return () => {};
   }
 };
