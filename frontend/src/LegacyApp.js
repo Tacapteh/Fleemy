@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import useTeam from "./hooks/useTeam";
 import "./App.css";
-import api from "./api";
+import { apiFetch } from "./lib/api";
 import { showToast } from "./utils/toast";
 import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
@@ -5380,12 +5380,13 @@ function App() {
   const handleLogin = async (sessionId) => {
     try {
       setLoading(true);
-      const response = await api.post("/auth/login", {
-        session_id: sessionId,
+      const response = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ session_id: sessionId }),
       });
-      setUser(response.data.user);
-      setSessionToken(response.data.session_token);
-      localStorage.setItem("fleemy_session_token", response.data.session_token);
+      setUser(response.user);
+      setSessionToken(response.session_token);
+      localStorage.setItem("fleemy_session_token", response.session_token);
       // Clear the hash from URL
       window.history.replaceState(null, null, window.location.pathname);
     } catch (error) {
@@ -5406,8 +5407,8 @@ function App() {
     const token = localStorage.getItem("fleemy_session_token");
     if (token) {
       try {
-        const response = await api.get("/auth/me");
-        setUser(response.data);
+        const response = await apiFetch("/auth/me");
+        setUser(response);
         setSessionToken(token);
       } catch (error) {
         localStorage.removeItem("fleemy_session_token");

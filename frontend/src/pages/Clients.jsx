@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import api from '../api';
+import { apiFetch } from '../lib/api';
 import ClientCard from '../components/clients/ClientCard';
 import ClientForm from '../components/clients/ClientForm';
 import { useOutletContext } from 'react-router-dom';
+import { isAuthDisabled } from '../firebase';
+import { showToast } from '../utils/toast';
 
 export default function Clients() {
   const { user } = useOutletContext();
@@ -15,8 +17,10 @@ export default function Clients() {
   const loadClients = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/clients', { headers: { 'X-User-Id': user.uid } });
-      setClients(res.data || []);
+      const res = await apiFetch('/clients', {
+        headers: { 'X-User-Id': user.uid },
+      });
+      setClients(res || []);
     } catch (e) {
       setError('Erreur de chargement');
     } finally {
@@ -42,8 +46,15 @@ export default function Clients() {
 
   const handleDelete = async (client) => {
     if (!window.confirm('Supprimer ce client ?')) return;
+    if (isAuthDisabled) {
+      showToast('Mode démo: lecture seule', true);
+      return;
+    }
     try {
-      await api.delete(`/clients/${client.id}`, { headers: { 'X-User-Id': user.uid } });
+      await apiFetch(`/clients/${client.id}`, {
+        method: 'DELETE',
+        headers: { 'X-User-Id': user.uid },
+      });
       loadClients();
     } catch (e) {
       setError('Erreur lors de la suppression');
@@ -51,18 +62,28 @@ export default function Clients() {
   };
 
   const handleSubmit = async (data, applyRate) => {
+    if (isAuthDisabled) {
+      showToast('Mode démo: lecture seule', true);
+      return;
+    }
     try {
       if (editing) {
-        await api.put(`/clients/${editing.id}?apply_rate=${applyRate ? 1 : 0}`, data, {
+        await apiFetch(`/clients/${editing.id}?apply_rate=${applyRate ? 1 : 0}`, {
+          method: 'PUT',
           headers: { 'X-User-Id': user.uid },
+          body: JSON.stringify(data),
         });
       } else {
-        await api.post('/clients', data, { headers: { 'X-User-Id': user.uid } });
+        await apiFetch('/clients', {
+          method: 'POST',
+          headers: { 'X-User-Id': user.uid },
+          body: JSON.stringify(data),
+        });
       }
       setShowForm(false);
       loadClients();
     } catch (e) {
-      setError('Erreur lors de l\'enregistrement');
+      setError("Erreur lors de l'enregistrement");
     }
   };
 
@@ -70,9 +91,11 @@ export default function Clients() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Clients</h1>
-        <button onClick={handleAdd} className="px-3 py-1 bg-blue-500 text-white rounded">
-          Nouveau client
-        </button>
+        {!isAuthDisabled && (
+          <button onClick={handleAdd} className="px-3 py-1 bg-blue-500 text-white rounded">
+            Nouveau client
+          </button>
+        )}
       </div>
       {error && <div className="text-red-500 mb-2">{error}</div>}
       {loading ? (
@@ -80,7 +103,13 @@ export default function Clients() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           {clients.map((c) => (
-            <ClientCard key={c.id} client={c} onEdit={handleEdit} onDelete={handleDelete} />
+            <ClientCard
+              key={c.id}
+              client={c}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              readOnly={isAuthDisabled}
+            />
           ))}
         </div>
       )}

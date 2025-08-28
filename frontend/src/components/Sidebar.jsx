@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { isAuthDisabled } from '../firebase';
 
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
@@ -56,7 +57,7 @@ export default function Sidebar({ user, onLogout }) {
               <p className="text-xs text-gray-500 truncate">{user.email ?? ''}</p>
             </div>
           </div>
-          {onLogout && (
+          {onLogout && !isAuthDisabled && (
             <button
               onClick={onLogout}
               className="w-full text-left text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded"

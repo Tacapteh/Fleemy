@@ -1,6 +1,6 @@
 import React from "react";
 import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider } from "./firebase";
+import { auth, googleProvider, isAuthDisabled } from "./firebase";
 
 export default function Login({ onLogin }) {
   const handleLogin = async () => {
@@ -8,12 +8,11 @@ export default function Login({ onLogin }) {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // Récupérer le token Firebase pour les requêtes API
-      const token = await user.getIdToken(); // ✅ CHECKED auth
-      console.log("token login", token); // ✅ CHECKED auth
+      const token = await user.getIdToken();
+      console.log("token login", token);
       localStorage.setItem("authToken", token);
 
-      onLogin(user); // Informe App.js que l'utilisateur est connecté
+      onLogin(user);
     } catch (error) {
       console.error("Erreur lors de la connexion :", error);
     }
@@ -28,20 +27,26 @@ export default function Login({ onLogin }) {
         height: "100vh",
       }}
     >
-      <button
-        onClick={handleLogin}
-        style={{
-          padding: "12px 24px",
-          backgroundColor: "#4285F4",
-          color: "white",
-          border: "none",
-          borderRadius: "6px",
-          cursor: "pointer",
-          fontSize: "16px",
-        }}
-      >
-        Se connecter avec Google
-      </button>
+      {isAuthDisabled ? (
+        <div style={{ padding: "16px", background: "#fef3c7", borderRadius: "6px" }}>
+          Mode démo: authentification désactivée pour les tests (lecture seule)
+        </div>
+      ) : (
+        <button
+          onClick={handleLogin}
+          style={{
+            padding: "12px 24px",
+            backgroundColor: "#4285F4",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "16px",
+          }}
+        >
+          Se connecter avec Google
+        </button>
+      )}
     </div>
   );
 }
