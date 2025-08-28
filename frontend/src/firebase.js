@@ -54,12 +54,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
-if (typeof window !== "undefined") {
-  window.auth = auth;
-  window.db = db;
-  window.fs = { collection, query, where, orderBy, getDocs, Timestamp, addDoc };
-}
-
 const recentErrors = new Map();
 
 const readOnlyGuard = () => {
