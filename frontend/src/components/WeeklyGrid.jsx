@@ -55,21 +55,38 @@ const StatusLegend = () => (
 
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
-  const totalMinutes = (dayEndHour - dayStartHour) * 60;
+  const totalMinutes = (dayEndHour - dayStartHour) * 60; // Exactement 9 heures (9h-18h)
   const days = Array.from({ length: 7 }, () => []);
 
   events.forEach((e) => {
     const start = new Date(e.start);
     const end = new Date(e.end);
     const day = (start.getDay() + 6) % 7;
-    const top =
-      ((start.getHours() * 60 + start.getMinutes() - startMinutes) /
-        totalMinutes) *
-      100;
-    const height = ((end - start) / 60000 / totalMinutes) * 100;
-    days[day].push({ ...e, start, end, top, height });
+    
+    // Tronquer l'affichage si hors plage 09:00-18:00
+    const startMinutesFromDay = start.getHours() * 60 + start.getMinutes();
+    const endMinutesFromDay = end.getHours() * 60 + end.getMinutes();
+    
+    const clampedStartMinutes = Math.max(startMinutesFromDay, startMinutes);
+    const clampedEndMinutes = Math.min(endMinutesFromDay, startMinutes + totalMinutes);
+    
+    // Ignorer si complètement hors plage
+    if (clampedStartMinutes >= clampedEndMinutes) return;
+    
+    const top = ((clampedStartMinutes - startMinutes) / totalMinutes) * 100;
+    const height = ((clampedEndMinutes - clampedStartMinutes) / totalMinutes) * 100;
+    
+    days[day].push({ 
+      ...e, 
+      start, 
+      end, 
+      top, 
+      height,
+      statusColorClass: getStatusColorClass(e.status)
+    });
   });
 
+  // Gérer les chevauchements avec partage de largeur
   days.forEach((list) => {
     list.sort((a, b) => a.start - b.start);
     const columns = [];
