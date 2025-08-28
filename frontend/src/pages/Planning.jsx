@@ -259,9 +259,22 @@ export default function Planning() {
       return;
     }
     try {
-      await deleteEvent(id);
+      // Trouver l'event pour obtenir sa date
+      const event = state.events.find(e => e.id === id);
+      if (!event) {
+        console.error('Event non trouvé pour suppression:', id);
+        return;
+      }
+
+      const eventDate = new Date(event.start);
+      const dateISO = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      await deleteEventNew(user.uid, dateISO, id);
+      showToast('Événement supprimé avec succès');
+
     } catch (e) {
       console.error('delete event', e);
+      showToast('Erreur lors de la suppression', true);
     } finally {
       closeModal();
     }
