@@ -22,3 +22,10 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   }
   return res.json();
 }
+
+export async function translateHtml(html: string, target: string) {
+  return apiFetch("/translate", {
+    method: "POST",
+    body: JSON.stringify({ html, target }),
+  });
+}

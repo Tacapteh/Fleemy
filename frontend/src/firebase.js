@@ -17,8 +17,8 @@ import {
   where,
   orderBy,
   Timestamp,
-  getDocs,
   setDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
 
@@ -81,10 +81,6 @@ export function useFirebaseUser() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
-      if (u && !ownerFixDone) {
-        ownerFixDone = true;
-        ensureOwnerId(u.uid);
-      }
     });
     return () => unsub();
   }, []);
@@ -103,10 +99,6 @@ let currentTeamId = null;
 let unsubEvents = null;
 let unsubTasks = null;
 
-// S'assurer que les anciens documents ont un owner_id
-let ownerFixDone = false;
-
-
 export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
 };
@@ -120,37 +112,6 @@ export const pathFor = (collectionName) => {
     `pathFor(${collectionName}) projectId=${projectId} uid=${uid} path=${path}`
   );
   return path;
-};
-
-// Corrige les documents sans owner_id pour l'utilisateur courant
-const ensureOwnerId = async (uid) => {
-  const collectionsToCheck = ["events", "tasks"];
-  let fixed = 0;
-  for (const name of collectionsToCheck) {
-    try {
-      const snap = await getDocs(collection(db, `users/${uid}/${name}`));
-      const writes = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (!data.owner_id) {
-          writes.push(
-            setDoc(
-              doc(db, `users/${uid}/${name}`, docSnap.id),
-              { owner_id: uid },
-              { merge: true }
-            )
-          );
-          fixed++;
-        }
-      });
-      await Promise.all(writes);
-    } catch (err) {
-      console.error("ensureOwnerId", name, err);
-    }
-  }
-  if (fixed) {
-    console.log(`ensureOwnerId corrected ${fixed} docs`);
-  }
 };
 
 // Utilitaire pour normaliser les dates
@@ -177,12 +138,12 @@ export const saveEvent = async (eventData = {}) => {
     ...eventData,
     start: normalizeDate(eventData.start),
     end: normalizeDate(eventData.end),
+    user_id: currentUid,
+    team_id: currentTeamId || null,
+    created_at: serverTimestamp(),
   };
   delete baseData.id;
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
-  baseData.owner_id = currentUid;
-  baseData.user_id = currentUid;
-  if (currentTeamId) baseData.team_id = currentTeamId;
 
   const data = baseData;
   const path = pathFor("events");
@@ -231,7 +192,7 @@ export const watchEvents = (range, callback) => {
 
   const q = query(
     collection(db, eventsPath),
-    where("owner_id", "==", currentUid),
+    where("user_id", "==", currentUid),
     where("start", "<=", toTimestamp),
     where("end", ">=", fromTimestamp),
     orderBy("start", "asc")
@@ -287,12 +248,12 @@ export const saveTask = async (taskData = {}) => {
     ...taskData,
     start: normalizeDate(taskData.start),
     end: normalizeDate(taskData.end),
+    user_id: currentUid,
+    team_id: currentTeamId || null,
+    created_at: serverTimestamp(),
   };
   delete baseData.id;
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
-  baseData.owner_id = currentUid;
-  baseData.user_id = currentUid;
-  if (currentTeamId) baseData.team_id = currentTeamId;
 
   const data = baseData;
   const path = "tasks";
@@ -341,7 +302,7 @@ export const watchTasks = (range, callback) => {
 
   const q = query(
     collection(db, tasksPath),
-    where("owner_id", "==", currentUid),
+    where("user_id", "==", currentUid),
     where("start", "<=", toTimestamp),
     where("end", ">=", fromTimestamp),
     orderBy("start", "asc")
@@ -440,8 +401,9 @@ export const saveEventNew = async (userId, dateISO, partial) => {
       duration: partial.duration || 60,
       task_id: partial.task_id || null,
       updated_at: Timestamp.now(),
-      owner_id: uid,
       user_id: uid,
+      team_id: currentTeamId || null,
+      created_at: serverTimestamp(),
       ...partial
     };
 
@@ -449,7 +411,7 @@ export const saveEventNew = async (userId, dateISO, partial) => {
     const planningDocId = `${uid}_${dateISO}`;
     const planningRef = doc(db, 'plannings', planningDocId);
 
-    const payload = { owner_id: uid, user_id: uid, slots: fixedSlots };
+    const payload = { user_id: uid, team_id: currentTeamId || null, created_at: serverTimestamp(), slots: fixedSlots };
 
     await setDoc(planningRef, payload, { merge: true });
 
@@ -483,8 +445,9 @@ export const deleteEventNew = async (userId, dateISO, eventId) => {
     await setDoc(
       planningRef,
       {
-        owner_id: uid,
         user_id: uid,
+        team_id: currentTeamId || null,
+        created_at: serverTimestamp(),
         slots: { [eventId]: null }
       },
       { merge: true }
@@ -513,11 +476,10 @@ export const watchWeekEvents = (userId, weekStartISO, weekEndISO, onData, onErro
     return () => {};
   }
 
-  // Vérifier que c'est bien l'utilisateur courant pour la sécurité
   const currentUser = auth.currentUser;
-  if (!currentUser || currentUser.uid !== userId) {
-    console.error('watchWeekEvents: accès non autorisé');
-    if (onError) onError(new Error('Accès non autorisé'));
+  if (!currentUser) {
+    console.error('watchWeekEvents: utilisateur non authentifié');
+    if (onError) onError(new Error('Utilisateur non authentifié'));
     return () => {};
   }
 

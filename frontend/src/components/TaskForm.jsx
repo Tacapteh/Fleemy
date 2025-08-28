@@ -57,7 +57,7 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
         start: startDate,
         end: endDate,
         price: task.price ? parseFloat(task.price) : null,
-        owner_id: user.uid
+        user_id: user.uid
       };
 
       const savedTask = await saveTask(taskData);
