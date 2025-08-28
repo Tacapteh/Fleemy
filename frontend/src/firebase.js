@@ -193,14 +193,14 @@ export const watchEvents = (range, callback) => {
     return () => {};
   }
 
-  const fromTimestamp = Timestamp.fromDate(fromDate);
-  const toTimestamp = Timestamp.fromDate(toDateVal);
+  const weekStartTs = Timestamp.fromDate(fromDate);
+  const weekEndTs = Timestamp.fromDate(toDateVal);
 
   const constraints = [
     where("user_id", "==", currentUid),
-    where("start", "<=", toTimestamp),
-    where("end", ">=", fromTimestamp),
-    orderBy("start", "asc"),
+    where("start", ">=", weekStartTs),
+    where("start", "<", weekEndTs),
+    orderBy("start"),
   ];
 
   if (currentTeamId) {
