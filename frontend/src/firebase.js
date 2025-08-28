@@ -414,6 +414,174 @@ export const getMonthRange = (year, month) => {
   return { from: start, to: end };
 };
 
+// NOUVELLES FONCTIONS DEMANDÉES
+
+/**
+ * Sauvegarde un event dans Firestore avec la structure plannings/${userId}_${YYYY-MM-DD}
+ * @param {string} userId - UID de l'utilisateur
+ * @param {string} dateISO - Date au format YYYY-MM-DD (local, sans heure)
+ * @param {object} partial - Données partielles de l'event
+ */
+export const saveEventNew = async (userId, dateISO, partial) => {
+  if (!userId || !dateISO) {
+    console.error('saveEventNew: userId et dateISO requis');
+    return;
+  }
+
+  try {
+    // Générer un ID unique si pas fourni
+    const eventId = partial.id || `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Structure obligatoire avec valeurs par défaut
+    const eventData = {
+      id: eventId,
+      start: partial.start || new Date().toISOString(),
+      end: partial.end || new Date(Date.now() + 3600000).toISOString(), // +1h par défaut
+      client: partial.client || '',
+      status: partial.status || 'unpaid', // défaut = unpaid
+      hourly_rate: partial.hourly_rate || 50,
+      duration: partial.duration || 60,
+      task_id: partial.task_id || null,
+      updated_at: Timestamp.now(),
+      ...partial // permet d'écraser les valeurs par défaut
+    };
+
+    // Document de planning pour cette date
+    const planningDocId = `${userId}_${dateISO}`;
+    const planningRef = doc(db, 'plannings', planningDocId);
+
+    // Utiliser merge pour ajouter/mettre à jour dans slots[]
+    await setDoc(planningRef, {
+      slots: {
+        [eventId]: eventData
+      }
+    }, { merge: true });
+
+    console.log(`Event ${eventId} sauvegardé dans plannings/${planningDocId}`);
+    return eventData;
+
+  } catch (error) {
+    console.error('Erreur saveEventNew:', error);
+    throw error;
+  }
+};
+
+/**
+ * Supprime un event de Firestore
+ * @param {string} userId - UID de l'utilisateur
+ * @param {string} dateISO - Date au format YYYY-MM-DD
+ * @param {string} eventId - ID de l'event à supprimer
+ */
+export const deleteEventNew = async (userId, dateISO, eventId) => {
+  if (!userId || !dateISO || !eventId) {
+    console.error('deleteEventNew: tous les paramètres sont requis');
+    return;
+  }
+
+  try {
+    const planningDocId = `${userId}_${dateISO}`;
+    const planningRef = doc(db, 'plannings', planningDocId);
+
+    // Supprimer le champ de l'event dans slots
+    await setDoc(planningRef, {
+      slots: {
+        [eventId]: null // Firestore supprime les champs null
+      }
+    }, { merge: true });
+
+    console.log(`Event ${eventId} supprimé de plannings/${planningDocId}`);
+
+  } catch (error) {
+    console.error('Erreur deleteEventNew:', error);
+    throw error;
+  }
+};
+
+/**
+ * Écoute les events d'une semaine avec déduplication et tri
+ * @param {string} userId - UID de l'utilisateur  
+ * @param {string} weekStartISO - Date de début (YYYY-MM-DD)
+ * @param {string} weekEndISO - Date de fin (YYYY-MM-DD)
+ * @param {function} onData - Callback avec les events triés et dédupliqués
+ * @param {function} onError - Callback d'erreur
+ * @returns {function} Fonction unsubscribe
+ */
+export const watchWeekEvents = (userId, weekStartISO, weekEndISO, onData, onError) => {
+  if (!userId || !weekStartISO || !weekEndISO) {
+    console.error('watchWeekEvents: tous les paramètres sont requis');
+    return () => {};
+  }
+
+  // Vérifier que c'est bien l'utilisateur courant pour la sécurité
+  const currentUser = auth.currentUser;
+  if (!currentUser || currentUser.uid !== userId) {
+    console.error('watchWeekEvents: accès non autorisé');
+    if (onError) onError(new Error('Accès non autorisé'));
+    return () => {};
+  }
+
+  try {
+    // Générer toutes les dates de la semaine
+    const startDate = new Date(weekStartISO + 'T00:00:00');
+    const endDate = new Date(weekEndISO + 'T23:59:59');
+    const dates = [];
+    
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+      dates.push(`${userId}_${dateStr}`);
+    }
+
+    // Écouter tous les documents de planning de la semaine
+    const unsubscribes = [];
+    const eventsMap = new Map(); // Pour déduplication par ID
+
+    const updateEvents = () => {
+      // Convertir la Map en array, trier par start, et appeler onData
+      const allEvents = Array.from(eventsMap.values())
+        .sort((a, b) => new Date(a.start) - new Date(b.start));
+      
+      if (onData) {
+        onData(allEvents);
+      }
+    };
+
+    // Créer un listener pour chaque document de planning
+    dates.forEach(planningDocId => {
+      const planningRef = doc(db, 'plannings', planningDocId);
+      
+      const unsubscribe = onSnapshot(planningRef, (snapshot) => {
+        const data = snapshot.data();
+        
+        if (data && data.slots) {
+          // Ajouter/mettre à jour les events de ce document
+          Object.values(data.slots).forEach(event => {
+            if (event && event.id) {
+              eventsMap.set(event.id, event);
+            }
+          });
+        }
+        
+        updateEvents();
+      }, (error) => {
+        console.error(`Erreur listener ${planningDocId}:`, error);
+        if (onError) onError(error);
+      });
+
+      unsubscribes.push(unsubscribe);
+    });
+
+    // Retourner fonction de désabonnement
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+
+  } catch (error) {
+    console.error('Erreur watchWeekEvents:', error);
+    if (onError) onError(error);
+    return () => {};
+  }
+};
+
 export { googleProvider, logout };
 
 window.auth = auth;
