@@ -13,7 +13,9 @@ import {
   saveEvent,
   deleteEvent,
   setTeamContext,
+  isAuthDisabled,
 } from '../firebase';
+import { showToast } from '../utils/toast';
 
 export default function Planning() {
   const user = useFirebaseUser();
@@ -169,6 +171,10 @@ export default function Planning() {
 
   const handleSaveEvent = async (data) => {
     if (!user) return;
+    if (isAuthDisabled) {
+      showToast('Mode démo: lecture seule', true);
+      return;
+    }
     try {
       const dayIndex = data.day;
       const startDate = new Date(weekStart);
@@ -208,6 +214,10 @@ export default function Planning() {
 
   const handleDeleteEvent = async (id) => {
     if (!user) return;
+    if (isAuthDisabled) {
+      showToast('Mode démo: lecture seule', true);
+      return;
+    }
     try {
       await deleteEvent(id);
     } catch (e) {
@@ -237,14 +247,16 @@ export default function Planning() {
         onViewChange={setView}
       />
 
-      <div className="flex justify-end mb-2">
-        <button
-          onClick={() => openDate(new Date(currentDate))}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
-        >
-          +
-        </button>
-      </div>
+      {!isAuthDisabled && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={() => openDate(new Date(currentDate))}
+            className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+          >
+            +
+          </button>
+        </div>
+      )}
       {state.loading && showSkeleton ? (
         <div>Chargement des événements...</div>
       ) : view === 'week' ? (
@@ -254,6 +266,7 @@ export default function Planning() {
           onSlotSelect={openSlot}
           onEventClick={openEvent}
           weekStart={weekStart}
+          aria-readonly={isAuthDisabled ? 'true' : undefined}
         />
       ) : (
         <MonthGrid
@@ -261,6 +274,7 @@ export default function Planning() {
           month={currentDate.getMonth()}
           onDateSelect={openDate}
           onEventClick={openEvent}
+          aria-readonly={isAuthDisabled ? 'true' : undefined}
         />
       )}
       <EventModal

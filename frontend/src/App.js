@@ -7,7 +7,7 @@ import {
   Outlet,
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, logout } from "./firebase";
+import { auth, logout, isAuthDisabled } from "./firebase";
 
 import Login from "./Login";
 import Dashboard from "./pages/Dashboard";
@@ -38,7 +38,16 @@ function App() {
   useEffect(() => {
     let first = true;
     const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+      if (!u && isAuthDisabled) {
+        setUser({
+          uid: "demo-user",
+          email: "demo@emergent.test",
+          displayName: "Demo",
+          team_id: null,
+        });
+      } else {
+        setUser(u);
+      }
       if (first) {
         setInitializing(false); // Firebase a fini d’initialiser
         first = false;
@@ -56,7 +65,7 @@ function App() {
     return <div>Chargement du compte...</div>;
   }
 
-  if (!user) {
+  if (!user && !isAuthDisabled) {
     return <Login onLogin={setUser} />;
   }
 
