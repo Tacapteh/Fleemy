@@ -46,4 +46,8 @@ module.exports = {
       return webpackConfig;
     },
   },
+  paths: (paths) => {
+    paths.appBuild = 'build';
+    return paths;
+  },
 };

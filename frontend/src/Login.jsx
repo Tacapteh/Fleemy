@@ -1,8 +1,11 @@
 import React from "react";
 import { signInWithPopup } from "firebase/auth";
-import { auth, googleProvider, isAuthDisabled } from "./firebase";
+import { auth, googleProvider } from "./firebase";
 
 export default function Login({ onLogin }) {
+  const demoMode =
+    (process.env.REACT_APP_DISABLE_GOOGLE_AUTH || "false") === "true";
+
   const handleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
@@ -27,11 +30,7 @@ export default function Login({ onLogin }) {
         height: "100vh",
       }}
     >
-      {isAuthDisabled ? (
-        <div style={{ padding: "16px", background: "#fef3c7", borderRadius: "6px" }}>
-          Mode démo: authentification désactivée pour les tests (lecture seule)
-        </div>
-      ) : (
+      {!demoMode ? (
         <button
           onClick={handleLogin}
           style={{
@@ -46,6 +45,10 @@ export default function Login({ onLogin }) {
         >
           Se connecter avec Google
         </button>
+      ) : (
+        <div style={{ padding: "16px", background: "#fef3c7", borderRadius: "6px" }}>
+          Mode démo : authentification désactivée (lecture seule)
+        </div>
       )}
     </div>
   );
