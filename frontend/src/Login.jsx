@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 
 export default function Login({ onLogin }) {
+  const [error, setError] = useState("");
+
   const handleLogin = async () => {
     try {
+      setError("");
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
@@ -14,7 +17,12 @@ export default function Login({ onLogin }) {
 
       onLogin(user);
     } catch (error) {
-      console.error("Erreur lors de la connexion :", error);
+      const message =
+        error.code === "auth/api-key-not-valid"
+          ? "Clé API Firebase invalide. Vérifiez votre configuration."
+          : "Erreur lors de la connexion.";
+      setError(message);
+      console.error(message, error);
     }
   };
 
@@ -25,8 +33,14 @@ export default function Login({ onLogin }) {
         justifyContent: "center",
         alignItems: "center",
         height: "100vh",
+        flexDirection: "column",
       }}
     >
+      {error && (
+        <p style={{ color: "red", marginBottom: "1rem", textAlign: "center" }}>
+          {error}
+        </p>
+      )}
       <button
         onClick={handleLogin}
         style={{
