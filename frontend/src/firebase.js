@@ -52,6 +52,13 @@ const projectId = app.options.projectId;
 console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+if (typeof window !== "undefined") {
+  window.auth = auth;
+  window.db = db;
+  window.fs = { collection, query, where, orderBy, getDocs, Timestamp, addDoc };
+}
+
 const googleProvider = new GoogleAuthProvider();
 
 const getUid = () => auth.currentUser?.uid || "demo-user";
@@ -197,15 +204,12 @@ export const watchEvents = (range, callback) => {
   const weekEndTs = Timestamp.fromDate(toDateVal);
 
   const constraints = [
-    where("user_id", "==", currentUid),
-    where("start", ">=", weekStartTs),
-    where("start", "<", weekEndTs),
-    orderBy("start"),
-  ];
+  where(currentTeamId ? "team_id" : "user_id", "==", currentTeamId || currentUid),
+  where("start", ">=", weekStartTs),
+  where("start", "<", weekEndTs),
+  orderBy("start"),
+];
 
-  if (currentTeamId) {
-    constraints.push(where("team_id", "==", currentTeamId));
-  }
 
   const q = query(collection(db, "events"), ...constraints);
 
