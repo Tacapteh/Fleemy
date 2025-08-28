@@ -12,6 +12,9 @@ import {
   watchTasks,
   saveEvent,
   deleteEvent,
+  saveEventNew,
+  deleteEventNew,
+  watchWeekEvents,
   setTeamContext,
   isAuthDisabled,
 } from '../firebase';
