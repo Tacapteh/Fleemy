@@ -47,6 +47,8 @@ origin_list = [
     "http://localhost:5173",
     "https://fleemy.web.app",
     "https://fleemy-21118.web.app",
+    "https://fleemy.vercel.app",
+    "https://preview-<hash>-fleemy.vercel.app",
 ]
 
 logger.info("CORS activé pour : %s", origin_list)
@@ -56,7 +58,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "https://fleemy.web.app",
-        "https://fleemy-21118.web.app"
+        "https://fleemy-21118.web.app",
+        "https://fleemy.vercel.app",
+        "https://preview-<hash>-fleemy.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
