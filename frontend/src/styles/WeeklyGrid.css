@@ -78,7 +78,7 @@
   grid-row: 1 / -1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: repeat(9, var(--weekly-grid-row-h)); /* 9 heures */
+  grid-template-rows: repeat(9, var(--weekly-grid-row-h)); /* Exactement 9 heures, pas plus */
   pointer-events: auto;
   position: relative;
   z-index: 1;
