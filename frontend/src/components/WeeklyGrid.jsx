@@ -233,12 +233,12 @@ export default function WeeklyGrid({
   const hours = useMemo(
     () =>
       Array.from(
-        { length: 10 },
+        { length: 9 }, // Exactement 9 heures (09:00-17:00, pas de ligne pour 18:00)
         (_, i) => `${String(9 + i).padStart(2, "0")}:00`
       ),
     []
   );
-  const timeLabels = React.useMemo(() => [...hours, "18:00"], [hours]);
+  const timeLabels = React.useMemo(() => [...hours, "18:00"], [hours]); // Affichage jusqu'à 18:00
 
   const days = useMemo(() => {
     const start = new Date(weekStart);
