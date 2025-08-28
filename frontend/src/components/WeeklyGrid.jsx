@@ -197,16 +197,22 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               onDragStart={() => setDraggingId(e.id)}
               onDragEnd={() => setDraggingId(null)}
               onClick={() => onEventClick && onEventClick(e)}
-              className={`event${draggingId === e.id ? " dragging" : ""}`}
+              className={`event border ${e.statusColorClass}${draggingId === e.id ? " dragging" : ""}`}
               style={{
                 left: `${(e.col * 100) / e.colCount}%`,
                 width: `${100 / e.colCount}%`,
                 top: `${e.top}%`,
                 height: `${e.height}%`,
-                backgroundColor: e.color || "#3b82f6",
               }}
             >
-              {e.description || e.title || "Événement"}
+              <div className="text-xs font-medium truncate">
+                {e.description || e.title || e.client || "Événement"}
+              </div>
+              {e.client && (
+                <div className="text-xs opacity-75 truncate">
+                  {e.client}
+                </div>
+              )}
             </div>
           ))}
         </div>
