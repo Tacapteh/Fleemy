@@ -121,17 +121,6 @@ export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
 };
 
-export const pathFor = (collectionName) => {
-  const uid = auth.currentUser?.uid;
-  const path = currentTeamId
-    ? `teams/${currentTeamId}/${collectionName}`
-    : `users/${uid}/${collectionName}`;
-  console.log(
-    `pathFor(${collectionName}) projectId=${projectId} uid=${uid} path=${path}`
-  );
-  return path;
-};
-
 // Utilitaire pour normaliser les dates
 const normalizeDate = (date) => {
   if (!date) return null;
@@ -150,7 +139,8 @@ const normalizeDate = (date) => {
 // EVENTS
 export const saveEvent = async (eventData = {}) => {
   if (readOnlyGuard()) return;
-  const currentUid = getUid();
+  const currentUid = auth.currentUser?.uid;
+  if (!currentUid) return;
 
   const baseData = {
     ...eventData,
@@ -164,13 +154,12 @@ export const saveEvent = async (eventData = {}) => {
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
   const data = baseData;
-  const path = pathFor("events");
 
   try {
-    const ref = await addDoc(collection(db, path), data);
+    const ref = await addDoc(collection(db, "events"), data);
     return { id: ref.id, ...data };
   } catch (error) {
-    console.error("saveEvent", path, error);
+    console.error("saveEvent", "events", error);
     return;
   }
 };
@@ -190,7 +179,6 @@ export const watchEvents = (range, callback) => {
     unsubEvents = null;
   }
 
-  const eventsPath = pathFor("events");
   let logged = false;
 
   const fromDate = normalizeDate(range.from);
@@ -208,23 +196,25 @@ export const watchEvents = (range, callback) => {
   const fromTimestamp = Timestamp.fromDate(fromDate);
   const toTimestamp = Timestamp.fromDate(toDateVal);
 
-  const field = currentTeamId ? "team_id" : "user_id";
-  const fieldValue = currentTeamId ? currentTeamId : currentUid;
-
-  const q = query(
-    collection(db, eventsPath),
-    where(field, "==", fieldValue),
+  const constraints = [
+    where("user_id", "==", currentUid),
     where("start", "<=", toTimestamp),
     where("end", ">=", fromTimestamp),
-    orderBy("start", "asc")
-  );
+    orderBy("start", "asc"),
+  ];
+
+  if (currentTeamId) {
+    constraints.push(where("team_id", "==", currentTeamId));
+  }
+
+  const q = query(collection(db, "events"), ...constraints);
 
   try {
     unsubEvents = onSnapshot(
       q,
       (snapshot) => {
         if (!logged) {
-          console.log("watchEvents OK", eventsPath);
+          console.log("watchEvents OK", "events");
           logged = true;
         }
         const events = [];
@@ -239,13 +229,13 @@ export const watchEvents = (range, callback) => {
         callback(events);
       },
       (err) => {
-        console.error("watchEvents", eventsPath, err.message);
+        console.error("watchEvents", "events", err.message);
         callback([]);
       }
     );
     return unsubEvents;
   } catch (err) {
-    console.error("watchEvents", eventsPath, err.message);
+    console.error("watchEvents", "events", err.message);
     return () => {};
   }
 };
@@ -253,7 +243,7 @@ export const watchEvents = (range, callback) => {
 export const deleteEvent = async (eventId) => {
   if (readOnlyGuard()) return;
   try {
-    const eventRef = doc(collection(db, pathFor("events")), eventId);
+    const eventRef = doc(collection(db, "events"), eventId);
     await deleteDoc(eventRef);
   } catch (error) {
     console.error("Erreur deleteEvent:", error);
