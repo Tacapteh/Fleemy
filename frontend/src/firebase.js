@@ -25,14 +25,16 @@ const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
 };
 
-const missingConfig = Object.entries(firebaseConfig)
-  .filter(([, value]) => !value)
-  .map(([key]) => key);
+if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
+  firebaseConfig.storageBucket = process.env.REACT_APP_FIREBASE_STORAGE_BUCKET;
+}
+
+const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
+const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
 
 if (missingConfig.length) {
   throw new Error(
