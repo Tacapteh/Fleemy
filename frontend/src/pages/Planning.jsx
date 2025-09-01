@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useReducer } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import WeeklyGrid from '../components/WeeklyGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
@@ -8,10 +8,7 @@ import EventModal from '../components/EventModal';
 import useTeam from '../hooks/useTeam';
 import {
   useFirebaseUser,
-  watchEvents,
   watchTasks,
-  saveEvent,
-  deleteEvent,
   saveEventNew,
   deleteEventNew,
   watchWeekEvents,
@@ -26,29 +23,9 @@ export default function Planning() {
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const initialState = { loading: false, error: null, events: [] };
-  function reducer(state, action) {
-    switch (action.type) {
-      case 'loading':
-        return { ...state, loading: true, error: null };
-      case 'events':
-        return { ...state, events: action.events };
-      case 'error':
-        return { ...state, error: action.error, events: [] };
-      case 'done':
-        return { ...state, loading: false };
-      case 'add':
-        return { ...state, events: [...state.events, action.event] };
-      case 'remove':
-        return {
-          ...state,
-          events: state.events.filter((e) => e.id !== action.id),
-        };
-      default:
-        return state;
-    }
-  }
-  const [state, dispatch] = useReducer(reducer, initialState);
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const [showSkeleton, setShowSkeleton] = useState(true);
   const [tasks, setTasks] = useState([]);
@@ -124,35 +101,54 @@ export default function Planning() {
   useEffect(() => {
     if (!user) {
       setTeamContext(null);
-      dispatch({ type: 'events', events: [] });
+      setEvents([]);
       setTasks([]);
       return () => {};
     }
 
     setTeamContext(teamId || null);
-    
-    // Utiliser les nouvelles fonctions Firebase pour une meilleure gestion
+    setLoading(true);
+    setError(null);
+
     const weekStartISO = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD
     const weekEndISO = weekEnd.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    // Nouvelle approche : utiliser watchWeekEvents pour la déduplication et le tri automatique
     const unsubEvents = watchWeekEvents(
       user.uid,
       weekStartISO,
       weekEndISO,
-      (events) => {
-        console.log('Snapshot size:', events.length, events.map(e => e.id));
-        const normalized = events.map(e => ({
-          ...e,
-          start: toHM(e.start),
-          end: toHM(e.end),
-        }));
-        dispatch({ type: 'events', events: normalized });
-        dispatch({ type: 'done' });
+      (snapshot) => {
+        const normalizedEvents = [];
+        const dayDocs = Array.isArray(snapshot?.docs) ? snapshot.docs : snapshot;
+        dayDocs.forEach((doc, docIndex) => {
+          const data = typeof doc.data === 'function' ? doc.data() : doc;
+          let date = data?.date || data?.day || null;
+          if (!date && doc?.id) {
+            const m = doc.id.match(/_(\d{4}-\d{2}-\d{2})/);
+            if (m) date = m[1];
+          }
+          if (!date) return;
+          const items = data?.events || data?.slots || data?.items || [];
+          items.forEach((item, idx) => {
+            normalizedEvents.push({
+              id: item.id || `${doc?.id || 'auto'}_${idx}`,
+              date,
+              start: toHM(item.start),
+              end: toHM(item.end),
+              status: item.status || 'pending',
+              title: item.title || item.client || '',
+              notes: item.notes || '',
+            });
+          });
+        });
+        setEvents(normalizedEvents);
+        setLoading(false);
       },
       (error) => {
         console.error('Erreur watchWeekEvents:', error);
-        dispatch({ type: 'error', error: error.message });
+        setError(error.message);
+        setEvents([]);
+        setLoading(false);
       }
     );
 
@@ -173,8 +169,7 @@ export default function Planning() {
       unsubTasks && unsubTasks();
     };
   }, [user?.uid, teamId, weekStart, weekEnd, weekRange]);
-  const weekEvents = state.events;
-  const monthEvents = state.events;
+
 
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -287,7 +282,7 @@ export default function Planning() {
     if (!user || modal.readOnly) return;
     try {
       // Vérifier que l'événement existe avant suppression
-      const event = state.events.find(e => e.id === id);
+      const event = events.find(e => e.id === id);
       if (!event) {
         console.error('Event non trouvé pour suppression:', id);
         return;
@@ -310,7 +305,7 @@ export default function Planning() {
 
   return (
     <>
-      {state.error && (
+      {error && (
         <div className="bg-red-100 text-red-700 p-2 rounded">
           Impossible de charger les événements
         </div>
@@ -332,11 +327,11 @@ export default function Planning() {
           +
         </button>
       </div>
-      {state.loading && showSkeleton ? (
+      {loading && showSkeleton ? (
         <div>Chargement des événements...</div>
       ) : view === 'week' ? (
         <WeeklyGrid
-          events={weekEvents}
+          events={events}
           tasks={tasks}
           onSlotSelect={openSlot}
           onEventClick={openEvent}
