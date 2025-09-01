@@ -7,6 +7,11 @@ import React, {
 import "../styles/WeeklyGrid.css";
 import { useFirebaseUser } from "../firebase";
 
+function toHM(v){ if(typeof v==="string"){ if(v.includes(":")) return v; if(/^\d{3,4}$/.test(v)){const s=v.padStart(4,"0"); return s.slice(0,2)+":"+s.slice(2);} } if(v&&typeof v==="object"){ if(typeof v.toDate==="function"){const d=v.toDate(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");} if(v instanceof Date){ return String(v.getHours()).padStart(2,"0")+":"+String(v.getMinutes()).padStart(2,"0");} } if(typeof v==="number"&&Number.isFinite(v)){ const hh=String(Math.floor(v/60)).padStart(2,"0"); const mm=String(v%60).padStart(2,"0"); return hh+":"+mm; } return "00:00"; }
+function toDateOnly(v){ if(!v) return null; if(typeof v==="string") return new Date(v+"T00:00:00"); if(v&&typeof v.toDate==="function") { const d=v.toDate(); return new Date(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T00:00:00"); } if(v instanceof Date) return new Date(v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0")+"T00:00:00"); return null; }
+function dayIndexFrom(dateLike, weekStartDate){ const d=toDateOnly(dateLike); if(!d) return -1; const ms=24*60*60*1000; const idx=Math.floor((d - new Date(weekStartDate.getFullYear()+"-"+String(weekStartDate.getMonth()+1).padStart(2,"0")+"-"+String(weekStartDate.getDate()).padStart(2,"0")+"T00:00:00"))/ms); return idx; }
+function minutesFromHM(hm){ const [h,m]=toHM(hm).split(":").map(n=>parseInt(n,10)); return (h*60)+(m||0); }
+
 const DAY_NAMES = [
   "Lundi",
   "Mardi",
@@ -20,16 +25,6 @@ const DAY_NAMES = [
 const DAY_START = 9;
 const DAY_END = 18; // exclusive (fin à 18h00)
 const SLOT_HEIGHT = 64;
-
-function getDayIndex(event) {
-  const date = new Date(event.start);
-  return (date.getDay() + 6) % 7;
-}
-
-function getTaskDayIndex(task) {
-  const date = new Date(task.start);
-  return (date.getDay() + 6) % 7;
-}
 
 // Composant légende des statuts
 const StatusLegend = () => (
@@ -48,59 +43,6 @@ const StatusLegend = () => (
       <span className="text-xs text-gray-600">En attente</span>
     </div>
   </div>
-);
-
-function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
-  const startMinutes = dayStartHour * 60;
-  const totalMinutes = (dayEndHour - dayStartHour) * 60; // Exactement 9 heures (9h-18h)
-  const columns = Array.from({ length: 7 }, () => []);
-
-  (events || []).forEach((e) => {
-    const start = new Date(e.start);
-    const end = new Date(e.end);
-    const day = getDayIndex(e);
-
-    // Tronquer l'affichage si hors plage 09:00-18:00
-    const startMinutesFromDay = start.getHours() * 60 + start.getMinutes();
-    const endMinutesFromDay = end.getHours() * 60 + end.getMinutes();
-
-    const clampedStartMinutes = Math.max(startMinutesFromDay, startMinutes);
-    const clampedEndMinutes = Math.min(endMinutesFromDay, startMinutes + totalMinutes);
-
-    // Ignorer si complètement hors plage
-    if (clampedStartMinutes >= clampedEndMinutes) return;
-
-    const top = ((clampedStartMinutes - startMinutes) / totalMinutes) * 100;
-    const height = ((clampedEndMinutes - clampedStartMinutes) / totalMinutes) * 100;
-
-    const d = Number.isInteger(day) && day >= 0 && day < 7 ? day : null;
-    if (d === null) return;
-    (columns[d] ||= []).push({
-      ...e,
-      start,
-      end,
-      top,
-      height,
-    });
-  });
-
-  // Gérer les chevauchements avec partage de largeur
-  columns.forEach((list) => {
-    list.sort((a, b) => a.start - b.start);
-    const columns = [];
-    list.forEach((ev) => {
-      let col = 0;
-      while (columns[col] && columns[col] > ev.start) col++;
-      ev.col = col;
-      columns[col] = ev.end;
-    });
-    const colCount = columns.length || 1;
-    list.forEach((ev) => (ev.colCount = colCount));
-  });
-
-  return columns;
-}
-
 const GridLayer = React.memo(({ hours, days }) => (
   <div className="grid-layer">
     <div className="days-grid">
@@ -180,31 +122,44 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
           className="events-container"
           style={{ gridColumn: dayIndex + 1 }}
         >
-          {dayEvents.map((e) => (
-            <div
-              key={e.id}
-              draggable
-              onDragStart={() => setDraggingId(e.id)}
-              onDragEnd={() => setDraggingId(null)}
-              onClick={() => onEventClick && onEventClick(e)}
-              className={`event-chip status-${e.status}${draggingId === e.id ? " dragging" : ""}`}
-              style={{
-                left: `${(e.col * 100) / e.colCount}%`,
-                width: `${100 / e.colCount}%`,
-                top: `${e.top}%`,
-                height: `${e.height}%`,
-              }}
-            >
-              <div className="title truncate">
-                {e.description || e.title || e.client || "Événement"}
-              </div>
-              {e.client && (
-                <div className="subtitle truncate">
-                  {e.client}
+          {dayEvents.map((e) => {
+            let top = e.top;
+            let height = e.height;
+            if (typeof e._topMin === "number" && typeof e._durMin === "number") {
+              const startMinutes = DAY_START * 60;
+              const endMinutes = DAY_END * 60;
+              const clampedStart = Math.max(e._topMin, startMinutes);
+              const clampedEnd = Math.min(e._topMin + e._durMin, endMinutes);
+              if (clampedStart >= clampedEnd) return null;
+              top = ((clampedStart - startMinutes) / (endMinutes - startMinutes)) * 100;
+              height = ((clampedEnd - clampedStart) / (endMinutes - startMinutes)) * 100;
+            }
+            return (
+              <div
+                key={e.id}
+                draggable
+                onDragStart={() => setDraggingId(e.id)}
+                onDragEnd={() => setDraggingId(null)}
+                onClick={() => onEventClick && onEventClick(e)}
+                className={`event-chip status-${e.status}${draggingId === e.id ? " dragging" : ""}`}
+                style={{
+                  left: `${(e.col * 100) / e.colCount}%`,
+                  width: `${100 / e.colCount}%`,
+                  top: `${top}%`,
+                  height: `${height}%`,
+                }}
+              >
+                <div className="title truncate">
+                  {e.description || e.title || e.client || "Événement"}
                 </div>
-              )}
-            </div>
-          ))}
+                {e.client && (
+                  <div className="subtitle truncate">
+                    {e.client}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>
@@ -214,7 +169,13 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 export default function WeeklyGrid(props) {
   const events = Array.isArray(props.events) ? props.events : [];
   const tasks = Array.isArray(props.tasks) ? props.tasks : [];
-  const { onSlotSelect, onEventClick, weekStart = new Date() } = props;
+  const weekStart =
+    props.weekStart instanceof Date
+      ? props.weekStart
+      : props.weekStart && typeof props.weekStart.toDate === "function"
+      ? props.weekStart.toDate()
+      : new Date(props.weekStart);
+  const { onSlotSelect, onEventClick } = props;
   const user = useFirebaseUser();
 
   const hours = useMemo(
@@ -235,6 +196,43 @@ export default function WeeklyGrid(props) {
       return { name, date: d };
     });
   }, [weekStart.getTime()]);
+
+  const columns = Array.from({ length: 7 }, () => []);
+  const taskColumns = Array.from({ length: 7 }, () => []);
+
+  events.forEach((e) => {
+    const idx = dayIndexFrom(e.date || e.day || e.startDate || e.start, weekStart);
+    if (idx >= 0 && idx < 7) {
+      const topMin = Math.max(0, minutesFromHM(e.start));
+      const endMin = minutesFromHM(e.end);
+      const dur = Math.max(15, endMin - topMin);
+      columns[idx].push({
+        ...e,
+        _topMin: topMin,
+        _durMin: dur,
+        start: toHM(e.start),
+        end: toHM(e.end),
+      });
+    }
+  });
+
+  tasks.forEach((t) => {
+    const idx = dayIndexFrom(t.date || t.day || t.startDate || t.start, weekStart);
+    if (idx >= 0 && idx < 7) taskColumns[idx].push(t);
+  });
+
+  columns.forEach((list) => {
+    list.sort((a, b) => a._topMin - b._topMin);
+    const cols = [];
+    list.forEach((ev) => {
+      let col = 0;
+      while (cols[col] && cols[col] > ev._topMin) col++;
+      ev.col = col;
+      cols[col] = ev._topMin + ev._durMin;
+    });
+    const colCount = cols.length || 1;
+    list.forEach((ev) => (ev.colCount = colCount));
+  });
 
   const onCellClick = useCallback(
     (date, timeString) => {
@@ -269,20 +267,6 @@ export default function WeeklyGrid(props) {
     },
     [onSlotSelect, user]
   );
-
-  const columns = useMemo(
-    () => placeEventsByDay(events, DAY_START, DAY_END),
-    [events]
-  );
-
-  const taskColumns = useMemo(() => {
-    const cols = Array.from({ length: 7 }, () => []);
-    tasks.forEach((t) => {
-      const day = getTaskDayIndex(t);
-      if (Number.isInteger(day) && day >= 0 && day < 7) (cols[day] ||= []).push(t);
-    });
-    return cols;
-  }, [tasks]);
 
   const wrapperRef = useRef(null);
 
