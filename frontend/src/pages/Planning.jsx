@@ -142,7 +142,12 @@ export default function Planning() {
       weekEndISO,
       (events) => {
         console.log('Snapshot size:', events.length, events.map(e => e.id));
-        dispatch({ type: 'events', events });
+        const normalized = events.map(e => ({
+          ...e,
+          start: toHM(e.start),
+          end: toHM(e.end),
+        }));
+        dispatch({ type: 'events', events: normalized });
         dispatch({ type: 'done' });
       },
       (error) => {
@@ -198,17 +203,46 @@ export default function Planning() {
 
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
+  function toHM(v) {
+    let date = null;
+    if (typeof v === 'string') {
+      if (v.includes(':')) {
+        const [h, m] = v.split(':');
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+      const n = Number(v);
+      if (!isNaN(n)) {
+        const h = Math.floor(n / 60);
+        const m = n % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+      date = new Date(v);
+    } else if (typeof v === 'number') {
+      const h = Math.floor(v / 60);
+      const m = v % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    } else if (v instanceof Date) {
+      date = v;
+    } else if (v && typeof v.toDate === 'function') {
+      date = v.toDate();
+    }
+    if (date instanceof Date && !isNaN(date.getTime())) {
+      return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    }
+    return '00:00';
+  }
+
   const handleSaveEvent = async (data) => {
     if (!user || modal.readOnly) return;
     try {
       const dayIndex = data.day;
       const startDate = new Date(weekStart);
       startDate.setDate(weekStart.getDate() + dayIndex);
-      const [sh, sm] = data.start.split(':').map(Number);
+      const [sh, sm] = toHM(data.start).split(':').map(Number);
       startDate.setHours(sh, sm, 0, 0);
       const endDate = new Date(weekStart);
       endDate.setDate(weekStart.getDate() + dayIndex);
-      const [eh, em] = data.end.split(':').map(Number);
+      const [eh, em] = toHM(data.end).split(':').map(Number);
       endDate.setHours(eh, em, 0, 0);
 
       const { from, to } = weekRange;
