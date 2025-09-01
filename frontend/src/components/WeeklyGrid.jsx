@@ -21,19 +21,6 @@ const DAY_START = 9;
 const DAY_END = 18; // exclusive (fin à 18h00)
 const SLOT_HEIGHT = 64;
 
-// Fonction utilitaire pour obtenir la classe de couleur selon le statut
-const getStatusColorClass = (status) => {
-  switch (status) {
-    case 'paid':
-      return 'bg-green-200 text-gray-800 border-gray-200';
-    case 'pending':
-      return 'bg-orange-200 text-gray-800 border-gray-200';
-    case 'unpaid':
-    default:
-      return 'bg-red-200 text-gray-800 border-gray-200';
-  }
-};
-
 // Composant légende des statuts
 const StatusLegend = () => (
   <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
@@ -84,7 +71,6 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
       end,
       top,
       height,
-      statusColorClass: getStatusColorClass(e.status),
     });
   });
 
@@ -199,7 +185,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               onDragStart={() => setDraggingId(e.id)}
               onDragEnd={() => setDraggingId(null)}
               onClick={() => onEventClick && onEventClick(e)}
-              className={`event border ${e.statusColorClass}${draggingId === e.id ? " dragging" : ""}`}
+              className={`event-chip status-${e.status}${draggingId === e.id ? " dragging" : ""}`}
               style={{
                 left: `${(e.col * 100) / e.colCount}%`,
                 width: `${100 / e.colCount}%`,
@@ -207,11 +193,11 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 height: `${e.height}%`,
               }}
             >
-              <div className="text-xs font-medium truncate">
+              <div className="title truncate">
                 {e.description || e.title || e.client || "Événement"}
               </div>
               {e.client && (
-                <div className="text-xs opacity-75 truncate">
+                <div className="subtitle truncate">
                   {e.client}
                 </div>
               )}
@@ -246,7 +232,7 @@ export default function WeeklyGrid(props) {
       d.setDate(start.getDate() + i);
       return { name, date: d };
     });
-  }, [weekStart]);
+  }, [weekStart.getTime()]);
 
   const onCellClick = useCallback(
     (date, timeString) => {
