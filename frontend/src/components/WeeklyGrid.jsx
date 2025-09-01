@@ -56,38 +56,40 @@ const StatusLegend = () => (
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
   const totalMinutes = (dayEndHour - dayStartHour) * 60; // Exactement 9 heures (9h-18h)
-  const days = Array.from({ length: 7 }, () => []);
+  const dayColumns = Array.from({ length: 7 }, () => []);
 
-  events.forEach((e) => {
+  (events || []).forEach((e) => {
     const start = new Date(e.start);
     const end = new Date(e.end);
     const day = (start.getDay() + 6) % 7;
-    
+
     // Tronquer l'affichage si hors plage 09:00-18:00
     const startMinutesFromDay = start.getHours() * 60 + start.getMinutes();
     const endMinutesFromDay = end.getHours() * 60 + end.getMinutes();
-    
+
     const clampedStartMinutes = Math.max(startMinutesFromDay, startMinutes);
     const clampedEndMinutes = Math.min(endMinutesFromDay, startMinutes + totalMinutes);
-    
+
     // Ignorer si complètement hors plage
     if (clampedStartMinutes >= clampedEndMinutes) return;
-    
+
     const top = ((clampedStartMinutes - startMinutes) / totalMinutes) * 100;
     const height = ((clampedEndMinutes - clampedStartMinutes) / totalMinutes) * 100;
-    
-    days[day].push({ 
-      ...e, 
-      start, 
-      end, 
-      top, 
+
+    const d = Number.isInteger(day) && day >= 0 && day < 7 ? day : null;
+    if (d === null) return;
+    (dayColumns[d] ||= []).push({
+      ...e,
+      start,
+      end,
+      top,
       height,
-      statusColorClass: getStatusColorClass(e.status)
+      statusColorClass: getStatusColorClass(e.status),
     });
   });
 
   // Gérer les chevauchements avec partage de largeur
-  days.forEach((list) => {
+  dayColumns.forEach((list) => {
     list.sort((a, b) => a.start - b.start);
     const columns = [];
     list.forEach((ev) => {
@@ -100,7 +102,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
     list.forEach((ev) => (ev.colCount = colCount));
   });
 
-  return days;
+  return dayColumns;
 }
 
 const GridLayer = React.memo(({ hours, days }) => (
@@ -221,13 +223,10 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   );
 });
 
-export default function WeeklyGrid({
-  events = [],
-  tasks = [],
-  onSlotSelect,
-  onEventClick,
-  weekStart = new Date(),
-}) {
+export default function WeeklyGrid(props) {
+  const events = Array.isArray(props.events) ? props.events : [];
+  const tasks = Array.isArray(props.tasks) ? props.tasks : [];
+  const { onSlotSelect, onEventClick, weekStart = new Date() } = props;
   const user = useFirebaseUser();
 
   const hours = useMemo(
