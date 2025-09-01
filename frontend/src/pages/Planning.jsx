@@ -48,13 +48,19 @@ function toHM(v) {
   return '00:00';
 }
 
-function ymdFromDocIdOrData(doc, data) {
+function toYMDFromDoc(doc, data) {
   if (data?.date) return data.date;
   if (doc?.id) {
     const m = doc.id.match(/_(\d{4}-\d{2}-\d{2})/);
     if (m) return m[1];
   }
   return null;
+}
+
+function dayIndex(d) {
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return null;
+  return (date.getDay() + 6) % 7;
 }
 
 export default function Planning() {
@@ -159,21 +165,25 @@ export default function Planning() {
       weekStartISO,
       weekEndISO,
       (snapshot) => {
-        const normalized = [];
         const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : snapshot;
+        const normalized = [];
         docs.forEach((doc) => {
           const data = typeof doc.data === 'function' ? doc.data() : doc;
-          const date = ymdFromDocIdOrData(doc, data);
+          const date = toYMDFromDoc(doc, data);
           if (!date) return;
-          const items = Array.isArray(data?.slots) ? data.slots : data?.events || [];
+          const items = Array.isArray(data?.slots)
+            ? data.slots
+            : data?.events || [];
           items.forEach((item, idx) => {
             normalized.push({
               id: item.id || `${doc?.id || 'auto'}_${idx}`,
               date,
+              day: Number.isInteger(item.day) ? item.day : dayIndex(date),
               start: toHM(item.start),
               end: toHM(item.end),
               status: item.status,
-              title: item.title || item.client || item.description || '',
+              title:
+                item.title || item.client || item.description || '',
             });
           });
         });
