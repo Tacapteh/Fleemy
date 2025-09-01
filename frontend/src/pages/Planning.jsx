@@ -134,13 +134,14 @@ export default function Planning() {
     // Utiliser les nouvelles fonctions Firebase pour une meilleure gestion
     const weekStartISO = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD
     const weekEndISO = weekEnd.toISOString().split('T')[0]; // YYYY-MM-DD
-    
+
     // Nouvelle approche : utiliser watchWeekEvents pour la déduplication et le tri automatique
     const unsubEvents = watchWeekEvents(
-      user.uid, 
-      weekStartISO, 
+      user.uid,
+      weekStartISO,
       weekEndISO,
       (events) => {
+        console.log('Snapshot size:', events.length, events.map(e => e.id));
         dispatch({ type: 'events', events });
         dispatch({ type: 'done' });
       },
@@ -217,7 +218,6 @@ export default function Planning() {
       }
 
       // Utiliser la nouvelle structure avec saveEventNew
-      const dateISO = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
       const duration = Math.round((endDate - startDate) / (1000 * 60)); // minutes
 
       const eventData = {
@@ -238,7 +238,7 @@ export default function Planning() {
         team_id: teamId || null,
       };
 
-      await saveEventNew(user.uid, dateISO, eventData);
+      await saveEventNew(eventData);
       showToast('Événement sauvegardé avec succès');
 
     } catch (e) {
@@ -252,17 +252,14 @@ export default function Planning() {
   const handleDeleteEvent = async (id) => {
     if (!user || modal.readOnly) return;
     try {
-      // Trouver l'event pour obtenir sa date
+      // Vérifier que l'événement existe avant suppression
       const event = state.events.find(e => e.id === id);
       if (!event) {
         console.error('Event non trouvé pour suppression:', id);
         return;
       }
 
-      const eventDate = new Date(event.start);
-      const dateISO = eventDate.toISOString().split('T')[0]; // YYYY-MM-DD
-      
-      await deleteEventNew(user.uid, dateISO, id);
+      await deleteEventNew(id);
       showToast('Événement supprimé avec succès');
 
     } catch (e) {

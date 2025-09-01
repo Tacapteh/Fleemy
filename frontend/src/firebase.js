@@ -61,7 +61,7 @@ const recentErrors = new Map();
 const readOnlyGuard = () => {
   if (DEMO_MODE) {
     showToast("Mode démo : lecture seule");
-    return true;
+    return !auth.currentUser;
   }
   return false;
 };
