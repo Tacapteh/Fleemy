@@ -252,14 +252,12 @@ export default function WeeklyGrid(props) {
   const taskColumns = Array.from({ length: 7 }, () => []);
 
   events.forEach(e => {
-    const idx = dayIndexFrom(e.date || e.day || e.startDate || e.start, weekStart);
+    const idx = dayIndexFrom(e.date, weekStart);
     if (idx >= 0 && idx < 7) {
       const top = Math.max(0, minutesFromHM(e.start));
       const dur = Math.max(15, minutesFromHM(e.end) - top);
       columns[idx].push({
         ...e,
-        start: toHM(e.start),
-        end: toHM(e.end),
         _topMin: top,
         _durMin: dur,
       });
