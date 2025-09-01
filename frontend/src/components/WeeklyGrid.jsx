@@ -21,6 +21,16 @@ const DAY_START = 9;
 const DAY_END = 18; // exclusive (fin à 18h00)
 const SLOT_HEIGHT = 64;
 
+function getDayIndex(event) {
+  const date = new Date(event.start);
+  return (date.getDay() + 6) % 7;
+}
+
+function getTaskDayIndex(task) {
+  const date = new Date(task.start);
+  return (date.getDay() + 6) % 7;
+}
+
 // Composant légende des statuts
 const StatusLegend = () => (
   <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
@@ -43,12 +53,12 @@ const StatusLegend = () => (
 function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   const startMinutes = dayStartHour * 60;
   const totalMinutes = (dayEndHour - dayStartHour) * 60; // Exactement 9 heures (9h-18h)
-  const dayColumns = Array.from({ length: 7 }, () => []);
+  const columns = Array.from({ length: 7 }, () => []);
 
   (events || []).forEach((e) => {
     const start = new Date(e.start);
     const end = new Date(e.end);
-    const day = (start.getDay() + 6) % 7;
+    const day = getDayIndex(e);
 
     // Tronquer l'affichage si hors plage 09:00-18:00
     const startMinutesFromDay = start.getHours() * 60 + start.getMinutes();
@@ -65,7 +75,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
 
     const d = Number.isInteger(day) && day >= 0 && day < 7 ? day : null;
     if (d === null) return;
-    (dayColumns[d] ||= []).push({
+    (columns[d] ||= []).push({
       ...e,
       start,
       end,
@@ -75,7 +85,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
   });
 
   // Gérer les chevauchements avec partage de largeur
-  dayColumns.forEach((list) => {
+  columns.forEach((list) => {
     list.sort((a, b) => a.start - b.start);
     const columns = [];
     list.forEach((ev) => {
@@ -88,7 +98,7 @@ function placeEventsByDay(events, dayStartHour = 9, dayEndHour = 18) {
     list.forEach((ev) => (ev.colCount = colCount));
   });
 
-  return dayColumns;
+  return columns;
 }
 
 const GridLayer = React.memo(({ hours, days }) => (
@@ -100,8 +110,8 @@ const GridLayer = React.memo(({ hours, days }) => (
 ));
 
 const InteractiveLayer = React.memo(function InteractiveLayer({
-  layout,
-  tasks,
+  columns,
+  taskColumns,
   hours,
   days,
   onCellClick,
@@ -139,15 +149,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
           ))}
 
           {/* Affichage des tâches dans les cellules */}
-          {tasks
-            .filter((task) => {
-              const taskStart = new Date(task.start);
-              const dayStart = new Date(day.date);
-              dayStart.setHours(0, 0, 0, 0);
-              const dayEnd = new Date(dayStart);
-              dayEnd.setDate(dayEnd.getDate() + 1);
-              return taskStart >= dayStart && taskStart < dayEnd;
-            })
+          {taskColumns[dayIndex]
             .map((task) => {
               const taskStart = new Date(task.start);
               const hourIndex = taskStart.getHours() - DAY_START;
@@ -172,7 +174,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
       ))}
 
       {/* Événements positionnés au-dessus */}
-      {layout.map((dayEvents, dayIndex) => (
+      {columns.map((dayEvents, dayIndex) => (
         <div
           key={dayIndex}
           className="events-container"
@@ -268,10 +270,19 @@ export default function WeeklyGrid(props) {
     [onSlotSelect, user]
   );
 
-  const layout = useMemo(
+  const columns = useMemo(
     () => placeEventsByDay(events, DAY_START, DAY_END),
     [events]
   );
+
+  const taskColumns = useMemo(() => {
+    const cols = Array.from({ length: 7 }, () => []);
+    tasks.forEach((t) => {
+      const day = getTaskDayIndex(t);
+      if (Number.isInteger(day) && day >= 0 && day < 7) (cols[day] ||= []).push(t);
+    });
+    return cols;
+  }, [tasks]);
 
   const wrapperRef = useRef(null);
 
@@ -320,8 +331,8 @@ export default function WeeklyGrid(props) {
         >
           <GridLayer hours={hours} days={days} />
           <InteractiveLayer
-            layout={layout}
-            tasks={tasks}
+            columns={columns}
+            taskColumns={taskColumns}
             hours={hours}
             days={days}
             onCellClick={onCellClick}
