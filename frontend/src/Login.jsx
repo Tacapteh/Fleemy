@@ -20,6 +20,8 @@ export default function Login({ onLogin }) {
       const message =
         error.code === "auth/api-key-not-valid"
           ? "Clé API Firebase invalide. Vérifiez votre configuration."
+          : error.code === "auth/unauthorized-domain"
+          ? "Domaine non autorisé. Ajoutez ce domaine dans la console Firebase Auth."
           : "Erreur lors de la connexion.";
       setError(message);
       console.error(message, error);
