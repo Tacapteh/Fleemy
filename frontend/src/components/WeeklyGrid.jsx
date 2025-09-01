@@ -7,10 +7,59 @@ import React, {
 import "../styles/WeeklyGrid.css";
 import { useFirebaseUser } from "../firebase";
 
-function toHM(v){ if(typeof v==="string"){ if(v.includes(":")) return v; if(/^\d{3,4}$/.test(v)){const s=v.padStart(4,"0"); return s.slice(0,2)+":"+s.slice(2);} } if(v&&typeof v==="object"){ if(typeof v.toDate==="function"){const d=v.toDate(); return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");} if(v instanceof Date){ return String(v.getHours()).padStart(2,"0")+":"+String(v.getMinutes()).padStart(2,"0");} } if(typeof v==="number"&&Number.isFinite(v)){ const hh=String(Math.floor(v/60)).padStart(2,"0"); const mm=String(v%60).padStart(2,"0"); return hh+":"+mm; } return "00:00"; }
-function toDateOnly(v){ if(!v) return null; if(typeof v==="string") return new Date(v+"T00:00:00"); if(v&&typeof v.toDate==="function") { const d=v.toDate(); return new Date(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+"T00:00:00"); } if(v instanceof Date) return new Date(v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0")+"T00:00:00"); return null; }
-function dayIndexFrom(dateLike, weekStartDate){ const d=toDateOnly(dateLike); if(!d) return -1; const ms=24*60*60*1000; const idx=Math.floor((d - new Date(weekStartDate.getFullYear()+"-"+String(weekStartDate.getMonth()+1).padStart(2,"0")+"-"+String(weekStartDate.getDate()).padStart(2,"0")+"T00:00:00"))/ms); return idx; }
-function minutesFromHM(hm){ const [h,m]=toHM(hm).split(":").map(n=>parseInt(n,10)); return (h*60)+(m||0); }
+const toHM = v => {
+  if (typeof v === "string") {
+    if (v.includes(":")) return v;
+    if (/^\d{3,4}$/.test(v)) {
+      const s = v.padStart(4, "0");
+      return s.slice(0, 2) + ":" + s.slice(2);
+    }
+  }
+  if (v && typeof v === "object") {
+    if (typeof v.toDate === "function") {
+      const d = v.toDate();
+      return (
+        String(d.getHours()).padStart(2, "0") +
+        ":" +
+        String(d.getMinutes()).padStart(2, "0")
+      );
+    }
+    if (v instanceof Date) {
+      return (
+        String(v.getHours()).padStart(2, "0") +
+        ":" +
+        String(v.getMinutes()).padStart(2, "0")
+      );
+    }
+  }
+  if (typeof v === "number" && Number.isFinite(v)) {
+    const hh = String(Math.floor(v / 60)).padStart(2, "0");
+    const mm = String(v % 60).padStart(2, "0");
+    return hh + ":" + mm;
+  }
+  return "00:00";
+};
+const toDateOnly = v => {
+  if (!v) return null;
+  if (typeof v === "string") return new Date(v + "T00:00:00");
+  if (v && typeof v.toDate === "function") {
+    const d = v.toDate();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+  if (v instanceof Date) return new Date(v.getFullYear(), v.getMonth(), v.getDate());
+  return null;
+};
+const dayIndexFrom = (dateLike, weekStartDate) => {
+  const d = toDateOnly(dateLike);
+  if (!d) return -1;
+  const ws = toDateOnly(weekStartDate) || new Date();
+  const MS = 24 * 60 * 60 * 1000;
+  return Math.floor((d - ws) / MS);
+};
+const minutesFromHM = hm => {
+  const [h, m] = toHM(hm).split(":").map(n => parseInt(n, 10));
+  return h * 60 + (m || 0);
+};
 
 const DAY_NAMES = [
   "Lundi",
@@ -43,6 +92,8 @@ const StatusLegend = () => (
       <span className="text-xs text-gray-600">En attente</span>
     </div>
   </div>
+);
+
 const GridLayer = React.memo(({ hours, days }) => (
   <div className="grid-layer">
     <div className="days-grid">
@@ -170,10 +221,10 @@ export default function WeeklyGrid(props) {
   const events = Array.isArray(props.events) ? props.events : [];
   const tasks = Array.isArray(props.tasks) ? props.tasks : [];
   const weekStart =
-    props.weekStart instanceof Date
-      ? props.weekStart
-      : props.weekStart && typeof props.weekStart.toDate === "function"
+    props.weekStart && typeof props.weekStart.toDate === "function"
       ? props.weekStart.toDate()
+      : props.weekStart instanceof Date
+      ? props.weekStart
       : new Date(props.weekStart);
   const { onSlotSelect, onEventClick } = props;
   const user = useFirebaseUser();
@@ -200,25 +251,34 @@ export default function WeeklyGrid(props) {
   const columns = Array.from({ length: 7 }, () => []);
   const taskColumns = Array.from({ length: 7 }, () => []);
 
-  events.forEach((e) => {
+  events.forEach(e => {
     const idx = dayIndexFrom(e.date || e.day || e.startDate || e.start, weekStart);
     if (idx >= 0 && idx < 7) {
-      const topMin = Math.max(0, minutesFromHM(e.start));
-      const endMin = minutesFromHM(e.end);
-      const dur = Math.max(15, endMin - topMin);
+      const top = Math.max(0, minutesFromHM(e.start));
+      const dur = Math.max(15, minutesFromHM(e.end) - top);
       columns[idx].push({
         ...e,
-        _topMin: topMin,
-        _durMin: dur,
         start: toHM(e.start),
         end: toHM(e.end),
+        _topMin: top,
+        _durMin: dur,
       });
     }
   });
 
-  tasks.forEach((t) => {
+  tasks.forEach(t => {
     const idx = dayIndexFrom(t.date || t.day || t.startDate || t.start, weekStart);
-    if (idx >= 0 && idx < 7) taskColumns[idx].push(t);
+    if (idx >= 0 && idx < 7) {
+      const top = Math.max(0, minutesFromHM(t.start));
+      const dur = Math.max(15, minutesFromHM(t.end) - top);
+      taskColumns[idx].push({
+        ...t,
+        start: toHM(t.start),
+        end: toHM(t.end),
+        _topMin: top,
+        _durMin: dur,
+      });
+    }
   });
 
   columns.forEach((list) => {
