@@ -16,6 +16,47 @@ import {
 } from '../firebase';
 import { showToast } from '../utils/toast';
 
+// Helpers -------------------------------------------------------------
+function toHM(v) {
+  let date = null;
+  if (typeof v === 'string') {
+    if (v.includes(':')) {
+      const [h, m] = v.split(':');
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    const n = Number(v);
+    if (!isNaN(n)) {
+      const h = Math.floor(n / 60);
+      const m = n % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    date = new Date(v);
+  } else if (typeof v === 'number') {
+    const h = Math.floor(v / 60);
+    const m = v % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  } else if (v instanceof Date) {
+    date = v;
+  } else if (v && typeof v.toDate === 'function') {
+    date = v.toDate();
+  }
+  if (date instanceof Date && !isNaN(date.getTime())) {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(
+      date.getMinutes(),
+    ).padStart(2, '0')}`;
+  }
+  return '00:00';
+}
+
+function ymdFromDocIdOrData(doc, data) {
+  if (data?.date) return data.date;
+  if (doc?.id) {
+    const m = doc.id.match(/_(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 export default function Planning() {
   const user = useFirebaseUser();
   const { team } = useTeam();
@@ -118,30 +159,25 @@ export default function Planning() {
       weekStartISO,
       weekEndISO,
       (snapshot) => {
-        const normalizedEvents = [];
-        const dayDocs = Array.isArray(snapshot?.docs) ? snapshot.docs : snapshot;
-        dayDocs.forEach((doc, docIndex) => {
+        const normalized = [];
+        const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : snapshot;
+        docs.forEach((doc) => {
           const data = typeof doc.data === 'function' ? doc.data() : doc;
-          let date = data?.date || data?.day || null;
-          if (!date && doc?.id) {
-            const m = doc.id.match(/_(\d{4}-\d{2}-\d{2})/);
-            if (m) date = m[1];
-          }
+          const date = ymdFromDocIdOrData(doc, data);
           if (!date) return;
-          const items = data?.events || data?.slots || data?.items || [];
+          const items = Array.isArray(data?.slots) ? data.slots : data?.events || [];
           items.forEach((item, idx) => {
-            normalizedEvents.push({
+            normalized.push({
               id: item.id || `${doc?.id || 'auto'}_${idx}`,
               date,
               start: toHM(item.start),
               end: toHM(item.end),
-              status: item.status || 'pending',
-              title: item.title || item.client || '',
-              notes: item.notes || '',
+              status: item.status,
+              title: item.title || item.client || item.description || '',
             });
           });
         });
-        setEvents(normalizedEvents);
+        setEvents(normalized);
         setLoading(false);
       },
       (error) => {
@@ -197,35 +233,6 @@ export default function Planning() {
   };
 
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
-
-  function toHM(v) {
-    let date = null;
-    if (typeof v === 'string') {
-      if (v.includes(':')) {
-        const [h, m] = v.split(':');
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      }
-      const n = Number(v);
-      if (!isNaN(n)) {
-        const h = Math.floor(n / 60);
-        const m = n % 60;
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      }
-      date = new Date(v);
-    } else if (typeof v === 'number') {
-      const h = Math.floor(v / 60);
-      const m = v % 60;
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    } else if (v instanceof Date) {
-      date = v;
-    } else if (v && typeof v.toDate === 'function') {
-      date = v.toDate();
-    }
-    if (date instanceof Date && !isNaN(date.getTime())) {
-      return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-    }
-    return '00:00';
-  }
 
   const handleSaveEvent = async (data) => {
     if (!user || modal.readOnly) return;
