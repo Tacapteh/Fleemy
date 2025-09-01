@@ -137,36 +137,6 @@
   grid-row: 1 / -1;
 }
 
-.event {
-  position: absolute;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  overflow: hidden;
-  padding: 4px 6px;
-  pointer-events: auto;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  z-index: 3;
-  line-height: 1.2;
-}
-
-.event:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
-  transition: all 0.2s ease;
-}
-
-.event:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
-  transition: all 0.2s ease;
-}
-
-.event.dragging {
-  will-change: transform;
-  opacity: 0.8;
-  transform: rotate(2deg);
-}
 
 /* Nouveaux styles pour les boutons + et les tâches */
 .add-event-btn {
@@ -211,4 +181,66 @@
 .task-icon {
   font-size: 10px;
   line-height: 1;
+}
+
+.event-chip {
+  position: absolute;
+  inset: auto;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: transparent;
+  border-left: 6px solid currentColor;
+  color: #374151;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06), 0 6px 12px rgba(0, 0, 0, 0.04);
+  backdrop-filter: saturate(120%);
+  overflow: hidden;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.event-chip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.event-chip:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.2);
+  outline-offset: 2px;
+}
+
+.event-chip .title {
+  font-weight: 600;
+}
+
+.event-chip .subtitle {
+  opacity: 0.85;
+}
+
+/* Couleurs pastel + fond transparent par statut */
+.status-paid {
+  color: #86efac;
+} /* vert pastel */
+
+.status-unpaid {
+  color: #fca5a5;
+} /* rouge pastel */
+
+.status-pending {
+  color: #fed7aa;
+} /* orange pastel */
+
+.event-chip:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+.event-chip.dragging {
+  will-change: transform;
+  opacity: 0.8;
+  transform: rotate(2deg);
 }
