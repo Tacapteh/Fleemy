@@ -167,8 +167,30 @@ export default function Planning() {
       (snapshot) => {
         const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : snapshot;
         const normalized = [];
-        docs.forEach((doc) => {
+        docs.forEach((doc, idxDoc) => {
           const data = typeof doc.data === 'function' ? doc.data() : doc;
+
+          // New format: direct event objects { start, end, ... }
+          if (data.start && data.end) {
+            const startDate = new Date(data.start);
+            const endDate = new Date(data.end);
+            if (isNaN(startDate) || isNaN(endDate)) return;
+            const date = startDate.toISOString().split('T')[0];
+            normalized.push({
+              id: data.id || doc.id || `event_${idxDoc}`,
+              date,
+              day: Number.isInteger(data.day) ? data.day : dayIndex(date),
+              start: toHM(startDate),
+              end: toHM(endDate),
+              status: data.status,
+              title: data.title || data.client || data.description || '',
+              readOnly: data.readOnly || false,
+              user_id: data.user_id,
+            });
+            return;
+          }
+
+          // Legacy format: documents containing `slots` or `events`
           const date = toYMDFromDoc(doc, data);
           if (!date) return;
           const items = Array.isArray(data?.slots)
@@ -182,8 +204,9 @@ export default function Planning() {
               start: toHM(item.start),
               end: toHM(item.end),
               status: item.status,
-              title:
-                item.title || item.client || item.description || '',
+              title: item.title || item.client || item.description || '',
+              readOnly: item.readOnly || false,
+              user_id: item.user_id,
             });
           });
         });
