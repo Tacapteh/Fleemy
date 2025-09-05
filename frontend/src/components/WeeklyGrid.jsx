@@ -110,6 +110,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   onCellClick,
   onEventClick,
   onAddEvent,
+  onTaskClick,
 }) {
   const [draggingId, setDraggingId] = useState(null);
 
@@ -158,6 +159,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                     backgroundColor: task.color || "#10b981",
                   }}
                   title={task.title}
+                  onClick={() => onTaskClick && onTaskClick(task)}
                 >
                   <span className="task-icon">{task.icon || "📋"}</span>
                 </div>
@@ -226,7 +228,7 @@ export default function WeeklyGrid(props) {
       : props.weekStart instanceof Date
       ? props.weekStart
       : new Date(props.weekStart);
-  const { onSlotSelect, onEventClick } = props;
+  const { onSlotSelect, onEventClick, onTaskClick } = props;
   const user = useFirebaseUser();
 
   const hours = useMemo(
@@ -382,6 +384,7 @@ export default function WeeklyGrid(props) {
             onCellClick={onCellClick}
             onEventClick={onEventClick}
             onAddEvent={onAddEvent}
+            onTaskClick={onTaskClick}
           />
         </div>
       </div>

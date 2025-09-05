@@ -4,11 +4,13 @@ import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
 import EventModal from '../components/EventModal';
+import TaskModal from '../components/TaskModal';
 
 import useTeam from '../hooks/useTeam';
 import {
   useFirebaseUser,
   watchTasks,
+  deleteTask,
   saveEventNew,
   deleteEventNew,
   watchWeekEvents,
@@ -82,6 +84,7 @@ export default function Planning() {
   }, []);
 
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
+  const [taskModal, setTaskModal] = useState({ open: false, task: null });
 
 
 
@@ -267,6 +270,28 @@ export default function Planning() {
 
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
+  const openNewTask = () => setTaskModal({ open: true, task: null });
+  const handleTaskClick = (task) => setTaskModal({ open: true, task });
+  const closeTaskModal = () => setTaskModal({ open: false, task: null });
+
+  const handleSaveTask = () => {
+    showToast('Tâche sauvegardée avec succès');
+    closeTaskModal();
+  };
+
+  const handleDeleteTask = async (id) => {
+    if (!user) return;
+    try {
+      await deleteTask(id);
+      showToast('Tâche supprimée');
+    } catch (e) {
+      console.error('delete task', e);
+      showToast('Erreur lors de la suppression de la tâche', true);
+    } finally {
+      closeTaskModal();
+    }
+  };
+
   const handleSaveEvent = async (data) => {
     if (!user || modal.readOnly) return;
     try {
@@ -359,12 +384,18 @@ export default function Planning() {
         onViewChange={setView}
       />
 
-      <div className="flex justify-end mb-2">
+      <div className="flex justify-end mb-2 space-x-2">
         <button
           onClick={() => openDate(new Date(currentDate))}
           className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
         >
-          +
+          + Événement
+        </button>
+        <button
+          onClick={openNewTask}
+          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+        >
+          + Tâche
         </button>
       </div>
       {loading && showSkeleton ? (
@@ -375,6 +406,7 @@ export default function Planning() {
           tasks={tasks}
           onSlotSelect={openSlot}
           onEventClick={openEvent}
+          onTaskClick={handleTaskClick}
           weekStart={weekStart}
         />
       ) : (
@@ -394,6 +426,13 @@ export default function Planning() {
         timeSlot={modal.timeSlot}
         selectedDate={modal.selectedDate}
         readOnly={modal.readOnly}
+      />
+      <TaskModal
+        isOpen={taskModal.open}
+        onClose={closeTaskModal}
+        onSave={handleSaveTask}
+        onDelete={handleDeleteTask}
+        task={taskModal.task}
       />
     </>
   );
