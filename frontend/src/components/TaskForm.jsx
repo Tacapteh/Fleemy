@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { saveTask, useFirebaseUser } from '../firebase';
 
-const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
+const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
   const [task, setTask] = useState({
     title: initialTask?.title || '',
     start: initialTask?.start || new Date(),
@@ -195,15 +195,24 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
           </div>
 
           <div className="task-form-actions">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={onCancel}
               className="task-form-cancel"
             >
               Annuler
             </button>
-            <button 
-              type="submit" 
+            {initialTask && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(initialTask.id)}
+                className="task-form-delete"
+              >
+                Supprimer
+              </button>
+            )}
+            <button
+              type="submit"
               disabled={isSubmitting}
               className="task-form-save"
             >
@@ -355,6 +364,16 @@ const TaskForm = ({ initialTask = null, onSave, onCancel }) => {
         .task-form-cancel {
           background: #f3f4f6;
           color: #374151;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .task-form-delete {
+          background: #ef4444;
+          color: white;
           border: none;
           padding: 10px 20px;
           border-radius: 6px;

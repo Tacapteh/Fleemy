@@ -259,8 +259,10 @@ export const saveTask = async (taskData = {}) => {
     end: normalizeDate(taskData.end),
     user_id: currentUid,
     team_id: currentTeamId || null,
-    created_at: serverTimestamp(),
+    // Only set created_at for new tasks
+    ...(taskData.id ? {} : { created_at: serverTimestamp() }),
   };
+  const id = taskData.id;
   delete baseData.id;
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
@@ -268,8 +270,14 @@ export const saveTask = async (taskData = {}) => {
   const path = "tasks";
 
   try {
-    const ref = await addDoc(collection(db, path), data);
-    return { id: ref.id, ...data };
+    if (id) {
+      const ref = doc(collection(db, path), id);
+      await setDoc(ref, data, { merge: true });
+      return { id, ...data };
+    } else {
+      const ref = await addDoc(collection(db, path), data);
+      return { id: ref.id, ...data };
+    }
   } catch (error) {
     console.error("saveTask", path, error);
     return;
