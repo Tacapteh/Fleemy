@@ -196,7 +196,7 @@
   overflow: hidden;
   pointer-events: auto;
   cursor: pointer;
-  opacity: 0.9;
+  opacity: 0.75;
   transition: opacity 0.2s ease;
 }
 
@@ -244,6 +244,6 @@
 
 .event-chip.dragging {
   will-change: transform;
-  opacity: 0.8;
+  opacity: 0.7;
   transform: rotate(2deg);
 }

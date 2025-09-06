@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import '../styles/MonthCalendar.css';
 import {
-  saveEvent,
   watchEvents,
   watchTasks,
   getMonthRange,
   useFirebaseUser,
 } from '../firebase';
 
-function MonthGrid({ year, month, onDateSelect, onEventClick }) {
+function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent }) {
   const user = useFirebaseUser();
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -96,75 +95,21 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
     return unsubscribe;
   }, [user, monthRange]);
 
-    const createEvent = useCallback(async (date) => {
-      if (!user) {
-        console.warn('Utilisateur non connecté, création événement bloquée');
-        return;
-      }
-
-      // Créer de vrais Date objects avec setHours
-      const start = new Date(date);
-      start.setHours(9, 0, 0, 0); // 09:00
-      const end = new Date(date);
-      end.setHours(10, 0, 0, 0); // 10:00
-
-      const newEvent = {
-        title: 'Nouvel événement',
-        start,
-        end,
-        status: 'unpaid',
-        description: ''
-      };
-
-    // Optimistic UI
-    const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
-    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    setEventsByDay(prev => ({
-      ...prev,
-      [dayKey]: [...(prev[dayKey] || []), tempEvent]
-    }));
-
-    try {
-      const savedEvent = await saveEvent(newEvent);
-      // Remplacer l'événement temporaire par le vrai
-      setEventsByDay(prev => ({
-        ...prev,
-        [dayKey]: (prev[dayKey] || []).map(e => e.id === tempEvent.id ? savedEvent : e)
-      }));
-    } catch (error) {
-      console.error('Erreur lors de la création de l\'événement:', error);
-      // Rollback optimistic UI
-      setEventsByDay(prev => ({
-        ...prev,
-        [dayKey]: (prev[dayKey] || []).filter(e => e.id !== tempEvent.id)
-      }));
-    }
-  }, [user]);
-
   const handleSelect = (value) => {
     if (!user) {
       console.warn('Utilisateur non connecté, sélection bloquée');
       return;
     }
-    
+
     if (value) {
       const selectedDate = new Date(year, month, value);
-      if (onDateSelect) {
+      const wantsEvent = window.confirm('Créer un événement ?\nAnnuler pour accéder à la semaine');
+      if (wantsEvent) {
+        onCreateEvent && onCreateEvent(selectedDate);
+      } else if (onDateSelect) {
         onDateSelect(selectedDate);
-      } else {
-        createEvent(selectedDate);
       }
     }
-  };
-
-  const handleAddEvent = (value) => {
-    if (!user) {
-      console.warn('Utilisateur non connecté, ajout événement bloqué');
-      return;
-    }
-    
-    const selectedDate = new Date(year, month, value);
-    createEvent(selectedDate);
   };
 
   const getDayItems = (value) => {
@@ -188,37 +133,38 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
 
     return (
       <>
-          {allItems.map((item, index) => {
-            const isTask = !!item.icon;
-            const statusClass = !isTask && item.status ? `status-${item.status}` : '';
-            const style = isTask
-              ? { '--item-color': item.color || '#10b981' }
-              : !item.status && item.color
-              ? { '--item-color': item.color }
-              : undefined;
-            const label = item.client || item.title;
-            return (
-              <div
-                key={item.id}
-                className={`month-item ${isTask ? 'month-task' : 'month-event'} ${statusClass}`.trim()}
-                style={style}
-                onClick={(evt) => {
-                  evt.stopPropagation();
-                  onEventClick && onEventClick(item);
-                }}
-                title={label}
-              >
-                {isTask && <span className="month-item-icon">{item.icon}</span>}
-                <span className="month-item-title">
-                  {label?.length > 12 ? `${label.substring(0, 12)}...` : label}
-                </span>
-              </div>
-            );
-          })}
+        {allItems.map((item) => {
+          const isTask = !!item.icon;
+          const type = item.status || item.type;
+          const statusClass = !isTask && ['paid', 'unpaid', 'pending'].includes(type)
+            ? `status-${type}`
+            : '';
+          const style = isTask
+            ? { '--item-color': item.color || '#10b981' }
+            : !statusClass && item.color
+            ? { '--item-color': item.color }
+            : undefined;
+          const label = item.client || item.title;
+          return (
+            <div
+              key={item.id}
+              className={`month-item ${isTask ? 'month-task' : ''} ${statusClass}`.trim()}
+              style={style}
+              onClick={(evt) => {
+                evt.stopPropagation();
+                onEventClick && onEventClick(item);
+              }}
+              title={label}
+            >
+              {isTask && <span className="month-item-icon">{item.icon}</span>}
+              <span className="month-item-title">
+                {label?.length > 12 ? `${label.substring(0, 12)}...` : label}
+              </span>
+            </div>
+          );
+        })}
         {remaining > 0 && (
-          <div className="month-item-more">
-            +{remaining}
-          </div>
+          <div className="month-item-more">+{remaining}</div>
         )}
       </>
     );
@@ -247,25 +193,16 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
           <div key={wi} className="calendar-row">
             {week.map((value, di) => (
               value ? (
-                <div key={di} className="calendar-cell">
+                <div
+                  key={di}
+                  className="calendar-cell"
+                  onClick={() => handleSelect(value)}
+                >
                   <div className="calendar-cell-header">
                     <span className="calendar-cell-day">{value}</span>
-                    <button
-                      className="calendar-add-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddEvent(value);
-                      }}
-                      title="Ajouter un événement"
-                    >
-                      +
-                    </button>
                   </div>
-                  
-                  <div 
-                    className="calendar-cell-content"
-                    onClick={() => handleSelect(value)}
-                  >
+
+                  <div className="calendar-cell-content">
                     {renderDayItems(getDayItems(value))}
                   </div>
                 </div>

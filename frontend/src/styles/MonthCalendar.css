@@ -45,24 +45,10 @@
   pointer-events: none;
 }
 
-.month-event {
-  width: 100%;
-  background: rgba(59, 130, 246, 0.15);
-  border-left: 4px solid #3b82f6;
-  border-radius: 0.25rem;
-  padding: 1px 2px;
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
-  color: #1e3a8a;
-}
-
 /* Nouveaux styles pour MonthGrid */
 .calendar-cell-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   width: 100%;
   margin-bottom: 4px;
@@ -74,31 +60,12 @@
   color: #374151;
 }
 
-.calendar-add-btn {
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: #3b82f6;
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.calendar-add-btn:hover {
-  background: #2563eb;
-}
-
 .calendar-cell-content {
   flex: 1;
   width: 100%;
   overflow: hidden;
 }
+
 
 .month-item {
   width: 100%;
@@ -115,7 +82,7 @@
   background: transparent;
   border-left: 4px solid var(--item-color, #3b82f6);
   overflow: hidden;
-  opacity: 0.9;
+  opacity: 0.75;
   transition: opacity 0.2s ease;
 }
 
@@ -130,10 +97,6 @@
   background: var(--item-color, #3b82f6);
   opacity: 0.25;
   pointer-events: none;
-}
-
-.month-item.month-event {
-  --item-color: #3b82f6;
 }
 
 .month-item.month-task {

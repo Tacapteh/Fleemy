@@ -263,6 +263,11 @@ export default function Planning() {
     setModal({ open: true, selectedDate: date, timeSlot: null, event: null, readOnly: false });
   };
 
+  const openWeek = (date) => {
+    setView('week');
+    setCurrentDate(date);
+  };
+
   const openEvent = (event) => {
     const readOnly = event.readOnly || (event.user_id && event.user_id !== user.uid);
     setModal({ open: true, event, timeSlot: null, selectedDate: null, readOnly });
@@ -413,7 +418,8 @@ export default function Planning() {
         <MonthGrid
           year={currentDate.getFullYear()}
           month={currentDate.getMonth()}
-          onDateSelect={openDate}
+          onDateSelect={openWeek}
+          onCreateEvent={openDate}
           onEventClick={openEvent}
         />
       )}
