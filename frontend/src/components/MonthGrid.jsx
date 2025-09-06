@@ -96,25 +96,25 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
     return unsubscribe;
   }, [user, monthRange]);
 
-  const createEvent = useCallback(async (date) => {
-    if (!user) {
-      console.warn('Utilisateur non connecté, création événement bloquée');
-      return;
-    }
+    const createEvent = useCallback(async (date) => {
+      if (!user) {
+        console.warn('Utilisateur non connecté, création événement bloquée');
+        return;
+      }
 
-    // Créer de vrais Date objects avec setHours
-    const start = new Date(date);
-    start.setHours(9, 0, 0, 0); // 09:00
-    const end = new Date(date);
-    end.setHours(10, 0, 0, 0); // 10:00
+      // Créer de vrais Date objects avec setHours
+      const start = new Date(date);
+      start.setHours(9, 0, 0, 0); // 09:00
+      const end = new Date(date);
+      end.setHours(10, 0, 0, 0); // 10:00
 
-    const newEvent = {
-      title: 'Nouvel événement',
-      start,
-      end,
-      color: '#3b82f6',
-      description: ''
-    };
+      const newEvent = {
+        title: 'Nouvel événement',
+        start,
+        end,
+        status: 'unpaid',
+        description: ''
+      };
 
     // Optimistic UI
     const tempEvent = { ...newEvent, id: `temp_${Date.now()}` };
@@ -188,23 +188,32 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
 
     return (
       <>
-        {allItems.map((item, index) => (
-          <div
-            key={item.id}
-            className={`month-item ${item.icon ? 'month-task' : 'month-event'}`}
-            style={{ backgroundColor: item.color || (item.icon ? '#10b981' : '#3b82f6') }}
-            onClick={(evt) => {
-              evt.stopPropagation();
-              onEventClick && onEventClick(item);
-            }}
-            title={item.title}
-          >
-            {item.icon && <span className="month-item-icon">{item.icon}</span>}
-            <span className="month-item-title">
-              {item.title?.length > 12 ? `${item.title.substring(0, 12)}...` : item.title}
-            </span>
-          </div>
-        ))}
+          {allItems.map((item, index) => {
+            const isTask = !!item.icon;
+            const statusClass = !isTask && item.status ? `status-${item.status}` : '';
+            const style = isTask
+              ? { '--item-color': item.color || '#10b981' }
+              : item.color
+              ? { '--item-color': item.color }
+              : undefined;
+            return (
+              <div
+                key={item.id}
+                className={`month-item ${isTask ? 'month-task' : 'month-event'} ${statusClass}`.trim()}
+                style={style}
+                onClick={(evt) => {
+                  evt.stopPropagation();
+                  onEventClick && onEventClick(item);
+                }}
+                title={item.title}
+              >
+                {isTask && <span className="month-item-icon">{item.icon}</span>}
+                <span className="month-item-title">
+                  {item.title?.length > 12 ? `${item.title.substring(0, 12)}...` : item.title}
+                </span>
+              </div>
+            );
+          })}
         {remaining > 0 && (
           <div className="month-item-more">
             +{remaining}

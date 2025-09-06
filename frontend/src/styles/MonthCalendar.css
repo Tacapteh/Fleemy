@@ -126,7 +126,7 @@
   position: absolute;
   inset: 0;
   background: var(--item-color, #3b82f6);
-  opacity: 0.2;
+  opacity: 0.25;
   pointer-events: none;
 }
 
@@ -136,6 +136,18 @@
 
 .month-item.month-task {
   --item-color: #10b981;
+}
+
+.month-item.status-paid {
+  --item-color: #22c55e;
+}
+
+.month-item.status-unpaid {
+  --item-color: #ef4444;
+}
+
+.month-item.status-pending {
+  --item-color: #f59e0b;
 }
 
 .month-item-icon {
