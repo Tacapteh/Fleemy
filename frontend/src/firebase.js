@@ -136,6 +136,29 @@ const normalizeDate = (date) => {
   return date;
 };
 
+// Convert ISO week + day name to a Date object (Monday-based)
+const DAY_NAME_INDEX = {
+  monday: 0,
+  tuesday: 1,
+  wednesday: 2,
+  thursday: 3,
+  friday: 4,
+  saturday: 5,
+  sunday: 6,
+};
+
+const dateFromISOWeek = (year, week, dayName) => {
+  const dayIndex = DAY_NAME_INDEX[dayName?.toLowerCase?.()];
+  if (dayIndex === undefined) return null;
+  const simple = new Date(year, 0, 4); // Jan 4th is always in week 1
+  const dayOffset = (simple.getDay() + 6) % 7; // convert to Monday=0
+  const monday = new Date(simple);
+  monday.setDate(simple.getDate() - dayOffset + (week - 1) * 7);
+  const d = new Date(monday);
+  d.setDate(monday.getDate() + dayIndex);
+  return d;
+};
+
 // EVENTS
 export const saveEvent = async (eventData = {}) => {
   if (readOnlyGuard()) return;
@@ -286,7 +309,7 @@ export const saveTask = async (taskData = {}) => {
 
 export const watchTasks = (range, callback) => {
   const currentUid = getUid();
-  if (!range?.from || !range?.to) {
+  if (!range?.from || !range?.to || !currentUid) {
     if (unsubTasks) {
       unsubTasks();
       unsubTasks = null;
@@ -298,9 +321,6 @@ export const watchTasks = (range, callback) => {
     unsubTasks();
     unsubTasks = null;
   }
-
-  const tasksPath = "tasks";
-  let logged = false;
 
   const fromDate = normalizeDate(range.from);
   const toDateVal = normalizeDate(range.to);
@@ -320,6 +340,11 @@ export const watchTasks = (range, callback) => {
   const field = currentTeamId ? "team_id" : "user_id";
   const fieldValue = currentTeamId ? currentTeamId : currentUid;
 
+  const results = { root: [], weekly: [] };
+  const emit = () => callback([...results.root, ...results.weekly]);
+  let logged = false;
+
+  const tasksPath = "tasks";
   const q = query(
     collection(db, tasksPath),
     where(field, "==", fieldValue),
@@ -328,35 +353,73 @@ export const watchTasks = (range, callback) => {
     orderBy("start", "asc")
   );
 
-  try {
-    unsubTasks = onSnapshot(
-      q,
-      (snapshot) => {
-        if (!logged) {
-          console.log("watchTasks OK", tasksPath);
-          logged = true;
-        }
-        const tasks = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          const start =
-            data.start instanceof Timestamp ? data.start.toDate() : data.start;
-          const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
-          const readOnly = data.user_id !== currentUid;
-          tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
-        });
-        callback(tasks);
-      },
-      (err) => {
-        logPermissionError(tasksPath, currentUid, err);
-        callback([]);
+  const unsubRoot = onSnapshot(
+    q,
+    (snapshot) => {
+      if (!logged) {
+        console.log("watchTasks OK", tasksPath);
+        logged = true;
       }
-    );
-    return unsubTasks;
-  } catch (err) {
-    logPermissionError(tasksPath, currentUid, err);
-    return () => {};
-  }
+      const tasks = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const start =
+          data.start instanceof Timestamp ? data.start.toDate() : data.start;
+        const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
+        const readOnly = data.user_id !== currentUid;
+        tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
+      });
+      results.root = tasks;
+      emit();
+    },
+    (err) => {
+      logPermissionError(tasksPath, currentUid, err);
+      results.root = [];
+      emit();
+    }
+  );
+
+  const weeklyRef = collection(db, `users/${currentUid}/tasks`);
+  const unsubWeekly = onSnapshot(
+    weeklyRef,
+    (snapshot) => {
+      const tasks = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (Array.isArray(data.time_slots)) {
+          data.time_slots.forEach((slot, idx) => {
+            const date = dateFromISOWeek(data.year, data.week, slot.day);
+            if (!date) return;
+            if (date < fromDate || date > toDateVal) return;
+            tasks.push({
+              id: `${docSnap.id}_${idx}`,
+              name: data.name,
+              color: data.color,
+              icon: data.icon,
+              price: data.price,
+              start: slot.start,
+              end: slot.end,
+              date,
+              readOnly: data.uid !== currentUid,
+            });
+          });
+        }
+      });
+      results.weekly = tasks;
+      emit();
+    },
+    (err) => {
+      logPermissionError(`users/${currentUid}/tasks`, currentUid, err);
+      results.weekly = [];
+      emit();
+    }
+  );
+
+  unsubTasks = () => {
+    unsubRoot && unsubRoot();
+    unsubWeekly && unsubWeekly();
+  };
+  return unsubTasks;
 };
 
 export const deleteTask = async (taskId) => {
