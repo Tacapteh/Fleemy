@@ -115,10 +115,12 @@
   background: transparent;
   border-left: 4px solid var(--item-color, #3b82f6);
   overflow: hidden;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
 }
 
 .month-item:hover {
-  opacity: 0.8;
+  opacity: 1;
 }
 
 .month-item::before {

@@ -196,6 +196,8 @@
   overflow: hidden;
   pointer-events: auto;
   cursor: pointer;
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
 }
 
 .event-chip::before {
@@ -237,6 +239,7 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   transform: translateY(-1px);
   transition: all 0.2s ease;
+  opacity: 1;
 }
 
 .event-chip.dragging {
