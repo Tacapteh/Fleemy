@@ -46,8 +46,10 @@
 }
 
 .month-event {
+  position: relative;
   width: 100%;
-  background: #bfdbfe;
+  background: transparent;
+  border-left: 6px solid var(--chip-color, #3b82f6);
   border-radius: 0.25rem;
   padding: 1px 2px;
   font-size: 12px;
@@ -55,6 +57,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   margin-top: 2px;
+  color: #1e3a8a;
+}
+
+.month-event::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--chip-color, #3b82f6);
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 /* Nouveaux styles pour MonthGrid */
@@ -99,6 +111,7 @@
 }
 
 .month-item {
+  position: relative;
   width: 100%;
   border-radius: 3px;
   padding: 2px 4px;
@@ -107,20 +120,44 @@
   display: flex;
   align-items: center;
   cursor: pointer;
-  color: white;
+  color: #374151;
   font-weight: 500;
+  background: transparent;
+  border-left: 6px solid var(--chip-color, var(--item-color, #3b82f6));
+  overflow: hidden;
 }
 
 .month-item:hover {
   opacity: 0.8;
 }
 
-.month-event {
-  background: #3b82f6;
+.month-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--chip-color, var(--item-color, #3b82f6));
+  opacity: 0.25;
+  pointer-events: none;
 }
 
-.month-task {
-  background: #10b981;
+.month-item.month-event {
+  --chip-color: #3b82f6;
+}
+
+.month-item.month-task {
+  --chip-color: #10b981;
+}
+
+.status-paid {
+  --chip-color: #22c55e;
+}
+
+.status-unpaid {
+  --chip-color: #ef4444;
+}
+
+.status-pending {
+  --chip-color: #f59e0b;
 }
 
 .month-item-icon {

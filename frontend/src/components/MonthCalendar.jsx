@@ -66,7 +66,8 @@ function MonthCalendar({ year, month, events = [], onDateSelect, onEventClick })
                       .map((e) => (
                         <div
                           key={e.id}
-                          className="month-event"
+                          className={`month-event${e.status ? ` status-${e.status}` : ''}`}
+                          style={e.color ? { '--chip-color': e.color } : undefined}
                           onClick={(evt) => {
                             evt.stopPropagation();
                             onEventClick && onEventClick(e);

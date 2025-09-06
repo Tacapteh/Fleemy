@@ -191,8 +191,10 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
         {allItems.map((item, index) => (
           <div
             key={item.id}
-            className={`month-item ${item.icon ? 'month-task' : 'month-event'}`}
-            style={{ backgroundColor: item.color || (item.icon ? '#10b981' : '#3b82f6') }}
+            className={`month-item ${item.icon ? 'month-task' : 'month-event'}${
+              item.status ? ` status-${item.status}` : ''
+            }`}
+            style={item.color ? { '--chip-color': item.color } : undefined}
             onClick={(evt) => {
               evt.stopPropagation();
               onEventClick && onEventClick(item);
