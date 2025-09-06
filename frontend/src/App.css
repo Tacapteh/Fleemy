@@ -718,11 +718,23 @@ button:active {
   font-size: 10px;
   line-height: 1.2;
   cursor: pointer;
-  border-left: 3px solid;
+  border-left: 3px solid var(--event-color, #3b82f6);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   transition: opacity 0.2s ease;
+  position: relative;
+  background: transparent;
+  color: #374151;
+}
+
+.month-event::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--event-color, #3b82f6);
+  opacity: 0.2;
+  pointer-events: none;
 }
 
 .month-event:hover {
@@ -730,27 +742,19 @@ button:active {
 }
 
 .month-event.event-meeting {
-  background: #dcfce7;
-  border-left-color: #16a34a;
-  color: #166534;
+  --event-color: #22c55e;
 }
 
 .month-event.event-task {
-  background: #fee2e2;
-  border-left-color: #dc2626;
-  color: #991b1b;
+  --event-color: #ef4444;
 }
 
 .month-event.event-break {
-  background: #fef3c7;
-  border-left-color: #d97706;
-  color: #92400e;
+  --event-color: #f59e0b;
 }
 
 .month-event.event-notworked {
-  background: #f1f5f9;
-  border-left-color: #64748b;
-  color: #475569;
+  --event-color: #9ca3af;
 }
 
 .month-more-events {
