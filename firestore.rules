@@ -21,11 +21,27 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
     }
 
-    // Transitional support for legacy subcollection path
-    match /users/{userId}/events/{eventId} {
-      allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.user_id == request.auth.uid;
+    match /users/{userId} {
+      allow create: if request.auth != null && request.auth.uid == userId &&
+        request.resource.data.user_id == request.auth.uid;
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow update, delete: if request.auth != null && request.auth.uid == userId && resource.data.user_id == request.auth.uid;
+      allow update, delete: if request.auth != null && request.auth.uid == userId &&
+        resource.data.user_id == request.auth.uid;
+
+      match /tasks/{taskId} {
+        allow create: if request.auth != null && request.auth.uid == userId &&
+          request.resource.data.uid == request.auth.uid;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow update, delete: if request.auth != null && request.auth.uid == userId &&
+          resource.data.uid == request.auth.uid;
+      }
+
+      // Transitional support for legacy subcollection path
+      match /events/{eventId} {
+        allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.user_id == request.auth.uid;
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow update, delete: if request.auth != null && request.auth.uid == userId && resource.data.user_id == request.auth.uid;
+      }
     }
   }
 }
