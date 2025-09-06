@@ -193,9 +193,10 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
             const statusClass = !isTask && item.status ? `status-${item.status}` : '';
             const style = isTask
               ? { '--item-color': item.color || '#10b981' }
-              : item.color
+              : !item.status && item.color
               ? { '--item-color': item.color }
               : undefined;
+            const label = item.client || item.title;
             return (
               <div
                 key={item.id}
@@ -205,11 +206,11 @@ function MonthGrid({ year, month, onDateSelect, onEventClick }) {
                   evt.stopPropagation();
                   onEventClick && onEventClick(item);
                 }}
-                title={item.title}
+                title={label}
               >
                 {isTask && <span className="month-item-icon">{item.icon}</span>}
                 <span className="month-item-title">
-                  {item.title?.length > 12 ? `${item.title.substring(0, 12)}...` : item.title}
+                  {label?.length > 12 ? `${label.substring(0, 12)}...` : label}
                 </span>
               </div>
             );
