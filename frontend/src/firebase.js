@@ -349,7 +349,6 @@ export const watchTasks = (range, callback) => {
     collection(db, tasksPath),
     where(field, "==", fieldValue),
     where("start", "<=", toTimestamp),
-    where("end", ">=", fromTimestamp),
     orderBy("start", "asc")
   );
 
@@ -366,8 +365,10 @@ export const watchTasks = (range, callback) => {
         const start =
           data.start instanceof Timestamp ? data.start.toDate() : data.start;
         const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
-        const readOnly = data.user_id !== currentUid;
-        tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
+        if (end >= fromDate) {
+          const readOnly = data.user_id !== currentUid;
+          tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
+        }
       });
       results.root = tasks;
       emit();
