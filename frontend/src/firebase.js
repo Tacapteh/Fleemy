@@ -392,14 +392,37 @@ export const watchTasks = (range, callback) => {
             const date = dateFromISOWeek(data.year, data.week, slot.day);
             if (!date) return;
             if (date < fromDate || date > toDateVal) return;
+
+            const parseSlotTime = (val) => {
+              if (val && typeof val.toDate === "function") return val.toDate();
+              if (val instanceof Date) return new Date(val);
+              if (typeof val === "string" && val.includes(":")) {
+                const [hh, mm] = val.split(":").map(Number);
+                const d = new Date(date);
+                d.setHours(hh, mm || 0, 0, 0);
+                return d;
+              }
+              if (typeof val === "number") {
+                const hh = Math.floor(val / 60);
+                const mm = val % 60;
+                const d = new Date(date);
+                d.setHours(hh, mm, 0, 0);
+                return d;
+              }
+              return normalizeDate(val);
+            };
+
+            const start = parseSlotTime(slot.start);
+            const end = parseSlotTime(slot.end);
+
             tasks.push({
               id: `${docSnap.id}_${idx}`,
               name: data.name,
               color: data.color,
               icon: data.icon,
               price: data.price,
-              start: slot.start,
-              end: slot.end,
+              start,
+              end,
               date,
               readOnly: data.uid !== currentUid,
             });

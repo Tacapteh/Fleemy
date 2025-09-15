@@ -1,11 +1,21 @@
 import React, { useState } from 'react';
 import { saveTask, useFirebaseUser } from '../firebase';
 
+const roundToHour = (date = new Date()) => {
+  const d = new Date(date);
+  d.setMinutes(0, 0, 0);
+  return d;
+};
+
 const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
+  const initStart = initialTask?.start ? new Date(initialTask.start) : roundToHour();
+  const initEnd = initialTask?.end
+    ? new Date(initialTask.end)
+    : new Date(initStart.getTime() + 60 * 60 * 1000);
   const [task, setTask] = useState({
     title: initialTask?.title || '',
-    start: initialTask?.start || new Date(),
-    end: initialTask?.end || new Date(Date.now() + 60 * 60 * 1000), // +1h par défaut
+    start: initStart,
+    end: initEnd,
     color: initialTask?.color || '#10b981',
     icon: initialTask?.icon || '📋',
     price: initialTask?.price || '',
@@ -42,6 +52,8 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
 
     const startDate = new Date(task.start);
     const endDate = new Date(task.end);
+    startDate.setMinutes(0, 0, 0);
+    endDate.setMinutes(0, 0, 0);
 
     if (startDate >= endDate) {
       setError('La date de fin doit être après la date de début');
@@ -121,6 +133,7 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                 type="datetime-local"
                 value={formatDateTimeLocal(task.start)}
                 onChange={(e) => setTask({ ...task, start: new Date(e.target.value) })}
+                step="3600"
                 required
               />
             </div>
@@ -132,6 +145,7 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                 type="datetime-local"
                 value={formatDateTimeLocal(task.end)}
                 onChange={(e) => setTask({ ...task, end: new Date(e.target.value) })}
+                step="3600"
                 required
               />
             </div>
