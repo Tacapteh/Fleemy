@@ -268,15 +268,51 @@ export default function WeeklyGrid(props) {
     }
   });
 
-  tasks.forEach(t => {
+  tasks.forEach((t) => {
     const idx = dayIndexFrom(t.date || t.day || t.startDate || t.start, weekStart);
     if (idx >= 0 && idx < 7) {
-      const top = Math.max(0, minutesFromHM(t.start));
-      const dur = Math.max(15, minutesFromHM(t.end) - top);
+      const baseDate = t.date instanceof Date
+        ? new Date(t.date)
+        : new Date(t.start || Date.now());
+
+      let start = t.start;
+      if (start && typeof start.toDate === "function") start = start.toDate();
+      else if (start instanceof Date) start = new Date(start);
+      else if (typeof start === "string" && start.includes(":")) {
+        const [hh, mm] = start.split(":").map(Number);
+        start = new Date(baseDate);
+        start.setHours(hh, mm || 0, 0, 0);
+      } else if (typeof start === "number") {
+        const hh = Math.floor(start / 60);
+        const mm = start % 60;
+        start = new Date(baseDate);
+        start.setHours(hh, mm, 0, 0);
+      } else {
+        start = new Date(start);
+      }
+
+      let end = t.end;
+      if (end && typeof end.toDate === "function") end = end.toDate();
+      else if (end instanceof Date) end = new Date(end);
+      else if (typeof end === "string" && end.includes(":")) {
+        const [hh, mm] = end.split(":").map(Number);
+        end = new Date(baseDate);
+        end.setHours(hh, mm || 0, 0, 0);
+      } else if (typeof end === "number") {
+        const hh = Math.floor(end / 60);
+        const mm = end % 60;
+        end = new Date(baseDate);
+        end.setHours(hh, mm, 0, 0);
+      } else {
+        end = new Date(end);
+      }
+
+      const top = Math.max(0, minutesFromHM(start));
+      const dur = Math.max(15, minutesFromHM(end) - top);
       taskColumns[idx].push({
         ...t,
-        start: toHM(t.start),
-        end: toHM(t.end),
+        start,
+        end,
         _topMin: top,
         _durMin: dur,
       });
