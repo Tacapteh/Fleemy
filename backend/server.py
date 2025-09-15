@@ -294,6 +294,8 @@ class TaskCreateRequest(BaseModel):
     color: str
     icon: str
     time_slots: List[Dict[str, str]] = []
+    year: Optional[int] = None
+    week: Optional[int] = None
 
 
 class TodoCreateRequest(BaseModel):
@@ -841,10 +843,10 @@ async def create_task(
     task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
     now = datetime.now()
-    year = now.year
-    week = now.isocalendar()[1]
-
-    task = WeeklyTask(uid=user["uid"], week=week, year=year, **task_request.dict())
+    year = task_request.year or now.year
+    week = task_request.week or now.isocalendar()[1]
+    task_data = task_request.dict(exclude={"year", "week"})
+    task = WeeklyTask(uid=user["uid"], week=week, year=year, **task_data)
     await asyncio.to_thread(
         user_col(user["uid"], "tasks").document(task.id).set, task.dict()
     )
@@ -875,15 +877,27 @@ async def update_task(
         return {"success": False, "error": "Task not found"}
 
     existing = snap.to_dict()
-    update_data = {**task_request.dict(), "updated_at": datetime.utcnow()}
+    incoming = task_request.dict(exclude_unset=True)
+    new_year = incoming.pop("year", existing["year"])
+    new_week = incoming.pop("week", existing["week"])
+    update_data = {
+        **incoming,
+        "year": new_year,
+        "week": new_week,
+        "updated_at": datetime.utcnow(),
+    }
     await asyncio.to_thread(
         user_col(user["uid"], "tasks").document(task_id).update, update_data
     )
     user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
     team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
     owner_id = team_id if team_id else user["uid"]
+    if existing["year"] != new_year or existing["week"] != new_week:
+        await asyncio.to_thread(
+            global_task_doc(existing["year"], existing["week"], owner_id, task_id).delete
+        )
     await asyncio.to_thread(
-        global_task_doc(existing["year"], existing["week"], owner_id, task_id).set,
+        global_task_doc(new_year, new_week, owner_id, task_id).set,
         {**existing, **update_data, "owner_id": owner_id},
     )
     if team_id:
