@@ -126,7 +126,10 @@ export default function useTasks(userId, weekStartISO) {
 
   // Écouter les tâches hebdomadaires en temps réel
   useEffect(() => {
+    console.log('useTasks useEffect déclenché', { userId, weekStartISO });
+    
     if (!userId) {
+      console.log('useTasks: Pas d\'userId, reset des données');
       setTasks([]);
       setLoading(false);
       setError(null);
@@ -140,6 +143,8 @@ export default function useTasks(userId, weekStartISO) {
     const tasksPath = "tasks";
     
     try {
+      console.log('useTasks: Tentative de connexion Firestore', { tasksPath, userId });
+      
       const tasksRef = collection(db, tasksPath);
       // Filtrer par user_id et weekly = true
       const q = query(
@@ -147,6 +152,8 @@ export default function useTasks(userId, weekStartISO) {
         where('user_id', '==', userId),
         where('weekly', '==', true)
       );
+      
+      console.log('useTasks: Query créée, démarrage onSnapshot');
       
       const unsubscribe = onSnapshot(
         q,
@@ -184,8 +191,15 @@ export default function useTasks(userId, weekStartISO) {
           setLoading(false);
         },
         (err) => {
-          console.error('Erreur écoute tâches hebdomadaires:', err);
-          setError(err.message || 'Erreur de récupération des tâches');
+          console.error('useTasks: Erreur écoute tâches hebdomadaires:', err);
+          
+          // Si c'est une erreur de configuration Firebase, afficher un message spécifique
+          if (err.message && err.message.includes('Firebase')) {
+            setError('Configuration Firebase manquante - Impossible de récupérer les tâches');
+          } else {
+            setError(err.message || 'Erreur de récupération des tâches');
+          }
+          
           setTasks([]);
           setLoading(false);
         }
@@ -193,8 +207,15 @@ export default function useTasks(userId, weekStartISO) {
 
       return unsubscribe;
     } catch (err) {
-      console.error('Erreur setup écoute tâches:', err);
-      setError(err.message || 'Erreur de configuration');
+      console.error('useTasks: Erreur setup écoute tâches:', err);
+      
+      // Erreur de setup (probablement Firebase non configuré)
+      if (err.message && err.message.includes('Firebase')) {
+        setError('Configuration Firebase requise pour les tâches hebdomadaires');
+      } else {
+        setError(err.message || 'Erreur de configuration');
+      }
+      
       setLoading(false);
       return () => {};
     }
