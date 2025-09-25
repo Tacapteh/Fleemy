@@ -37,19 +37,31 @@ export default function useTasks(userId, weekStartISO) {
 
   // Projeter les time_ranges sur la semaine courante
   const occurrences = useMemo(() => {
-    if (!tasks.length || !weekDates) return [];
+    if (!tasks.length || !weekDates) {
+      console.log('useTasks: Pas de tâches ou weekDates manquantes', { tasksLength: tasks.length, weekDates });
+      return [];
+    }
     
     const result = [];
     
     tasks.forEach(task => {
+      console.log('useTasks: Traitement tâche', { id: task.id, label: task.label, weekly: task.weekly, time_ranges: task.time_ranges });
+      
       // Vérifier que la tâche est hebdomadaire et a des créneaux
-      if (!task.weekly || !Array.isArray(task.time_ranges)) return;
+      if (!task.weekly || !Array.isArray(task.time_ranges)) {
+        console.log('useTasks: Tâche ignorée - pas hebdomadaire ou pas de time_ranges', task.id);
+        return;
+      }
       
       task.time_ranges.forEach((range, rangeIndex) => {
         const { day, start, end } = range;
+        console.log('useTasks: Traitement time_range', { day, start, end, rangeIndex });
         
         // day doit être entre 0 (lundi) et 6 (dimanche)
-        if (typeof day !== 'number' || day < 0 || day > 6) return;
+        if (typeof day !== 'number' || day < 0 || day > 6) {
+          console.log('useTasks: Jour invalide', day);
+          return;
+        }
         
         // Valider et parser les heures
         const parseTime = (timeStr) => {
@@ -65,11 +77,17 @@ export default function useTasks(userId, weekStartISO) {
         const startTime = parseTime(start);
         const endTime = parseTime(end);
         
-        if (!startTime || !endTime) return;
+        if (!startTime || !endTime) {
+          console.log('useTasks: Heures invalides', { start, end });
+          return;
+        }
         
         // Créer les dates absolues pour cette occurrence
         const dayDate = weekDates[day];
-        if (!dayDate) return;
+        if (!dayDate) {
+          console.log('useTasks: Date jour manquante', { day, weekDates });
+          return;
+        }
         
         const startDate = new Date(dayDate);
         startDate.setHours(startTime.hours, startTime.minutes, 0, 0);
@@ -78,9 +96,12 @@ export default function useTasks(userId, weekStartISO) {
         endDate.setHours(endTime.hours, endTime.minutes, 0, 0);
         
         // Vérifier que l'heure de fin est après l'heure de début
-        if (endDate <= startDate) return;
+        if (endDate <= startDate) {
+          console.log('useTasks: Heure de fin invalide', { startDate, endDate });
+          return;
+        }
         
-        result.push({
+        const occurrence = {
           taskId: task.id,
           occurrenceId: `${task.id}_${rangeIndex}`,
           dayIndex: day,
@@ -90,17 +111,25 @@ export default function useTasks(userId, weekStartISO) {
           color: task.color || '#dbeafe', // pastel-blue par défaut
           icon: task.icon || '📋',
           price: task.price || null,
-          readOnly: task.user_id !== currentUid
-        });
+          readOnly: task.user_id !== currentUid,
+          weekly: true
+        };
+        
+        console.log('useTasks: Occurrence créée', occurrence);
+        result.push(occurrence);
       });
     });
     
+    console.log('useTasks: Total occurrences générées:', result.length, result);
     return result;
   }, [tasks, weekDates, currentUid]);
 
   // Écouter les tâches hebdomadaires en temps réel
   useEffect(() => {
+    console.log('useTasks useEffect déclenché', { userId, weekStartISO });
+    
     if (!userId) {
+      console.log('useTasks: Pas d\'userId, reset des données');
       setTasks([]);
       setLoading(false);
       setError(null);
@@ -114,6 +143,8 @@ export default function useTasks(userId, weekStartISO) {
     const tasksPath = "tasks";
     
     try {
+      console.log('useTasks: Tentative de connexion Firestore', { tasksPath, userId });
+      
       const tasksRef = collection(db, tasksPath);
       // Filtrer par user_id et weekly = true
       const q = query(
@@ -122,13 +153,19 @@ export default function useTasks(userId, weekStartISO) {
         where('weekly', '==', true)
       );
       
+      console.log('useTasks: Query créée, démarrage onSnapshot');
+      
       const unsubscribe = onSnapshot(
         q,
         (snapshot) => {
           const tasksList = [];
           
+          console.log('useTasks: Snapshot reçu', { size: snapshot.size, userId });
+          
           snapshot.forEach((doc) => {
             const data = doc.data();
+            
+            console.log('useTasks: Document reçu', { id: doc.id, data });
             
             // Normaliser les données avec des fallbacks sûrs
             const task = {
@@ -145,15 +182,24 @@ export default function useTasks(userId, weekStartISO) {
               updated_at: data.updated_at || null
             };
             
+            console.log('useTasks: Tâche normalisée', task);
             tasksList.push(task);
           });
           
+          console.log('useTasks: Mise à jour tasks', { count: tasksList.length, tasksList });
           setTasks(tasksList);
           setLoading(false);
         },
         (err) => {
-          console.error('Erreur écoute tâches hebdomadaires:', err);
-          setError(err.message || 'Erreur de récupération des tâches');
+          console.error('useTasks: Erreur écoute tâches hebdomadaires:', err);
+          
+          // Si c'est une erreur de configuration Firebase, afficher un message spécifique
+          if (err.message && err.message.includes('Firebase')) {
+            setError('Configuration Firebase manquante - Impossible de récupérer les tâches');
+          } else {
+            setError(err.message || 'Erreur de récupération des tâches');
+          }
+          
           setTasks([]);
           setLoading(false);
         }
@@ -161,12 +207,28 @@ export default function useTasks(userId, weekStartISO) {
 
       return unsubscribe;
     } catch (err) {
-      console.error('Erreur setup écoute tâches:', err);
-      setError(err.message || 'Erreur de configuration');
+      console.error('useTasks: Erreur setup écoute tâches:', err);
+      
+      // Erreur de setup (probablement Firebase non configuré)
+      if (err.message && err.message.includes('Firebase')) {
+        setError('Configuration Firebase requise pour les tâches hebdomadaires');
+      } else {
+        setError(err.message || 'Erreur de configuration');
+      }
+      
       setLoading(false);
       return () => {};
     }
   }, [userId]);
+
+  console.log('useTasks: Retour hook', { 
+    tasksCount: tasks.length, 
+    occurrencesCount: occurrences.length, 
+    loading, 
+    error,
+    weekStartISO,
+    userId 
+  });
 
   return {
     tasks,
