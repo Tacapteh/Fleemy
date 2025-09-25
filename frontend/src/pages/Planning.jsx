@@ -277,8 +277,17 @@ export default function Planning() {
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
   const openNewTask = () => setTaskModal({ open: true, task: null });
-  const handleTaskClick = (task) => setTaskModal({ open: true, task });
+  const openNewWeeklyTask = () => setWeeklyTaskModal({ open: true, task: null });
+  const handleTaskClick = (task) => {
+    // Distinguer entre tâches normales et hebdomadaires
+    if (task.weekly || task.occurrenceId) {
+      setWeeklyTaskModal({ open: true, task });
+    } else {
+      setTaskModal({ open: true, task });
+    }
+  };
   const closeTaskModal = () => setTaskModal({ open: false, task: null });
+  const closeWeeklyTaskModal = () => setWeeklyTaskModal({ open: false, task: null });
 
   const handleSaveTask = () => {
     showToast('Tâche sauvegardée avec succès');
