@@ -110,11 +110,17 @@ export default function useTasks(userId, weekStartISO) {
     setLoading(true);
     setError(null);
 
-    const tasksPath = `users/${userId}/tasks`;
+    // Utiliser la collection "tasks" existante avec des filtres
+    const tasksPath = "tasks";
     
     try {
       const tasksRef = collection(db, tasksPath);
-      const q = query(tasksRef, where('weekly', '==', true));
+      // Filtrer par user_id et weekly = true
+      const q = query(
+        tasksRef, 
+        where('user_id', '==', userId),
+        where('weekly', '==', true)
+      );
       
       const unsubscribe = onSnapshot(
         q,
@@ -128,7 +134,7 @@ export default function useTasks(userId, weekStartISO) {
             const task = {
               id: doc.id,
               user_id: data.user_id || userId,
-              label: data.label || data.name || 'Tâche sans titre',
+              label: data.label || data.title || data.name || 'Tâche sans titre',
               price: data.price || null,
               color: data.color || '#dbeafe',
               icon: data.icon || '📋',
