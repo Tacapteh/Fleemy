@@ -114,6 +114,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   onEventClick,
   onAddEvent,
   onTaskClick,
+  isReadOnlyMode,
 }) {
   const [draggingId, setDraggingId] = useState(null);
 
@@ -127,13 +128,16 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
           style={{ gridColumn: dayIndex + 1, gridRow: "1 / -1" }}
         >
           {/* Bouton + en haut de la colonne */}
-          <button
-            className="add-event-btn"
-            onClick={() => onAddEvent(day.date, "09:00")}
-            title="Ajouter un événement"
-          >
-            +
-          </button>
+          {!isReadOnlyMode && (
+            <button
+              className="add-event-btn"
+              onClick={() => onAddEvent(day.date, "09:00")}
+              title="Ajouter un événement"
+              data-testid={`add-event-day-${dayIndex}`}
+            >
+              +
+            </button>
+          )}
 
           {hours.map((time, hourIndex) => (
             <button
@@ -141,40 +145,18 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               type="button"
               className="time-slot-cell"
               style={{ gridRow: hourIndex + 1 }}
-              onClick={() => onCellClick(day.date, time)}
+              onClick={() => !isReadOnlyMode && onCellClick(day.date, time)}
+              disabled={isReadOnlyMode}
+              data-testid={`time-slot-${dayIndex}-${hourIndex}`}
             />
           ))}
-
-          {/* Affichage des tâches dans les cellules */}
-          {taskColumns[dayIndex]
-            .map((task) => {
-              const taskStart = new Date(task.start);
-              const hourIndex = taskStart.getHours() - DAY_START;
-
-              if (hourIndex < 0 || hourIndex >= hours.length) return null;
-
-              return (
-                <div
-                  key={task.id}
-                  className="task-indicator"
-                  style={{
-                    gridRow: hourIndex + 1,
-                    backgroundColor: task.color || "#10b981",
-                  }}
-                  title={task.title}
-                  onClick={() => onTaskClick && onTaskClick(task)}
-                >
-                  <span className="task-icon">{task.icon || "📋"}</span>
-                </div>
-              );
-            })}
         </div>
       ))}
 
       {/* Événements positionnés au-dessus */}
       {columns.map((dayEvents, dayIndex) => (
         <div
-          key={dayIndex}
+          key={`events-${dayIndex}`}
           className="events-container"
           style={{ gridColumn: dayIndex + 1 }}
         >
@@ -190,11 +172,20 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               top = ((clampedStart - startMinutes) / (endMinutes - startMinutes)) * 100;
               height = ((clampedEnd - clampedStart) / (endMinutes - startMinutes)) * 100;
             }
+
+            // Chercher les tâches qui se chevauchent avec cet événement
+            const overlappingTasks = taskColumns[dayIndex].filter(task => {
+              return slotsOverlap(
+                { startDate: new Date(e.start || 0), endDate: new Date(e.end || 0) },
+                { startDate: task.start, endDate: task.end }
+              );
+            });
+
             return (
               <div
                 key={e.id}
-                draggable
-                onDragStart={() => setDraggingId(e.id)}
+                draggable={!isReadOnlyMode && !e.readOnly}
+                onDragStart={() => !isReadOnlyMode && setDraggingId(e.id)}
                 onDragEnd={() => setDraggingId(null)}
                 onClick={() => onEventClick && onEventClick(e)}
                 className={`event-chip status-${e.status}${draggingId === e.id ? " dragging" : ""}`}
@@ -204,6 +195,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   top: `${top}%`,
                   height: `${height}%`,
                 }}
+                data-testid={`event-${e.id}`}
               >
                 <div className="title truncate">
                   {e.description || e.title || e.client || "Événement"}
@@ -213,6 +205,72 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                     {e.client}
                   </div>
                 )}
+                
+                {/* Affichage des tâches qui se chevauchent en deuxième ligne */}
+                {overlappingTasks.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1 opacity-80">
+                    {overlappingTasks.map((task) => (
+                      <TaskBadge
+                        key={task.occurrenceId}
+                        task={task}
+                        size="small"
+                        isReadOnly={task.readOnly || isReadOnlyMode}
+                        onClick={onTaskClick}
+                        data-testid={`task-badge-overlap-${task.occurrenceId}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {/* Tâches autonomes (qui ne se chevauchent pas avec des événements) */}
+      {taskColumns.map((dayTasks, dayIndex) => (
+        <div
+          key={`tasks-${dayIndex}`}
+          className="tasks-container"
+          style={{ gridColumn: dayIndex + 1 }}
+        >
+          {dayTasks.map((task) => {
+            // Vérifier si cette tâche se chevauche avec des événements
+            const hasOverlap = columns[dayIndex].some(event => 
+              slotsOverlap(
+                { startDate: new Date(event.start || 0), endDate: new Date(event.end || 0) },
+                { startDate: task.start, endDate: task.end }
+              )
+            );
+
+            // Si elle se chevauche, elle sera affichée dans l'événement
+            if (hasOverlap) return null;
+
+            // Calculer la position pour les tâches autonomes
+            const top = calculateTopPosition(task.start);
+            const height = calculateHeight(task.start, task.end);
+            
+            if (height <= 0) return null;
+
+            return (
+              <div
+                key={task.occurrenceId}
+                className="task-standalone"
+                style={{
+                  top: `${top}%`,
+                  height: `${height}%`,
+                  left: '2px',
+                  right: '2px',
+                }}
+                data-testid={`task-standalone-${task.occurrenceId}`}
+              >
+                <TaskBadge
+                  task={task}
+                  size="normal"
+                  isReadOnly={task.readOnly || isReadOnlyMode}
+                  onClick={onTaskClick}
+                  className="w-full h-full"
+                />
               </div>
             );
           })}
