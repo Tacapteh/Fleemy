@@ -168,7 +168,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
           </div>
 
           <div className="task-form-field">
-            <label>Créneaux horaires *</label>
+            <label>Créneaux horaires * <small>(heures pleines uniquement)</small></label>
             <div className="time-ranges-list">
               {task.time_ranges.map((range, index) => (
                 <div key={index} className="time-range-item">
