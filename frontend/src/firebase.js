@@ -271,7 +271,62 @@ export const deleteEvent = async (eventId) => {
   }
 };
 
-// TASKS
+// TASKS HEBDOMADAIRES
+export const saveWeeklyTask = async (taskData = {}) => {
+  if (readOnlyGuard()) return;
+  const currentUid = getUid();
+
+  if (!taskData.time_ranges || !Array.isArray(taskData.time_ranges) || taskData.time_ranges.length === 0) {
+    console.error("Les tâches hebdomadaires doivent avoir time_ranges");
+    return;
+  }
+
+  const baseData = {
+    label: taskData.title || taskData.label || 'Tâche sans titre',
+    price: taskData.price || null,
+    color: taskData.color || 'pastel-blue',
+    icon: taskData.icon || 'briefcase',
+    weekly: true,
+    time_ranges: taskData.time_ranges,
+    user_id: currentUid,
+    created_at: taskData.id ? undefined : serverTimestamp(),
+    updated_at: serverTimestamp(),
+  };
+
+  // Nettoyer les valeurs undefined
+  Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
+
+  const userTasksPath = `users/${currentUid}/tasks`;
+  
+  try {
+    if (taskData.id) {
+      const ref = doc(db, userTasksPath, taskData.id);
+      await setDoc(ref, baseData, { merge: true });
+      return { id: taskData.id, ...baseData };
+    } else {
+      const ref = await addDoc(collection(db, userTasksPath), baseData);
+      return { id: ref.id, ...baseData };
+    }
+  } catch (error) {
+    console.error("saveWeeklyTask", userTasksPath, error);
+    throw error;
+  }
+};
+
+export const deleteWeeklyTask = async (taskId) => {
+  if (readOnlyGuard()) return;
+  const currentUid = getUid();
+  
+  try {
+    const taskRef = doc(db, `users/${currentUid}/tasks`, taskId);
+    await deleteDoc(taskRef);
+  } catch (error) {
+    console.error("Erreur deleteWeeklyTask:", error);
+    throw error;
+  }
+};
+
+// TASKS (existing function remains unchanged)
 export const saveTask = async (taskData = {}) => {
   if (readOnlyGuard()) return;
   const currentUid = getUid();
