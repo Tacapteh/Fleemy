@@ -87,8 +87,8 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
     }
   };
 
-  const iconOptions = ['📋', '✅', '🎯', '💼', '📝', '🔧', '💡', '📊', '🎨', '🚀'];
-  const colorOptions = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#06b6d4', '#84cc16', '#f97316'];
+  const iconOptions = TASK_ICON_KEYS.slice(0, 20); // Afficher les 20 premiers
+  const colorOptions = TASK_COLOR_KEYS;
 
   if (!user) {
     return <div>Chargement...</div>;
