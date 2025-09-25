@@ -47,13 +47,14 @@ export default function Sidebar({ user, onLogout }) {
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center space-x-3 mb-3">
             <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-              {user.name ? user.name.charAt(0).toUpperCase() : ''}
+              {user.displayName ? user.displayName.charAt(0).toUpperCase() : 
+               user.email ? user.email.charAt(0).toUpperCase() : 'U'}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-800 truncate">
-                {user.name ?? ''}
+                {user.displayName || user.email || 'Utilisateur'}
               </p>
-              <p className="text-xs text-gray-500 truncate">{user.email ?? ''}</p>
+              <p className="text-xs text-gray-500 truncate">{user.email || ''}</p>
             </div>
           </div>
           {onLogout && (
