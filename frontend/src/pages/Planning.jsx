@@ -374,8 +374,13 @@ export default function Planning() {
   return (
     <>
       {error && (
-        <div className="bg-red-100 text-red-700 p-2 rounded">
+        <div className="bg-red-100 text-red-700 p-2 rounded mb-2">
           Impossible de charger les événements
+        </div>
+      )}
+      {tasksError && (
+        <div className="bg-orange-100 text-orange-700 p-2 rounded mb-2">
+          Erreur chargement tâches: {tasksError}
         </div>
       )}
       <WeekNavigationHeader
