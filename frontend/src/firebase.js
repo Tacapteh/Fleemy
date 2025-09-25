@@ -557,8 +557,6 @@ export const watchWeekEvents = (
   }
 };
 
-export { googleProvider, logout };
-
 window.auth = auth;
 
 
