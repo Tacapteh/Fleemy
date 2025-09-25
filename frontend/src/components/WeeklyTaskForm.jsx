@@ -32,6 +32,15 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
 
   const updateTimeRange = (index, field, value) => {
     const newRanges = [...task.time_ranges];
+    
+    // Forcer les heures pleines (minutes = 00)
+    if (field === 'start' || field === 'end') {
+      const timeParts = value.split(':');
+      if (timeParts.length === 2) {
+        value = `${timeParts[0]}:00`; // Forcer les minutes à 00
+      }
+    }
+    
     newRanges[index] = { ...newRanges[index], [field]: value };
     setTask({ ...task, time_ranges: newRanges });
   };
