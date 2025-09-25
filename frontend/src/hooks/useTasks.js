@@ -153,8 +153,12 @@ export default function useTasks(userId, weekStartISO) {
         (snapshot) => {
           const tasksList = [];
           
+          console.log('useTasks: Snapshot reçu', { size: snapshot.size, userId });
+          
           snapshot.forEach((doc) => {
             const data = doc.data();
+            
+            console.log('useTasks: Document reçu', { id: doc.id, data });
             
             // Normaliser les données avec des fallbacks sûrs
             const task = {
@@ -171,9 +175,11 @@ export default function useTasks(userId, weekStartISO) {
               updated_at: data.updated_at || null
             };
             
+            console.log('useTasks: Tâche normalisée', task);
             tasksList.push(task);
           });
           
+          console.log('useTasks: Mise à jour tasks', { count: tasksList.length, tasksList });
           setTasks(tasksList);
           setLoading(false);
         },
