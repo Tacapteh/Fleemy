@@ -25,8 +25,6 @@ import { showToast } from "./utils/toast";
 
 const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
 
-const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
-
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY || (DEMO_MODE ? "demo-api-key" : undefined),
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || (DEMO_MODE ? "demo-project.firebaseapp.com" : undefined),
