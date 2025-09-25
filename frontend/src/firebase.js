@@ -42,7 +42,8 @@ if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
 const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
 
-if (missingConfig.length) {
+// En mode démo, on ignore les clés manquantes
+if (missingConfig.length && !DEMO_MODE) {
   throw new Error(
     `Missing Firebase configuration: ${missingConfig.join(", ")}. ` +
       "Check your REACT_APP_FIREBASE_* environment variables."
