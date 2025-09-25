@@ -37,19 +37,31 @@ export default function useTasks(userId, weekStartISO) {
 
   // Projeter les time_ranges sur la semaine courante
   const occurrences = useMemo(() => {
-    if (!tasks.length || !weekDates) return [];
+    if (!tasks.length || !weekDates) {
+      console.log('useTasks: Pas de tâches ou weekDates manquantes', { tasksLength: tasks.length, weekDates });
+      return [];
+    }
     
     const result = [];
     
     tasks.forEach(task => {
+      console.log('useTasks: Traitement tâche', { id: task.id, label: task.label, weekly: task.weekly, time_ranges: task.time_ranges });
+      
       // Vérifier que la tâche est hebdomadaire et a des créneaux
-      if (!task.weekly || !Array.isArray(task.time_ranges)) return;
+      if (!task.weekly || !Array.isArray(task.time_ranges)) {
+        console.log('useTasks: Tâche ignorée - pas hebdomadaire ou pas de time_ranges', task.id);
+        return;
+      }
       
       task.time_ranges.forEach((range, rangeIndex) => {
         const { day, start, end } = range;
+        console.log('useTasks: Traitement time_range', { day, start, end, rangeIndex });
         
         // day doit être entre 0 (lundi) et 6 (dimanche)
-        if (typeof day !== 'number' || day < 0 || day > 6) return;
+        if (typeof day !== 'number' || day < 0 || day > 6) {
+          console.log('useTasks: Jour invalide', day);
+          return;
+        }
         
         // Valider et parser les heures
         const parseTime = (timeStr) => {
@@ -65,11 +77,17 @@ export default function useTasks(userId, weekStartISO) {
         const startTime = parseTime(start);
         const endTime = parseTime(end);
         
-        if (!startTime || !endTime) return;
+        if (!startTime || !endTime) {
+          console.log('useTasks: Heures invalides', { start, end });
+          return;
+        }
         
         // Créer les dates absolues pour cette occurrence
         const dayDate = weekDates[day];
-        if (!dayDate) return;
+        if (!dayDate) {
+          console.log('useTasks: Date jour manquante', { day, weekDates });
+          return;
+        }
         
         const startDate = new Date(dayDate);
         startDate.setHours(startTime.hours, startTime.minutes, 0, 0);
@@ -78,9 +96,12 @@ export default function useTasks(userId, weekStartISO) {
         endDate.setHours(endTime.hours, endTime.minutes, 0, 0);
         
         // Vérifier que l'heure de fin est après l'heure de début
-        if (endDate <= startDate) return;
+        if (endDate <= startDate) {
+          console.log('useTasks: Heure de fin invalide', { startDate, endDate });
+          return;
+        }
         
-        result.push({
+        const occurrence = {
           taskId: task.id,
           occurrenceId: `${task.id}_${rangeIndex}`,
           dayIndex: day,
@@ -90,11 +111,16 @@ export default function useTasks(userId, weekStartISO) {
           color: task.color || '#dbeafe', // pastel-blue par défaut
           icon: task.icon || '📋',
           price: task.price || null,
-          readOnly: task.user_id !== currentUid
-        });
+          readOnly: task.user_id !== currentUid,
+          weekly: true
+        };
+        
+        console.log('useTasks: Occurrence créée', occurrence);
+        result.push(occurrence);
       });
     });
     
+    console.log('useTasks: Total occurrences générées:', result.length, result);
     return result;
   }, [tasks, weekDates, currentUid]);
 
