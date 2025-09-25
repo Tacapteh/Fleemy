@@ -6,6 +6,9 @@ import React, {
 } from "react";
 import "../styles/WeeklyGrid.css";
 import { useFirebaseUser } from "../firebase";
+import TaskBadge from "./TaskBadge";
+import { slotsOverlap, calculateTopPosition, calculateHeight, getDayIndex } from "../utils/time";
+import { getTaskColor } from "../constants/colors";
 
 const toHM = v => {
   if (typeof v === "string") {
