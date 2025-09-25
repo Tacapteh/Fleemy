@@ -274,12 +274,14 @@ export const saveWeeklyTask = async (taskData = {}) => {
 
   const baseData = {
     label: taskData.title || taskData.label || 'Tâche sans titre',
+    title: taskData.title || taskData.label || 'Tâche sans titre', // Pour compatibilité avec les tâches existantes
     price: taskData.price || null,
     color: taskData.color || 'pastel-blue',
     icon: taskData.icon || 'briefcase',
-    weekly: true,
+    weekly: true, // Flag pour identifier les tâches hebdomadaires
     time_ranges: taskData.time_ranges,
     user_id: currentUid,
+    team_id: currentTeamId || null,
     created_at: taskData.id ? undefined : serverTimestamp(),
     updated_at: serverTimestamp(),
   };
@@ -287,21 +289,22 @@ export const saveWeeklyTask = async (taskData = {}) => {
   // Nettoyer les valeurs undefined
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
-  const userTasksPath = `users/${currentUid}/tasks`;
+  // Utiliser la collection "tasks" existante au lieu de users/{uid}/tasks
+  const tasksPath = "tasks";
   
   try {
     if (taskData.id) {
-      const ref = doc(db, userTasksPath, taskData.id);
+      const ref = doc(db, tasksPath, taskData.id);
       await setDoc(ref, baseData, { merge: true });
       showToast('Tâche hebdomadaire mise à jour');
       return { id: taskData.id, ...baseData };
     } else {
-      const ref = await addDoc(collection(db, userTasksPath), baseData);
+      const ref = await addDoc(collection(db, tasksPath), baseData);
       showToast('Tâche hebdomadaire créée');
       return { id: ref.id, ...baseData };
     }
   } catch (error) {
-    console.error("saveWeeklyTask", userTasksPath, error);
+    console.error("saveWeeklyTask", tasksPath, error);
     showToast('Erreur lors de la sauvegarde de la tâche', true);
     throw error;
   }
@@ -314,7 +317,7 @@ export const deleteWeeklyTask = async (taskId) => {
   }
   
   try {
-    const taskRef = doc(db, `users/${currentUid}/tasks`, taskId);
+    const taskRef = doc(db, "tasks", taskId);
     await deleteDoc(taskRef);
     showToast('Tâche hebdomadaire supprimée');
   } catch (error) {
@@ -395,15 +398,15 @@ export const watchTasks = (range, callback) => {
   const field = currentTeamId ? "team_id" : "user_id";
   const fieldValue = currentTeamId ? currentTeamId : currentUid;
 
-  const results = { root: [], weekly: [] };
-  const emit = () => callback([...results.root, ...results.weekly]);
   let logged = false;
 
   const tasksPath = "tasks";
   const q = query(
     collection(db, tasksPath),
     where(field, "==", fieldValue),
+    where("weekly", "!=", true), // Exclure les tâches hebdomadaires
     where("start", "<=", toTimestamp),
+    orderBy("weekly", "asc"), // Nécessaire pour la contrainte d'inégalité
     orderBy("start", "asc")
   );
 
@@ -417,6 +420,9 @@ export const watchTasks = (range, callback) => {
       const tasks = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        // Ignorer les tâches hebdomadaires même si elles passent le filtre
+        if (data.weekly === true) return;
+        
         const start =
           data.start instanceof Timestamp ? data.start.toDate() : data.start;
         const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
@@ -425,80 +431,16 @@ export const watchTasks = (range, callback) => {
           tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
         }
       });
-      results.root = tasks;
-      emit();
+      callback(tasks);
     },
     (err) => {
       logPermissionError(tasksPath, currentUid, err);
-      results.root = [];
-      emit();
+      callback([]);
     }
   );
 
-  const weeklyRef = collection(db, `users/${currentUid}/tasks`);
-  const unsubWeekly = onSnapshot(
-    weeklyRef,
-    (snapshot) => {
-      const tasks = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (Array.isArray(data.time_slots)) {
-          data.time_slots.forEach((slot, idx) => {
-            const date = dateFromISOWeek(data.year, data.week, slot.day);
-            if (!date) return;
-            if (date < fromDate || date > toDateVal) return;
-
-            const parseSlotTime = (val) => {
-              if (val && typeof val.toDate === "function") return val.toDate();
-              if (val instanceof Date) return new Date(val);
-              if (typeof val === "string" && val.includes(":")) {
-                const [hh, mm] = val.split(":").map(Number);
-                const d = new Date(date);
-                d.setHours(hh, mm || 0, 0, 0);
-                return d;
-              }
-              if (typeof val === "number") {
-                const hh = Math.floor(val / 60);
-                const mm = val % 60;
-                const d = new Date(date);
-                d.setHours(hh, mm, 0, 0);
-                return d;
-              }
-              return normalizeDate(val);
-            };
-
-            const start = parseSlotTime(slot.start);
-            const end = parseSlotTime(slot.end);
-
-            tasks.push({
-              id: `${docSnap.id}_${idx}`,
-              name: data.name,
-              color: data.color,
-              icon: data.icon,
-              price: data.price,
-              start,
-              end,
-              date,
-              readOnly: data.uid !== currentUid,
-            });
-          });
-        }
-      });
-      results.weekly = tasks;
-      emit();
-    },
-    (err) => {
-      logPermissionError(`users/${currentUid}/tasks`, currentUid, err);
-      results.weekly = [];
-      emit();
-    }
-  );
-
-  unsubTasks = () => {
-    unsubRoot && unsubRoot();
-    unsubWeekly && unsubWeekly();
-  };
-  return unsubTasks;
+  unsubTasks = unsubRoot;
+  return unsubRoot;
 };
 
 export const deleteTask = async (taskId) => {
