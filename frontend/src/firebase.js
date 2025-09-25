@@ -274,12 +274,14 @@ export const saveWeeklyTask = async (taskData = {}) => {
 
   const baseData = {
     label: taskData.title || taskData.label || 'Tâche sans titre',
+    title: taskData.title || taskData.label || 'Tâche sans titre', // Pour compatibilité avec les tâches existantes
     price: taskData.price || null,
     color: taskData.color || 'pastel-blue',
     icon: taskData.icon || 'briefcase',
-    weekly: true,
+    weekly: true, // Flag pour identifier les tâches hebdomadaires
     time_ranges: taskData.time_ranges,
     user_id: currentUid,
+    team_id: currentTeamId || null,
     created_at: taskData.id ? undefined : serverTimestamp(),
     updated_at: serverTimestamp(),
   };
@@ -287,21 +289,22 @@ export const saveWeeklyTask = async (taskData = {}) => {
   // Nettoyer les valeurs undefined
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
-  const userTasksPath = `users/${currentUid}/tasks`;
+  // Utiliser la collection "tasks" existante au lieu de users/{uid}/tasks
+  const tasksPath = "tasks";
   
   try {
     if (taskData.id) {
-      const ref = doc(db, userTasksPath, taskData.id);
+      const ref = doc(db, tasksPath, taskData.id);
       await setDoc(ref, baseData, { merge: true });
       showToast('Tâche hebdomadaire mise à jour');
       return { id: taskData.id, ...baseData };
     } else {
-      const ref = await addDoc(collection(db, userTasksPath), baseData);
+      const ref = await addDoc(collection(db, tasksPath), baseData);
       showToast('Tâche hebdomadaire créée');
       return { id: ref.id, ...baseData };
     }
   } catch (error) {
-    console.error("saveWeeklyTask", userTasksPath, error);
+    console.error("saveWeeklyTask", tasksPath, error);
     showToast('Erreur lors de la sauvegarde de la tâche', true);
     throw error;
   }
@@ -314,7 +317,7 @@ export const deleteWeeklyTask = async (taskId) => {
   }
   
   try {
-    const taskRef = doc(db, `users/${currentUid}/tasks`, taskId);
+    const taskRef = doc(db, "tasks", taskId);
     await deleteDoc(taskRef);
     showToast('Tâche hebdomadaire supprimée');
   } catch (error) {
