@@ -37,6 +37,25 @@ function App() {
   const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
 
   useEffect(() => {
+    if (DEMO_MODE) {
+      // Mode démo : créer un utilisateur fictif directement
+      const demoUser = {
+        uid: 'demo-user',
+        email: 'demo@example.com',
+        displayName: 'Utilisateur Démo',
+        photoURL: null,
+        getIdToken: () => Promise.resolve('demo-token')
+      };
+      
+      setTimeout(() => {
+        setUser(demoUser);
+        setInitializing(false);
+      }, 500);
+      
+      return () => {}; // Pas de cleanup nécessaire en mode démo
+    }
+    
+    // Mode production : utiliser Firebase Auth
     let first = true;
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
