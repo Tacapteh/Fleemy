@@ -59,9 +59,9 @@ export { getUid };
 const recentErrors = new Map();
 
 const readOnlyGuard = () => {
+  // En mode démo, on autorise les opérations (elles seront mockées)
   if (DEMO_MODE) {
-    showToast("Mode démo : lecture seule");
-    return !auth.currentUser;
+    return false; // Autoriser les opérations
   }
   return false;
 };
