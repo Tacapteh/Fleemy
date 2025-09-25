@@ -2,6 +2,116 @@ import { useState, useEffect, useMemo } from 'react';
 import { db, getUid } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
+const DAY_NAME_TO_INDEX = {
+  monday: 0,
+  mon: 0,
+  lundi: 0,
+  tuesday: 1,
+  tue: 1,
+  mardi: 1,
+  wednesday: 2,
+  wed: 2,
+  mercredi: 2,
+  thursday: 3,
+  thu: 3,
+  th: 3,
+  jeudi: 3,
+  friday: 4,
+  fri: 4,
+  vendredi: 4,
+  saturday: 5,
+  sat: 5,
+  samedi: 5,
+  sunday: 6,
+  sun: 6,
+  dimanche: 6
+};
+
+const toDayIndex = (value) => {
+  if (typeof value === 'number' && value >= 0 && value <= 6) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+
+    if (/^\d+$/.test(trimmed)) {
+      const asNumber = parseInt(trimmed, 10);
+      if (!Number.isNaN(asNumber)) {
+        if (asNumber >= 0 && asNumber <= 6) return asNumber;
+        if (asNumber >= 1 && asNumber <= 7) return (asNumber + 6) % 7;
+      }
+    }
+
+    if (DAY_NAME_TO_INDEX.hasOwnProperty(trimmed)) {
+      return DAY_NAME_TO_INDEX[trimmed];
+    }
+
+    const asDate = new Date(value);
+    if (!Number.isNaN(asDate.getTime())) {
+      return (asDate.getDay() + 6) % 7;
+    }
+  }
+
+  return null;
+};
+
+const normalizeTimeRanges = (data = {}) => {
+  const candidateRanges = [];
+
+  if (Array.isArray(data.time_ranges)) {
+    candidateRanges.push(...data.time_ranges);
+  }
+
+  if (Array.isArray(data.time_slots)) {
+    candidateRanges.push(...data.time_slots);
+  }
+
+  return candidateRanges
+    .map((range) => {
+      if (!range || typeof range !== 'object') return null;
+
+      const dayCandidate =
+        range.day ??
+        range.dayIndex ??
+        range.day_index ??
+        range.day_of_week ??
+        range.dayOfWeek ??
+        range.weekday;
+      const normalizedDay = toDayIndex(dayCandidate);
+      if (normalizedDay === null) return null;
+
+      return {
+        ...range,
+        day: normalizedDay
+      };
+    })
+    .filter(Boolean);
+};
+
+const normalizeTaskDocument = (docSnapshot, fallbackUserId, prefetchedData) => {
+  if (!docSnapshot || typeof docSnapshot.data !== 'function') return null;
+
+  const data = prefetchedData || docSnapshot.data();
+  if (!data || typeof data !== 'object') return null;
+
+  const userId = data.user_id || data.uid || data.owner_id || fallbackUserId || null;
+  const timeRanges = normalizeTimeRanges(data);
+
+  return {
+    id: docSnapshot.id,
+    user_id: userId,
+    label: data.label || data.title || data.name || 'Tâche sans titre',
+    price: data.price || null,
+    color: data.color || '#dbeafe',
+    icon: data.icon || '📋',
+    weekly: data.weekly === undefined ? timeRanges.length > 0 : data.weekly,
+    time_ranges: timeRanges,
+    created_at: data.created_at || null,
+    updated_at: data.updated_at || null
+  };
+};
+
 /**
  * Hook pour récupérer et écouter les tâches hebdomadaires d'un utilisateur
  * @param {string} userId - L'ID de l'utilisateur dont on veut récupérer les tâches
@@ -127,7 +237,7 @@ export default function useTasks(userId, weekStartISO) {
   // Écouter les tâches hebdomadaires en temps réel
   useEffect(() => {
     console.log('useTasks useEffect déclenché', { userId, weekStartISO });
-    
+
     if (!userId) {
       console.log('useTasks: Pas d\'userId, reset des données');
       setTasks([]);
@@ -138,87 +248,88 @@ export default function useTasks(userId, weekStartISO) {
 
     setLoading(true);
     setError(null);
+    setTasks([]);
 
-    // Utiliser la collection "tasks" existante avec des filtres
-    const tasksPath = "tasks";
-    
-    try {
-      console.log('useTasks: Tentative de connexion Firestore', { tasksPath, userId });
-      
-      const tasksRef = collection(db, tasksPath);
-      // Filtrer par user_id et weekly = true
-      const q = query(
-        tasksRef, 
-        where('user_id', '==', userId),
-        where('weekly', '==', true)
-      );
-      
-      console.log('useTasks: Query créée, démarrage onSnapshot');
-      
-      const unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const tasksList = [];
-          
-          console.log('useTasks: Snapshot reçu', { size: snapshot.size, userId });
-          
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            
-            console.log('useTasks: Document reçu', { id: doc.id, data });
-            
-            // Normaliser les données avec des fallbacks sûrs
-            const task = {
-              id: doc.id,
-              user_id: data.user_id || userId,
-              label: data.label || data.title || data.name || 'Tâche sans titre',
-              price: data.price || null,
-              color: data.color || '#dbeafe',
-              icon: data.icon || '📋',
-              weekly: true,
-              time_ranges: Array.isArray(data.time_ranges) ? data.time_ranges : 
-                          Array.isArray(data.time_slots) ? data.time_slots : [],
-              created_at: data.created_at || null,
-              updated_at: data.updated_at || null
-            };
-            
-            console.log('useTasks: Tâche normalisée', task);
-            tasksList.push(task);
-          });
-          
-          console.log('useTasks: Mise à jour tasks', { count: tasksList.length, tasksList });
-          setTasks(tasksList);
-          setLoading(false);
-        },
-        (err) => {
-          console.error('useTasks: Erreur écoute tâches hebdomadaires:', err);
-          
-          // Si c'est une erreur de configuration Firebase, afficher un message spécifique
-          if (err.message && err.message.includes('Firebase')) {
-            setError('Configuration Firebase manquante - Impossible de récupérer les tâches');
-          } else {
-            setError(err.message || 'Erreur de récupération des tâches');
-          }
-          
-          setTasks([]);
-          setLoading(false);
-        }
-      );
+    const sourceTasks = {};
 
-      return unsubscribe;
-    } catch (err) {
-      console.error('useTasks: Erreur setup écoute tâches:', err);
-      
-      // Erreur de setup (probablement Firebase non configuré)
-      if (err.message && err.message.includes('Firebase')) {
-        setError('Configuration Firebase requise pour les tâches hebdomadaires');
-      } else {
-        setError(err.message || 'Erreur de configuration');
-      }
-      
+    const updateFromSources = () => {
+      const merged = new Map();
+      Object.values(sourceTasks).forEach((list) => {
+        list.forEach((task) => {
+          if (!task || !task.id) return;
+          merged.set(task.id, task);
+        });
+      });
+
+      const mergedTasks = Array.from(merged.values());
+      console.log('useTasks: Mise à jour tasks depuis sources', { mergedTasks });
+      setTasks(mergedTasks);
       setLoading(false);
-      return () => {};
+    };
+
+    const handleSnapshot = (sourceKey) => (snapshot) => {
+      console.log('useTasks: Snapshot reçu', { sourceKey, size: snapshot.size, userId });
+      const normalized = [];
+
+      snapshot.forEach((doc) => {
+        const rawData = typeof doc.data === 'function' ? doc.data() : null;
+        const task = normalizeTaskDocument(doc, userId, rawData);
+        console.log('useTasks: Document reçu', { sourceKey, id: doc.id, data: rawData, task });
+        if (task) {
+          normalized.push(task);
+        }
+      });
+
+      sourceTasks[sourceKey] = normalized;
+      updateFromSources();
+    };
+
+    const handleError = (sourceKey) => (err) => {
+      console.error('useTasks: Erreur écoute tâches', { sourceKey, err });
+
+      sourceTasks[sourceKey] = [];
+      if (err?.message && err.message.includes('Firebase')) {
+        setError('Configuration Firebase manquante - Impossible de récupérer les tâches');
+      } else {
+        setError(err?.message || 'Erreur de récupération des tâches');
+      }
+      setLoading(false);
+    };
+
+    const unsubscribers = [];
+
+    try {
+      const userTasksRef = collection(db, 'users', userId, 'tasks');
+      unsubscribers.push(onSnapshot(userTasksRef, handleSnapshot('userCollection'), handleError('userCollection')));
+    } catch (err) {
+      console.error('useTasks: Erreur écoute sous-collection utilisateurs', err);
     }
+
+    try {
+      const globalTasksRef = collection(db, 'tasks');
+
+      const queries = [
+        { key: 'global_user_id', ref: query(globalTasksRef, where('user_id', '==', userId)) },
+        { key: 'global_owner_id', ref: query(globalTasksRef, where('owner_id', '==', userId)) },
+        { key: 'global_uid', ref: query(globalTasksRef, where('uid', '==', userId)) }
+      ];
+
+      queries.forEach(({ key, ref }) => {
+        try {
+          unsubscribers.push(onSnapshot(ref, handleSnapshot(key), handleError(key)));
+        } catch (err) {
+          console.error('useTasks: Erreur création écoute globale', { key, err });
+        }
+      });
+    } catch (err) {
+      console.error('useTasks: Erreur accès collection globale tasks', err);
+    }
+
+    return () => {
+      unsubscribers.forEach((unsub) => {
+        if (typeof unsub === 'function') unsub();
+      });
+    };
   }, [userId]);
 
   console.log('useTasks: Retour hook', { 
