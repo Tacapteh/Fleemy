@@ -12,7 +12,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
     color: initialTask?.color || DEFAULT_TASK_COLOR,
     icon: initialTask?.icon || 'briefcase',
     time_ranges: initialTask?.time_ranges || [
-      { day: 0, start: '09:00', end: '10:00' } // Lundi par défaut
+      { day: 0, start: '09:00', end: '10:00' } // Lundi par défaut - heures pleines
     ]
   });
 
