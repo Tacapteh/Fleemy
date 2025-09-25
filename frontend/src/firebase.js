@@ -261,37 +261,15 @@ export const deleteEvent = async (eventId) => {
   }
 };
 
-// SYSTÈME DE STOCKAGE DEMO POUR LES TÂCHES HEBDOMADAIRES
-const DEMO_TASKS_KEY = 'demo_weekly_tasks';
-
-const getDemoTasks = () => {
-  try {
-    const tasks = localStorage.getItem(DEMO_TASKS_KEY);
-    return tasks ? JSON.parse(tasks) : [];
-  } catch (e) {
-    console.error('Erreur lecture tâches démo:', e);
-    return [];
-  }
-};
-
-const saveDemoTasks = (tasks) => {
-  try {
-    localStorage.setItem(DEMO_TASKS_KEY, JSON.stringify(tasks));
-    // Déclencher un événement personnalisé pour notifier les hooks
-    window.dispatchEvent(new CustomEvent('demo-tasks-updated'));
-  } catch (e) {
-    console.error('Erreur sauvegarde tâches démo:', e);
-  }
-};
-
 // TASKS HEBDOMADAIRES
 export const saveWeeklyTask = async (taskData = {}) => {
-  if (readOnlyGuard()) return;
   const currentUid = getUid();
+  if (!currentUid) {
+    throw new Error('Utilisateur non connecté');
+  }
 
   if (!taskData.time_ranges || !Array.isArray(taskData.time_ranges) || taskData.time_ranges.length === 0) {
-    console.error("Les tâches hebdomadaires doivent avoir time_ranges");
-    return;
+    throw new Error("Les tâches hebdomadaires doivent avoir time_ranges");
   }
 
   const baseData = {
@@ -302,87 +280,46 @@ export const saveWeeklyTask = async (taskData = {}) => {
     weekly: true,
     time_ranges: taskData.time_ranges,
     user_id: currentUid,
-    created_at: taskData.id ? undefined : new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    created_at: taskData.id ? undefined : serverTimestamp(),
+    updated_at: serverTimestamp(),
   };
 
   // Nettoyer les valeurs undefined
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
-  // En mode démo, utiliser le localStorage
-  if (DEMO_MODE) {
-    try {
-      let tasks = getDemoTasks();
-      
-      if (taskData.id) {
-        // Mise à jour
-        const index = tasks.findIndex(t => t.id === taskData.id);
-        if (index !== -1) {
-          tasks[index] = { id: taskData.id, ...baseData };
-        }
-      } else {
-        // Création
-        const newTask = { 
-          id: 'demo_task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9), 
-          ...baseData 
-        };
-        tasks.push(newTask);
-        baseData.id = newTask.id;
-      }
-      
-      saveDemoTasks(tasks);
-      showToast('Tâche hebdomadaire sauvegardée (mode démo)');
-      return { id: taskData.id || baseData.id, ...baseData };
-    } catch (error) {
-      console.error("Erreur sauvegarde tâche démo:", error);
-      showToast('Erreur sauvegarde tâche (mode démo)', true);
-      throw error;
-    }
-  }
-
-  // Mode production avec Firestore
   const userTasksPath = `users/${currentUid}/tasks`;
   
   try {
     if (taskData.id) {
       const ref = doc(db, userTasksPath, taskData.id);
       await setDoc(ref, baseData, { merge: true });
+      showToast('Tâche hebdomadaire mise à jour');
       return { id: taskData.id, ...baseData };
     } else {
       const ref = await addDoc(collection(db, userTasksPath), baseData);
+      showToast('Tâche hebdomadaire créée');
       return { id: ref.id, ...baseData };
     }
   } catch (error) {
     console.error("saveWeeklyTask", userTasksPath, error);
+    showToast('Erreur lors de la sauvegarde de la tâche', true);
     throw error;
   }
 };
 
 export const deleteWeeklyTask = async (taskId) => {
-  if (readOnlyGuard()) return;
   const currentUid = getUid();
-  
-  // En mode démo, supprimer du localStorage
-  if (DEMO_MODE) {
-    try {
-      let tasks = getDemoTasks();
-      tasks = tasks.filter(t => t.id !== taskId);
-      saveDemoTasks(tasks);
-      showToast('Tâche hebdomadaire supprimée (mode démo)');
-      return;
-    } catch (error) {
-      console.error("Erreur suppression tâche démo:", error);
-      showToast('Erreur suppression tâche (mode démo)', true);
-      throw error;
-    }
+  if (!currentUid) {
+    throw new Error('Utilisateur non connecté');
   }
   
-  // Mode production
   try {
     const taskRef = doc(db, `users/${currentUid}/tasks`, taskId);
     await deleteDoc(taskRef);
+    showToast('Tâche hebdomadaire supprimée');
   } catch (error) {
     console.error("Erreur deleteWeeklyTask:", error);
+    showToast('Erreur lors de la suppression de la tâche', true);
     throw error;
   }
 };
