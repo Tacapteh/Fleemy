@@ -86,6 +86,7 @@ export default function Planning() {
 
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
   const [taskModal, setTaskModal] = useState({ open: false, task: null });
+  const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
 
   // Déterminer l'utilisateur dont on consulte le planning
   const viewedUserId = team?.viewedMember || user?.uid;
