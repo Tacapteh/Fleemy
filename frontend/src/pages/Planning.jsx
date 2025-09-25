@@ -91,6 +91,15 @@ export default function Planning() {
   // Déterminer l'utilisateur dont on consulte le planning
   const viewedUserId = team?.viewedMember || user?.uid;
   const isReadOnlyMode = viewedUserId && viewedUserId !== user?.uid;
+  
+  console.log('Planning: Contexte utilisateur', { 
+    user: user?.uid, 
+    userDisplayName: user?.displayName,
+    team: team?.id, 
+    viewedMember: team?.viewedMember, 
+    viewedUserId,
+    isReadOnlyMode
+  });
 
 
 
