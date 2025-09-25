@@ -25,12 +25,14 @@ import { showToast } from "./utils/toast";
 
 const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
 
+const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
+
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || (DEMO_MODE ? "demo-api-key" : undefined),
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || (DEMO_MODE ? "demo-project.firebaseapp.com" : undefined),
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || (DEMO_MODE ? "demo-project" : undefined),
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || (DEMO_MODE ? "1:123456789:web:abcdef" : undefined),
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || (DEMO_MODE ? "123456789" : undefined),
 };
 
 if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
