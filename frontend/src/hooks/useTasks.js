@@ -2,17 +2,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { db, getUid } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
-// Fonction pour récupérer les tâches démo du localStorage
-const getDemoTasks = () => {
-  try {
-    const tasks = localStorage.getItem('demo_weekly_tasks');
-    return tasks ? JSON.parse(tasks) : [];
-  } catch (e) {
-    console.error('Erreur lecture tâches démo:', e);
-    return [];
-  }
-};
-
 /**
  * Hook pour récupérer et écouter les tâches hebdomadaires d'un utilisateur
  * @param {string} userId - L'ID de l'utilisateur dont on veut récupérer les tâches
