@@ -15,11 +15,11 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
     ? new Date(initialTask.end)
     : new Date(initStart.getTime() + 60 * 60 * 1000);
   const [task, setTask] = useState({
-    title: initialTask?.title || '',
+    title: initialTask?.title || initialTask?.label || '',
     start: initStart,
     end: initEnd,
-    color: initialTask?.color || '#10b981',
-    icon: initialTask?.icon || '📋',
+    color: initialTask?.color || DEFAULT_TASK_COLOR,
+    icon: initialTask?.icon || 'briefcase',
     price: initialTask?.price || '',
     description: initialTask?.description || ''
   });
