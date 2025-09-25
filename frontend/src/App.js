@@ -34,6 +34,7 @@ function Layout({ user, onLogout }) {
 function App() {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
+  const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
 
   useEffect(() => {
     let first = true;
