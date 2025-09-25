@@ -483,6 +483,13 @@ export default function Planning() {
         onDelete={handleDeleteTask}
         task={taskModal.task}
       />
+      <WeeklyTaskModal
+        isOpen={weeklyTaskModal.open}
+        onClose={closeWeeklyTaskModal}
+        onSave={handleSaveWeeklyTask}
+        onDelete={handleDeleteWeeklyTask}
+        task={weeklyTaskModal.task}
+      />
     </>
   );
 }
