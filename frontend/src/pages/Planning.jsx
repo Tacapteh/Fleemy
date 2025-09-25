@@ -77,7 +77,6 @@ export default function Planning() {
   const [error, setError] = useState(null);
 
   const [showSkeleton, setShowSkeleton] = useState(true);
-  const [tasks, setTasks] = useState([]);
   useEffect(() => {
     const t = setTimeout(() => setShowSkeleton(false), 300);
     return () => clearTimeout(t);
@@ -85,6 +84,10 @@ export default function Planning() {
 
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
   const [taskModal, setTaskModal] = useState({ open: false, task: null });
+
+  // Déterminer l'utilisateur dont on consulte le planning
+  const viewedUserId = team?.viewedMember || user?.uid;
+  const isReadOnlyMode = viewedUserId && viewedUserId !== user?.uid;
 
 
 
