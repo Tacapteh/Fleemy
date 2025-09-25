@@ -163,17 +163,19 @@ export default function Planning() {
     return { from, to };
   }, [weekStart]);
 
-  // Hook pour les tâches hebdomadaires
+  // Hook pour les tâches hebdomadaires - seulement si on a un utilisateur
   const weekStartISO = weekStart.toISOString().split('T')[0];
   const { 
     tasks: weeklyTasks, 
     occurrences: taskOccurrences, 
     loading: tasksLoading,
     error: tasksError 
-  } = useTasks(viewedUserId, weekStartISO);
+  } = useTasks(user?.uid ? (viewedUserId || user.uid) : null, weekStartISO);
   
   console.log('Planning: Hook useTasks', { 
+    userId: user?.uid,
     viewedUserId, 
+    finalUserId: user?.uid ? (viewedUserId || user.uid) : null,
     weekStartISO, 
     weeklyTasksCount: weeklyTasks.length, 
     taskOccurrencesCount: taskOccurrences.length,
