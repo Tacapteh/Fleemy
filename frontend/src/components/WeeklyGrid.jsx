@@ -225,6 +225,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 export default function WeeklyGrid(props) {
   const events = Array.isArray(props.events) ? props.events : [];
   const tasks = Array.isArray(props.tasks) ? props.tasks : [];
+  const isReadOnlyMode = props.isReadOnlyMode || false;
   const weekStart =
     props.weekStart && typeof props.weekStart.toDate === "function"
       ? props.weekStart.toDate()
