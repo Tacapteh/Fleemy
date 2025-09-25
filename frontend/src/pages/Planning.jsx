@@ -12,6 +12,7 @@ import useTasks from '../hooks/useTasks';
 import {
   useFirebaseUser,
   deleteTask,
+  deleteWeeklyTask,
   saveEventNew,
   deleteEventNew,
   watchWeekEvents,
