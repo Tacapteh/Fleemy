@@ -395,13 +395,15 @@ export default function Planning() {
       <div className="flex justify-end mb-2 space-x-2">
         <button
           onClick={() => openDate(new Date(currentDate))}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isReadOnlyMode}
         >
           + Événement
         </button>
         <button
           onClick={openNewTask}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isReadOnlyMode}
         >
           + Tâche
         </button>
