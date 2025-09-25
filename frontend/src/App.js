@@ -64,7 +64,7 @@ function App() {
       }
     });
     return () => unsub();
-  }, [DEMO_MODE]);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
