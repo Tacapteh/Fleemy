@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { saveTask, useFirebaseUser } from '../firebase';
+import { TASK_ICON_KEYS, getTaskIcon } from '../constants/icons';
+import { TASK_COLOR_KEYS, getTaskColor, DEFAULT_TASK_COLOR } from '../constants/colors';
 
 const roundToHour = (date = new Date()) => {
   const d = new Date(date);
