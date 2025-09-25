@@ -95,7 +95,7 @@ export function useFirebaseUser() {
   return user;
 }
 
-const logout = async () => {
+export const logout = async () => {
   await signOut(auth);
   localStorage.removeItem("authToken");
 };
