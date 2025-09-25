@@ -85,3 +85,7 @@ frontend/.env
 
 serviceAccountKey.json
 backend/serviceAccountKey.json
+-e 
+# Environment files
+*.env
+*.env.*
