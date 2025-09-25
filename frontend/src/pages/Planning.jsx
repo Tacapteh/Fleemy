@@ -91,6 +91,15 @@ export default function Planning() {
   // Déterminer l'utilisateur dont on consulte le planning
   const viewedUserId = team?.viewedMember || user?.uid;
   const isReadOnlyMode = viewedUserId && viewedUserId !== user?.uid;
+  
+  console.log('Planning: Contexte utilisateur', { 
+    user: user?.uid, 
+    userDisplayName: user?.displayName,
+    team: team?.id, 
+    viewedMember: team?.viewedMember, 
+    viewedUserId,
+    isReadOnlyMode
+  });
 
 
 
@@ -154,14 +163,25 @@ export default function Planning() {
     return { from, to };
   }, [weekStart]);
 
-  // Hook pour les tâches hebdomadaires
+  // Hook pour les tâches hebdomadaires - seulement si on a un utilisateur
   const weekStartISO = weekStart.toISOString().split('T')[0];
   const { 
     tasks: weeklyTasks, 
     occurrences: taskOccurrences, 
     loading: tasksLoading,
     error: tasksError 
-  } = useTasks(viewedUserId, weekStartISO);
+  } = useTasks(user?.uid ? (viewedUserId || user.uid) : null, weekStartISO);
+  
+  console.log('Planning: Hook useTasks', { 
+    userId: user?.uid,
+    viewedUserId, 
+    finalUserId: user?.uid ? (viewedUserId || user.uid) : null,
+    weekStartISO, 
+    weeklyTasksCount: weeklyTasks.length, 
+    taskOccurrencesCount: taskOccurrences.length,
+    tasksLoading,
+    tasksError
+  });
 
   useEffect(() => {
     if (!user) {
