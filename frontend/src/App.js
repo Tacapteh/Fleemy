@@ -36,7 +36,7 @@ function App() {
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    if (DEMO_MODE) {
+    let first = true;
       // Mode démo : créer un utilisateur fictif directement
       const demoUser = {
         uid: 'demo-user',
