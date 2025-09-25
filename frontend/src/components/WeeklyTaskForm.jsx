@@ -25,7 +25,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
       ...task,
       time_ranges: [
         ...task.time_ranges,
-        { day: 0, start: '09:00', end: '10:00' }
+        { day: 0, start: '09:00', end: '10:00' } // Heures pleines par défaut
       ]
     });
   };
