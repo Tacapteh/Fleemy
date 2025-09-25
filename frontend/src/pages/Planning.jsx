@@ -406,11 +406,12 @@ export default function Planning() {
       ) : view === 'week' ? (
         <WeeklyGrid
           events={events}
-          tasks={tasks}
+          tasks={taskOccurrences}
           onSlotSelect={openSlot}
           onEventClick={openEvent}
           onTaskClick={handleTaskClick}
           weekStart={weekStart}
+          isReadOnlyMode={isReadOnlyMode}
         />
       ) : (
         <MonthGrid
