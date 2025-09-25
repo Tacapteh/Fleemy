@@ -157,14 +157,15 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
             <div className="task-form-field">
               <label>Icône</label>
               <div className="task-form-icons">
-                {iconOptions.map((icon) => (
+                {iconOptions.map((iconKey) => (
                   <button
-                    key={icon}
+                    key={iconKey}
                     type="button"
-                    className={`task-form-icon ${task.icon === icon ? 'selected' : ''}`}
-                    onClick={() => setTask({ ...task, icon })}
+                    className={`task-form-icon ${task.icon === iconKey ? 'selected' : ''}`}
+                    onClick={() => setTask({ ...task, icon: iconKey })}
+                    title={iconKey}
                   >
-                    {icon}
+                    {getTaskIcon(iconKey)}
                   </button>
                 ))}
               </div>
@@ -173,15 +174,19 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
             <div className="task-form-field">
               <label>Couleur</label>
               <div className="task-form-colors">
-                {colorOptions.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`task-form-color ${task.color === color ? 'selected' : ''}`}
-                    style={{ backgroundColor: color }}
-                    onClick={() => setTask({ ...task, color })}
-                  />
-                ))}
+                {colorOptions.map((colorKey) => {
+                  const colorStyles = getTaskColor(colorKey);
+                  return (
+                    <button
+                      key={colorKey}
+                      type="button"
+                      className={`task-form-color ${task.color === colorKey ? 'selected' : ''}`}
+                      style={{ backgroundColor: colorStyles.backgroundColor }}
+                      onClick={() => setTask({ ...task, color: colorKey })}
+                      title={colorKey}
+                    />
+                  );
+                })}
               </div>
             </div>
           </div>
