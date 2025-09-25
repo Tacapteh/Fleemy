@@ -164,7 +164,6 @@ export default function Planning() {
     if (!user) {
       setTeamContext(null);
       setEvents([]);
-      setTasks([]);
       return () => {};
     }
 
@@ -236,23 +235,10 @@ export default function Planning() {
       }
     );
 
-    // Garder l'ancien système pour les tâches pour l'instant
-    let { from, to } = weekRange || {};
-    if (!from || !to) return () => {};
-
-    if (typeof from === 'string') from = new Date(from);
-    if (typeof to === 'string') to = new Date(to);
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) return () => {};
-
-    const unsubTasks = watchTasks({ from, to }, (tsks) => {
-      setTasks(tsks);
-    });
-
     return () => {
       unsubEvents && unsubEvents();
-      unsubTasks && unsubTasks();
     };
-  }, [user?.uid, teamId, weekStart, weekEnd, weekRange]);
+  }, [user?.uid, teamId, weekStart, weekEnd]);
 
 
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
