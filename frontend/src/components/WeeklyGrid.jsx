@@ -453,6 +453,7 @@ export default function WeeklyGrid(props) {
             onEventClick={onEventClick}
             onAddEvent={onAddEvent}
             onTaskClick={onTaskClick}
+            isReadOnlyMode={isReadOnlyMode}
           />
         </div>
       </div>
