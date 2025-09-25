@@ -200,6 +200,15 @@ export default function useTasks(userId, weekStartISO) {
     }
   }, [userId]);
 
+  console.log('useTasks: Retour hook', { 
+    tasksCount: tasks.length, 
+    occurrencesCount: occurrences.length, 
+    loading, 
+    error,
+    weekStartISO,
+    userId 
+  });
+
   return {
     tasks,
     occurrences,
