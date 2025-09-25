@@ -326,8 +326,10 @@ export const deleteWeeklyTask = async (taskId) => {
 
 // TASKS (existing function remains unchanged)
 export const saveTask = async (taskData = {}) => {
-  if (readOnlyGuard()) return;
   const currentUid = getUid();
+  if (!currentUid) {
+    throw new Error('Utilisateur non connecté');
+  }
 
   const baseData = {
     ...taskData,
