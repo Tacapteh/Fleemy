@@ -7,9 +7,9 @@ import EventModal from '../components/EventModal';
 import TaskModal from '../components/TaskModal';
 
 import useTeam from '../hooks/useTeam';
+import useTasks from '../hooks/useTasks';
 import {
   useFirebaseUser,
-  watchTasks,
   deleteTask,
   saveEventNew,
   deleteEventNew,
