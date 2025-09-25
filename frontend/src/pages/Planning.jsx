@@ -151,6 +151,15 @@ export default function Planning() {
     return { from, to };
   }, [weekStart]);
 
+  // Hook pour les tâches hebdomadaires
+  const weekStartISO = weekStart.toISOString().split('T')[0];
+  const { 
+    tasks: weeklyTasks, 
+    occurrences: taskOccurrences, 
+    loading: tasksLoading,
+    error: tasksError 
+  } = useTasks(viewedUserId, weekStartISO);
+
   useEffect(() => {
     if (!user) {
       setTeamContext(null);
