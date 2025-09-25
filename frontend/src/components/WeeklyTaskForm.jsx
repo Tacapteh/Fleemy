@@ -190,6 +190,9 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                       onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
                       className="time-input"
                       aria-label={`Heure de début ${index + 1}`}
+                      step="3600"
+                      min="00:00"
+                      max="23:00"
                     />
                     
                     <span className="time-separator">à</span>
@@ -200,6 +203,9 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                       onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
                       className="time-input"
                       aria-label={`Heure de fin ${index + 1}`}
+                      step="3600"
+                      min="01:00"
+                      max="23:59"
                     />
                     
                     {task.time_ranges.length > 1 && (
