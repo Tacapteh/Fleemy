@@ -23,14 +23,12 @@ import {
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
 
-const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
-
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || (DEMO_MODE ? "demo-api-key" : undefined),
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || (DEMO_MODE ? "demo-project.firebaseapp.com" : undefined),
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || (DEMO_MODE ? "demo-project" : undefined),
-  appId: process.env.REACT_APP_FIREBASE_APP_ID || (DEMO_MODE ? "1:123456789:web:abcdef" : undefined),
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || (DEMO_MODE ? "123456789" : undefined),
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
 };
 
 if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
@@ -40,8 +38,7 @@ if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
 const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
 
-// En mode démo, on ignore les clés manquantes
-if (missingConfig.length && !DEMO_MODE) {
+if (missingConfig.length) {
   throw new Error(
     `Missing Firebase configuration: ${missingConfig.join(", ")}. ` +
       "Check your REACT_APP_FIREBASE_* environment variables."
@@ -54,7 +51,7 @@ console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const getUid = () => auth.currentUser?.uid || "demo-user";
+const getUid = () => auth.currentUser?.uid || null;
 export { getUid };
 
 const recentErrors = new Map();
