@@ -26,11 +26,11 @@ import { showToast } from "./utils/toast";
 const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY || (DEMO_MODE ? "demo-api-key" : undefined),
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN || (DEMO_MODE ? "demo-project.firebaseapp.com" : undefined),
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID || (DEMO_MODE ? "demo-project" : undefined),
+  appId: process.env.REACT_APP_FIREBASE_APP_ID || (DEMO_MODE ? "1:123456789:web:abcdef" : undefined),
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID || (DEMO_MODE ? "123456789" : undefined),
 };
 
 if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
@@ -40,7 +40,8 @@ if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
 const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
 
-if (missingConfig.length) {
+// En mode démo, on ignore les clés manquantes
+if (missingConfig.length && !DEMO_MODE) {
   throw new Error(
     `Missing Firebase configuration: ${missingConfig.join(", ")}. ` +
       "Check your REACT_APP_FIREBASE_* environment variables."
@@ -59,9 +60,9 @@ export { getUid };
 const recentErrors = new Map();
 
 const readOnlyGuard = () => {
+  // En mode démo, on autorise les opérations (elles seront mockées)
   if (DEMO_MODE) {
-    showToast("Mode démo : lecture seule");
-    return !auth.currentUser;
+    return false; // Autoriser les opérations
   }
   return false;
 };
@@ -271,6 +272,29 @@ export const deleteEvent = async (eventId) => {
   }
 };
 
+// SYSTÈME DE STOCKAGE DEMO POUR LES TÂCHES HEBDOMADAIRES
+const DEMO_TASKS_KEY = 'demo_weekly_tasks';
+
+const getDemoTasks = () => {
+  try {
+    const tasks = localStorage.getItem(DEMO_TASKS_KEY);
+    return tasks ? JSON.parse(tasks) : [];
+  } catch (e) {
+    console.error('Erreur lecture tâches démo:', e);
+    return [];
+  }
+};
+
+const saveDemoTasks = (tasks) => {
+  try {
+    localStorage.setItem(DEMO_TASKS_KEY, JSON.stringify(tasks));
+    // Déclencher un événement personnalisé pour notifier les hooks
+    window.dispatchEvent(new CustomEvent('demo-tasks-updated'));
+  } catch (e) {
+    console.error('Erreur sauvegarde tâches démo:', e);
+  }
+};
+
 // TASKS HEBDOMADAIRES
 export const saveWeeklyTask = async (taskData = {}) => {
   if (readOnlyGuard()) return;
@@ -289,13 +313,45 @@ export const saveWeeklyTask = async (taskData = {}) => {
     weekly: true,
     time_ranges: taskData.time_ranges,
     user_id: currentUid,
-    created_at: taskData.id ? undefined : serverTimestamp(),
-    updated_at: serverTimestamp(),
+    created_at: taskData.id ? undefined : new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 
   // Nettoyer les valeurs undefined
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
+  // En mode démo, utiliser le localStorage
+  if (DEMO_MODE) {
+    try {
+      let tasks = getDemoTasks();
+      
+      if (taskData.id) {
+        // Mise à jour
+        const index = tasks.findIndex(t => t.id === taskData.id);
+        if (index !== -1) {
+          tasks[index] = { id: taskData.id, ...baseData };
+        }
+      } else {
+        // Création
+        const newTask = { 
+          id: 'demo_task_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9), 
+          ...baseData 
+        };
+        tasks.push(newTask);
+        baseData.id = newTask.id;
+      }
+      
+      saveDemoTasks(tasks);
+      showToast('Tâche hebdomadaire sauvegardée (mode démo)');
+      return { id: taskData.id || baseData.id, ...baseData };
+    } catch (error) {
+      console.error("Erreur sauvegarde tâche démo:", error);
+      showToast('Erreur sauvegarde tâche (mode démo)', true);
+      throw error;
+    }
+  }
+
+  // Mode production avec Firestore
   const userTasksPath = `users/${currentUid}/tasks`;
   
   try {
@@ -317,6 +373,22 @@ export const deleteWeeklyTask = async (taskId) => {
   if (readOnlyGuard()) return;
   const currentUid = getUid();
   
+  // En mode démo, supprimer du localStorage
+  if (DEMO_MODE) {
+    try {
+      let tasks = getDemoTasks();
+      tasks = tasks.filter(t => t.id !== taskId);
+      saveDemoTasks(tasks);
+      showToast('Tâche hebdomadaire supprimée (mode démo)');
+      return;
+    } catch (error) {
+      console.error("Erreur suppression tâche démo:", error);
+      showToast('Erreur suppression tâche (mode démo)', true);
+      throw error;
+    }
+  }
+  
+  // Mode production
   try {
     const taskRef = doc(db, `users/${currentUid}/tasks`, taskId);
     await deleteDoc(taskRef);

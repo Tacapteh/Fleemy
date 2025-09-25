@@ -12,7 +12,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
     color: initialTask?.color || DEFAULT_TASK_COLOR,
     icon: initialTask?.icon || 'briefcase',
     time_ranges: initialTask?.time_ranges || [
-      { day: 0, start: '09:00', end: '10:00' } // Lundi par défaut
+      { day: 0, start: '09:00', end: '10:00' } // Lundi par défaut - heures pleines
     ]
   });
 
@@ -25,13 +25,22 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
       ...task,
       time_ranges: [
         ...task.time_ranges,
-        { day: 0, start: '09:00', end: '10:00' }
+        { day: 0, start: '09:00', end: '10:00' } // Heures pleines par défaut
       ]
     });
   };
 
   const updateTimeRange = (index, field, value) => {
     const newRanges = [...task.time_ranges];
+    
+    // Forcer les heures pleines (minutes = 00)
+    if (field === 'start' || field === 'end') {
+      const timeParts = value.split(':');
+      if (timeParts.length === 2) {
+        value = `${timeParts[0]}:00`; // Forcer les minutes à 00
+      }
+    }
+    
     newRanges[index] = { ...newRanges[index], [field]: value };
     setTask({ ...task, time_ranges: newRanges });
   };
@@ -159,7 +168,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
           </div>
 
           <div className="task-form-field">
-            <label>Créneaux horaires *</label>
+            <label>Créneaux horaires * <small>(heures pleines uniquement)</small></label>
             <div className="time-ranges-list">
               {task.time_ranges.map((range, index) => (
                 <div key={index} className="time-range-item">
@@ -181,6 +190,9 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                       onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
                       className="time-input"
                       aria-label={`Heure de début ${index + 1}`}
+                      step="3600"
+                      min="00:00"
+                      max="23:00"
                     />
                     
                     <span className="time-separator">à</span>
@@ -191,6 +203,9 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                       onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
                       className="time-input"
                       aria-label={`Heure de fin ${index + 1}`}
+                      step="3600"
+                      min="01:00"
+                      max="23:59"
                     />
                     
                     {task.time_ranges.length > 1 && (
