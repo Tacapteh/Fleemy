@@ -151,9 +151,10 @@ const dateFromISOWeek = (year, week, dayName) => {
 
 // EVENTS
 export const saveEvent = async (eventData = {}) => {
-  if (readOnlyGuard()) return;
   const currentUid = auth.currentUser?.uid;
-  if (!currentUid) return;
+  if (!currentUid) {
+    throw new Error('Utilisateur non connecté');
+  }
 
   const baseData = {
     ...eventData,
@@ -173,7 +174,7 @@ export const saveEvent = async (eventData = {}) => {
     return { id: ref.id, ...data };
   } catch (error) {
     console.error("saveEvent", "events", error);
-    return;
+    throw error;
   }
 };
 
