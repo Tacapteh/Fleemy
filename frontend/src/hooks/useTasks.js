@@ -298,11 +298,18 @@ export default function useTasks(userId, weekStartISO) {
 
     const unsubscribers = [];
 
-    try {
-      const userTasksRef = collection(db, 'users', userId, 'tasks');
-      unsubscribers.push(onSnapshot(userTasksRef, handleSnapshot('userCollection'), handleError('userCollection')));
-    } catch (err) {
-      console.error('useTasks: Erreur écoute sous-collection utilisateurs', err);
+    if (userId === currentUid) {
+      try {
+        const userTasksRef = collection(db, 'users', userId, 'tasks');
+        unsubscribers.push(onSnapshot(userTasksRef, handleSnapshot('userCollection'), handleError('userCollection')));
+      } catch (err) {
+        console.error('useTasks: Erreur écoute sous-collection utilisateurs', err);
+      }
+    } else {
+      console.log('useTasks: Vue autre utilisateur, ignore sous-collection', {
+        userId,
+        currentUid
+      });
     }
 
     try {
