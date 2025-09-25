@@ -50,9 +50,20 @@ const projectId = app.options.projectId;
 console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-const googleProvider = new GoogleAuthProvider();
+export const googleProvider = new GoogleAuthProvider();
 const getUid = () => auth.currentUser?.uid || null;
 export { getUid };
+
+// AUTHENTICATION
+export const logout = async () => {
+  try {
+    await signOut(auth);
+    localStorage.removeItem("authToken");
+  } catch (error) {
+    console.error("Erreur lors de la déconnexion:", error);
+    throw error;
+  }
+};
 
 const recentErrors = new Map();
 
