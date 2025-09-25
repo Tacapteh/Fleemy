@@ -5,6 +5,7 @@ import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
 import EventModal from '../components/EventModal';
 import TaskModal from '../components/TaskModal';
+import WeeklyTaskModal from '../components/WeeklyTaskModal';
 
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
