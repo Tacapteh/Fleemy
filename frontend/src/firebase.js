@@ -56,14 +56,6 @@ export { getUid };
 
 const recentErrors = new Map();
 
-const readOnlyGuard = () => {
-  // En mode démo, on autorise les opérations (elles seront mockées)
-  if (DEMO_MODE) {
-    return false; // Autoriser les opérations
-  }
-  return false;
-};
-
 const logPermissionError = (path, uid, err) => {
   if (err?.code !== "permission-denied") return;
   const key = `${path}|${err.message}`;
