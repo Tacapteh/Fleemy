@@ -502,7 +502,6 @@ export const watchTasks = (range, callback) => {
 };
 
 export const deleteTask = async (taskId) => {
-  if (readOnlyGuard()) return;
   try {
     const taskRef = doc(collection(db, "tasks"), taskId);
     await deleteDoc(taskRef);
