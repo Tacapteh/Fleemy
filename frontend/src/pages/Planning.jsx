@@ -294,6 +294,11 @@ export default function Planning() {
     closeTaskModal();
   };
 
+  const handleSaveWeeklyTask = () => {
+    showToast('Tâche hebdomadaire sauvegardée avec succès');
+    closeWeeklyTaskModal();
+  };
+
   const handleDeleteTask = async (id) => {
     if (!user) return;
     try {
@@ -304,6 +309,19 @@ export default function Planning() {
       showToast('Erreur lors de la suppression de la tâche', true);
     } finally {
       closeTaskModal();
+    }
+  };
+
+  const handleDeleteWeeklyTask = async (id) => {
+    if (!user || isReadOnlyMode) return;
+    try {
+      await deleteWeeklyTask(id);
+      showToast('Tâche hebdomadaire supprimée');
+    } catch (e) {
+      console.error('delete weekly task', e);
+      showToast('Erreur lors de la suppression de la tâche hebdomadaire', true);
+    } finally {
+      closeWeeklyTaskModal();
     }
   };
 
