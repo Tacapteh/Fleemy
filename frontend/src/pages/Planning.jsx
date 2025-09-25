@@ -437,6 +437,13 @@ export default function Planning() {
         >
           + Tâche
         </button>
+        <button
+          onClick={openNewWeeklyTask}
+          className="px-3 py-1 bg-blue-300 rounded hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isReadOnlyMode}
+        >
+          + Tâche hebdomadaire
+        </button>
       </div>
       {loading && showSkeleton ? (
         <div>Chargement des événements...</div>
