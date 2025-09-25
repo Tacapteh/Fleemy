@@ -171,6 +171,15 @@ export default function Planning() {
     loading: tasksLoading,
     error: tasksError 
   } = useTasks(viewedUserId, weekStartISO);
+  
+  console.log('Planning: Hook useTasks', { 
+    viewedUserId, 
+    weekStartISO, 
+    weeklyTasksCount: weeklyTasks.length, 
+    taskOccurrencesCount: taskOccurrences.length,
+    tasksLoading,
+    tasksError
+  });
 
   useEffect(() => {
     if (!user) {
