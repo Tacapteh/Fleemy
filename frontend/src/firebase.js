@@ -252,7 +252,6 @@ export const watchEvents = (range, callback) => {
 };
 
 export const deleteEvent = async (eventId) => {
-  if (readOnlyGuard()) return;
   try {
     const eventRef = doc(collection(db, "events"), eventId);
     await deleteDoc(eventRef);
