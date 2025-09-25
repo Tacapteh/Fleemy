@@ -110,63 +110,6 @@ export default function useTasks(userId, weekStartISO) {
     setLoading(true);
     setError(null);
 
-    // Mode démo : utiliser localStorage
-    const DEMO_MODE = process.env.REACT_APP_DISABLE_GOOGLE_AUTH === "true";
-    if (DEMO_MODE) {
-      try {
-        const demoTasks = getDemoTasks();
-        const tasksList = demoTasks.map(data => ({
-          id: data.id,
-          user_id: data.user_id || userId,
-          label: data.label || data.name || 'Tâche sans titre',
-          price: data.price || null,
-          color: data.color || '#dbeafe',
-          icon: data.icon || '📋',
-          weekly: true,
-          time_ranges: Array.isArray(data.time_ranges) ? data.time_ranges : [],
-          created_at: data.created_at || null,
-          updated_at: data.updated_at || null
-        }));
-        
-        setTasks(tasksList);
-        setLoading(false);
-
-        // Écouter les changements du localStorage pour les mises à jour en temps réel
-        const handleStorageChange = () => {
-          const updatedTasks = getDemoTasks();
-          const updatedTasksList = updatedTasks.map(data => ({
-            id: data.id,
-            user_id: data.user_id || userId,
-            label: data.label || data.name || 'Tâche sans titre',
-            price: data.price || null,
-            color: data.color || '#dbeafe',
-            icon: data.icon || '📋',
-            weekly: true,
-            time_ranges: Array.isArray(data.time_ranges) ? data.time_ranges : [],
-            created_at: data.created_at || null,
-            updated_at: data.updated_at || null
-          }));
-          setTasks(updatedTasksList);
-        };
-
-        // Écouter à la fois storage et événements personnalisés
-        window.addEventListener('storage', handleStorageChange);
-        window.addEventListener('demo-tasks-updated', handleStorageChange);
-        
-        return () => {
-          window.removeEventListener('storage', handleStorageChange);
-          window.removeEventListener('demo-tasks-updated', handleStorageChange);
-        };
-      } catch (err) {
-        console.error('Erreur tâches démo:', err);
-        setError('Erreur de récupération des tâches démo');
-        setTasks([]);
-        setLoading(false);
-        return () => {};
-      }
-    }
-
-    // Mode production : utiliser Firestore
     const tasksPath = `users/${userId}/tasks`;
     
     try {
