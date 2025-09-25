@@ -287,6 +287,8 @@ const getDemoTasks = () => {
 const saveDemoTasks = (tasks) => {
   try {
     localStorage.setItem(DEMO_TASKS_KEY, JSON.stringify(tasks));
+    // Déclencher un événement personnalisé pour notifier les hooks
+    window.dispatchEvent(new CustomEvent('demo-tasks-updated'));
   } catch (e) {
     console.error('Erreur sauvegarde tâches démo:', e);
   }
