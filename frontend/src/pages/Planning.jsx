@@ -170,7 +170,11 @@ export default function Planning() {
     occurrences: taskOccurrences, 
     loading: tasksLoading,
     error: tasksError 
-  } = useTasks(user?.uid ? (viewedUserId || user.uid) : null, weekStartISO);
+  } = useTasks(
+    user?.uid ? (viewedUserId || user.uid) : null,
+    weekStartISO,
+    teamId || null
+  );
   
   console.log('Planning: Hook useTasks', { 
     userId: user?.uid,

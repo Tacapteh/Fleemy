@@ -118,7 +118,7 @@ const normalizeTaskDocument = (docSnapshot, fallbackUserId, prefetchedData) => {
  * @param {string} weekStartISO - Date de début de semaine au format ISO (YYYY-MM-DD)
  * @returns {Object} { tasks: Task[], occurrences: TaskOccurrence[], loading: boolean, error: string|null }
  */
-export default function useTasks(userId, weekStartISO) {
+export default function useTasks(userId, weekStartISO, teamId = null) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -288,17 +288,22 @@ export default function useTasks(userId, weekStartISO) {
       console.error('useTasks: Erreur écoute tâches', { sourceKey, err });
 
       sourceTasks[sourceKey] = [];
-      if (err?.message && err.message.includes('Firebase')) {
+      if (err?.code === 'permission-denied' || err?.message?.includes('Missing or insufficient permissions')) {
+        setError('Accès refusé : permissions insuffisantes pour ces tâches.');
+      } else if (err?.message && err.message.includes('Firebase')) {
         setError('Configuration Firebase manquante - Impossible de récupérer les tâches');
       } else {
         setError(err?.message || 'Erreur de récupération des tâches');
       }
+      updateFromSources();
       setLoading(false);
     };
 
     const unsubscribers = [];
+    const isSelfView = userId && userId === currentUid;
+    const activeTeamId = teamId || null;
 
-    if (userId === currentUid) {
+    if (isSelfView) {
       try {
         const userTasksRef = collection(db, 'users', userId, 'tasks');
         unsubscribers.push(onSnapshot(userTasksRef, handleSnapshot('userCollection'), handleError('userCollection')));
@@ -315,11 +320,15 @@ export default function useTasks(userId, weekStartISO) {
     try {
       const globalTasksRef = collection(db, 'tasks');
 
-      const queries = [
-        { key: 'global_user_id', ref: query(globalTasksRef, where('user_id', '==', userId)) },
-        { key: 'global_owner_id', ref: query(globalTasksRef, where('owner_id', '==', userId)) },
-        { key: 'global_uid', ref: query(globalTasksRef, where('uid', '==', userId)) }
-      ];
+      const queries = [];
+
+      if (userId) {
+        queries.push({ key: 'global_user_id', ref: query(globalTasksRef, where('user_id', '==', userId)) });
+      }
+
+      if (activeTeamId && !isSelfView) {
+        queries.push({ key: 'global_team_id', ref: query(globalTasksRef, where('team_id', '==', activeTeamId)) });
+      }
 
       queries.forEach(({ key, ref }) => {
         try {
@@ -337,7 +346,7 @@ export default function useTasks(userId, weekStartISO) {
         if (typeof unsub === 'function') unsub();
       });
     };
-  }, [userId]);
+  }, [userId, teamId]);
 
   console.log('useTasks: Retour hook', { 
     tasksCount: tasks.length, 
