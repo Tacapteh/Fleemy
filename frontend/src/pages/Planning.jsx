@@ -4,14 +4,12 @@ import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
 import EventModal from '../components/EventModal';
-import TaskModal from '../components/TaskModal';
 import WeeklyTaskModal from '../components/WeeklyTaskModal';
 
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
 import {
   useFirebaseUser,
-  deleteTask,
   deleteWeeklyTask,
   saveEventNew,
   deleteEventNew,
@@ -85,7 +83,6 @@ export default function Planning() {
   }, []);
 
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
-  const [taskModal, setTaskModal] = useState({ open: false, task: null });
   const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
 
   // Déterminer l'utilisateur dont on consulte le planning
@@ -300,40 +297,21 @@ export default function Planning() {
 
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
-  const openNewTask = () => setTaskModal({ open: true, task: null });
   const openNewWeeklyTask = () => setWeeklyTaskModal({ open: true, task: null });
-  const handleTaskClick = (task) => {
-    // Distinguer entre tâches normales et hebdomadaires
-    if (task.weekly || task.occurrenceId) {
-      setWeeklyTaskModal({ open: true, task });
+  const handleTaskClick = (taskOccurrence) => {
+    // Récupérer la tâche originale depuis weeklyTasks
+    const originalTask = weeklyTasks.find(t => t.id === taskOccurrence.taskId);
+    if (originalTask) {
+      setWeeklyTaskModal({ open: true, task: originalTask });
     } else {
-      setTaskModal({ open: true, task });
+      console.error('Tâche originale non trouvée:', taskOccurrence.taskId);
     }
   };
-  const closeTaskModal = () => setTaskModal({ open: false, task: null });
   const closeWeeklyTaskModal = () => setWeeklyTaskModal({ open: false, task: null });
-
-  const handleSaveTask = () => {
-    showToast('Tâche sauvegardée avec succès');
-    closeTaskModal();
-  };
 
   const handleSaveWeeklyTask = () => {
     showToast('Tâche hebdomadaire sauvegardée avec succès');
     closeWeeklyTaskModal();
-  };
-
-  const handleDeleteTask = async (id) => {
-    if (!user) return;
-    try {
-      await deleteTask(id);
-      showToast('Tâche supprimée');
-    } catch (e) {
-      console.error('delete task', e);
-      showToast('Erreur lors de la suppression de la tâche', true);
-    } finally {
-      closeTaskModal();
-    }
   };
 
   const handleDeleteWeeklyTask = async (id) => {
@@ -455,13 +433,6 @@ export default function Planning() {
           + Événement
         </button>
         <button
-          onClick={openNewTask}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isReadOnlyMode}
-        >
-          + Tâche
-        </button>
-        <button
           onClick={openNewWeeklyTask}
           className="px-3 py-1 bg-blue-300 rounded hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={isReadOnlyMode}
@@ -499,13 +470,6 @@ export default function Planning() {
         timeSlot={modal.timeSlot}
         selectedDate={modal.selectedDate}
         readOnly={modal.readOnly}
-      />
-      <TaskModal
-        isOpen={taskModal.open}
-        onClose={closeTaskModal}
-        onSave={handleSaveTask}
-        onDelete={handleDeleteTask}
-        task={taskModal.task}
       />
       <WeeklyTaskModal
         isOpen={weeklyTaskModal.open}
