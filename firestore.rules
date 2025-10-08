@@ -30,10 +30,10 @@ service cloud.firestore {
 
       match /tasks/{taskId} {
         allow create: if request.auth != null && request.auth.uid == userId &&
-          request.resource.data.uid == request.auth.uid;
+          request.resource.data.user_id == request.auth.uid;
         allow read: if request.auth != null && request.auth.uid == userId;
         allow update, delete: if request.auth != null && request.auth.uid == userId &&
-          resource.data.uid == request.auth.uid;
+          resource.data.user_id == request.auth.uid;
       }
 
       // Transitional support for legacy subcollection path

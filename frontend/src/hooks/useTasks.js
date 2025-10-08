@@ -300,22 +300,7 @@ export default function useTasks(userId, weekStartISO, teamId = null) {
     };
 
     const unsubscribers = [];
-    const isSelfView = userId && userId === currentUid;
     const activeTeamId = teamId || null;
-
-    if (isSelfView) {
-      try {
-        const userTasksRef = collection(db, 'users', userId, 'tasks');
-        unsubscribers.push(onSnapshot(userTasksRef, handleSnapshot('userCollection'), handleError('userCollection')));
-      } catch (err) {
-        console.error('useTasks: Erreur écoute sous-collection utilisateurs', err);
-      }
-    } else {
-      console.log('useTasks: Vue autre utilisateur, ignore sous-collection', {
-        userId,
-        currentUid
-      });
-    }
 
     try {
       const globalTasksRef = collection(db, 'tasks');
@@ -323,11 +308,17 @@ export default function useTasks(userId, weekStartISO, teamId = null) {
       const queries = [];
 
       if (userId) {
-        queries.push({ key: 'global_user_id', ref: query(globalTasksRef, where('user_id', '==', userId)) });
+        queries.push({
+          key: 'global_user_id',
+          ref: query(globalTasksRef, where('user_id', '==', userId), where('weekly', '==', true))
+        });
       }
 
-      if (activeTeamId && !isSelfView) {
-        queries.push({ key: 'global_team_id', ref: query(globalTasksRef, where('team_id', '==', activeTeamId)) });
+      if (activeTeamId) {
+        queries.push({
+          key: 'global_team_id',
+          ref: query(globalTasksRef, where('team_id', '==', activeTeamId), where('weekly', '==', true))
+        });
       }
 
       queries.forEach(({ key, ref }) => {
