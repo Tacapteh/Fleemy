@@ -181,10 +181,20 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               const eventStart = e.start instanceof Date ? e.start : new Date(e.start);
               const eventEnd = e.end instanceof Date ? e.end : new Date(e.end);
 
-              return slotsOverlap(
+              const overlaps = slotsOverlap(
                 { startDate: eventStart, endDate: eventEnd },
                 { startDate: task.start, endDate: task.end }
               );
+              
+              if (overlaps) {
+                console.log('[WeeklyGrid] Chevauchement détecté:', {
+                  event: { id: e.id, start: eventStart, end: eventEnd },
+                  task: { id: task.occurrenceId, start: task.start, end: task.end },
+                  dayIndex
+                });
+              }
+              
+              return overlaps;
             });
 
             // Dédupliquer les tâches par occurrenceId (éviter doublons après reload)
