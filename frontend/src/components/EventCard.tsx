@@ -1,5 +1,6 @@
 import React from 'react';
 import type { DisplayEvent } from '../selectors/planningSelectors';
+import TaskIconBadge from './TaskIconBadge';
 
 interface EventCardProps {
   event: DisplayEvent;
@@ -31,7 +32,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
 
   return (
     <div
-      className={`event-chip relative${statusClass}`}
+      className={`event-chip relative pr-8 pb-5${statusClass}`}
       style={style}
       onClick={isInteractive ? handleClick : undefined}
       onKeyDown={handleKeyDown}
@@ -40,28 +41,27 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       aria-label={`Événement : ${title}`}
       data-testid={`event-${event.id}`}
     >
-      <div className="title truncate">{title}</div>
+      <div className="title truncate leading-tight break-words">{title}</div>
 
-      <div className="relative w-full min-h-[18px]" aria-hidden={event.attachedTaskIcons.length === 0 ? 'true' : undefined}>
-        <div className="absolute bottom-1 right-1 flex gap-1 flex-wrap justify-end items-end" style={{ pointerEvents: 'none' }}>
+      {event.attachedTaskIcons.length > 0 && (
+        <div
+          className="absolute bottom-1 right-1 flex flex-wrap items-end justify-end gap-1 text-[0]"
+          style={{ pointerEvents: 'none' }}
+        >
           {event.attachedTaskIcons.map((icon) => (
-            <span
+            <TaskIconBadge
               key={icon.occurrenceId}
-              className="inline-flex w-[18px] h-[18px] items-center justify-center text-xs"
-              style={{ color: icon.color || 'currentColor', backgroundColor: 'transparent' }}
-              aria-label={`Task: ${icon.label}`}
-              role="img"
-              title={icon.label}
-            >
-              {icon.icon || '📋'}
-            </span>
+              iconId={icon.icon}
+              color={icon.color}
+              label={icon.label}
+            />
           ))}
         </div>
-      </div>
+      )}
 
-      {event.client && <div className="subtitle truncate">{event.client}</div>}
+      {event.client && <div className="subtitle truncate leading-tight break-words">{event.client}</div>}
       {event.description && !event.client && (
-        <div className="subtitle truncate text-xs text-gray-600">{event.description}</div>
+        <div className="subtitle truncate break-words leading-tight text-xs text-gray-600">{event.description}</div>
       )}
     </div>
   );
