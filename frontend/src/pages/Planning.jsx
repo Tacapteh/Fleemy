@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import WeeklyGrid from '../components/WeeklyGrid';
+import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
@@ -445,9 +445,9 @@ export default function Planning() {
       {loading && showSkeleton ? (
         <div>Chargement des événements...</div>
       ) : view === 'week' ? (
-        <WeeklyGrid
+        <PlannerGrid
           events={events}
-          tasks={taskOccurrences}
+          tasks={weeklyTasks.length ? weeklyTasks : taskOccurrences}
           onSlotSelect={openSlot}
           onEventClick={openEvent}
           onTaskClick={handleTaskClick}
