@@ -47,7 +47,7 @@ module.exports = {
     },
   },
   paths: (paths) => {
-    paths.appBuild = 'build';
+    paths.appBuild = path.resolve(__dirname, 'build');
     return paths;
   },
 };
