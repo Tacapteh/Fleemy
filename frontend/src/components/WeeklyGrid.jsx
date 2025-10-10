@@ -215,7 +215,6 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   width: `${100 / e.colCount}%`,
                   top: `${top}%`,
                   height: `${height}%`,
-                  position: 'absolute',
                 }}
                 data-testid={`event-${e.id}`}
               >
@@ -231,8 +230,17 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 {/* Icônes de tâches chevauchantes - coin inférieur droit (position absolue) */}
                 {overlappingTasks.length > 0 && (
                   <div 
-                    className="absolute bottom-1 right-1 flex gap-1 flex-wrap justify-end"
-                    style={{ maxWidth: 'calc(100% - 8px)' }}
+                    style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      right: '4px',
+                      display: 'flex',
+                      gap: '4px',
+                      flexWrap: 'wrap',
+                      justifyContent: 'flex-end',
+                      maxWidth: 'calc(100% - 8px)',
+                      zIndex: 10,
+                    }}
                   >
                     {overlappingTasks.map((task) => (
                       <TaskBadge
