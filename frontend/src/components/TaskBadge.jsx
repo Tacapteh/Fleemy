@@ -10,7 +10,8 @@ export default function TaskBadge({
   isReadOnly = false, 
   onClick, 
   className = '',
-  size = 'normal' // 'small', 'normal', 'large'
+  size = 'normal', // 'small', 'normal', 'large'
+  mode = 'badge' // 'badge' ou 'icon-only'
 }) {
   const colorStyles = getTaskColor(task.color);
   const icon = getTaskIcon(task.icon);
@@ -26,10 +27,53 @@ export default function TaskBadge({
   
   const startTime = formatTime(task.startDate);
   const endTime = formatTime(task.endDate);
-  const ariaLabel = `Tâche ${task.label}, ${startTime} à ${endTime}${task.price ? `, ${task.price}€` : ''}`;
-  const title = `${task.label}\n${startTime} - ${endTime}${task.price ? `\n${task.price}€` : ''}`;
+  const ariaLabel = `Tâche: ${task.label}${startTime ? `, ${startTime} à ${endTime}` : ''}${task.price ? `, ${task.price}€` : ''}`;
+  const title = `${task.label}${startTime ? `\n${startTime} - ${endTime}` : ''}${task.price ? `\n${task.price}€` : ''}`;
   
-  // Classes CSS selon la taille
+  // Mode icon-only : badge simple 18x18, transparent, sans texte
+  if (mode === 'icon-only') {
+    const iconOnlyClasses = `
+      inline-flex items-center justify-center
+      w-[18px] h-[18px]
+      flex-shrink-0
+      ${onClick && !isReadOnly ? 'cursor-pointer hover:opacity-70 focus:outline-none focus:ring-1 focus:ring-blue-500' : ''}
+      ${className}
+    `.trim();
+    
+    const iconOnlyProps = {
+      className: iconOnlyClasses,
+      style: {
+        color: colorStyles.color,
+        fontSize: '14px'
+      },
+      title: title,
+      'aria-label': ariaLabel,
+      ...(onClick && !isReadOnly ? {
+        role: 'button',
+        tabIndex: 0,
+        onClick: (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onClick(task);
+        },
+        onKeyDown: (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            onClick(task);
+          }
+        }
+      } : {})
+    };
+    
+    return (
+      <span {...iconOnlyProps}>
+        {icon}
+      </span>
+    );
+  }
+  
+  // Mode badge normal (comportement existant)
   const sizeClasses = {
     small: 'text-xs px-1 py-0.5',
     normal: 'text-sm px-2 py-1',
