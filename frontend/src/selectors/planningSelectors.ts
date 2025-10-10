@@ -51,19 +51,17 @@ export interface TaskOccurrence {
   [key: string]: unknown;
 }
 
-export interface TaskIconBadge {
-  occurrenceId: string;
-  taskId: string;
-  icon: string;
+export interface AttachedTaskBadge {
+  iconId: string;
   label: string;
-  color?: string;
+  price?: number;
 }
 
 export interface DisplayEvent extends PlannerEventInput {
   dayIndex: number;
   startDate: Date;
   endDate: Date;
-  attachedTaskIcons: TaskIconBadge[];
+  attachedTaskBadges: AttachedTaskBadge[];
 }
 
 export interface DisplayTaskGroup {
@@ -151,6 +149,25 @@ const rangesOverlap = (aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): bool
   return aStart.getTime() < bEnd.getTime() && bStart.getTime() < aEnd.getTime();
 };
 
+const normalizeBadgePrice = (value: unknown): number | undefined => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const sanitized = trimmed.replace(/[^0-9,.-]+/g, '').replace(',', '.');
+    if (!sanitized) {
+      return undefined;
+    }
+    const parsed = Number(sanitized);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+};
+
 const normalizeEvent = (event: PlannerEventInput, rangeStart: Date): DisplayEvent | null => {
   const fallbackDate = event.date ? parseDate(`${event.date}T00:00:00`) : null;
 
@@ -197,7 +214,7 @@ const normalizeEvent = (event: PlannerEventInput, rangeStart: Date): DisplayEven
     dayIndex: normalizedDay,
     startDate: safeStart,
     endDate: safeEnd,
-    attachedTaskIcons: [],
+    attachedTaskBadges: [],
   };
 };
 
@@ -331,30 +348,61 @@ export const computeDisplayBlocks = (
   const occurrences = expandTaskOccurrences(dateRange, tasks);
 
   const displayEvents = normalizedEvents.map((event) => {
-    const attached: TaskIconBadge[] = [];
-    const seen = new Set<string>();
+    const badges: AttachedTaskBadge[] = [];
+    const seenOccurrences = new Set<string>();
 
     occurrences.forEach((occurrence) => {
       if (occurrence.dayIndex !== event.dayIndex) return;
       if (!rangesOverlap(event.startDate, event.endDate, occurrence.startDate, occurrence.endDate)) return;
-      if (seen.has(occurrence.occurrenceId)) return;
+      if (seenOccurrences.has(occurrence.occurrenceId)) return;
 
-      seen.add(occurrence.occurrenceId);
+      seenOccurrences.add(occurrence.occurrenceId);
       occurrence.attachedToEvent = true;
-      attached.push({
-        occurrenceId: occurrence.occurrenceId,
-        taskId: occurrence.taskId,
-        icon: occurrence.icon || '📋',
-        label: occurrence.label,
-        color: occurrence.color,
+
+      const iconId =
+        typeof occurrence.icon === 'string' && occurrence.icon.trim() !== ''
+          ? occurrence.icon.trim()
+          : 'briefcase';
+      const label = typeof occurrence.label === 'string' && occurrence.label.trim() !== ''
+        ? occurrence.label.trim()
+        : 'Tâche';
+      const price = normalizeBadgePrice(occurrence.price);
+
+      badges.push({
+        iconId,
+        label,
+        price,
       });
     });
 
-    attached.sort((a, b) => a.occurrenceId.localeCompare(b.occurrenceId));
+    const uniqueBadges = new Map<string, AttachedTaskBadge>();
+    badges.forEach((badge) => {
+      const key = `${badge.iconId}::${badge.label}::${badge.price ?? ''}`;
+      if (!uniqueBadges.has(key)) {
+        uniqueBadges.set(key, badge);
+      }
+    });
+
+    const attachedTaskBadges = Array.from(uniqueBadges.values()).sort((a, b) => {
+      const labelComparison = a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
+      if (labelComparison !== 0) {
+        return labelComparison;
+      }
+      if (a.price !== undefined && b.price !== undefined && a.price !== b.price) {
+        return a.price - b.price;
+      }
+      if (a.price === undefined && b.price !== undefined) {
+        return 1;
+      }
+      if (a.price !== undefined && b.price === undefined) {
+        return -1;
+      }
+      return a.iconId.localeCompare(b.iconId, 'fr', { sensitivity: 'base' });
+    });
 
     return {
       ...event,
-      attachedTaskIcons: attached,
+      attachedTaskBadges,
     };
   });
 
