@@ -130,12 +130,7 @@
   background: rgba(59, 130, 246, 0.15);
 }
 
-.events-container {
-  position: relative;
-  pointer-events: none;
-  z-index: 3;
-  grid-row: 1 / -1;
-}
+/* Supprimé - défini plus bas avec le bon z-index */
 
 
 /* Nouveaux styles pour les boutons + et les tâches */
