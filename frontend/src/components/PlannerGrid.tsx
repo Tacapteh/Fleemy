@@ -9,6 +9,7 @@ import {
   DisplayTaskGroup,
   TaskOccurrence,
   DateRange,
+  PlannerEventInput,
 } from '../selectors/planningSelectors';
 import EventCard from './EventCard';
 import TaskBadge from './TaskBadge';
@@ -35,7 +36,7 @@ const StatusLegend = React.memo(() => (
 ));
 
 interface PlannerGridProps {
-  events?: unknown[];
+  events?: PlannerEventInput[];
   tasks?: unknown[];
   weekStart: Date | string | { toDate: () => Date };
   onSlotSelect?: (start: Date) => void;
@@ -190,7 +191,7 @@ function ensureDate(value: Date | string | { toDate: () => Date }): Date {
   if (value && typeof value === 'object' && typeof value.toDate === 'function') {
     return value.toDate();
   }
-  return new Date(value as string);
+  return new Date(value as unknown as string);
 }
 
 const createDateRange = (weekStart: Date): DateRange => {
@@ -237,7 +238,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   );
 
   const eventLayouts = useMemo(() => {
-    const perDay: EventLayout[][] = Array.from({ length: 7 }, () => []);
+    const perDay: DisplayEvent[][] = Array.from({ length: 7 }, () => []);
 
     displayEvents.forEach((event) => {
       if (event.dayIndex < 0 || event.dayIndex > 6) return;
