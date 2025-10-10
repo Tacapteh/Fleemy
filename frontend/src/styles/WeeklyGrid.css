@@ -302,6 +302,17 @@
   min-height: 18px;
 }
 
+/* Conteneur d'icônes de tâches en bas à droite de l'événement */
+.event-chip .absolute {
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* S'assurer que les icônes ne provoquent pas de débordement */
+.event-chip .absolute.bottom-1.right-1 {
+  max-width: calc(100% - 8px);
+}
+
 /* Icônes de tâches : garantir bon contraste et accessibilité */
 .event-chip [role="button"] {
   transition: opacity 0.15s ease;
