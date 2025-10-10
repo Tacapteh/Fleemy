@@ -215,6 +215,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   width: `${100 / e.colCount}%`,
                   top: `${top}%`,
                   height: `${height}%`,
+                  position: 'absolute',
                 }}
                 data-testid={`event-${e.id}`}
               >
