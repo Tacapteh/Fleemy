@@ -174,7 +174,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             }
 
             // Chercher les tâches qui se chevauchent avec cet événement
-            const overlappingTasks = taskColumns[dayIndex].filter(task => {
+            const overlappingTasksRaw = taskColumns[dayIndex].filter(task => {
               // Vérifier que les dates sont valides
               if (!task.start || !task.end || !e.start || !e.end) return false;
 
@@ -186,6 +186,21 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 { startDate: task.start, endDate: task.end }
               );
             });
+
+            // Dédupliquer les tâches par occurrenceId (éviter doublons après reload)
+            const uniqueOverlappingTasks = [];
+            const seenTaskIds = new Set();
+            overlappingTasksRaw.forEach(task => {
+              if (!seenTaskIds.has(task.occurrenceId)) {
+                seenTaskIds.add(task.occurrenceId);
+                uniqueOverlappingTasks.push(task);
+              }
+            });
+
+            // Trier par occurrenceId pour ordre stable
+            const overlappingTasks = uniqueOverlappingTasks.sort((a, b) => 
+              a.occurrenceId.localeCompare(b.occurrenceId)
+            );
 
             return (
               <div
