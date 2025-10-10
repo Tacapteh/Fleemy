@@ -236,10 +236,10 @@ export default function useTasks(userId, weekStartISO, teamId = null) {
 
   // Écouter les tâches hebdomadaires en temps réel
   useEffect(() => {
-    console.log('useTasks useEffect déclenché', { userId, weekStartISO });
+    console.log('🔍 useTasks useEffect déclenché', { userId, weekStartISO, teamId });
 
     if (!userId) {
-      console.log('useTasks: Pas d\'userId, reset des données');
+      console.log('⚠️ useTasks: Pas d\'userId, reset des données');
       setTasks([]);
       setLoading(false);
       setError(null);
@@ -262,30 +262,55 @@ export default function useTasks(userId, weekStartISO, teamId = null) {
       });
 
       const mergedTasks = Array.from(merged.values());
-      console.log('useTasks: Mise à jour tasks depuis sources', { mergedTasks });
+      console.log('📊 useTasks: Mise à jour tasks depuis sources', { 
+        count: mergedTasks.length,
+        taskIds: mergedTasks.map(t => t.id),
+        tasks: mergedTasks
+      });
       setTasks(mergedTasks);
       setLoading(false);
     };
 
     const handleSnapshot = (sourceKey) => (snapshot) => {
-      console.log('useTasks: Snapshot reçu', { sourceKey, size: snapshot.size, userId });
+      console.log('📸 useTasks: Snapshot reçu', { 
+        sourceKey, 
+        size: snapshot.size, 
+        userId,
+        empty: snapshot.empty 
+      });
       const normalized = [];
 
       snapshot.forEach((doc) => {
         const rawData = typeof doc.data === 'function' ? doc.data() : null;
+        console.log('📄 useTasks: Document brut', { 
+          sourceKey, 
+          id: doc.id, 
+          rawData,
+          weekly: rawData?.weekly,
+          user_id: rawData?.user_id,
+          time_ranges: rawData?.time_ranges
+        });
         const task = normalizeTaskDocument(doc, userId, rawData);
-        console.log('useTasks: Document reçu', { sourceKey, id: doc.id, data: rawData, task });
+        console.log('✅ useTasks: Document normalisé', { sourceKey, id: doc.id, task });
         if (task) {
           normalized.push(task);
+        } else {
+          console.warn('⚠️ useTasks: Document ignoré (normalisation échouée)', doc.id);
         }
       });
 
+      console.log('📦 useTasks: Tâches normalisées pour', sourceKey, ':', normalized);
       sourceTasks[sourceKey] = normalized;
       updateFromSources();
     };
 
     const handleError = (sourceKey) => (err) => {
-      console.error('useTasks: Erreur écoute tâches', { sourceKey, err });
+      console.error('❌ useTasks: Erreur écoute tâches', { 
+        sourceKey, 
+        err,
+        code: err?.code,
+        message: err?.message 
+      });
 
       sourceTasks[sourceKey] = [];
       if (err?.code === 'permission-denied' || err?.message?.includes('Missing or insufficient permissions')) {
@@ -308,31 +333,41 @@ export default function useTasks(userId, weekStartISO, teamId = null) {
       const queries = [];
 
       if (userId) {
+        const userQuery = query(globalTasksRef, where('user_id', '==', userId), where('weekly', '==', true));
+        console.log('🔍 useTasks: Création query user_id', { userId });
         queries.push({
           key: 'global_user_id',
-          ref: query(globalTasksRef, where('user_id', '==', userId), where('weekly', '==', true))
+          ref: userQuery
         });
       }
 
       if (activeTeamId) {
+        const teamQuery = query(globalTasksRef, where('team_id', '==', activeTeamId), where('weekly', '==', true));
+        console.log('🔍 useTasks: Création query team_id', { activeTeamId });
         queries.push({
           key: 'global_team_id',
-          ref: query(globalTasksRef, where('team_id', '==', activeTeamId), where('weekly', '==', true))
+          ref: teamQuery
         });
       }
 
+      console.log('🎯 useTasks: Nombre de queries créées:', queries.length);
+
       queries.forEach(({ key, ref }) => {
         try {
+          console.log('👂 useTasks: Démarrage écoute pour', key);
           unsubscribers.push(onSnapshot(ref, handleSnapshot(key), handleError(key)));
         } catch (err) {
-          console.error('useTasks: Erreur création écoute globale', { key, err });
+          console.error('❌ useTasks: Erreur création écoute globale', { key, err });
         }
       });
     } catch (err) {
-      console.error('useTasks: Erreur accès collection globale tasks', err);
+      console.error('❌ useTasks: Erreur accès collection globale tasks', err);
+      setError('Erreur d\'accès à la base de données');
+      setLoading(false);
     }
 
     return () => {
+      console.log('🧹 useTasks: Nettoyage des écouteurs');
       unsubscribers.forEach((unsub) => {
         if (typeof unsub === 'function') unsub();
       });
