@@ -272,6 +272,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 
       {/* Tâches autonomes (qui ne se chevauchent pas avec des événements) */}
       {taskColumns.map((dayTasks, dayIndex) => {
+        console.log(`[WeeklyGrid] Jour ${dayIndex}: ${dayTasks.length} tâches, ${columns[dayIndex].length} événements`);
+        
         // Étape 1: Filtrer les tâches qui ne chevauchent PAS avec des événements
         const standaloneTasks = dayTasks.filter((task) => {
           if (!task.start || !task.end) {
@@ -285,11 +287,19 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
             const eventEnd = event.end instanceof Date ? event.end : new Date(event.end);
 
-            return slotsOverlap(
+            const overlaps = slotsOverlap(
               { startDate: eventStart, endDate: eventEnd },
               { startDate: task.start, endDate: task.end }
             );
+            
+            return overlaps;
           });
+
+          if (hasOverlap) {
+            console.log(`[WeeklyGrid] Tâche ${task.occurrenceId} filtrée (chevauche un événement)`);
+          } else {
+            console.log(`[WeeklyGrid] Tâche ${task.occurrenceId} autonome (pas de chevauchement)`);
+          }
 
           return !hasOverlap; // Garder seulement les tâches sans chevauchement avec events
         });
