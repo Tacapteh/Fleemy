@@ -43,17 +43,16 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
     >
       <div className="title truncate leading-tight break-words">{title}</div>
 
-      {event.attachedTaskIcons.length > 0 && (
+      {event.attachedTaskBadges.length > 0 && (
         <div
           className="absolute bottom-1 right-1 flex flex-wrap items-end justify-end gap-1 text-[0]"
-          style={{ pointerEvents: 'none' }}
         >
-          {event.attachedTaskIcons.map((icon) => (
+          {event.attachedTaskBadges.map((badge) => (
             <TaskIconBadge
-              key={icon.occurrenceId}
-              iconId={icon.icon}
-              color={icon.color}
-              label={icon.label}
+              key={`${badge.iconId}-${badge.label}-${badge.price ?? 'na'}`}
+              iconId={badge.iconId}
+              label={badge.label}
+              price={badge.price}
             />
           ))}
         </div>
