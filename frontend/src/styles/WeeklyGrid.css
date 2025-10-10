@@ -195,6 +195,11 @@
   transition: opacity 0.2s ease;
 }
 
+/* S'assurer que le positionnement absolu des enfants fonctionne */
+.event-chip > * {
+  position: relative;
+}
+
 .event-chip::before {
   content: "";
   position: absolute;

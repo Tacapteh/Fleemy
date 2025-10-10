@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Positionnement Icônes</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    
+    .test-container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    .event-block {
+      position: relative; /* CLEF: contexte pour absolute */
+      width: 100%;
+      height: 120px;
+      padding: 8px 10px;
+      margin: 20px 0;
+      border-radius: 12px;
+      border-left: 6px solid #f59e0b;
+      background: rgba(251, 146, 60, 0.2);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .event-title {
+      font-weight: 600;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    
+    .event-client {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    
+    .icons-container {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: calc(100% - 8px);
+      background: rgba(255, 255, 255, 0.5);
+      padding: 2px;
+      border-radius: 4px;
+    }
+    
+    .task-icon {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    
+    .task-icon:hover {
+      transform: scale(1.2);
+    }
+    
+    h2 {
+      margin-top: 30px;
+    }
+    
+    .explanation {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    
+    code {
+      background: #eee;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>Test de Positionnement des Icônes de Tâches</h1>
+    
+    <div class="explanation">
+      <strong>Objectif:</strong> Les icônes de tâches doivent apparaître dans le coin inférieur droit du bloc événement.
+      <br><br>
+      <strong>Technique:</strong> Utiliser <code>position: absolute</code> sur le conteneur d'icônes avec <code>bottom: 4px</code> et <code>right: 4px</code>.
+      Le bloc parent doit avoir <code>position: relative</code> (ou <code>absolute</code>).
+    </div>
+    
+    <h2>Test 1: Événement avec 1 tâche</h2>
+    <div class="event-block">
+      <div class="event-title">Consultation client XYZ</div>
+      <div class="event-client">Client ABC</div>
+      
+      <div class="icons-container">
+        <span class="task-icon" title="Tâche: Préparation dossier">📋</span>
+      </div>
+    </div>
+    
+    <h2>Test 2: Événement avec 3 tâches</h2>
+    <div class="event-block">
+      <div class="event-title">Réunion d'équipe</div>
+      <div class="event-client">Équipe Dev</div>
+      
+      <div class="icons-container">
+        <span class="task-icon" title="Tâche: Revue code">💻</span>
+        <span class="task-icon" title="Tâche: Documentation">📝</span>
+        <span class="task-icon" title="Tâche: Tests">🧪</span>
+      </div>
+    </div>
+    
+    <h2>Test 3: Événement avec 6 tâches (wrap)</h2>
+    <div class="event-block">
+      <div class="event-title">Projet Sprint Planning</div>
+      <div class="event-client">Équipe Produit</div>
+      
+      <div class="icons-container">
+        <span class="task-icon" title="Tâche 1">🔧</span>
+        <span class="task-icon" title="Tâche 2">📊</span>
+        <span class="task-icon" title="Tâche 3">✏️</span>
+        <span class="task-icon" title="Tâche 4">📧</span>
+        <span class="task-icon" title="Tâche 5">🎯</span>
+        <span class="task-icon" title="Tâche 6">🚀</span>
+      </div>
+    </div>
+    
+    <div class="explanation" style="margin-top: 30px; background: #e8f4fd; border-left: 4px solid #3b82f6;">
+      <strong>✅ Résultat attendu:</strong>
+      <ul>
+        <li>Les icônes sont dans le coin inférieur droit</li>
+        <li>Elles ne débordent pas du bloc</li>
+        <li>Elles wrap proprement si trop nombreuses</li>
+        <li>Elles sont cliquables et réactives au hover</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

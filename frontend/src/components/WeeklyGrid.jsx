@@ -181,10 +181,20 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               const eventStart = e.start instanceof Date ? e.start : new Date(e.start);
               const eventEnd = e.end instanceof Date ? e.end : new Date(e.end);
 
-              return slotsOverlap(
+              const overlaps = slotsOverlap(
                 { startDate: eventStart, endDate: eventEnd },
                 { startDate: task.start, endDate: task.end }
               );
+              
+              if (overlaps) {
+                console.log('[WeeklyGrid] Chevauchement détecté:', {
+                  event: { id: e.id, start: eventStart, end: eventEnd },
+                  task: { id: task.occurrenceId, start: task.start, end: task.end },
+                  dayIndex
+                });
+              }
+              
+              return overlaps;
             });
 
             // Dédupliquer les tâches par occurrenceId (éviter doublons après reload)
@@ -215,7 +225,6 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   width: `${100 / e.colCount}%`,
                   top: `${top}%`,
                   height: `${height}%`,
-                  position: 'absolute',
                 }}
                 data-testid={`event-${e.id}`}
               >
@@ -231,8 +240,17 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 {/* Icônes de tâches chevauchantes - coin inférieur droit (position absolue) */}
                 {overlappingTasks.length > 0 && (
                   <div 
-                    className="absolute bottom-1 right-1 flex gap-1 flex-wrap justify-end"
-                    style={{ maxWidth: 'calc(100% - 8px)' }}
+                    style={{
+                      position: 'absolute',
+                      bottom: '4px',
+                      right: '4px',
+                      display: 'flex',
+                      gap: '4px',
+                      flexWrap: 'wrap',
+                      justifyContent: 'flex-end',
+                      maxWidth: 'calc(100% - 8px)',
+                      zIndex: 10,
+                    }}
                   >
                     {overlappingTasks.map((task) => (
                       <TaskBadge
@@ -254,6 +272,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 
       {/* Tâches autonomes (qui ne se chevauchent pas avec des événements) */}
       {taskColumns.map((dayTasks, dayIndex) => {
+        console.log(`[WeeklyGrid] Jour ${dayIndex}: ${dayTasks.length} tâches, ${columns[dayIndex].length} événements`);
+        
         // Étape 1: Filtrer les tâches qui ne chevauchent PAS avec des événements
         const standaloneTasks = dayTasks.filter((task) => {
           if (!task.start || !task.end) {
@@ -267,11 +287,19 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
             const eventEnd = event.end instanceof Date ? event.end : new Date(event.end);
 
-            return slotsOverlap(
+            const overlaps = slotsOverlap(
               { startDate: eventStart, endDate: eventEnd },
               { startDate: task.start, endDate: task.end }
             );
+            
+            return overlaps;
           });
+
+          if (hasOverlap) {
+            console.log(`[WeeklyGrid] Tâche ${task.occurrenceId} filtrée (chevauche un événement)`);
+          } else {
+            console.log(`[WeeklyGrid] Tâche ${task.occurrenceId} autonome (pas de chevauchement)`);
+          }
 
           return !hasOverlap; // Garder seulement les tâches sans chevauchement avec events
         });
