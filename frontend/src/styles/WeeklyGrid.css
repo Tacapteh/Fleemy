@@ -293,12 +293,18 @@
   pointer-events: auto;
 }
 
-/* Badges de tâches dans les events - wrap pour mobile */
+/* Rail d'icônes de tâches dans les events - mode icon-only */
 .event-chip .flex-wrap {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   align-items: center;
+  min-height: 18px;
+}
+
+/* Icônes de tâches : garantir bon contraste et accessibilité */
+.event-chip [role="button"] {
+  transition: opacity 0.15s ease;
 }
 
 /* Mobile: meilleur wrap et espacement */
@@ -306,6 +312,11 @@
   .task-standalone .flex-wrap,
   .event-chip .flex-wrap {
     gap: 0.125rem;
+  }
+  
+  /* S'assurer que les icônes restent visibles sur mobile */
+  .event-chip .flex-wrap {
+    line-height: 1;
   }
 }
 
