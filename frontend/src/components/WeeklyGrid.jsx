@@ -227,9 +227,12 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   </div>
                 )}
                 
-                {/* Rail d'icônes pour les tâches chevauchantes (mode icon-only uniquement) */}
+                {/* Icônes de tâches chevauchantes - coin inférieur droit (position absolue) */}
                 {overlappingTasks.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div 
+                    className="absolute bottom-1 right-1 flex gap-1 flex-wrap justify-end"
+                    style={{ maxWidth: 'calc(100% - 8px)' }}
+                  >
                     {overlappingTasks.map((task) => (
                       <TaskBadge
                         key={task.occurrenceId}
