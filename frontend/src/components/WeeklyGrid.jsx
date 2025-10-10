@@ -234,65 +234,107 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
       ))}
 
       {/* Tâches autonomes (qui ne se chevauchent pas avec des événements) */}
-      {taskColumns.map((dayTasks, dayIndex) => (
-        <div
-          key={`tasks-${dayIndex}`}
-          className="tasks-container"
-          style={{ gridColumn: dayIndex + 1 }}
-        >
-          {dayTasks.map((task) => {
-            // Vérifier si cette tâche se chevauche avec des événements
-            const hasOverlap = columns[dayIndex].some(event => {
-              if (!event.start || !event.end || !task.start || !task.end) return false;
+      {taskColumns.map((dayTasks, dayIndex) => {
+        // Étape 1: Filtrer les tâches qui ne chevauchent PAS avec des événements
+        const standaloneTasks = dayTasks.filter((task) => {
+          if (!task.start || !task.end) {
+            console.warn('Tâche avec dates invalides:', task);
+            return false;
+          }
 
-              const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
-              const eventEnd = event.end instanceof Date ? event.end : new Date(event.end);
+          const hasOverlap = columns[dayIndex].some(event => {
+            if (!event.start || !event.end) return false;
 
-              return slotsOverlap(
-                { startDate: eventStart, endDate: eventEnd },
-                { startDate: task.start, endDate: task.end }
-              );
-            });
+            const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
+            const eventEnd = event.end instanceof Date ? event.end : new Date(event.end);
 
-            // Si elle se chevauche, elle sera affichée dans l'événement
-            if (hasOverlap) return null;
-
-            // Vérifier que les dates sont valides
-            if (!task.start || !task.end) {
-              console.warn('Tâche avec dates invalides:', task);
-              return null;
-            }
-
-            // Calculer la position pour les tâches autonomes
-            const top = calculateTopPosition(task.start);
-            const height = calculateHeight(task.start, task.end);
-
-            if (height <= 0) return null;
-
-            return (
-              <div
-                key={task.occurrenceId}
-                className="task-standalone"
-                style={{
-                  top: `${top}%`,
-                  height: `${height}%`,
-                  left: '2px',
-                  right: '2px',
-                }}
-                data-testid={`task-standalone-${task.occurrenceId}`}
-              >
-                <TaskBadge
-                  task={task}
-                  size="normal"
-                  isReadOnly={task.readOnly || isReadOnlyMode}
-                  onClick={onTaskClick}
-                  className="w-full h-full"
-                />
-              </div>
+            return slotsOverlap(
+              { startDate: eventStart, endDate: eventEnd },
+              { startDate: task.start, endDate: task.end }
             );
-          })}
-        </div>
-      ))}
+          });
+
+          return !hasOverlap; // Garder seulement les tâches sans chevauchement avec events
+        });
+
+        // Étape 2: Dédupliquer par occurrenceId (éviter les doublons après reload Firestore)
+        const uniqueTasks = [];
+        const seenIds = new Set();
+        standaloneTasks.forEach(task => {
+          if (!seenIds.has(task.occurrenceId)) {
+            seenIds.add(task.occurrenceId);
+            uniqueTasks.push(task);
+          }
+        });
+
+        // Étape 3: Grouper les tâches par créneau horaire (même start/end = même slot)
+        const taskGroups = new Map();
+        uniqueTasks.forEach(task => {
+          const startTime = task.start.getTime();
+          const endTime = task.end.getTime();
+          const slotKey = `${startTime}-${endTime}`;
+
+          if (!taskGroups.has(slotKey)) {
+            taskGroups.set(slotKey, []);
+          }
+          taskGroups.get(slotKey).push(task);
+        });
+
+        // Étape 4: Rendre un seul bloc par groupe avec toutes les icônes
+        const taskBlocks = [];
+        taskGroups.forEach((tasksInSlot, slotKey) => {
+          if (tasksInSlot.length === 0) return;
+
+          // Trier par occurrenceId pour un ordre stable
+          tasksInSlot.sort((a, b) => a.occurrenceId.localeCompare(b.occurrenceId));
+
+          const firstTask = tasksInSlot[0];
+          const top = calculateTopPosition(firstTask.start);
+          const height = calculateHeight(firstTask.start, firstTask.end);
+
+          if (height <= 0) return;
+
+          // Générer un ID unique pour le groupe
+          const groupId = tasksInSlot.map(t => t.occurrenceId).join('_');
+
+          taskBlocks.push(
+            <div
+              key={groupId}
+              className="task-standalone"
+              style={{
+                top: `${top}%`,
+                height: `${height}%`,
+                left: '2px',
+                right: '2px',
+              }}
+              data-testid={`task-standalone-group-${slotKey}`}
+            >
+              <div className="flex flex-wrap gap-1 p-1 h-full items-center justify-start">
+                {tasksInSlot.map((task) => (
+                  <TaskBadge
+                    key={task.occurrenceId}
+                    task={task}
+                    size={tasksInSlot.length > 1 ? "small" : "normal"}
+                    isReadOnly={task.readOnly || isReadOnlyMode}
+                    onClick={onTaskClick}
+                    data-testid={`task-badge-${task.occurrenceId}`}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        });
+
+        return (
+          <div
+            key={`tasks-${dayIndex}`}
+            className="tasks-container"
+            style={{ gridColumn: dayIndex + 1 }}
+          >
+            {taskBlocks}
+          </div>
+        );
+      })}
     </div>
   );
 });
