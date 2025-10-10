@@ -325,9 +325,16 @@
     gap: 0.125rem;
   }
   
-  /* S'assurer que les icônes restent visibles sur mobile */
+  /* S'assurer que les icônes restent visibles et bien positionnées sur mobile */
   .event-chip .flex-wrap {
     line-height: 1;
+  }
+  
+  /* Icônes de tâches en bas à droite - ajuster l'espacement sur mobile */
+  .event-chip .absolute.bottom-1.right-1 {
+    bottom: 0.125rem;
+    right: 0.125rem;
+    gap: 0.125rem;
   }
 }
 
