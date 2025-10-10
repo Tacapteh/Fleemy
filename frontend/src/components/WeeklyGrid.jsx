@@ -227,17 +227,17 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   </div>
                 )}
                 
-                {/* Affichage des tâches qui se chevauchent en deuxième ligne */}
+                {/* Rail d'icônes pour les tâches chevauchantes (mode icon-only uniquement) */}
                 {overlappingTasks.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1 opacity-80">
+                  <div className="flex flex-wrap gap-1 mt-1">
                     {overlappingTasks.map((task) => (
                       <TaskBadge
                         key={task.occurrenceId}
                         task={task}
-                        size="small"
+                        mode="icon-only"
                         isReadOnly={task.readOnly || isReadOnlyMode}
                         onClick={onTaskClick}
-                        data-testid={`task-badge-overlap-${task.occurrenceId}`}
+                        data-testid={`task-icon-overlap-${task.occurrenceId}`}
                       />
                     ))}
                   </div>
