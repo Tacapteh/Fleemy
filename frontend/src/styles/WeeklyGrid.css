@@ -251,16 +251,24 @@
 /* Styles pour les tâches autonomes */
 .task-standalone {
   position: absolute;
-  z-index: 15;
+  z-index: 25;
   border-radius: 4px;
   pointer-events: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s ease;
+}
+
+.task-standalone:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  z-index: 30;
 }
 
 /* Styles pour les conteneurs de tâches */
 .tasks-container {
   position: relative;
   pointer-events: none;
-  z-index: 10;
+  z-index: 20;
+  grid-row: 1 / -1;
 }
 
 /* Amélioration des event-chips pour supporter les tâches en overlay */

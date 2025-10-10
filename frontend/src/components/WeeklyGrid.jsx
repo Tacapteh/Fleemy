@@ -175,8 +175,14 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 
             // Chercher les tâches qui se chevauchent avec cet événement
             const overlappingTasks = taskColumns[dayIndex].filter(task => {
+              // Vérifier que les dates sont valides
+              if (!task.start || !task.end || !e.start || !e.end) return false;
+
+              const eventStart = e.start instanceof Date ? e.start : new Date(e.start);
+              const eventEnd = e.end instanceof Date ? e.end : new Date(e.end);
+
               return slotsOverlap(
-                { startDate: new Date(e.start || 0), endDate: new Date(e.end || 0) },
+                { startDate: eventStart, endDate: eventEnd },
                 { startDate: task.start, endDate: task.end }
               );
             });
@@ -236,20 +242,31 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
         >
           {dayTasks.map((task) => {
             // Vérifier si cette tâche se chevauche avec des événements
-            const hasOverlap = columns[dayIndex].some(event => 
-              slotsOverlap(
-                { startDate: new Date(event.start || 0), endDate: new Date(event.end || 0) },
+            const hasOverlap = columns[dayIndex].some(event => {
+              if (!event.start || !event.end || !task.start || !task.end) return false;
+
+              const eventStart = event.start instanceof Date ? event.start : new Date(event.start);
+              const eventEnd = event.end instanceof Date ? event.end : new Date(event.end);
+
+              return slotsOverlap(
+                { startDate: eventStart, endDate: eventEnd },
                 { startDate: task.start, endDate: task.end }
-              )
-            );
+              );
+            });
 
             // Si elle se chevauche, elle sera affichée dans l'événement
             if (hasOverlap) return null;
 
+            // Vérifier que les dates sont valides
+            if (!task.start || !task.end) {
+              console.warn('Tâche avec dates invalides:', task);
+              return null;
+            }
+
             // Calculer la position pour les tâches autonomes
             const top = calculateTopPosition(task.start);
             const height = calculateHeight(task.start, task.end);
-            
+
             if (height <= 0) return null;
 
             return (
@@ -315,18 +332,37 @@ export default function WeeklyGrid(props) {
   const columns = Array.from({ length: 7 }, () => []);
   const taskColumns = Array.from({ length: 7 }, () => []);
 
-  // Traitement des événements (inchangé)
+  // Traitement des événements
   events.forEach((e) => {
     const idx = Number.isInteger(e.day)
       ? e.day
       : dayIndexFrom(e.date, weekStart);
     if (idx >= 0 && idx < 7) {
-      const top = Math.max(0, minutesFromHM(e.start));
-      const dur = Math.max(15, minutesFromHM(e.end) - top);
+      // Gérer start et end comme Date ou HH:MM
+      let startMinutes, endMinutes;
+
+      if (e.start instanceof Date) {
+        startMinutes = e.start.getHours() * 60 + e.start.getMinutes();
+      } else {
+        startMinutes = minutesFromHM(e.start);
+      }
+
+      if (e.end instanceof Date) {
+        endMinutes = e.end.getHours() * 60 + e.end.getMinutes();
+      } else {
+        endMinutes = minutesFromHM(e.end);
+      }
+
+      const top = Math.max(0, startMinutes);
+      const dur = Math.max(15, endMinutes - top);
+
       columns[idx].push({
         ...e,
         _topMin: top,
         _durMin: dur,
+        // Normaliser start et end comme Date pour la cohérence
+        start: e.start instanceof Date ? e.start : new Date(`${e.date}T${toHM(e.start)}`),
+        end: e.end instanceof Date ? e.end : new Date(`${e.date}T${toHM(e.end)}`),
       });
     }
   });
@@ -334,13 +370,29 @@ export default function WeeklyGrid(props) {
   // Traitement des tâches hebdomadaires (nouveau format)
   tasks.forEach((taskOccurrence) => {
     const { dayIndex, startDate, endDate } = taskOccurrence;
-    
-    if (dayIndex >= 0 && dayIndex < 7 && startDate && endDate) {
+
+    if (typeof dayIndex === 'number' && dayIndex >= 0 && dayIndex < 7 && startDate && endDate) {
+      // Vérifier que startDate et endDate sont valides
+      if (!(startDate instanceof Date) || !(endDate instanceof Date)) {
+        console.warn('Tâche avec dates invalides:', taskOccurrence);
+        return;
+      }
+
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        console.warn('Tâche avec timestamps invalides:', taskOccurrence);
+        return;
+      }
+
       // Calculer la position en minutes depuis le début de la journée
       const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
       const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
       const duration = Math.max(15, endMinutes - startMinutes);
-      
+
+      if (duration <= 0) {
+        console.warn('Tâche avec durée invalide:', taskOccurrence);
+        return;
+      }
+
       taskColumns[dayIndex].push({
         ...taskOccurrence,
         _topMin: startMinutes,
@@ -348,6 +400,8 @@ export default function WeeklyGrid(props) {
         start: startDate,
         end: endDate,
       });
+    } else {
+      console.warn('Tâche avec dayIndex invalide:', taskOccurrence);
     }
   });
 

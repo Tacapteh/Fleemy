@@ -63,6 +63,11 @@ export const TASK_ICONS = {
 
 // Fonction pour obtenir l'icône par clé, avec fallback
 export const getTaskIcon = (iconKey) => {
+  // Si iconKey est déjà un emoji (pas une clé), le retourner directement
+  if (typeof iconKey === 'string' && iconKey.length <= 4 && /[\u{1F300}-\u{1F9FF}]/u.test(iconKey)) {
+    return iconKey;
+  }
+
   return TASK_ICONS[iconKey] || TASK_ICONS['briefcase'] || '📋';
 };
 

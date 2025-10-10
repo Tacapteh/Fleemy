@@ -87,11 +87,28 @@ export const DEFAULT_TASK_COLOR = 'pastel-blue';
 
 // Fonction pour obtenir les styles d'une couleur
 export const getTaskColor = (colorKey) => {
+  // Si colorKey est déjà une couleur hex directe, chercher la clé correspondante
+  if (typeof colorKey === 'string' && colorKey.startsWith('#')) {
+    const matchingKey = Object.entries(PASTEL_COLORS).find(
+      ([key, value]) => value.bg === colorKey
+    );
+    if (matchingKey) {
+      colorKey = matchingKey[0];
+    } else {
+      // Si pas de correspondance, utiliser la couleur directement
+      return {
+        backgroundColor: colorKey,
+        color: '#1e40af',
+        borderColor: '#1e40af20'
+      };
+    }
+  }
+
   const color = PASTEL_COLORS[colorKey] || PASTEL_COLORS[DEFAULT_TASK_COLOR];
   return {
     backgroundColor: color.bg,
     color: color.text,
-    borderColor: color.text + '20' // Ajout de transparence pour la bordure
+    borderColor: color.text + '20'
   };
 };
 
