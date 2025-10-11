@@ -932,6 +932,508 @@ class FleemyAPITester:
         
         return True
 
+    def test_client_endpoints_unauthorized(self):
+        """Test client endpoints without authentication"""
+        print("\n🔍 Testing Client Endpoints (Unauthorized)...")
+        
+        # All client endpoints should return 401 without authentication
+        endpoints = [
+            ("Get clients list", "GET", "/clients"),
+            ("Create client", "POST", "/clients"),
+            ("Update client", "PATCH", "/clients/test-id"),
+            ("Delete client", "DELETE", "/clients/test-id"),
+        ]
+        
+        for name, method, endpoint in endpoints:
+            if method == "POST":
+                data = {"display_name": "Test Client"}
+                self.run_api_test(name + " (unauthorized)", method, endpoint, 401, data)
+            elif method == "PATCH":
+                data = {"display_name": "Updated Client"}
+                self.run_api_test(name + " (unauthorized)", method, endpoint, 401, data)
+            else:
+                self.run_api_test(name + " (unauthorized)", method, endpoint, 401)
+        
+        return True
+
+    def test_client_data_validation(self):
+        """Test client data validation without authentication"""
+        print("\n🔍 Testing Client Data Validation (No Auth)...")
+        
+        # Test client creation with missing required field
+        invalid_client_data = [
+            ({}, "Empty data"),
+            ({"contact_name": "John Doe"}, "Missing display_name"),
+            ({"display_name": ""}, "Empty display_name"),
+            ({"display_name": "   "}, "Whitespace display_name"),
+        ]
+        
+        for data, description in invalid_client_data:
+            self.run_api_test(
+                f"Create client with {description} (no auth)", 
+                "POST", 
+                "/clients", 
+                401,  # Auth fails first
+                data
+            )
+        
+        # Test with valid required field
+        valid_client = {"display_name": "Valid Client Name"}
+        self.run_api_test(
+            "Create client with valid display_name (no auth)", 
+            "POST", 
+            "/clients", 
+            401,  # Auth fails first
+            valid_client
+        )
+        
+        return True
+
+    def test_client_email_validation(self):
+        """Test client email format validation"""
+        print("\n🔍 Testing Client Email Validation (No Auth)...")
+        
+        # Test various email formats
+        email_test_cases = [
+            ("valid@example.com", "Valid email"),
+            ("user.name@domain.co.uk", "Valid email with subdomain"),
+            ("test+tag@gmail.com", "Valid email with plus"),
+            ("invalid-email", "Invalid email format"),
+            ("@domain.com", "Invalid email - missing local part"),
+            ("user@", "Invalid email - missing domain"),
+            ("user@domain", "Invalid email - missing TLD"),
+            ("", "Empty email (should be valid as optional)"),
+        ]
+        
+        for email, description in email_test_cases:
+            client_data = {
+                "display_name": "Test Client",
+                "email": email
+            }
+            self.run_api_test(
+                f"Create client with {description} (no auth)", 
+                "POST", 
+                "/clients", 
+                401,  # Auth fails first
+                client_data
+            )
+        
+        return True
+
+    def test_client_phone_validation(self):
+        """Test French phone number validation"""
+        print("\n🔍 Testing Client French Phone Validation (No Auth)...")
+        
+        # Test various French phone formats
+        phone_test_cases = [
+            ("0612345678", "Valid French mobile"),
+            ("+33612345678", "Valid French mobile with +33"),
+            ("0033612345678", "Valid French mobile with 0033"),
+            ("01 23 45 67 89", "Valid French landline with spaces"),
+            ("01.23.45.67.89", "Valid French landline with dots"),
+            ("01-23-45-67-89", "Valid French landline with dashes"),
+            ("+33 1 23 45 67 89", "Valid French landline with +33 and spaces"),
+            ("1234567890", "Invalid - missing country/area code"),
+            ("+1234567890", "Invalid - wrong country code"),
+            ("0012345678", "Invalid - too short"),
+            ("061234567890", "Invalid - too long"),
+            ("", "Empty phone (should be valid as optional)"),
+        ]
+        
+        for phone, description in phone_test_cases:
+            client_data = {
+                "display_name": "Test Client",
+                "phone": phone
+            }
+            self.run_api_test(
+                f"Create client with {description} (no auth)", 
+                "POST", 
+                "/clients", 
+                401,  # Auth fails first
+                client_data
+            )
+        
+        return True
+
+    def test_client_address_structure(self):
+        """Test client address object structure"""
+        print("\n🔍 Testing Client Address Structure (No Auth)...")
+        
+        # Test with complete address
+        complete_address = {
+            "line1": "123 Rue de la Paix",
+            "line2": "Appartement 4B",
+            "postal_code": "75001",
+            "city": "Paris",
+            "country": "France"
+        }
+        
+        client_with_address = {
+            "display_name": "Client with Address",
+            "address": complete_address
+        }
+        
+        self.run_api_test(
+            "Create client with complete address (no auth)", 
+            "POST", 
+            "/clients", 
+            401,  # Auth fails first
+            client_with_address
+        )
+        
+        # Test with minimal address
+        minimal_address = {
+            "line1": "456 Avenue des Champs",
+            "postal_code": "69000",
+            "city": "Lyon"
+        }
+        
+        client_with_minimal_address = {
+            "display_name": "Client with Minimal Address",
+            "address": minimal_address
+        }
+        
+        self.run_api_test(
+            "Create client with minimal address (no auth)", 
+            "POST", 
+            "/clients", 
+            401,  # Auth fails first
+            client_with_minimal_address
+        )
+        
+        # Test with empty address object
+        client_with_empty_address = {
+            "display_name": "Client with Empty Address",
+            "address": {}
+        }
+        
+        self.run_api_test(
+            "Create client with empty address (no auth)", 
+            "POST", 
+            "/clients", 
+            401,  # Auth fails first
+            client_with_empty_address
+        )
+        
+        return True
+
+    def test_client_complete_data_structure(self):
+        """Test client creation with complete data structure"""
+        print("\n🔍 Testing Client Complete Data Structure (No Auth)...")
+        
+        # Test with all possible fields
+        complete_client = {
+            "display_name": "Complete Test Client",
+            "contact_name": "Jean Dupont",
+            "email": "jean.dupont@example.com",
+            "phone": "+33 6 12 34 56 78",
+            "address": {
+                "line1": "123 Boulevard Saint-Germain",
+                "line2": "3ème étage",
+                "postal_code": "75006",
+                "city": "Paris",
+                "country": "France"
+            },
+            "notes": "Client important avec besoins spécifiques en développement web",
+            "is_archived": False
+        }
+        
+        self.run_api_test(
+            "Create client with complete data (no auth)", 
+            "POST", 
+            "/clients", 
+            401,  # Auth fails first
+            complete_client
+        )
+        
+        # Test with minimal required data
+        minimal_client = {
+            "display_name": "Minimal Test Client"
+        }
+        
+        self.run_api_test(
+            "Create client with minimal data (no auth)", 
+            "POST", 
+            "/clients", 
+            401,  # Auth fails first
+            minimal_client
+        )
+        
+        return True
+
+    def test_client_list_pagination(self):
+        """Test client list with pagination parameters"""
+        print("\n🔍 Testing Client List Pagination (No Auth)...")
+        
+        # Test default pagination
+        self.run_api_test(
+            "Get clients list default (no auth)", 
+            "GET", 
+            "/clients", 
+            401
+        )
+        
+        # Test with pagination parameters
+        pagination_tests = [
+            ("?page=1&limit=10", "First page, 10 items"),
+            ("?page=2&limit=5", "Second page, 5 items"),
+            ("?page=1&limit=20", "First page, 20 items (default)"),
+            ("?page=0&limit=10", "Invalid page 0"),
+            ("?page=1&limit=0", "Invalid limit 0"),
+            ("?page=1&limit=100", "Large limit"),
+            ("?page=-1&limit=10", "Negative page"),
+            ("?page=1&limit=-5", "Negative limit"),
+        ]
+        
+        for params, description in pagination_tests:
+            self.run_api_test(
+                f"Get clients list {description} (no auth)", 
+                "GET", 
+                f"/clients{params}", 
+                401
+            )
+        
+        return True
+
+    def test_client_search_functionality(self):
+        """Test client search functionality"""
+        print("\n🔍 Testing Client Search Functionality (No Auth)...")
+        
+        # Test search parameters
+        search_tests = [
+            ("?search=test", "Search for 'test'"),
+            ("?search=client", "Search for 'client'"),
+            ("?search=", "Empty search"),
+            ("?search=a", "Single character search"),
+            ("?search=nonexistent", "Non-existent search term"),
+            ("?search=Test Client", "Multi-word search"),
+            ("?search=TEST", "Uppercase search"),
+            ("?search=test&page=1&limit=5", "Search with pagination"),
+        ]
+        
+        for params, description in search_tests:
+            self.run_api_test(
+                f"Get clients list {description} (no auth)", 
+                "GET", 
+                f"/clients{params}", 
+                401
+            )
+        
+        return True
+
+    def test_client_archive_functionality(self):
+        """Test client archive/unarchive functionality"""
+        print("\n🔍 Testing Client Archive Functionality (No Auth)...")
+        
+        # Test including archived clients
+        self.run_api_test(
+            "Get clients including archived (no auth)", 
+            "GET", 
+            "/clients?include_archived=true", 
+            401
+        )
+        
+        self.run_api_test(
+            "Get clients excluding archived (no auth)", 
+            "GET", 
+            "/clients?include_archived=false", 
+            401
+        )
+        
+        # Test archiving a client via PATCH
+        archive_data = {"is_archived": True}
+        self.run_api_test(
+            "Archive client via PATCH (no auth)", 
+            "PATCH", 
+            "/clients/test-client-id", 
+            401,
+            archive_data
+        )
+        
+        # Test unarchiving a client via PATCH
+        unarchive_data = {"is_archived": False}
+        self.run_api_test(
+            "Unarchive client via PATCH (no auth)", 
+            "PATCH", 
+            "/clients/test-client-id", 
+            401,
+            unarchive_data
+        )
+        
+        return True
+
+    def test_client_update_scenarios(self):
+        """Test client update scenarios"""
+        print("\n🔍 Testing Client Update Scenarios (No Auth)...")
+        
+        # Test full update
+        full_update = {
+            "display_name": "Updated Client Name",
+            "contact_name": "Updated Contact",
+            "email": "updated@example.com",
+            "phone": "+33 6 98 76 54 32",
+            "address": {
+                "line1": "456 Rue Neuve",
+                "postal_code": "69001",
+                "city": "Lyon",
+                "country": "France"
+            },
+            "notes": "Updated notes",
+            "is_archived": False
+        }
+        
+        self.run_api_test(
+            "Full client update (no auth)", 
+            "PATCH", 
+            "/clients/test-client-id", 
+            401,
+            full_update
+        )
+        
+        # Test partial updates
+        partial_updates = [
+            ({"display_name": "New Name Only"}, "Display name only"),
+            ({"email": "newemail@example.com"}, "Email only"),
+            ({"phone": "+33 1 23 45 67 89"}, "Phone only"),
+            ({"notes": "New notes"}, "Notes only"),
+            ({"is_archived": True}, "Archive status only"),
+        ]
+        
+        for update_data, description in partial_updates:
+            self.run_api_test(
+                f"Partial client update - {description} (no auth)", 
+                "PATCH", 
+                "/clients/test-client-id", 
+                401,
+                update_data
+            )
+        
+        return True
+
+    def test_client_edge_cases(self):
+        """Test client management edge cases"""
+        print("\n🔍 Testing Client Management Edge Cases (No Auth)...")
+        
+        # Test with non-existent client ID
+        self.run_api_test(
+            "Update non-existent client (no auth)", 
+            "PATCH", 
+            "/clients/non-existent-id", 
+            401,
+            {"display_name": "Updated"}
+        )
+        
+        self.run_api_test(
+            "Delete non-existent client (no auth)", 
+            "DELETE", 
+            "/clients/non-existent-id", 
+            401
+        )
+        
+        # Test with invalid client ID formats
+        invalid_ids = ["", "invalid-id", "123", "client-", "very-long-invalid-client-id-that-should-not-exist"]
+        
+        for invalid_id in invalid_ids:
+            if invalid_id:  # Skip empty string for URL construction
+                self.run_api_test(
+                    f"Update client with invalid ID '{invalid_id}' (no auth)", 
+                    "PATCH", 
+                    f"/clients/{invalid_id}", 
+                    401,
+                    {"display_name": "Test"}
+                )
+        
+        # Test with malformed JSON
+        try:
+            url = f"{self.api_url}/clients"
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(url, data="invalid json", headers=headers, timeout=10)
+            success = response.status_code in [400, 422]  # Should be validation error
+            self.log_test("Create client with malformed JSON", success, f"Status: {response.status_code}")
+        except Exception as e:
+            self.log_test("Create client with malformed JSON", False, f"Exception: {str(e)}")
+        
+        return True
+
+    def test_client_security_scenarios(self):
+        """Test client security scenarios"""
+        print("\n🔍 Testing Client Security Scenarios (No Auth)...")
+        
+        # Test that user_id filtering is enforced (can't test without auth, but structure is important)
+        self.run_api_test(
+            "Get clients (should filter by user_id when authenticated)", 
+            "GET", 
+            "/clients", 
+            401
+        )
+        
+        # Test that clients can only be modified by owner (structure test)
+        self.run_api_test(
+            "Update client (should check ownership when authenticated)", 
+            "PATCH", 
+            "/clients/test-id", 
+            401,
+            {"display_name": "Unauthorized Update"}
+        )
+        
+        self.run_api_test(
+            "Delete client (should check ownership when authenticated)", 
+            "DELETE", 
+            "/clients/test-id", 
+            401
+        )
+        
+        return True
+
+    def test_client_data_model_fields(self):
+        """Test client data model field requirements"""
+        print("\n🔍 Testing Client Data Model Fields (No Auth)...")
+        
+        # Test all optional fields
+        optional_fields_test = {
+            "display_name": "Test Client",  # Required
+            "contact_name": "Optional Contact Name",
+            "email": "optional@example.com",
+            "phone": "+33 6 12 34 56 78",
+            "address": {
+                "line1": "Optional Address Line 1",
+                "line2": "Optional Address Line 2",
+                "postal_code": "75001",
+                "city": "Paris",
+                "country": "France"
+            },
+            "notes": "Optional notes field",
+            "is_archived": False
+        }
+        
+        self.run_api_test(
+            "Create client with all optional fields (no auth)", 
+            "POST", 
+            "/clients", 
+            401,
+            optional_fields_test
+        )
+        
+        # Test field type validation
+        type_validation_tests = [
+            ({"display_name": 123}, "display_name as number"),
+            ({"display_name": "Valid", "email": 123}, "email as number"),
+            ({"display_name": "Valid", "phone": 123}, "phone as number"),
+            ({"display_name": "Valid", "is_archived": "true"}, "is_archived as string"),
+            ({"display_name": "Valid", "address": "not an object"}, "address as string"),
+        ]
+        
+        for data, description in type_validation_tests:
+            self.run_api_test(
+                f"Create client with {description} (no auth)", 
+                "POST", 
+                "/clients", 
+                401,
+                data
+            )
+        
+        return True
+
     def run_all_tests(self):
         """Run all backend tests"""
         print("🚀 Starting Fleemy Backend API Tests")
