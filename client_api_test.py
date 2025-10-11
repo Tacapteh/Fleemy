@@ -89,7 +89,7 @@ class ClientAPITester:
         
         try:
             response = requests.post(f"{self.api_url}/clients", json=invalid_client, headers=self.headers, timeout=10)
-            if response.status_code == 400:
+            if response.status_code in [400, 422]:  # Accept both 400 and 422 for validation errors
                 self.log_test("Create client without display_name (validation)", True, f"Correctly rejected: {response.text}")
             else:
                 self.log_test("Create client without display_name (validation)", False, f"Should have been rejected. Status: {response.status_code}")
