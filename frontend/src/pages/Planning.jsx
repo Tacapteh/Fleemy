@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import WeeklyGrid from '../components/WeeklyGrid';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 
@@ -17,6 +17,7 @@ import {
   setTeamContext,
 } from '../firebase';
 import { showToast } from '../utils/toast';
+import { subscribeToUIEvent } from '../store/uiStore';
 
 // Helpers -------------------------------------------------------------
 function toHM(v) {
@@ -309,14 +310,14 @@ export default function Planning() {
       console.error('Tâche originale non trouvée:', taskOccurrence.taskId);
     }
   };
-  const closeWeeklyTaskModal = () => setWeeklyTaskModal({ open: false, task: null });
+  const closeWeeklyTaskModal = useCallback(() => setWeeklyTaskModal({ open: false, task: null }), [setWeeklyTaskModal]);
 
   const handleSaveWeeklyTask = () => {
     showToast('Tâche hebdomadaire sauvegardée avec succès');
     closeWeeklyTaskModal();
   };
 
-  const handleDeleteWeeklyTask = async (id) => {
+  const handleDeleteWeeklyTask = useCallback(async (id) => {
     if (!user || isReadOnlyMode) return;
     try {
       await deleteWeeklyTask(id);
@@ -327,7 +328,42 @@ export default function Planning() {
     } finally {
       closeWeeklyTaskModal();
     }
-  };
+  }, [user, isReadOnlyMode, closeWeeklyTaskModal]);
+
+  useEffect(() => {
+    const unsubscribeOpen = subscribeToUIEvent('openTaskModal', (taskId) => {
+      const originalTask = weeklyTasks.find((task) => task.id === taskId);
+      if (originalTask) {
+        setWeeklyTaskModal({ open: true, task: originalTask });
+      } else {
+        console.warn('Tâche originale non trouvée:', taskId);
+      }
+    });
+
+    const unsubscribeDelete = subscribeToUIEvent('confirmDeleteTask', (taskId) => {
+      if (isReadOnlyMode) {
+        return;
+      }
+
+      const originalTask = weeklyTasks.find((task) => task.id === taskId);
+      if (!originalTask) {
+        console.warn('Tâche originale non trouvée:', taskId);
+        return;
+      }
+
+      const confirmed = window.confirm(`Supprimer la tâche "${originalTask.label}" ?`);
+      if (!confirmed) {
+        return;
+      }
+
+      handleDeleteWeeklyTask(taskId);
+    });
+
+    return () => {
+      unsubscribeOpen();
+      unsubscribeDelete();
+    };
+  }, [weeklyTasks, isReadOnlyMode, handleDeleteWeeklyTask]);
 
   const handleSaveEvent = async (data) => {
     if (!user || modal.readOnly) return;
@@ -445,9 +481,9 @@ export default function Planning() {
       {loading && showSkeleton ? (
         <div>Chargement des événements...</div>
       ) : view === 'week' ? (
-        <WeeklyGrid
+        <PlannerGrid
           events={events}
-          tasks={taskOccurrences}
+          tasks={weeklyTasks.length ? weeklyTasks : taskOccurrences}
           onSlotSelect={openSlot}
           onEventClick={openEvent}
           onTaskClick={handleTaskClick}
