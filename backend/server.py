@@ -150,6 +150,27 @@ def _apply_cors_headers(request: Request, response: Response) -> Response:
         if origin in ALLOWED_ORIGINS or re.match(ALLOWED_ORIGIN_REGEX, origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
+            # For preflight responses make sure browsers receive the same
+            # negotiation headers that CORSMiddleware would add. Without these
+            # headers the browser treats the preflight as a failure even if the
+            # origin itself is allowed, which is what happened on production
+            # when FastAPI raised an error before CORSMiddleware handled the
+            # request.
+            if request.method == "OPTIONS":
+                requested_method = request.headers.get("Access-Control-Request-Method")
+                requested_headers = request.headers.get("Access-Control-Request-Headers")
+
+                if requested_method:
+                    response.headers["Access-Control-Allow-Methods"] = requested_method
+                else:
+                    response.headers.setdefault("Access-Control-Allow-Methods", "*")
+
+                if requested_headers:
+                    response.headers["Access-Control-Allow-Headers"] = requested_headers
+                else:
+                    response.headers.setdefault("Access-Control-Allow-Headers", "*")
+
+                response.headers.setdefault("Access-Control-Max-Age", "86400")
             # Keep compatibility with caches/proxies when varying by origin
             existing_vary = response.headers.get("Vary")
             if existing_vary:
