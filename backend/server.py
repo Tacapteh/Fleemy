@@ -14,12 +14,14 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import json
 import calendar
 import httpx
 import re
+import secrets
+import string
 
 # Firebase Admin
 import firebase_admin
@@ -175,16 +177,19 @@ class User(BaseModel):
     picture: Optional[str] = None
     team_id: Optional[str] = None
     hourly_rate: float = 50.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_context: Optional[Dict[str, Any]] = None
 
 
 class Team(BaseModel):
     team_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     members: List[str] = []
-    created_by: str
+    owner_uid: str
     invite_code: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    invite_expires_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class PlanningEvent(BaseModel):
@@ -200,8 +205,8 @@ class PlanningEvent(BaseModel):
     end_time: str  # "17:00"
     status: str  # "paid", "unpaid", "pending", "not_worked"
     hourly_rate: float = 50.0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class WeeklyTask(BaseModel):
@@ -216,8 +221,8 @@ class WeeklyTask(BaseModel):
     time_slots: List[Dict[str, str]] = (
         []
     )  # {"day": "monday", "start": "09:00", "end": "10:00"}
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Todo(BaseModel):
@@ -228,8 +233,8 @@ class Todo(BaseModel):
     priority: str = "normal"  # "low", "normal", "urgent"
     completed: bool = False
     due_date: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Address(BaseModel):
@@ -250,8 +255,8 @@ class Client(BaseModel):
     address: Optional[Address] = None
     notes: Optional[str] = ""
     is_archived: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class QuoteItem(BaseModel):
@@ -275,8 +280,8 @@ class Quote(BaseModel):
     total: float = 0.0
     status: str = "draft"  # "draft", "sent", "accepted", "rejected"
     valid_until: datetime
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Invoice(BaseModel):
@@ -295,8 +300,8 @@ class Invoice(BaseModel):
     status: str = "sent"  # "sent", "paid", "overdue", "cancelled"
     due_date: datetime
     paid_date: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # Request models
@@ -376,7 +381,12 @@ class TeamCreateRequest(BaseModel):
 
 
 class TeamJoinRequest(BaseModel):
-    invite_code: str
+    code: str
+
+
+class LastContextUpdate(BaseModel):
+    type: str  # "solo" or "team"
+    team_id: Optional[str] = None
 
 
 # Firestore helper utilities
@@ -419,6 +429,18 @@ async def stream_docs(query):
     return [d.to_dict() for d in docs]
 
 
+def generate_invite_code(length=8):
+    """Generate a unique uppercase alphanumeric invite code."""
+    chars = string.ascii_uppercase + string.digits
+    while True:
+        code = ''.join(secrets.choice(chars) for _ in range(length))
+        # Check if code already exists
+        teams_ref = db.collection("teams")
+        existing = teams_ref.where("invite_code", "==", code).limit(1).stream()
+        if not list(existing):
+            return code
+
+
 # Authentication endpoints
 
 
@@ -448,6 +470,7 @@ async def get_me(request: Request):
                 "picture": db_user.get("picture"),
                 "hourly_rate": db_user.get("hourly_rate"),
                 "team_id": db_user.get("team_id"),
+                "last_context": db_user.get("last_context"),
             }
         }
     except Exception as e:
@@ -461,6 +484,25 @@ async def update_me(hourly_rate: float, user: Dict[str, Any] = Depends(verify_to
     await asyncio.to_thread(user_ref.update, {"hourly_rate": hourly_rate})
     updated_user = await asyncio.to_thread(user_ref.get)
     return User(**updated_user.to_dict())
+
+
+@api_router.put("/auth/context")
+async def update_last_context(
+    context: LastContextUpdate,
+    user: Dict[str, Any] = Depends(verify_token)
+):
+    """Update user's last context (solo or team)."""
+    try:
+        user_ref = user_doc(user["uid"])
+        context_data = context.dict()
+        await asyncio.to_thread(user_ref.update, {
+            "last_context": context_data,
+            "updated_at": firestore.SERVER_TIMESTAMP
+        })
+        return {"success": True, "context": context_data}
+    except Exception as e:
+        logger.error("update_last_context error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Dashboard endpoint used for testing basic connectivity
@@ -486,7 +528,7 @@ async def get_week_planning(
             )
             team = team_snap.to_dict() if team_snap.exists else None
             if not team or user["uid"] not in (
-                team.get("members", []) + [team.get("created_by")]
+                team.get("members", []) + [team.get("owner_uid")]
             ):
                 raise HTTPException(
                     status_code=403, detail="Not authorized for this team"
@@ -550,7 +592,7 @@ async def get_month_planning(
             )
             team = team_snap.to_dict() if team_snap.exists else None
             if not team or user["uid"] not in (
-                team.get("members", []) + [team.get("created_by")]
+                team.get("members", []) + [team.get("owner_uid")]
             ):
                 raise HTTPException(status_code=403, detail="Not authorized for this team")
             events_ref = team_col(team_id, "events")
@@ -688,7 +730,7 @@ async def create_event(
     event_request: EventCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
     try:
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         year = event_request.year or now.year
         week = event_request.week or now.isocalendar()[1]
 
@@ -738,7 +780,7 @@ async def update_event(
         return {"success": False, "error": "Event not found"}
 
     existing = snap.to_dict()
-    update_data = {**event_request.dict(), "updated_at": datetime.utcnow()}
+    update_data = {**event_request.dict(), "updated_at": datetime.now(timezone.utc)}
     await asyncio.to_thread(
         user_col(user["uid"], "events").document(event_id).update, update_data
     )
@@ -796,7 +838,7 @@ async def get_earnings(
         )
         team = team_snap.to_dict() if team_snap.exists else None
         if not team or user["uid"] not in (
-            team.get("members", []) + [team.get("created_by")]
+            team.get("members", []) + [team.get("owner_uid")]
         ):
             raise HTTPException(status_code=403, detail="Not authorized for this team")
         events_ref = team_col(team_id, "events")
@@ -879,7 +921,7 @@ async def list_tasks(
 async def create_task(
     task_request: TaskCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     year = task_request.year or now.year
     week = task_request.week or now.isocalendar()[1]
     task_data = task_request.dict(exclude={"year", "week"})
@@ -921,7 +963,7 @@ async def update_task(
         **incoming,
         "year": new_year,
         "week": new_week,
-        "updated_at": datetime.utcnow(),
+        "updated_at": datetime.now(timezone.utc),
     }
     await asyncio.to_thread(
         user_col(user["uid"], "tasks").document(task_id).update, update_data
@@ -1006,7 +1048,7 @@ async def update_todo(
             todo_data["due_date"].replace("Z", "+00:00")
         )
 
-    update_data = {**todo_data, "updated_at": datetime.utcnow()}
+    update_data = {**todo_data, "updated_at": datetime.now(timezone.utc)}
     await asyncio.to_thread(
         user_col(user["uid"], "todos").document(todo_id).update, update_data
     )
@@ -1025,7 +1067,7 @@ async def toggle_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)
         doc_ref.update,
         {
             "completed": not data.get("completed", False),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         },
     )
     updated = await asyncio.to_thread(doc_ref.get)
@@ -1173,7 +1215,7 @@ async def update_client(
     if "phone" in data and data["phone"] and not validate_french_phone(data["phone"]):
         raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
     
-    update_data = {**data, "updated_at": datetime.utcnow()}
+    update_data = {**data, "updated_at": datetime.now(timezone.utc)}
     await asyncio.to_thread(doc_ref.update, update_data)
     
     updated = await asyncio.to_thread(doc_ref.get)
@@ -1214,7 +1256,7 @@ async def create_quote(
 ):
     # Generate quote number
     quote_count = len(await stream_docs(user_col(user["uid"], "quotes")))
-    quote_number = f"DEV-{datetime.now().year}-{quote_count + 1:04d}"
+    quote_number = f"DEV-{datetime.now(timezone.utc).year}-{quote_count + 1:04d}"
 
     quote_data = quote_request.dict()
     quote_data["quote_number"] = quote_number
@@ -1268,7 +1310,7 @@ async def update_quote(
             "subtotal": subtotal,
             "tax_amount": tax_amount,
             "total": total,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
     )
 
@@ -1301,20 +1343,11 @@ async def delete_quote(quote_id: str, user: Dict[str, Any] = Depends(verify_toke
     return {"message": "Quote deleted"}
 
 
-# @api_router.get("/quotes/{quote_id}/pdf")
-# async def get_quote_pdf(quote_id: str, current_user: User = Depends(get_current_user)):
-# quote = await db.quotes.find_one({"id": quote_id, "uid": current_user.uid}, {"_id": 0})
-# if not quote:
-# raise HTTPException(status_code=404, detail="Quote not found")
-# pdf_bytes = await quote_pdf_bytes(quote)
-# return Response(content=pdf_bytes, media_type="application/pdf")
-
-
 @api_router.put("/quotes/{quote_id}/status")
 async def update_quote_status(
     quote_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)
 ):
-    update_data = {"status": status, "updated_at": datetime.utcnow()}
+    update_data = {"status": status, "updated_at": datetime.now(timezone.utc)}
     await asyncio.to_thread(
         user_col(user["uid"], "quotes").document(quote_id).update, update_data
     )
@@ -1347,7 +1380,7 @@ async def create_invoice(
 ):
     # Generate invoice number
     invoice_count = len(await stream_docs(user_col(user["uid"], "invoices")))
-    invoice_number = f"FACT-{datetime.now().year}-{invoice_count + 1:04d}"
+    invoice_number = f"FACT-{datetime.now(timezone.utc).year}-{invoice_count + 1:04d}"
 
     invoice_data = invoice_request.dict()
     invoice_data["invoice_number"] = invoice_number
@@ -1402,7 +1435,7 @@ async def update_invoice(
             "subtotal": subtotal,
             "tax_amount": tax_amount,
             "total": total,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         }
     )
 
@@ -1419,15 +1452,6 @@ async def update_invoice(
         user_col(user["uid"], "invoices").document(invoice_id).get
     )
     return updated.to_dict()
-
-
-# @api_router.get("/invoices/{invoice_id}/pdf")
-# async def get_invoice_pdf(invoice_id: str, current_user: User = Depends(get_current_user)):
-#    invoice = await db.invoices.find_one({"id": invoice_id, "uid": current_user.uid}, {"_id": 0})
-#   if not invoice:
-#      raise HTTPException(status_code=404, detail="Invoice not found")
-# pdf_bytes = await invoice_pdf_bytes(invoice)
-# return Response(content=pdf_bytes, media_type="application/pdf")
 
 
 @api_router.delete("/invoices/{invoice_id}")
@@ -1450,9 +1474,9 @@ async def delete_invoice(invoice_id: str, user: Dict[str, Any] = Depends(verify_
 async def update_invoice_status(
     invoice_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)
 ):
-    update_data = {"status": status, "updated_at": datetime.utcnow()}
+    update_data = {"status": status, "updated_at": datetime.now(timezone.utc)}
     if status == "paid":
-        update_data["paid_date"] = datetime.utcnow()
+        update_data["paid_date"] = datetime.now(timezone.utc)
 
     await asyncio.to_thread(
         user_col(user["uid"], "invoices").document(invoice_id).update, update_data
@@ -1474,59 +1498,188 @@ async def update_invoice_status(
 async def create_team(
     team_request: TeamCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
-    team = Team(name=team_request.name, members=[user["uid"]], created_by=user["uid"])
+    """Create a new team with unique invite code."""
+    try:
+        # Validate team name
+        name = team_request.name.strip()
+        if len(name) < 2 or len(name) > 48:
+            raise HTTPException(
+                status_code=400,
+                detail="Le nom de l'équipe doit contenir entre 2 et 48 caractères"
+            )
+        
+        # Generate unique invite code
+        invite_code = generate_invite_code(8)
+        
+        team = Team(
+            name=name,
+            members=[user["uid"]],
+            owner_uid=user["uid"],
+            invite_code=invite_code,
+        )
 
-    await asyncio.to_thread(
-        db.collection("teams").document(team.team_id).set, team.dict()
-    )
-    await asyncio.to_thread(user_doc(user["uid"]).update, {"team_id": team.team_id})
+        await asyncio.to_thread(
+            db.collection("teams").document(team.team_id).set, team.dict()
+        )
+        
+        logger.info("Team created: %s by user %s", team.team_id, user["uid"])
+        
+        return {
+            "success": True,
+            "team_id": team.team_id,
+            "name": team.name,
+            "invite_code": team.invite_code,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("create_team error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return team
+
+@api_router.post("/teams/join")
+async def join_team(
+    join_request: TeamJoinRequest,
+    user: Dict[str, Any] = Depends(verify_token)
+):
+    """Join a team using an invite code."""
+    try:
+        # Normalize code to uppercase
+        code = join_request.code.strip().upper()
+        
+        if not code:
+            raise HTTPException(status_code=400, detail="Le code d'invitation est requis")
+        
+        # Find team by invite code
+        teams_ref = db.collection("teams")
+        query = teams_ref.where("invite_code", "==", code).limit(1)
+        teams = list(await asyncio.to_thread(query.stream))
+        
+        if not teams:
+            raise HTTPException(
+                status_code=404,
+                detail="Code d'invitation invalide ou expiré"
+            )
+        
+        team_doc = teams[0]
+        team_data = team_doc.to_dict()
+        team_id = team_doc.id
+        
+        # Check expiration if set
+        if team_data.get("invite_expires_at"):
+            expiry = team_data["invite_expires_at"]
+            if datetime.now(timezone.utc) > expiry:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Ce code d'invitation a expiré"
+                )
+        
+        # Check if user is already a member
+        current_members = team_data.get("members", [])
+        if user["uid"] in current_members:
+            # Already a member - return success (idempotent)
+            return {
+                "success": True,
+                "team_id": team_id,
+                "name": team_data.get("name"),
+                "already_member": True,
+            }
+        
+        # Add user to members
+        current_members.append(user["uid"])
+        await asyncio.to_thread(
+            db.collection("teams").document(team_id).update,
+            {
+                "members": current_members,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            }
+        )
+        
+        logger.info("User %s joined team %s", user["uid"], team_id)
+        
+        return {
+            "success": True,
+            "team_id": team_id,
+            "name": team_data.get("name"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("join_team error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_router.get("/teams/my")
-async def get_my_team(user: Dict[str, Any] = Depends(verify_token)):
+async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
+    """Get all teams where the user is a member."""
     logger.info("/teams/my called for %s", user.get("uid"))
     try:
-        user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-        db_user = user_snap.to_dict() if user_snap.exists else None
-        if not db_user or not db_user.get("team_id"):
-            return {"team": None}
-
-        team_snap = await asyncio.to_thread(
-            db.collection("teams").document(db_user["team_id"]).get
-        )
-        team = team_snap.to_dict() if team_snap.exists else None
-        if not team:
-            return {"team": None}
-
-        members = []
-        for member_uid in team.get("members", []):
-            snap = await asyncio.to_thread(
-                db.collection("users").document(member_uid).get
-            )
-            member = snap.to_dict() if snap.exists else None
-            if member:
-                members.append(
-                    {
-                        "uid": member["uid"],
-                        "name": member["name"],
-                        "email": member["email"],
-                    }
-                )
-
-        return {
-            "team": {
-                "team_id": team["team_id"],
-                "name": team["name"],
-                "invite_code": team.get("invite_code"),
-                "members": members,
-                "created_by": team.get("created_by"),
-            }
-        }
+        # Query all teams where user is in members array
+        teams_ref = db.collection("teams")
+        query = teams_ref.where("members", "array_contains", user["uid"])
+        teams_docs = await asyncio.to_thread(lambda: list(query.stream()))
+        
+        teams = []
+        for team_doc in teams_docs:
+            team_data = team_doc.to_dict()
+            teams.append({
+                "team_id": team_doc.id,
+                "name": team_data.get("name"),
+                "owner_uid": team_data.get("owner_uid"),
+                "invite_code": team_data.get("invite_code"),
+                "members_count": len(team_data.get("members", [])),
+            })
+        
+        logger.info("Found %d teams for user %s", len(teams), user["uid"])
+        
+        return {"success": True, "teams": teams}
     except Exception as e:
-        logger.error("get_my_team error: %s", e, exc_info=True)
-        return {"team": None}
+        logger.error("get_my_teams error: %s", e, exc_info=True)
+        return {"success": False, "teams": [], "error": str(e)}
+
+
+@api_router.post("/teams/{team_id}/rotate-code")
+async def rotate_invite_code(
+    team_id: str,
+    user: Dict[str, Any] = Depends(verify_token)
+):
+    """Regenerate the invite code for a team (owner only)."""
+    try:
+        team_ref = db.collection("teams").document(team_id)
+        team_snap = await asyncio.to_thread(team_ref.get)
+        
+        if not team_snap.exists:
+            raise HTTPException(status_code=404, detail="Équipe introuvable")
+        
+        team_data = team_snap.to_dict()
+        
+        # Verify user is the owner
+        if team_data.get("owner_uid") != user["uid"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Seul le propriétaire peut régénérer le code"
+            )
+        
+        # Generate new code
+        new_code = generate_invite_code(8)
+        
+        # Update team
+        await asyncio.to_thread(
+            team_ref.update,
+            {
+                "invite_code": new_code,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            }
+        )
+        
+        logger.info("Invite code rotated for team %s", team_id)
+        
+        return {"success": True, "invite_code": new_code}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("rotate_invite_code error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Translate endpoint (server-side proxy)
