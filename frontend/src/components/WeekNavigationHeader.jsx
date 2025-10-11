@@ -15,6 +15,10 @@ export default function WeekNavigationHeader({
   onPlanningModeChange,
   canUseTeamMode = false,
   teamName = null,
+  teamOptions = [],
+  selectedTeamId = null,
+  onTeamChange,
+  teamsLoading = false,
 }) {
   const showMemberSelector =
     planningMode === 'team' && Array.isArray(memberOptions) && memberOptions.length > 1;
@@ -23,6 +27,15 @@ export default function WeekNavigationHeader({
       ? selectedMemberId
       : memberOptions[0]?.value || '';
   const showTeamToggle = Boolean(onPlanningModeChange) && canUseTeamMode;
+  const showTeamSelector =
+    planningMode === 'team' &&
+    Array.isArray(teamOptions) &&
+    teamOptions.length > 1 &&
+    typeof onTeamChange === 'function';
+  const selectedTeamValue =
+    selectedTeamId && teamOptions.some((option) => option.value === selectedTeamId)
+      ? selectedTeamId
+      : teamOptions[0]?.value || '';
 
   const handleModeClick = (mode) => {
     if (!onPlanningModeChange) return;
@@ -56,9 +69,41 @@ export default function WeekNavigationHeader({
       <div className="flex flex-col items-center gap-2 text-center md:flex-1">
         <h2 className="text-lg font-bold">{currentLabel}</h2>
         {planningMode === 'team' && (
-          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-            Planning d'équipe{teamName ? ` • ${teamName}` : ''}
-          </span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+              Équipe
+            </span>
+            {teamName && (
+              <span className="text-sm font-medium text-blue-800" data-testid="planning-team-name">
+                {teamName}
+              </span>
+            )}
+            {showTeamSelector && (
+              <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600">
+                <label htmlFor="planning-team-select" className="font-medium">
+                  Afficher
+                </label>
+                <select
+                  id="planning-team-select"
+                  className="px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  value={selectedTeamValue}
+                  onChange={(event) => onTeamChange?.(event.target.value)}
+                  disabled={teamsLoading}
+                >
+                  {teamOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                {teamsLoading && (
+                  <span className="text-xs text-gray-500" aria-live="polite">
+                    Chargement…
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         )}
         {showMemberSelector && (
           <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600">

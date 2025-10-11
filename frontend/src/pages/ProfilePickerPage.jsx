@@ -217,6 +217,9 @@ const ProfilePickerPage = () => {
               data-testid={`profile-team-${team.team_id}-btn`}
               aria-label={`Équipe ${team.name}`}
             >
+              <span className="absolute top-3 left-3 z-10 inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm">
+                Équipe
+              </span>
               {isOwner && team.invite_code && (
                 <span
                   role="button"

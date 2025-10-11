@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
@@ -18,8 +19,36 @@ import {
 } from '../firebase';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
+import { apiFetch } from '../lib/api';
+import { contextStore } from '../stores/contextStore';
 
 // Helpers -------------------------------------------------------------
+const safeReadLocalStorage = (key) => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return null;
+  }
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    return null;
+  }
+};
+
+const safeWriteLocalStorage = (key, value) => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  try {
+    if (value === null || value === undefined) {
+      localStorage.removeItem(key);
+    } else {
+      localStorage.setItem(key, value);
+    }
+  } catch (error) {
+    console.warn("Impossible d'écrire localStorage", { key, error });
+  }
+};
+
 function toHM(v) {
   let date = null;
   if (typeof v === 'string') {
@@ -68,8 +97,88 @@ function dayIndex(d) {
 
 export default function Planning() {
   const user = useFirebaseUser();
-  const { team } = useTeam();
-  const teamId = team?.id;
+  const navigate = useNavigate();
+  const { teamId: routeTeamParam } = useParams();
+  const routeTeamId = routeTeamParam || null;
+
+  const [activeTeamId, setActiveTeamId] = useState(() => routeTeamId || safeReadLocalStorage('teamId'));
+  const [activeTeamName, setActiveTeamName] = useState(() => safeReadLocalStorage('teamName'));
+  const { team } = useTeam(activeTeamId || undefined);
+  const teamId = team?.id || activeTeamId || null;
+  const [availableTeams, setAvailableTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState(null);
+
+  useEffect(() => {
+    if (routeTeamId && routeTeamId !== activeTeamId) {
+      setActiveTeamId(routeTeamId);
+    }
+  }, [routeTeamId, activeTeamId]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setAvailableTeams([]);
+      setTeamsError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadTeams = async () => {
+      setTeamsLoading(true);
+      try {
+        const data = await apiFetch('/teams/my');
+        const teamsList = Array.isArray(data?.teams) ? data.teams : [];
+        if (cancelled) {
+          return;
+        }
+        setTeamsError(null);
+        setAvailableTeams(teamsList);
+        setActiveTeamId((current) => {
+          if (!teamsList.length) {
+            return null;
+          }
+          if (current && teamsList.some((t) => t.team_id === current)) {
+            return current;
+          }
+          return teamsList[0].team_id;
+        });
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Erreur chargement équipes:', err);
+        setTeamsError("Impossible de charger les équipes");
+        setAvailableTeams([]);
+      } finally {
+        if (!cancelled) {
+          setTeamsLoading(false);
+        }
+      }
+    };
+
+    loadTeams();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (team?.name) {
+      setActiveTeamName(team.name);
+      return;
+    }
+
+    if (!teamId) {
+      setActiveTeamName(null);
+      return;
+    }
+
+    const matchingTeam = availableTeams.find((candidate) => candidate.team_id === teamId);
+    if (matchingTeam?.name) {
+      setActiveTeamName(matchingTeam.name);
+    }
+  }, [team?.name, teamId, availableTeams]);
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedMemberId, setSelectedMemberId] = useState(null);
@@ -78,7 +187,7 @@ export default function Planning() {
     [teamId]
   );
   const [planningMode, setPlanningMode] = useState(() => {
-    const stored = planningContextKey ? localStorage.getItem(planningContextKey) : null;
+    const stored = planningContextKey ? safeReadLocalStorage(planningContextKey) : null;
     if (stored === 'team' || stored === 'personal') {
       if (stored === 'team' && !teamId) {
         return 'personal';
@@ -87,6 +196,22 @@ export default function Planning() {
     }
     return teamId ? 'team' : 'personal';
   });
+
+  useEffect(() => {
+    if (planningMode === 'team' && teamId) {
+      contextStore.set({
+        type: 'team',
+        teamId,
+        teamName: activeTeamName || null,
+      });
+      safeWriteLocalStorage('teamId', teamId);
+      if (activeTeamName) {
+        safeWriteLocalStorage('teamName', activeTeamName);
+      }
+    } else if (planningMode === 'personal') {
+      contextStore.set({ type: 'solo' });
+    }
+  }, [planningMode, teamId, activeTeamName]);
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -102,7 +227,7 @@ export default function Planning() {
   const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
 
   useEffect(() => {
-    const stored = planningContextKey ? localStorage.getItem(planningContextKey) : null;
+    const stored = planningContextKey ? safeReadLocalStorage(planningContextKey) : null;
     const nextMode = teamId
       ? stored === 'team' || stored === 'personal'
         ? stored
@@ -113,7 +238,7 @@ export default function Planning() {
 
   useEffect(() => {
     if (!planningContextKey) return;
-    localStorage.setItem(planningContextKey, planningMode);
+    safeWriteLocalStorage(planningContextKey, planningMode);
   }, [planningMode, planningContextKey]);
 
   const storageKey = useMemo(() => {
@@ -196,6 +321,36 @@ export default function Planning() {
     planningMode,
   });
 
+  const teamOptions = useMemo(() => {
+    if (!Array.isArray(availableTeams)) {
+      return [];
+    }
+
+    const options = [];
+    const seen = new Set();
+
+    availableTeams.forEach((availableTeam) => {
+      if (!availableTeam?.team_id || seen.has(availableTeam.team_id)) {
+        return;
+      }
+      seen.add(availableTeam.team_id);
+      options.push({
+        value: availableTeam.team_id,
+        label: availableTeam.name || 'Équipe',
+      });
+    });
+
+    if (teamId && !seen.has(teamId)) {
+      seen.add(teamId);
+      options.push({
+        value: teamId,
+        label: activeTeamName || team?.name || 'Équipe',
+      });
+    }
+
+    return options;
+  }, [availableTeams, teamId, activeTeamName, team?.name]);
+
   const memberOptions = useMemo(() => {
     if (planningMode !== 'team') {
       return [];
@@ -232,13 +387,39 @@ export default function Planning() {
     setSelectedMemberId(memberId);
   }, [planningMode, availableMembers, selectedMemberId]);
 
+  const handleTeamChange = useCallback(
+    (nextTeamId) => {
+      if (!nextTeamId || nextTeamId === activeTeamId) {
+        return;
+      }
+      setActiveTeamId(nextTeamId);
+      setPlanningMode('team');
+      if (routeTeamId) {
+        navigate(`/team/${nextTeamId}/schedule`, { replace: true });
+      }
+    },
+    [activeTeamId, navigate, routeTeamId]
+  );
+
   const handlePlanningModeChange = useCallback(
     (mode) => {
       if (mode === planningMode) return;
-      if (mode === 'team' && !teamId) return;
-      setPlanningMode(mode);
+      if (mode === 'team') {
+        if (!teamId && !teamOptions.length) {
+          return;
+        }
+        if (!teamId && teamOptions.length) {
+          const fallbackTeamId = teamOptions[0].value;
+          if (fallbackTeamId && fallbackTeamId !== activeTeamId) {
+            setActiveTeamId(fallbackTeamId);
+          }
+        }
+        setPlanningMode('team');
+        return;
+      }
+      setPlanningMode('personal');
     },
-    [planningMode, teamId]
+    [planningMode, teamId, teamOptions, activeTeamId]
   );
 
 
@@ -613,6 +794,11 @@ export default function Planning() {
           Erreur chargement tâches: {tasksError}
         </div>
       )}
+      {teamsError && (
+        <div className="bg-yellow-100 text-yellow-800 p-2 rounded mb-2">
+          {teamsError}
+        </div>
+      )}
       <WeekNavigationHeader
         currentLabel={currentLabel}
         onPrev={onPrev}
@@ -626,8 +812,12 @@ export default function Planning() {
         isReadOnlyMode={isReadOnlyMode}
         planningMode={planningMode}
         onPlanningModeChange={handlePlanningModeChange}
-        canUseTeamMode={Boolean(teamId)}
-        teamName={team?.name || null}
+        canUseTeamMode={teamOptions.length > 0}
+        teamName={activeTeamName || team?.name || null}
+        teamOptions={teamOptions}
+        selectedTeamId={planningMode === 'team' ? teamId : null}
+        onTeamChange={handleTeamChange}
+        teamsLoading={teamsLoading}
       />
 
       <div className="flex justify-end mb-2 space-x-2">
