@@ -3925,7 +3925,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
   useEffect(() => {
     if (quote) {
       setFormData({
-        client_id: quote.client_id || "",
+        client_id: quote.client_id ? String(quote.client_id) : "",
         client_name: quote.client_name || "",
         title: quote.title || "",
         items:
@@ -3961,13 +3961,16 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
   }, [quote, isOpen]);
 
   const handleClientChange = (clientId) => {
-    const selectedClient = clients.find((c) => c.id === clientId);
+    const normalizedClientId = clientId ? String(clientId) : "";
+    const selectedClient = clients.find(
+      (c) => String(c.id) === normalizedClientId,
+    );
     const clientName = selectedClient
       ? selectedClient.display_name || selectedClient.name || ""
       : "";
     setFormData((prev) => ({
       ...prev,
-      client_id: clientId,
+      client_id: normalizedClientId,
       client_name: clientName,
     }));
   };
@@ -4082,7 +4085,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
             >
               <option value="">Sélectionner un client</option>
               {clients.map((client) => (
-                <option key={client.id} value={client.id}>
+                <option key={client.id} value={client.id != null ? String(client.id) : ""}>
                   {client?.display_name ?? client?.name ?? ""}
                 </option>
               ))}
@@ -4656,8 +4659,8 @@ const InvoiceModal = ({
   useEffect(() => {
     if (invoice) {
       setFormData({
-        quote_id: invoice.quote_id || "",
-        client_id: invoice.client_id || "",
+        quote_id: invoice.quote_id ? String(invoice.quote_id) : "",
+        client_id: invoice.client_id ? String(invoice.client_id) : "",
         client_name: invoice.client_name || "",
         title: invoice.title || "",
         items: invoice.items || [
@@ -4693,12 +4696,15 @@ const InvoiceModal = ({
   }, [invoice, isOpen]);
 
   const handleQuoteSelection = (quoteId) => {
-    const selectedQuote = quotes.find((q) => q.id === quoteId);
+    const normalizedQuoteId = quoteId ? String(quoteId) : "";
+    const selectedQuote = quotes.find((q) => String(q.id) === normalizedQuoteId);
     if (selectedQuote) {
       setFormData((prev) => ({
         ...prev,
-        quote_id: quoteId,
-        client_id: selectedQuote.client_id,
+        quote_id: normalizedQuoteId,
+        client_id: selectedQuote.client_id
+          ? String(selectedQuote.client_id)
+          : "",
         client_name: selectedQuote.client_name,
         title: selectedQuote.title,
         items: selectedQuote.items,
@@ -4711,13 +4717,16 @@ const InvoiceModal = ({
   };
 
   const handleClientChange = (clientId) => {
-    const selectedClient = clients.find((c) => c.id === clientId);
+    const normalizedClientId = clientId ? String(clientId) : "";
+    const selectedClient = clients.find(
+      (c) => String(c.id) === normalizedClientId,
+    );
     const clientName = selectedClient
       ? selectedClient.display_name || selectedClient.name || ""
       : "";
     setFormData((prev) => ({
       ...prev,
-      client_id: clientId,
+      client_id: normalizedClientId,
       client_name: clientName,
     }));
   };
@@ -4834,7 +4843,10 @@ const InvoiceModal = ({
             >
               <option value="">Créer une nouvelle facture</option>
               {acceptedQuotes.map((quote) => (
-                <option key={quote.id} value={quote.id}>
+                <option
+                  key={quote.id}
+                  value={quote.id != null ? String(quote.id) : ""}
+                >
                   {quote.quote_number} - {quote?.client_name ?? ""} -{" "}
                   {formatCurrency(quote.total)}
                 </option>
@@ -4859,7 +4871,10 @@ const InvoiceModal = ({
             >
               <option value="">Sélectionner un client</option>
               {clients.map((client) => (
-                <option key={client.id} value={client.id}>
+                <option
+                  key={client.id}
+                  value={client.id != null ? String(client.id) : ""}
+                >
                   {client?.display_name ?? client?.name ?? ""}
                 </option>
               ))}
