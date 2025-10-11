@@ -147,7 +147,11 @@ export default function Planning() {
           return;
         }
         console.error('Erreur chargement équipes:', err);
-        setTeamsError("Impossible de charger les équipes");
+        if (err?.response?.status === 403) {
+          setTeamsError("Accès refusé : vous n'avez pas les permissions nécessaires pour consulter cette équipe.");
+        } else {
+          setTeamsError("Impossible de charger les équipes.");
+        }
         setAvailableTeams([]);
       } finally {
         if (!cancelled) {
@@ -791,7 +795,10 @@ export default function Planning() {
       )}
       {tasksError && (
         <div className="bg-orange-100 text-orange-700 p-2 rounded mb-2">
-          Erreur chargement tâches: {tasksError}
+          Erreur lors du chargement des tâches :{' '}
+          {tasksError.includes('Accès refusé')
+            ? "Accès refusé : vous n'avez pas les permissions nécessaires pour consulter ces tâches."
+            : tasksError}
         </div>
       )}
       {teamsError && (
