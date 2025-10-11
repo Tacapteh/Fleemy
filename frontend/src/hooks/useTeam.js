@@ -1,11 +1,61 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { auth, db } from '../firebase';
 import { doc, getDoc } from 'firebase/firestore';
+
+const buildMemberLabel = (memberData, currentUser) => {
+  if (!memberData) return { uid: null };
+
+  if (typeof memberData === 'string') {
+    return { uid: memberData };
+  }
+
+  const uid = memberData?.uid || null;
+  const name = memberData?.name || memberData?.displayName || null;
+  const email = memberData?.email || null;
+
+  if (!uid) {
+    return { uid: null };
+  }
+
+  if (currentUser && uid === currentUser.uid) {
+    return {
+      uid,
+      name: name || currentUser.displayName || currentUser.email || null,
+      email: email || currentUser.email || null,
+    };
+  }
+
+  return {
+    uid,
+    name: name || null,
+    email: email || null,
+  };
+};
 
 export default function useTeam(teamId) {
   const [state, setState] = useState({ data: null, error: null });
   const [loading, setLoading] = useState(true);
   const resolvedTeamId = teamId ?? localStorage.getItem('teamId');
+
+  const currentUser = auth.currentUser;
+
+  const buildMembersList = useMemo(() => {
+    return (rawMembers = []) => {
+      const normalized = [];
+      const seen = new Set();
+
+      rawMembers.forEach((raw) => {
+        const member = buildMemberLabel(raw, currentUser);
+        if (!member?.uid || seen.has(member.uid)) {
+          return;
+        }
+        seen.add(member.uid);
+        normalized.push(member);
+      });
+
+      return normalized;
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     const loadTeam = async () => {
@@ -24,14 +74,79 @@ export default function useTeam(teamId) {
           return;
         }
         const data = teamSnap.data();
-        const members = (data.members || []).map((uid) => {
-          if (uid === auth.currentUser.uid && auth.currentUser.displayName) {
-            return { uid, name: auth.currentUser.displayName };
-          }
-          return { uid };
-        });
+
+        const rawMembers = Array.isArray(data.members) ? data.members : [];
+        const initialMembers = buildMembersList(rawMembers);
+
+        const members = await Promise.all(
+          initialMembers.map(async (member) => {
+            if (!member?.uid) {
+              return null;
+            }
+
+            if (member.name) {
+              return member;
+            }
+
+            try {
+              const userDoc = await getDoc(doc(db, 'users', member.uid));
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                const inferredName =
+                  userData?.name ||
+                  userData?.displayName ||
+                  userData?.full_name ||
+                  userData?.fullName ||
+                  null;
+
+                const inferredEmail = userData?.email || null;
+
+                return {
+                  uid: member.uid,
+                  name:
+                    inferredName ||
+                    (member.uid === currentUser?.uid
+                      ? currentUser?.displayName || currentUser?.email || null
+                      : null),
+                  email: inferredEmail,
+                };
+              }
+            } catch (memberError) {
+              console.warn('useTeam: impossible de charger le membre', member.uid, memberError);
+            }
+
+            if (member.uid === currentUser?.uid) {
+              return {
+                uid: member.uid,
+                name: currentUser?.displayName || currentUser?.email || null,
+                email: currentUser?.email || null,
+              };
+            }
+
+            return member;
+          })
+        );
+
+        const uniqueMembersMap = new Map();
+        members
+          .filter(Boolean)
+          .forEach((member) => {
+            if (!member.uid) return;
+            const existing = uniqueMembersMap.get(member.uid) || {};
+            uniqueMembersMap.set(member.uid, {
+              uid: member.uid,
+              name: member.name || existing.name || null,
+              email: member.email || existing.email || null,
+            });
+          });
+
         setState({
-          data: { id: resolvedTeamId, name: data.name, ownerId: data.ownerId, members },
+          data: {
+            id: resolvedTeamId,
+            name: data.name,
+            ownerId: data.ownerId,
+            members: Array.from(uniqueMembersMap.values()),
+          },
           error: null,
         });
       } catch (e) {
