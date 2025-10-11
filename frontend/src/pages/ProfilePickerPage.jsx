@@ -41,7 +41,7 @@ const ProfilePickerPage = () => {
             ? data.data
             : null;
 
-      if (resolvedTeams) {
+      if (Array.isArray(resolvedTeams)) {
         setTeams(resolvedTeams);
         return;
       }
