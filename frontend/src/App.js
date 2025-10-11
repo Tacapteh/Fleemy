@@ -20,6 +20,7 @@ import Clients from "./pages/Clients";
 import ProfilePickerPage from "./pages/ProfilePickerPage";
 import Sidebar from "./components/Sidebar";
 import NotFound from "./pages/NotFound";
+import { apiFetch } from "./lib/api";
 
 // Composant qui gère la mise en page commune (Sidebar + Outlet)
 function Layout({ user, onLogout }) {
@@ -58,27 +59,22 @@ function AuthGuard({ user, children }) {
             return;
           } else if (savedContext.type === 'team' && savedContext.teamId) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
-            const token = await user.getIdToken();
-            const backendUrl = process.env.REACT_APP_BACKEND_URL;
-            
-            const response = await fetch(`${backendUrl}/api/teams/my`, {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-            });
+            const data = await apiFetch('/teams/my');
 
-            const data = await response.json();
-            const stillMember = data.teams?.some(t => t.team_id === savedContext.teamId);
-            
-            if (stillMember) {
-              // Contexte team toujours valide
-              setChecking(false);
-              return;
+            if (!data?.success) {
+              console.error('Error checking team membership:', data?.error);
+            } else {
+              const stillMember = data.teams?.some((t) => t.team_id === savedContext.teamId);
+
+              if (stillMember) {
+                // Contexte team toujours valide
+                setChecking(false);
+                return;
+              }
             }
           }
         }
-        
+
         // Pas de contexte valide, rediriger vers /profiles
         navigate('/profiles');
       } catch (err) {

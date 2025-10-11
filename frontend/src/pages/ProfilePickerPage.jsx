@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn } from 'lucide-react';
 import { auth } from '../firebase';
+import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
 import JoinTeamDialog from '../components/profiles/JoinTeamDialog';
@@ -26,22 +27,15 @@ const ProfilePickerPage = () => {
         return;
       }
 
-      const token = await user.getIdToken();
-      const backendUrl = process.env.REACT_APP_BACKEND_URL;
-      
-      const response = await fetch(`${backendUrl}/api/teams/my`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      setError('');
 
-      const data = await response.json();
-      
-      if (data.success) {
+      const data = await apiFetch('/teams/my');
+
+      if (data?.success) {
         setTeams(data.teams || []);
       } else {
-        console.error('Error loading teams:', data.error);
+        console.error('Error loading teams:', data?.error);
+        setError(data?.error || 'Erreur lors du chargement des équipes');
       }
     } catch (err) {
       console.error('Error loading teams:', err);
@@ -56,15 +50,8 @@ const ProfilePickerPage = () => {
       const user = auth.currentUser;
       if (!user) return;
 
-      const token = await user.getIdToken();
-      const backendUrl = process.env.REACT_APP_BACKEND_URL;
-      
-      await fetch(`${backendUrl}/api/auth/context`, {
+      await apiFetch('/auth/context', {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(contextData),
       });
     } catch (err) {
@@ -95,27 +82,18 @@ const ProfilePickerPage = () => {
       const user = auth.currentUser;
       if (!user) throw new Error('Non connecté');
 
-      const token = await user.getIdToken();
-      const backendUrl = process.env.REACT_APP_BACKEND_URL;
-      
-      const response = await fetch(`${backendUrl}/api/teams`, {
+      const data = await apiFetch('/teams', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ name: teamName }),
       });
 
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Erreur lors de la création');
+      if (!data?.success) {
+        throw new Error(data?.error || 'Erreur lors de la création');
       }
 
       // Reload teams
       await loadTeams();
-      
+
       // Select the new team
       handleSelectTeam({
         team_id: data.team_id,
@@ -131,27 +109,18 @@ const ProfilePickerPage = () => {
       const user = auth.currentUser;
       if (!user) throw new Error('Non connecté');
 
-      const token = await user.getIdToken();
-      const backendUrl = process.env.REACT_APP_BACKEND_URL;
-      
-      const response = await fetch(`${backendUrl}/api/teams/join`, {
+      const data = await apiFetch('/teams/join', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ code }),
       });
 
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Code invalide ou expiré');
+      if (!data?.success) {
+        throw new Error(data?.error || 'Code invalide ou expiré');
       }
 
       // Reload teams
       await loadTeams();
-      
+
       // Select the joined team
       if (!data.already_member) {
         handleSelectTeam({
