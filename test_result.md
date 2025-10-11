@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Moderniser le module Planification de Fleemy avec un style moderne et fluide (comme Google Agenda/Notion), en reprenant la logique fonctionnelle du script.js. Inclut : tableau semaine aéré avec fond clair et ombres, entêtes de jours en gras avec fond blanc cassé, colonnes flexibles sur toute la largeur, navigation fluide entre semaines avec animations douces, fonctionnalités CRUD d'événements via modales, calcul des revenus automatique."
+user_problem_statement: "Implement comprehensive client management feature for Fleemy application - includes new Firestore clients collection, FastAPI backend endpoints (GET/POST/PATCH /api/clients), frontend clients page with pagination (20 clients/page), search, CRUD operations, integration with EventForm/Quotes/Invoices, French phone validation, security (user_id filtering), accessibility (ARIA), mobile-first design."
 
 backend:
   - task: "API Planning Events - Week/Month endpoints"
