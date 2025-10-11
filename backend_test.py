@@ -1444,6 +1444,21 @@ class FleemyAPITester:
         test_suites = [
             self.test_basic_connectivity,
             self.test_auth_endpoints,
+            # Client Management Tests (NEW)
+            self.test_client_endpoints_unauthorized,
+            self.test_client_data_validation,
+            self.test_client_email_validation,
+            self.test_client_phone_validation,
+            self.test_client_address_structure,
+            self.test_client_complete_data_structure,
+            self.test_client_list_pagination,
+            self.test_client_search_functionality,
+            self.test_client_archive_functionality,
+            self.test_client_update_scenarios,
+            self.test_client_edge_cases,
+            self.test_client_security_scenarios,
+            self.test_client_data_model_fields,
+            # Existing Planning Tests
             self.test_planning_week_endpoint,
             self.test_planning_month_endpoint,
             self.test_planning_earnings_endpoint,
