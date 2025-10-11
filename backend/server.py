@@ -63,26 +63,25 @@ app = FastAPI()
 # Configurer CORS (après app et après dotenv)
 from fastapi.middleware.cors import CORSMiddleware
 
-# ✅ FIXED pour production: CORS origins explicit
-origin_list = [
+# ✅ FIXED pour production: CORS origins explicit + wildcard preview support
+ALLOWED_ORIGINS = {
     "http://localhost:5173",
     "https://fleemy.web.app",
     "https://fleemy-21118.web.app",
     "https://fleemy.vercel.app",
-    "https://preview-<hash>-fleemy.vercel.app",
-]
+}
+ALLOWED_ORIGIN_REGEX = r"https://([a-z0-9-]+\.)?fleemy\.vercel\.app$"
 
-logger.info("CORS activé pour : %s", origin_list)
+logger.info(
+    "CORS activé pour : %s et regex %s",
+    sorted(ALLOWED_ORIGINS),
+    ALLOWED_ORIGIN_REGEX,
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "https://fleemy.web.app",
-        "https://fleemy-21118.web.app",
-        "https://fleemy.vercel.app",
-        "https://preview-<hash>-fleemy.vercel.app",
-    ],
+    allow_origins=list(ALLOWED_ORIGINS),
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,6 +139,24 @@ async def verify_token(request: Request):
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
+
+def _build_cors_error_response(request: Request, content: Dict[str, Any]) -> JSONResponse:
+    """Ensure custom error responses keep CORS headers."""
+    response = JSONResponse(status_code=200, content=content)
+    origin = request.headers.get("origin")
+    if origin:
+        if origin in ALLOWED_ORIGINS or re.match(ALLOWED_ORIGIN_REGEX, origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            # Keep compatibility with caches/proxies when varying by origin
+            existing_vary = response.headers.get("Vary")
+            if existing_vary:
+                if "origin" not in existing_vary.lower():
+                    response.headers["Vary"] = f"{existing_vary}, Origin"
+            else:
+                response.headers["Vary"] = "Origin"
+    return response
+
 @app.middleware("http")
 async def error_handling_middleware(request: Request, call_next):
     try:
@@ -147,7 +164,9 @@ async def error_handling_middleware(request: Request, call_next):
         return response
     except RequestValidationError as exc:
         logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
-        return JSONResponse(status_code=200, content={"success": False, "error": str(exc)})
+        return _build_cors_error_response(
+            request, {"success": False, "error": str(exc)}
+        )
     except HTTPException as exc:
         logger.error(
             "HTTPException on %s [%s]: %s",
@@ -156,11 +175,15 @@ async def error_handling_middleware(request: Request, call_next):
             exc.detail,
             exc_info=True,
         )
-        return JSONResponse(status_code=200, content={"success": False, "error": exc.detail})
+        return _build_cors_error_response(
+            request, {"success": False, "error": exc.detail}
+        )
     except Exception as exc:
         logger.error("Unhandled server error on %s: %s", request.url.path, exc, exc_info=True)
         # Never expose raw 500 errors to the client
-        return JSONResponse(status_code=200, content={"success": False, "error": str(exc)})
+        return _build_cors_error_response(
+            request, {"success": False, "error": str(exc)}
+        )
 
 
 # Create a router with the /api prefix
