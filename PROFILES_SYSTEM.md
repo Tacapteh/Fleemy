@@ -260,7 +260,7 @@ def test_rotate_code_non_owner():
 ### Frontend
 Variables d'environnement dans `/app/frontend/.env` :
 ```bash
-REACT_APP_BACKEND_URL=https://your-backend.com
+REACT_APP_API_URL=https://your-backend.com
 REACT_APP_FIREBASE_PROJECT_ID=your-project-id
 REACT_APP_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
 REACT_APP_FIREBASE_API_KEY=your-api-key
