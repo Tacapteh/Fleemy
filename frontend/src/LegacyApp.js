@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import useTeam from "./hooks/useTeam";
 import "./App.css";
 import { apiFetch } from "./lib/api";
@@ -86,6 +86,52 @@ const extractArrayData = (response, key) => {
   }
   return [];
 };
+
+const CACHE_STORAGE_KEYS = {
+  quotes: "fleemy.quotesCache",
+  invoices: "fleemy.invoicesCache",
+};
+
+const readCacheFromStorage = (key, ttl) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    if (!rawValue) {
+      return null;
+    }
+    const parsed = JSON.parse(rawValue);
+    if (!parsed?.timestamp || !parsed?.data) {
+      return null;
+    }
+    if (ttl && Date.now() - parsed.timestamp > ttl) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    console.error(`Failed to read cache for ${key}`, error);
+    return null;
+  }
+};
+
+const persistCacheToStorage = (key, data) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const payload = { timestamp: Date.now(), data };
+    window.localStorage.setItem(key, JSON.stringify(payload));
+    return payload.timestamp;
+  } catch (error) {
+    console.error(`Failed to persist cache for ${key}`, error);
+    return null;
+  }
+};
+
+const normalizeId = (value) =>
+  value !== undefined && value !== null ? String(value) : "";
 
 // Ensure time strings are always HH:MM with leading zeroes
 const normalizeTime = (time) => {
@@ -255,7 +301,6 @@ const Dashboard = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -1852,7 +1897,6 @@ const Planning = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       const resp = await api({
         url,
@@ -3611,7 +3655,6 @@ const TodoList = () => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -4315,11 +4358,35 @@ const getFreshQuotesCache = () => {
   }
   return null;
 };
+const getInitialQuotesState = () => {
+  const freshCache = getFreshQuotesCache();
+  if (freshCache) {
+    return {
+      quotes: freshCache.quotes ?? [],
+      clients: freshCache.clients ?? [],
+      loading: false,
+    };
+  }
+  const storedCache = readCacheFromStorage(
+    CACHE_STORAGE_KEYS.quotes,
+    QUOTES_CACHE_TTL,
+  );
+  if (storedCache?.data) {
+    quotesCache = storedCache.data;
+    quotesCacheTimestamp = storedCache.timestamp;
+    return {
+      quotes: storedCache.data.quotes ?? [],
+      clients: storedCache.data.clients ?? [],
+      loading: false,
+    };
+  }
+  return { quotes: [], clients: [], loading: true };
+};
 const Quotes = ({ user }) => {
-  const cachedQuotes = getFreshQuotesCache();
-  const [quotes, setQuotes] = useState(() => cachedQuotes?.quotes ?? []);
-  const [clients, setClients] = useState(() => cachedQuotes?.clients ?? []);
-  const [loading, setLoading] = useState(() => !cachedQuotes);
+  const initialQuotesState = useMemo(() => getInitialQuotesState(), []);
+  const [quotes, setQuotes] = useState(() => initialQuotesState.quotes);
+  const [clients, setClients] = useState(() => initialQuotesState.clients);
+  const [loading, setLoading] = useState(initialQuotesState.loading);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
   const [quoteTemplates, setQuoteTemplates] = useState([]);
@@ -4344,7 +4411,6 @@ const Quotes = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -4364,14 +4430,21 @@ const Quotes = ({ user }) => {
 
   const persistQuotesCache = useCallback(
     (nextQuotes, nextClients = clients) => {
-      quotesCache = { quotes: nextQuotes, clients: nextClients };
-      quotesCacheTimestamp = Date.now();
+      const cachePayload = { quotes: nextQuotes, clients: nextClients };
+      quotesCache = cachePayload;
+      const persistedAt =
+        persistCacheToStorage(CACHE_STORAGE_KEYS.quotes, cachePayload) ??
+        Date.now();
+      quotesCacheTimestamp = persistedAt;
     },
     [clients],
   );
 
   const loadQuotes = useCallback(async () => {
-    if (!getFreshQuotesCache()) {
+    if (
+      !getFreshQuotesCache() &&
+      (!quotesCache || (Array.isArray(quotesCache.quotes) && quotesCache.quotes.length === 0))
+    ) {
       setLoading(true);
     }
     try {
@@ -4466,8 +4539,11 @@ const Quotes = ({ user }) => {
       await apiCall(`/quotes/${quoteId}`, {
         method: "DELETE",
       });
+      const normalizedId = normalizeId(quoteId);
       setQuotes((prevQuotes) => {
-        const nextQuotes = prevQuotes.filter((q) => q.id !== quoteId);
+        const nextQuotes = prevQuotes.filter(
+          (q) => normalizeId(q.id) !== normalizedId,
+        );
         persistQuotesCache(nextQuotes);
         return nextQuotes;
       });
@@ -4542,6 +4618,33 @@ const Quotes = ({ user }) => {
     }
   };
 
+  const quoteStats = useMemo(
+    () =>
+      quotes.reduce(
+        (acc, quote) => {
+          switch (quote?.status) {
+            case "draft":
+              acc.draft += 1;
+              break;
+            case "sent":
+              acc.sent += 1;
+              break;
+            case "accepted":
+              acc.accepted += 1;
+              break;
+            case "rejected":
+              acc.rejected += 1;
+              break;
+            default:
+              break;
+          }
+          return acc;
+        },
+        { draft: 0, sent: 0, accepted: 0, rejected: 0 },
+      ),
+    [quotes],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -4572,25 +4675,25 @@ const Quotes = ({ user }) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-gray-700">
-            {quotes.filter((q) => q.status === "draft").length}
+            {quoteStats.draft}
           </div>
           <div className="text-sm text-gray-500">Brouillons</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-blue-600">
-            {quotes.filter((q) => q.status === "sent").length}
+            {quoteStats.sent}
           </div>
           <div className="text-sm text-gray-500">Envoyés</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-green-600">
-            {quotes.filter((q) => q.status === "accepted").length}
+            {quoteStats.accepted}
           </div>
           <div className="text-sm text-gray-500">Acceptés</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-red-600">
-            {quotes.filter((q) => q.status === "rejected").length}
+            {quoteStats.rejected}
           </div>
           <div className="text-sm text-gray-500">Refusés</div>
         </div>
@@ -5172,14 +5275,38 @@ const getFreshInvoicesCache = () => {
   }
   return null;
 };
-const Invoices = ({ user }) => {
-  const cachedInvoices = getFreshInvoicesCache();
-  const [invoices, setInvoices] = useState(
-    () => cachedInvoices?.invoices ?? [],
+const getInitialInvoicesState = () => {
+  const freshCache = getFreshInvoicesCache();
+  if (freshCache) {
+    return {
+      invoices: freshCache.invoices ?? [],
+      clients: freshCache.clients ?? [],
+      quotes: freshCache.quotes ?? [],
+      loading: false,
+    };
+  }
+  const storedCache = readCacheFromStorage(
+    CACHE_STORAGE_KEYS.invoices,
+    INVOICES_CACHE_TTL,
   );
-  const [clients, setClients] = useState(() => cachedInvoices?.clients ?? []);
-  const [quotes, setQuotes] = useState(() => cachedInvoices?.quotes ?? []);
-  const [loading, setLoading] = useState(() => !cachedInvoices);
+  if (storedCache?.data) {
+    invoicesCache = storedCache.data;
+    invoicesCacheTimestamp = storedCache.timestamp;
+    return {
+      invoices: storedCache.data.invoices ?? [],
+      clients: storedCache.data.clients ?? [],
+      quotes: storedCache.data.quotes ?? [],
+      loading: false,
+    };
+  }
+  return { invoices: [], clients: [], quotes: [], loading: true };
+};
+const Invoices = ({ user }) => {
+  const initialInvoicesState = useMemo(() => getInitialInvoicesState(), []);
+  const [invoices, setInvoices] = useState(() => initialInvoicesState.invoices);
+  const [clients, setClients] = useState(() => initialInvoicesState.clients);
+  const [quotes, setQuotes] = useState(() => initialInvoicesState.quotes);
+  const [loading, setLoading] = useState(initialInvoicesState.loading);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
 
@@ -5203,7 +5330,6 @@ const Invoices = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -5223,18 +5349,27 @@ const Invoices = ({ user }) => {
 
   const persistInvoicesCache = useCallback(
     (nextInvoices, nextClients = clients, nextQuotes = quotes) => {
-      invoicesCache = {
+      const cachePayload = {
         invoices: nextInvoices,
         clients: nextClients,
         quotes: nextQuotes,
       };
-      invoicesCacheTimestamp = Date.now();
+      invoicesCache = cachePayload;
+      const persistedAt =
+        persistCacheToStorage(CACHE_STORAGE_KEYS.invoices, cachePayload) ??
+        Date.now();
+      invoicesCacheTimestamp = persistedAt;
     },
     [clients, quotes],
   );
 
   const loadInvoices = useCallback(async () => {
-    if (!getFreshInvoicesCache()) {
+    if (
+      !getFreshInvoicesCache() &&
+      (!invoicesCache ||
+        (Array.isArray(invoicesCache.invoices) &&
+          invoicesCache.invoices.length === 0))
+    ) {
       setLoading(true);
     }
     try {
@@ -5337,8 +5472,11 @@ const Invoices = ({ user }) => {
       await apiCall(`/invoices/${invoiceId}`, {
         method: "DELETE",
       });
+      const normalizedId = normalizeId(invoiceId);
       setInvoices((prevInvoices) => {
-        const nextInvoices = prevInvoices.filter((i) => i.id !== invoiceId);
+        const nextInvoices = prevInvoices.filter(
+          (i) => normalizeId(i.id) !== normalizedId,
+        );
         persistInvoicesCache(nextInvoices);
         return nextInvoices;
       });
@@ -5386,21 +5524,36 @@ const Invoices = ({ user }) => {
     }
   };
 
-  const isOverdue = (invoice) => {
-    return new Date(invoice.due_date) < new Date() && invoice.status !== "paid";
-  };
+  const invoiceStats = useMemo(() => {
+    const stats = {
+      totalPaid: 0,
+      totalUnpaid: 0,
+      overdueCount: 0,
+      total: invoices.length,
+      overdueIds: new Set(),
+    };
+    const now = Date.now();
+    invoices.forEach((invoice) => {
+      const status = invoice?.status;
+      const amount = Number(invoice?.total) || 0;
+      if (status === "paid") {
+        stats.totalPaid += amount;
+      } else if (status === "sent" || status === "overdue") {
+        stats.totalUnpaid += amount;
+      }
+      const dueDate = invoice?.due_date
+        ? new Date(invoice.due_date).getTime()
+        : NaN;
+      if (!Number.isNaN(dueDate) && dueDate < now && status !== "paid") {
+        stats.overdueCount += 1;
+        stats.overdueIds.add(normalizeId(invoice?.id));
+      }
+    });
+    return stats;
+  }, [invoices]);
 
-  const getTotalPaid = () => {
-    return invoices
-      .filter((i) => i.status === "paid")
-      .reduce((sum, i) => sum + i.total, 0);
-  };
-
-  const getTotalUnpaid = () => {
-    return invoices
-      .filter((i) => i.status === "sent" || i.status === "overdue")
-      .reduce((sum, i) => sum + i.total, 0);
-  };
+  const isOverdue = (invoice) =>
+    invoiceStats.overdueIds.has(normalizeId(invoice?.id));
 
   if (loading) {
     return (
@@ -5432,25 +5585,25 @@ const Invoices = ({ user }) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-green-600">
-            {formatCurrency(getTotalPaid())}
+            {formatCurrency(invoiceStats.totalPaid)}
           </div>
           <div className="text-sm text-gray-500">Total payé</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-red-600">
-            {formatCurrency(getTotalUnpaid())}
+            {formatCurrency(invoiceStats.totalUnpaid)}
           </div>
           <div className="text-sm text-gray-500">En attente de paiement</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-orange-600">
-            {invoices.filter((i) => isOverdue(i)).length}
+            {invoiceStats.overdueCount}
           </div>
           <div className="text-sm text-gray-500">En retard</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-gray-700">
-            {invoices.length}
+            {invoiceStats.total}
           </div>
           <div className="text-sm text-gray-500">Total factures</div>
         </div>
