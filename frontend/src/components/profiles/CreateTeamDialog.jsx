@@ -128,8 +128,9 @@ const CreateTeamDialog = ({ isOpen, onClose, onCreateTeam }) => {
               disabled={loading || !teamName.trim()}
               className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               data-testid="submit-create-team-btn"
+              aria-live="polite"
             >
-              {loading ? 'Création...' : 'Créer'}
+              {loading ? "Création de l'équipe…" : 'Créer'}
             </button>
           </div>
         </form>
