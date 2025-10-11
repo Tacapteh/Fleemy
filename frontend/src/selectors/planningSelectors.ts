@@ -52,6 +52,7 @@ export interface TaskOccurrence {
 }
 
 export interface AttachedTaskBadge {
+  taskId: string;
   iconId: string;
   label: string;
   price?: number;
@@ -350,6 +351,7 @@ export const computeDisplayBlocks = (
   const displayEvents = normalizedEvents.map((event) => {
     const badges: AttachedTaskBadge[] = [];
     const seenOccurrences = new Set<string>();
+    const seenTaskIds = new Set<string>();
 
     occurrences.forEach((occurrence) => {
       if (occurrence.dayIndex !== event.dayIndex) return;
@@ -358,6 +360,11 @@ export const computeDisplayBlocks = (
 
       seenOccurrences.add(occurrence.occurrenceId);
       occurrence.attachedToEvent = true;
+
+      if (seenTaskIds.has(occurrence.taskId)) {
+        return;
+      }
+      seenTaskIds.add(occurrence.taskId);
 
       const iconId =
         typeof occurrence.icon === 'string' && occurrence.icon.trim() !== ''
@@ -369,40 +376,16 @@ export const computeDisplayBlocks = (
       const price = normalizeBadgePrice(occurrence.price);
 
       badges.push({
+        taskId: occurrence.taskId,
         iconId,
         label,
         price,
       });
     });
 
-    const uniqueBadges = new Map<string, AttachedTaskBadge>();
-    badges.forEach((badge) => {
-      const key = `${badge.iconId}::${badge.label}::${badge.price ?? ''}`;
-      if (!uniqueBadges.has(key)) {
-        uniqueBadges.set(key, badge);
-      }
-    });
-
-    const attachedTaskBadges = Array.from(uniqueBadges.values()).sort((a, b) => {
-      const labelComparison = a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
-      if (labelComparison !== 0) {
-        return labelComparison;
-      }
-      if (a.price !== undefined && b.price !== undefined && a.price !== b.price) {
-        return a.price - b.price;
-      }
-      if (a.price === undefined && b.price !== undefined) {
-        return 1;
-      }
-      if (a.price !== undefined && b.price === undefined) {
-        return -1;
-      }
-      return a.iconId.localeCompare(b.iconId, 'fr', { sensitivity: 'base' });
-    });
-
     return {
       ...event,
-      attachedTaskBadges,
+      attachedTaskBadges: badges,
     };
   });
 
