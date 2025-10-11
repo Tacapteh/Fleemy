@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import useTeam from "./hooks/useTeam";
 import "./App.css";
 import { apiFetch } from "./lib/api";
@@ -7,6 +7,27 @@ import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
 import Combobox from "./components/Combobox";
 import useClients from "./hooks/useClients";
+
+const api = async ({ url, data, body, headers, ...options }) => {
+  const init = { ...options };
+  if (data !== undefined && body === undefined) {
+    init.body = JSON.stringify(data);
+  } else if (body !== undefined) {
+    init.body = body;
+  }
+
+  if (data !== undefined && body === undefined) {
+    init.headers = {
+      "Content-Type": "application/json",
+      ...(headers || {}),
+    };
+  } else if (headers) {
+    init.headers = headers;
+  }
+
+  const payload = await apiFetch(url, init);
+  return { data: payload };
+};
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -66,6 +87,52 @@ const extractArrayData = (response, key) => {
   }
   return [];
 };
+
+const CACHE_STORAGE_KEYS = {
+  quotes: "fleemy.quotesCache",
+  invoices: "fleemy.invoicesCache",
+};
+
+const readCacheFromStorage = (key, ttl) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    if (!rawValue) {
+      return null;
+    }
+    const parsed = JSON.parse(rawValue);
+    if (!parsed?.timestamp || !parsed?.data) {
+      return null;
+    }
+    if (ttl && Date.now() - parsed.timestamp > ttl) {
+      window.localStorage.removeItem(key);
+      return null;
+    }
+    return parsed;
+  } catch (error) {
+    console.error(`Failed to read cache for ${key}`, error);
+    return null;
+  }
+};
+
+const persistCacheToStorage = (key, data) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const payload = { timestamp: Date.now(), data };
+    window.localStorage.setItem(key, JSON.stringify(payload));
+    return payload.timestamp;
+  } catch (error) {
+    console.error(`Failed to persist cache for ${key}`, error);
+    return null;
+  }
+};
+
+const normalizeId = (value) =>
+  value !== undefined && value !== null ? String(value) : "";
 
 // Ensure time strings are always HH:MM with leading zeroes
 const normalizeTime = (time) => {
@@ -235,7 +302,6 @@ const Dashboard = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -628,7 +694,17 @@ const EventModal = ({
   const [loading, setLoading] = useState(false);
   
   // Use clients hook for client selection
-  const { clients, loading: clientsLoading } = useClients({ search: '', page: 1, limit: 100 });
+  const {
+    clients,
+    loading: clientsLoading,
+    loadClients,
+  } = useClients({ search: '', page: 1, limit: 100 });
+
+  useEffect(() => {
+    if (isOpen) {
+      loadClients();
+    }
+  }, [isOpen, loadClients]);
 
   useEffect(() => {
     if (event) {
@@ -1822,7 +1898,6 @@ const Planning = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       const resp = await api({
         url,
@@ -3581,7 +3656,6 @@ const TodoList = () => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -4276,15 +4350,49 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
 };
 
 // Quotes Module - Complete Implementation
+const QUOTES_CACHE_TTL = 60 * 1000; // 1 minute cache to keep navigation snappy
+let quotesCache = null;
+let quotesCacheTimestamp = 0;
+const getFreshQuotesCache = () => {
+  if (quotesCache && Date.now() - quotesCacheTimestamp < QUOTES_CACHE_TTL) {
+    return quotesCache;
+  }
+  return null;
+};
+const getInitialQuotesState = () => {
+  const freshCache = getFreshQuotesCache();
+  if (freshCache) {
+    return {
+      quotes: freshCache.quotes ?? [],
+      clients: freshCache.clients ?? [],
+      loading: false,
+    };
+  }
+  const storedCache = readCacheFromStorage(
+    CACHE_STORAGE_KEYS.quotes,
+    QUOTES_CACHE_TTL,
+  );
+  if (storedCache?.data) {
+    quotesCache = storedCache.data;
+    quotesCacheTimestamp = storedCache.timestamp;
+    return {
+      quotes: storedCache.data.quotes ?? [],
+      clients: storedCache.data.clients ?? [],
+      loading: false,
+    };
+  }
+  return { quotes: [], clients: [], loading: true };
+};
 const Quotes = ({ user }) => {
-  const [quotes, setQuotes] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const initialQuotesState = useMemo(() => getInitialQuotesState(), []);
+  const [quotes, setQuotes] = useState(() => initialQuotesState.quotes);
+  const [clients, setClients] = useState(() => initialQuotesState.clients);
+  const [loading, setLoading] = useState(initialQuotesState.loading);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
   const [quoteTemplates, setQuoteTemplates] = useState([]);
 
-  const apiCall = async (url, options = {}) => {
+  const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
     if (!user) {
@@ -4304,7 +4412,6 @@ const Quotes = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -4320,22 +4427,43 @@ const Quotes = ({ user }) => {
       console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-  };
+  }, []);
 
-  const loadQuotes = async () => {
+  const persistQuotesCache = useCallback(
+    (nextQuotes, nextClients = clients) => {
+      const cachePayload = { quotes: nextQuotes, clients: nextClients };
+      quotesCache = cachePayload;
+      const persistedAt =
+        persistCacheToStorage(CACHE_STORAGE_KEYS.quotes, cachePayload) ??
+        Date.now();
+      quotesCacheTimestamp = persistedAt;
+    },
+    [clients],
+  );
+
+  const loadQuotes = useCallback(async () => {
+    if (
+      !getFreshQuotesCache() &&
+      (!quotesCache || (Array.isArray(quotesCache.quotes) && quotesCache.quotes.length === 0))
+    ) {
+      setLoading(true);
+    }
     try {
       const [quotesResponse, clientsResponse] = await Promise.all([
         apiCall("/quotes"),
         apiCall("/clients"),
       ]);
-      setQuotes(extractArrayData(quotesResponse, "quotes"));
-      setClients(extractArrayData(clientsResponse, "clients"));
+      const nextQuotes = extractArrayData(quotesResponse, "quotes");
+      const nextClients = extractArrayData(clientsResponse, "clients");
+      setQuotes(nextQuotes);
+      setClients(nextClients);
+      persistQuotesCache(nextQuotes, nextClients);
     } catch (error) {
       console.error("Error loading quotes:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiCall, persistQuotesCache]);
 
   const handleCreateQuote = () => {
     setEditingQuote(null);
@@ -4356,11 +4484,13 @@ const Quotes = ({ user }) => {
         });
         console.log(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
         showToast(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
-        setQuotes((prevQuotes) =>
-          prevQuotes.map((q) =>
+        setQuotes((prevQuotes) => {
+          const nextQuotes = prevQuotes.map((q) =>
             q.id === editingQuote.id ? { ...q, ...quoteData } : q,
-          ),
-        );
+          );
+          persistQuotesCache(nextQuotes);
+          return nextQuotes;
+        });
       } else {
         const response = await apiCall("/quotes", {
           method: "POST",
@@ -4368,7 +4498,11 @@ const Quotes = ({ user }) => {
         });
         console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
         showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
-        setQuotes((prevQuotes) => [response.data, ...prevQuotes]);
+        setQuotes((prevQuotes) => {
+          const nextQuotes = [response.data, ...prevQuotes];
+          persistQuotesCache(nextQuotes);
+          return nextQuotes;
+        });
       }
       setShowQuoteModal(false);
     } catch (error) {
@@ -4386,11 +4520,41 @@ const Quotes = ({ user }) => {
         method: "PUT",
         data: { status },
       });
-      setQuotes((prevQuotes) =>
-        prevQuotes.map((q) => (q.id === quoteId ? { ...q, status } : q)),
-      );
+      setQuotes((prevQuotes) => {
+        const nextQuotes = prevQuotes.map((q) =>
+          q.id === quoteId ? { ...q, status } : q,
+        );
+        persistQuotesCache(nextQuotes);
+        return nextQuotes;
+      });
     } catch (error) {
       console.error("Error updating quote status:", error);
+    }
+  };
+
+  const handleDeleteQuote = async (quoteId) => {
+    if (!window.confirm("Supprimer ce devis ? Cette action est définitive.")) {
+      return;
+    }
+    try {
+      await apiCall(`/quotes/${quoteId}`, {
+        method: "DELETE",
+      });
+      const normalizedId = normalizeId(quoteId);
+      setQuotes((prevQuotes) => {
+        const nextQuotes = prevQuotes.filter(
+          (q) => normalizeId(q.id) !== normalizedId,
+        );
+        persistQuotesCache(nextQuotes);
+        return nextQuotes;
+      });
+      showToast("Devis supprimé avec succès");
+    } catch (error) {
+      console.error("Error deleting quote:", error);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true,
+      );
     }
   };
 
@@ -4423,7 +4587,7 @@ const Quotes = ({ user }) => {
 
   useEffect(() => {
     loadQuotes();
-  }, []);
+  }, [loadQuotes]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -4455,6 +4619,33 @@ const Quotes = ({ user }) => {
     }
   };
 
+  const quoteStats = useMemo(
+    () =>
+      quotes.reduce(
+        (acc, quote) => {
+          switch (quote?.status) {
+            case "draft":
+              acc.draft += 1;
+              break;
+            case "sent":
+              acc.sent += 1;
+              break;
+            case "accepted":
+              acc.accepted += 1;
+              break;
+            case "rejected":
+              acc.rejected += 1;
+              break;
+            default:
+              break;
+          }
+          return acc;
+        },
+        { draft: 0, sent: 0, accepted: 0, rejected: 0 },
+      ),
+    [quotes],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -4485,25 +4676,25 @@ const Quotes = ({ user }) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-gray-700">
-            {quotes.filter((q) => q.status === "draft").length}
+            {quoteStats.draft}
           </div>
           <div className="text-sm text-gray-500">Brouillons</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-blue-600">
-            {quotes.filter((q) => q.status === "sent").length}
+            {quoteStats.sent}
           </div>
           <div className="text-sm text-gray-500">Envoyés</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-green-600">
-            {quotes.filter((q) => q.status === "accepted").length}
+            {quoteStats.accepted}
           </div>
           <div className="text-sm text-gray-500">Acceptés</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-red-600">
-            {quotes.filter((q) => q.status === "rejected").length}
+            {quoteStats.rejected}
           </div>
           <div className="text-sm text-gray-500">Refusés</div>
         </div>
@@ -4610,6 +4801,13 @@ const Quotes = ({ user }) => {
                       className="btn btn-outline btn-sm"
                     >
                       📄 PDF
+                    </button>
+                    <button
+                      onClick={() => handleDeleteQuote(quote.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Supprimer"
+                    >
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -5066,15 +5264,54 @@ const InvoiceModal = ({
 };
 
 // Invoices Module - Complete Implementation
+const INVOICES_CACHE_TTL = 60 * 1000;
+let invoicesCache = null;
+let invoicesCacheTimestamp = 0;
+const getFreshInvoicesCache = () => {
+  if (
+    invoicesCache &&
+    Date.now() - invoicesCacheTimestamp < INVOICES_CACHE_TTL
+  ) {
+    return invoicesCache;
+  }
+  return null;
+};
+const getInitialInvoicesState = () => {
+  const freshCache = getFreshInvoicesCache();
+  if (freshCache) {
+    return {
+      invoices: freshCache.invoices ?? [],
+      clients: freshCache.clients ?? [],
+      quotes: freshCache.quotes ?? [],
+      loading: false,
+    };
+  }
+  const storedCache = readCacheFromStorage(
+    CACHE_STORAGE_KEYS.invoices,
+    INVOICES_CACHE_TTL,
+  );
+  if (storedCache?.data) {
+    invoicesCache = storedCache.data;
+    invoicesCacheTimestamp = storedCache.timestamp;
+    return {
+      invoices: storedCache.data.invoices ?? [],
+      clients: storedCache.data.clients ?? [],
+      quotes: storedCache.data.quotes ?? [],
+      loading: false,
+    };
+  }
+  return { invoices: [], clients: [], quotes: [], loading: true };
+};
 const Invoices = ({ user }) => {
-  const [invoices, setInvoices] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const initialInvoicesState = useMemo(() => getInitialInvoicesState(), []);
+  const [invoices, setInvoices] = useState(() => initialInvoicesState.invoices);
+  const [clients, setClients] = useState(() => initialInvoicesState.clients);
+  const [quotes, setQuotes] = useState(() => initialInvoicesState.quotes);
+  const [loading, setLoading] = useState(initialInvoicesState.loading);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
 
-  const apiCall = async (url, options = {}) => {
+  const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
     if (!user) {
@@ -5094,7 +5331,6 @@ const Invoices = ({ user }) => {
       console.error("[apiCall] impossible d'obtenir le token:", err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-    console.log("token apiCall", token); // ✅ FIXED token/projectId/trace
     try {
       return await api({
         url,
@@ -5110,9 +5346,33 @@ const Invoices = ({ user }) => {
       console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-  };
+  }, []);
 
-  const loadInvoices = async () => {
+  const persistInvoicesCache = useCallback(
+    (nextInvoices, nextClients = clients, nextQuotes = quotes) => {
+      const cachePayload = {
+        invoices: nextInvoices,
+        clients: nextClients,
+        quotes: nextQuotes,
+      };
+      invoicesCache = cachePayload;
+      const persistedAt =
+        persistCacheToStorage(CACHE_STORAGE_KEYS.invoices, cachePayload) ??
+        Date.now();
+      invoicesCacheTimestamp = persistedAt;
+    },
+    [clients, quotes],
+  );
+
+  const loadInvoices = useCallback(async () => {
+    if (
+      !getFreshInvoicesCache() &&
+      (!invoicesCache ||
+        (Array.isArray(invoicesCache.invoices) &&
+          invoicesCache.invoices.length === 0))
+    ) {
+      setLoading(true);
+    }
     try {
       const [invoicesResponse, clientsResponse, quotesResponse] =
         await Promise.all([
@@ -5120,15 +5380,19 @@ const Invoices = ({ user }) => {
           apiCall("/clients"),
           apiCall("/quotes"),
         ]);
-      setInvoices(extractArrayData(invoicesResponse, "invoices"));
-      setClients(extractArrayData(clientsResponse, "clients"));
-      setQuotes(extractArrayData(quotesResponse, "quotes"));
+      const nextInvoices = extractArrayData(invoicesResponse, "invoices");
+      const nextClients = extractArrayData(clientsResponse, "clients");
+      const nextQuotes = extractArrayData(quotesResponse, "quotes");
+      setInvoices(nextInvoices);
+      setClients(nextClients);
+      setQuotes(nextQuotes);
+      persistInvoicesCache(nextInvoices, nextClients, nextQuotes);
     } catch (error) {
       console.error("Error loading invoices:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiCall, persistInvoicesCache]);
 
   const handleCreateInvoice = () => {
     setEditingInvoice(null);
@@ -5151,11 +5415,13 @@ const Invoices = ({ user }) => {
           `Élément enregistré avec succès (ID: ${editingInvoice.id})`,
         );
         showToast(`Élément enregistré avec succès (ID: ${editingInvoice.id})`);
-        setInvoices((prevInvoices) =>
-          prevInvoices.map((i) =>
+        setInvoices((prevInvoices) => {
+          const nextInvoices = prevInvoices.map((i) =>
             i.id === editingInvoice.id ? { ...i, ...invoiceData } : i,
-          ),
-        );
+          );
+          persistInvoicesCache(nextInvoices);
+          return nextInvoices;
+        });
       } else {
         const response = await apiCall("/invoices", {
           method: "POST",
@@ -5163,7 +5429,11 @@ const Invoices = ({ user }) => {
         });
         console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
         showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
-        setInvoices((prevInvoices) => [response.data, ...prevInvoices]);
+        setInvoices((prevInvoices) => {
+          const nextInvoices = [response.data, ...prevInvoices];
+          persistInvoicesCache(nextInvoices);
+          return nextInvoices;
+        });
       }
       setShowInvoiceModal(false);
     } catch (error) {
@@ -5181,17 +5451,49 @@ const Invoices = ({ user }) => {
         method: "PUT",
         data: { status },
       });
-      setInvoices((prevInvoices) =>
-        prevInvoices.map((i) => (i.id === invoiceId ? { ...i, status } : i)),
-      );
+      setInvoices((prevInvoices) => {
+        const nextInvoices = prevInvoices.map((i) =>
+          i.id === invoiceId ? { ...i, status } : i,
+        );
+        persistInvoicesCache(nextInvoices);
+        return nextInvoices;
+      });
     } catch (error) {
       console.error("Error updating invoice status:", error);
     }
   };
 
+  const handleDeleteInvoice = async (invoiceId) => {
+    if (
+      !window.confirm("Supprimer cette facture ? Cette action est définitive.")
+    ) {
+      return;
+    }
+    try {
+      await apiCall(`/invoices/${invoiceId}`, {
+        method: "DELETE",
+      });
+      const normalizedId = normalizeId(invoiceId);
+      setInvoices((prevInvoices) => {
+        const nextInvoices = prevInvoices.filter(
+          (i) => normalizeId(i.id) !== normalizedId,
+        );
+        persistInvoicesCache(nextInvoices);
+        return nextInvoices;
+      });
+      showToast("Facture supprimée avec succès");
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true,
+      );
+    }
+  };
+
   useEffect(() => {
     loadInvoices();
-  }, []);
+  }, [loadInvoices]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -5223,21 +5525,36 @@ const Invoices = ({ user }) => {
     }
   };
 
-  const isOverdue = (invoice) => {
-    return new Date(invoice.due_date) < new Date() && invoice.status !== "paid";
-  };
+  const invoiceStats = useMemo(() => {
+    const stats = {
+      totalPaid: 0,
+      totalUnpaid: 0,
+      overdueCount: 0,
+      total: invoices.length,
+      overdueIds: new Set(),
+    };
+    const now = Date.now();
+    invoices.forEach((invoice) => {
+      const status = invoice?.status;
+      const amount = Number(invoice?.total) || 0;
+      if (status === "paid") {
+        stats.totalPaid += amount;
+      } else if (status === "sent" || status === "overdue") {
+        stats.totalUnpaid += amount;
+      }
+      const dueDate = invoice?.due_date
+        ? new Date(invoice.due_date).getTime()
+        : NaN;
+      if (!Number.isNaN(dueDate) && dueDate < now && status !== "paid") {
+        stats.overdueCount += 1;
+        stats.overdueIds.add(normalizeId(invoice?.id));
+      }
+    });
+    return stats;
+  }, [invoices]);
 
-  const getTotalPaid = () => {
-    return invoices
-      .filter((i) => i.status === "paid")
-      .reduce((sum, i) => sum + i.total, 0);
-  };
-
-  const getTotalUnpaid = () => {
-    return invoices
-      .filter((i) => i.status === "sent" || i.status === "overdue")
-      .reduce((sum, i) => sum + i.total, 0);
-  };
+  const isOverdue = (invoice) =>
+    invoiceStats.overdueIds.has(normalizeId(invoice?.id));
 
   if (loading) {
     return (
@@ -5269,25 +5586,25 @@ const Invoices = ({ user }) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-green-600">
-            {formatCurrency(getTotalPaid())}
+            {formatCurrency(invoiceStats.totalPaid)}
           </div>
           <div className="text-sm text-gray-500">Total payé</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-red-600">
-            {formatCurrency(getTotalUnpaid())}
+            {formatCurrency(invoiceStats.totalUnpaid)}
           </div>
           <div className="text-sm text-gray-500">En attente de paiement</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-orange-600">
-            {invoices.filter((i) => isOverdue(i)).length}
+            {invoiceStats.overdueCount}
           </div>
           <div className="text-sm text-gray-500">En retard</div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <div className="text-2xl font-bold text-gray-700">
-            {invoices.length}
+            {invoiceStats.total}
           </div>
           <div className="text-sm text-gray-500">Total factures</div>
         </div>
@@ -5384,6 +5701,13 @@ const Invoices = ({ user }) => {
                       className="btn btn-outline btn-sm"
                     >
                       📄 PDF
+                    </button>
+                    <button
+                      onClick={() => handleDeleteInvoice(invoice.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Supprimer"
+                    >
+                      🗑️
                     </button>
                   </div>
                 </div>
