@@ -6,13 +6,14 @@ import json
 from datetime import datetime
 
 class FleemyAPITester:
-    def __init__(self, base_url="http://localhost:8001"):
+    def __init__(self, base_url="https://customer-hub-46.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.session_token = None
         self.tests_run = 0
         self.tests_passed = 0
         self.user_data = None
+        self.created_client_ids = []  # Track created clients for cleanup
 
     def log_test(self, name, success, details=""):
         """Log test results"""
