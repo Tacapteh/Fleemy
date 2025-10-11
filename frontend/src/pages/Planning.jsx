@@ -556,6 +556,7 @@ export default function Planning() {
               description: data.description || '',
               readOnly: Boolean(data.readOnly) || (ownerId && ownerId !== user.uid),
               user_id: ownerId,
+              team_id: data.team_id || null,
             });
             return;
           }
@@ -578,18 +579,33 @@ export default function Planning() {
               title: item.title || item.client || item.description || '',
               readOnly: Boolean(item.readOnly) || (ownerId && ownerId !== user.uid),
               user_id: ownerId,
+              team_id: item.team_id || data.team_id || null,
             });
           });
         });
         const filtered = normalized.filter((event) => {
+          const eventTeamId = event.team_id || null;
+          const eventOwnerId = event.user_id || null;
+
           if (planningMode !== 'team') {
-            return !event.user_id || event.user_id === user.uid;
+            if (eventTeamId) {
+              return false;
+            }
+            if (!eventOwnerId) {
+              return true;
+            }
+            return eventOwnerId === user.uid;
           }
+
+          if (!teamId || (eventTeamId && eventTeamId !== teamId)) {
+            return false;
+          }
+
           if (!viewedUserId) return true;
-          if (!event.user_id) {
+          if (!eventOwnerId) {
             return viewedUserId === user.uid;
           }
-          return event.user_id === viewedUserId;
+          return eventOwnerId === viewedUserId;
         });
         setEvents(filtered);
         setLoading(false);
