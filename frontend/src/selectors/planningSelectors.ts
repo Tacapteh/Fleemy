@@ -77,7 +77,6 @@ export function groupEventsByClient(events: any[], clientMap: Map<string, any>) 
   
   return grouped;
 }
-=======
 export interface DateRange {
   from: Date;
   to: Date;
