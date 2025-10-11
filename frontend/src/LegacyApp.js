@@ -614,6 +614,9 @@ const EventModal = ({
     client_name: "",
   });
   const [loading, setLoading] = useState(false);
+  
+  // Use clients hook for client selection
+  const { clients, loading: clientsLoading } = useClients({ search: '', page: 1, limit: 100 });
 
   useEffect(() => {
     if (event) {
