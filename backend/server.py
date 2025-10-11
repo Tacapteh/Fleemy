@@ -342,6 +342,16 @@ class ClientCreateRequest(BaseModel):
     is_archived: Optional[bool] = False
 
 
+class ClientUpdateRequest(BaseModel):
+    display_name: Optional[str] = None
+    contact_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[Address] = None
+    notes: Optional[str] = None
+    is_archived: Optional[bool] = None
+
+
 class QuoteCreateRequest(BaseModel):
     client_id: str
     client_name: str
