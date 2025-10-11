@@ -322,6 +322,66 @@ frontend:
         agent: "main"
         comment: "Nettoyage final : suppression du composant de page 'Tasks' et du case correspondant dans renderCurrentPage. Toutes les tâches sont désormais gérées uniquement dans la vue Planning."
 
+  - task: "Client Management Page - List/Search/Pagination"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ClientsPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Replaced existing ClientsPage with new implementation featuring search, pagination (20/page), mobile-first design, add/edit/archive actions via modals."
+
+  - task: "Client Form Component - Validation & ARIA"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/clients/ClientForm.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Enhanced ClientForm with proper validation (display_name required, French phone format), ARIA labels, error handling, accessibility features."
+
+  - task: "Client Combobox Component - Reusable"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/Combobox.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Created generic Combobox component for client selection with search, keyboard navigation, accessibility features."
+
+  - task: "useClients Hook - Data Management"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/hooks/useClients.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Custom hook for client data management with search, pagination, CRUD operations, error handling."
+
+  - task: "Client Integration - EventForm Updates"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/EventForm.tsx + types/global.d.ts"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Replaced text client field with Combobox component, added client_id to Event type, updated TypeScript definitions."
+
   - task: "Revenue Summary with Tasks Integration"
     implemented: true
     working: true
