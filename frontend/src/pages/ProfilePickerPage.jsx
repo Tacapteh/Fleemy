@@ -33,10 +33,24 @@ const ProfilePickerPage = () => {
 
       const data = await apiFetch('/teams/my');
 
+      const resolvedTeams = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.teams)
+          ? data.teams
+          : Array.isArray(data?.data)
+            ? data.data
+            : null;
+
+      if (resolvedTeams) {
+        setTeams(resolvedTeams);
+        return;
+      }
+
       if (data?.success) {
         setTeams(data.teams || []);
       } else {
-        console.error('Error loading teams:', data?.error);
+        console.error('Error loading teams:', data?.error || data);
+        setTeams([]);
         setError(data?.error || 'Erreur lors du chargement des équipes');
       }
     } catch (err) {
