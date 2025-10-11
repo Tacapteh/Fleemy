@@ -117,6 +117,7 @@ function App() {
 
   const handleLogout = async () => {
     await logout();
+    contextStore.clear();
     setUser(null);
   };
 
