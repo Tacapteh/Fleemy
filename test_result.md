@@ -200,15 +200,18 @@ backend:
 
   - task: "Client Data Models - Pydantic schemas"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/models/global.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "IMPLEMENTED: Added Client, Event, Quote, Invoice models with proper client_id integration. Client model includes display_name (required), email/phone (optional with validation), address object, notes, timestamps, is_archived flag."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Client data models working correctly. Client model properly validates display_name (required), email format (optional), French phone format (optional), address object structure, notes, and is_archived flag. Added ClientUpdateRequest model for PATCH operations supporting partial updates. All field validations working as expected with proper error messages."
 
   - task: "Firestore Index Migration for Clients"
     implemented: true
