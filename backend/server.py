@@ -1161,16 +1161,16 @@ async def update_client(
     
     data = client_request.dict(exclude_unset=True)
     
-    # Validate display_name if provided
+    # Only validate fields that are being updated
     if "display_name" in data and (not data["display_name"] or not data["display_name"].strip()):
         raise HTTPException(status_code=400, detail="display_name cannot be empty")
     
-    # Validate email format
-    if data.get("email") and not validate_email(data["email"]):
+    # Validate email format if provided
+    if "email" in data and data["email"] and not validate_email(data["email"]):
         raise HTTPException(status_code=400, detail="Invalid email format")
     
-    # Validate phone format
-    if data.get("phone") and not validate_french_phone(data["phone"]):
+    # Validate phone format if provided
+    if "phone" in data and data["phone"] and not validate_french_phone(data["phone"]):
         raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
     
     update_data = {**data, "updated_at": datetime.utcnow()}
