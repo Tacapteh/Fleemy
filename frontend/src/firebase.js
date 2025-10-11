@@ -24,11 +24,11 @@ import {
 import { showToast } from "./utils/toast";
 
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  apiKey: "AIzaSyDq8ZJR1J2LKR5m5vWyY6VJfwF1a4X7Y9Z",
+  authDomain: "fleemy-app.firebaseapp.com",
+  projectId: "fleemy-app",
+  appId: "1:123456789012:web:abcdef123456789012345678",
+  messagingSenderId: "123456789012",
 };
 
 if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
