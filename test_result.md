@@ -404,7 +404,12 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Client API Endpoints - GET/POST/PATCH /api/clients"
+    - "Client Data Models - Pydantic schemas"
+    - "Client Management Page - List/Search/Pagination"
+    - "Client Form Component - Validation & ARIA"
+    - "useClients Hook - Data Management"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
