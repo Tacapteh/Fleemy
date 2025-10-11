@@ -242,6 +242,7 @@ const Dashboard = ({ user }) => {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.uid ? { "X-User-Id": user.uid } : {}),
           ...options.headers,
         },
         ...options,
@@ -3587,6 +3588,7 @@ const TodoList = () => {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.uid ? { "X-User-Id": user.uid } : {}),
           ...options.headers,
         },
         ...options,
@@ -4309,6 +4311,7 @@ const Quotes = ({ user }) => {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.uid ? { "X-User-Id": user.uid } : {}),
           ...options.headers,
         },
         ...options,
@@ -5098,6 +5101,7 @@ const Invoices = ({ user }) => {
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.uid ? { "X-User-Id": user.uid } : {}),
           ...options.headers,
         },
         ...options,
