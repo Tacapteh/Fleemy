@@ -24,15 +24,14 @@ import {
 import { showToast } from "./utils/toast";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDq8ZJR1J2LKR5m5vWyY6VJfwF1a4X7Y9Z",
-  authDomain: "fleemy-app.firebaseapp.com",
-  projectId: "fleemy-app",
-  appId: "1:123456789012:web:abcdef123456789012345678",
-  messagingSenderId: "123456789012",
+  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  appId: process.env.REACT_APP_FIREBASE_APP_ID,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
 };
-
-// Optional storage bucket configuration
-firebaseConfig.storageBucket = "fleemy-app.appspot.com";
 
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
 const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
@@ -40,9 +39,15 @@ const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
 if (missingConfig.length) {
   throw new Error(
     `Missing Firebase configuration: ${missingConfig.join(", ")}. ` +
-      "Check your REACT_APP_FIREBASE_* environment variables."
+      "Set the corresponding REACT_APP_FIREBASE_* values in your .env file (see .env.example)."
   );
 }
+
+Object.keys(firebaseConfig).forEach((key) => {
+  if (firebaseConfig[key] == null || firebaseConfig[key] === "") {
+    delete firebaseConfig[key];
+  }
+});
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const projectId = app.options.projectId;
