@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import useTeam from "./hooks/useTeam";
 import "./App.css";
 import { apiFetch } from "./lib/api";
@@ -4306,15 +4306,25 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
 };
 
 // Quotes Module - Complete Implementation
+const QUOTES_CACHE_TTL = 60 * 1000; // 1 minute cache to keep navigation snappy
+let quotesCache = null;
+let quotesCacheTimestamp = 0;
+const getFreshQuotesCache = () => {
+  if (quotesCache && Date.now() - quotesCacheTimestamp < QUOTES_CACHE_TTL) {
+    return quotesCache;
+  }
+  return null;
+};
 const Quotes = ({ user }) => {
-  const [quotes, setQuotes] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedQuotes = getFreshQuotesCache();
+  const [quotes, setQuotes] = useState(() => cachedQuotes?.quotes ?? []);
+  const [clients, setClients] = useState(() => cachedQuotes?.clients ?? []);
+  const [loading, setLoading] = useState(() => !cachedQuotes);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
   const [quoteTemplates, setQuoteTemplates] = useState([]);
 
-  const apiCall = async (url, options = {}) => {
+  const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
     if (!user) {
@@ -4350,22 +4360,36 @@ const Quotes = ({ user }) => {
       console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-  };
+  }, []);
 
-  const loadQuotes = async () => {
+  const persistQuotesCache = useCallback(
+    (nextQuotes, nextClients = clients) => {
+      quotesCache = { quotes: nextQuotes, clients: nextClients };
+      quotesCacheTimestamp = Date.now();
+    },
+    [clients],
+  );
+
+  const loadQuotes = useCallback(async () => {
+    if (!getFreshQuotesCache()) {
+      setLoading(true);
+    }
     try {
       const [quotesResponse, clientsResponse] = await Promise.all([
         apiCall("/quotes"),
         apiCall("/clients"),
       ]);
-      setQuotes(extractArrayData(quotesResponse, "quotes"));
-      setClients(extractArrayData(clientsResponse, "clients"));
+      const nextQuotes = extractArrayData(quotesResponse, "quotes");
+      const nextClients = extractArrayData(clientsResponse, "clients");
+      setQuotes(nextQuotes);
+      setClients(nextClients);
+      persistQuotesCache(nextQuotes, nextClients);
     } catch (error) {
       console.error("Error loading quotes:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiCall, persistQuotesCache]);
 
   const handleCreateQuote = () => {
     setEditingQuote(null);
@@ -4386,11 +4410,13 @@ const Quotes = ({ user }) => {
         });
         console.log(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
         showToast(`Élément enregistré avec succès (ID: ${editingQuote.id})`);
-        setQuotes((prevQuotes) =>
-          prevQuotes.map((q) =>
+        setQuotes((prevQuotes) => {
+          const nextQuotes = prevQuotes.map((q) =>
             q.id === editingQuote.id ? { ...q, ...quoteData } : q,
-          ),
-        );
+          );
+          persistQuotesCache(nextQuotes);
+          return nextQuotes;
+        });
       } else {
         const response = await apiCall("/quotes", {
           method: "POST",
@@ -4398,7 +4424,11 @@ const Quotes = ({ user }) => {
         });
         console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
         showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
-        setQuotes((prevQuotes) => [response.data, ...prevQuotes]);
+        setQuotes((prevQuotes) => {
+          const nextQuotes = [response.data, ...prevQuotes];
+          persistQuotesCache(nextQuotes);
+          return nextQuotes;
+        });
       }
       setShowQuoteModal(false);
     } catch (error) {
@@ -4416,11 +4446,38 @@ const Quotes = ({ user }) => {
         method: "PUT",
         data: { status },
       });
-      setQuotes((prevQuotes) =>
-        prevQuotes.map((q) => (q.id === quoteId ? { ...q, status } : q)),
-      );
+      setQuotes((prevQuotes) => {
+        const nextQuotes = prevQuotes.map((q) =>
+          q.id === quoteId ? { ...q, status } : q,
+        );
+        persistQuotesCache(nextQuotes);
+        return nextQuotes;
+      });
     } catch (error) {
       console.error("Error updating quote status:", error);
+    }
+  };
+
+  const handleDeleteQuote = async (quoteId) => {
+    if (!window.confirm("Supprimer ce devis ? Cette action est définitive.")) {
+      return;
+    }
+    try {
+      await apiCall(`/quotes/${quoteId}`, {
+        method: "DELETE",
+      });
+      setQuotes((prevQuotes) => {
+        const nextQuotes = prevQuotes.filter((q) => q.id !== quoteId);
+        persistQuotesCache(nextQuotes);
+        return nextQuotes;
+      });
+      showToast("Devis supprimé avec succès");
+    } catch (error) {
+      console.error("Error deleting quote:", error);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true,
+      );
     }
   };
 
@@ -4453,7 +4510,7 @@ const Quotes = ({ user }) => {
 
   useEffect(() => {
     loadQuotes();
-  }, []);
+  }, [loadQuotes]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -4640,6 +4697,13 @@ const Quotes = ({ user }) => {
                       className="btn btn-outline btn-sm"
                     >
                       📄 PDF
+                    </button>
+                    <button
+                      onClick={() => handleDeleteQuote(quote.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Supprimer"
+                    >
+                      🗑️
                     </button>
                   </div>
                 </div>
@@ -5096,15 +5160,30 @@ const InvoiceModal = ({
 };
 
 // Invoices Module - Complete Implementation
+const INVOICES_CACHE_TTL = 60 * 1000;
+let invoicesCache = null;
+let invoicesCacheTimestamp = 0;
+const getFreshInvoicesCache = () => {
+  if (
+    invoicesCache &&
+    Date.now() - invoicesCacheTimestamp < INVOICES_CACHE_TTL
+  ) {
+    return invoicesCache;
+  }
+  return null;
+};
 const Invoices = ({ user }) => {
-  const [invoices, setInvoices] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedInvoices = getFreshInvoicesCache();
+  const [invoices, setInvoices] = useState(
+    () => cachedInvoices?.invoices ?? [],
+  );
+  const [clients, setClients] = useState(() => cachedInvoices?.clients ?? []);
+  const [quotes, setQuotes] = useState(() => cachedInvoices?.quotes ?? []);
+  const [loading, setLoading] = useState(() => !cachedInvoices);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
 
-  const apiCall = async (url, options = {}) => {
+  const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
     const user = getAuth().currentUser;
     if (!user) {
@@ -5140,9 +5219,24 @@ const Invoices = ({ user }) => {
       console.error(`[apiCall] échec appel ${url}:`, err); // ✅ FIXED token/projectId/trace
       throw err;
     }
-  };
+  }, []);
 
-  const loadInvoices = async () => {
+  const persistInvoicesCache = useCallback(
+    (nextInvoices, nextClients = clients, nextQuotes = quotes) => {
+      invoicesCache = {
+        invoices: nextInvoices,
+        clients: nextClients,
+        quotes: nextQuotes,
+      };
+      invoicesCacheTimestamp = Date.now();
+    },
+    [clients, quotes],
+  );
+
+  const loadInvoices = useCallback(async () => {
+    if (!getFreshInvoicesCache()) {
+      setLoading(true);
+    }
     try {
       const [invoicesResponse, clientsResponse, quotesResponse] =
         await Promise.all([
@@ -5150,15 +5244,19 @@ const Invoices = ({ user }) => {
           apiCall("/clients"),
           apiCall("/quotes"),
         ]);
-      setInvoices(extractArrayData(invoicesResponse, "invoices"));
-      setClients(extractArrayData(clientsResponse, "clients"));
-      setQuotes(extractArrayData(quotesResponse, "quotes"));
+      const nextInvoices = extractArrayData(invoicesResponse, "invoices");
+      const nextClients = extractArrayData(clientsResponse, "clients");
+      const nextQuotes = extractArrayData(quotesResponse, "quotes");
+      setInvoices(nextInvoices);
+      setClients(nextClients);
+      setQuotes(nextQuotes);
+      persistInvoicesCache(nextInvoices, nextClients, nextQuotes);
     } catch (error) {
       console.error("Error loading invoices:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiCall, persistInvoicesCache]);
 
   const handleCreateInvoice = () => {
     setEditingInvoice(null);
@@ -5181,11 +5279,13 @@ const Invoices = ({ user }) => {
           `Élément enregistré avec succès (ID: ${editingInvoice.id})`,
         );
         showToast(`Élément enregistré avec succès (ID: ${editingInvoice.id})`);
-        setInvoices((prevInvoices) =>
-          prevInvoices.map((i) =>
+        setInvoices((prevInvoices) => {
+          const nextInvoices = prevInvoices.map((i) =>
             i.id === editingInvoice.id ? { ...i, ...invoiceData } : i,
-          ),
-        );
+          );
+          persistInvoicesCache(nextInvoices);
+          return nextInvoices;
+        });
       } else {
         const response = await apiCall("/invoices", {
           method: "POST",
@@ -5193,7 +5293,11 @@ const Invoices = ({ user }) => {
         });
         console.log(`Élément enregistré avec succès (ID: ${response.data.id})`);
         showToast(`Élément enregistré avec succès (ID: ${response.data.id})`);
-        setInvoices((prevInvoices) => [response.data, ...prevInvoices]);
+        setInvoices((prevInvoices) => {
+          const nextInvoices = [response.data, ...prevInvoices];
+          persistInvoicesCache(nextInvoices);
+          return nextInvoices;
+        });
       }
       setShowInvoiceModal(false);
     } catch (error) {
@@ -5211,17 +5315,46 @@ const Invoices = ({ user }) => {
         method: "PUT",
         data: { status },
       });
-      setInvoices((prevInvoices) =>
-        prevInvoices.map((i) => (i.id === invoiceId ? { ...i, status } : i)),
-      );
+      setInvoices((prevInvoices) => {
+        const nextInvoices = prevInvoices.map((i) =>
+          i.id === invoiceId ? { ...i, status } : i,
+        );
+        persistInvoicesCache(nextInvoices);
+        return nextInvoices;
+      });
     } catch (error) {
       console.error("Error updating invoice status:", error);
     }
   };
 
+  const handleDeleteInvoice = async (invoiceId) => {
+    if (
+      !window.confirm("Supprimer cette facture ? Cette action est définitive.")
+    ) {
+      return;
+    }
+    try {
+      await apiCall(`/invoices/${invoiceId}`, {
+        method: "DELETE",
+      });
+      setInvoices((prevInvoices) => {
+        const nextInvoices = prevInvoices.filter((i) => i.id !== invoiceId);
+        persistInvoicesCache(nextInvoices);
+        return nextInvoices;
+      });
+      showToast("Facture supprimée avec succès");
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      showToast(
+        `Erreur: ${error.response?.data?.detail || error.message}`,
+        true,
+      );
+    }
+  };
+
   useEffect(() => {
     loadInvoices();
-  }, []);
+  }, [loadInvoices]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -5414,6 +5547,13 @@ const Invoices = ({ user }) => {
                       className="btn btn-outline btn-sm"
                     >
                       📄 PDF
+                    </button>
+                    <button
+                      onClick={() => handleDeleteInvoice(invoice.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Supprimer"
+                    >
+                      🗑️
                     </button>
                   </div>
                 </div>
