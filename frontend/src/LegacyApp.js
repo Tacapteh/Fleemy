@@ -5,6 +5,8 @@ import { apiFetch } from "./lib/api";
 import { showToast } from "./utils/toast";
 import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
+import Combobox from "./components/Combobox";
+import { useClients } from "./hooks/useClients";
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
