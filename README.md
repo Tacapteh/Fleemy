@@ -34,14 +34,21 @@ Render will automatically provide the `PORT` environment variable when deploying
 
 ### Frontend
 
-1. Install dependencies:
+1. Copy the environment template and fill in your Firebase credentials:
+
+```bash
+cp frontend/.env.example frontend/.env
+# then edit frontend/.env
+```
+
+2. Install dependencies:
 
 ```bash
 cd frontend
 npm install
 ```
 
-2. Start the development server:
+3. Start the development server:
 
 ```bash
 npm start
@@ -54,7 +61,7 @@ The PDF export feature is temporarily disabled in `frontend/src/utils/pdf.js`.
 All other pages (Planning, Devis, Factures) work normally. To re-enable PDF
 generation later, implement the real functions in `pdf.js`.
 
-Create a `.env` file based on `.env.example` at the project root to configure both frontend and backend URLs. Make sure to fill in the `REACT_APP_FIREBASE_*` variables with the credentials of your Firebase web app; otherwise the login will fail with an `auth/api-key-not-valid` error.
+Use `frontend/.env.example` as a reference for the required `REACT_APP_FIREBASE_*` variables. Without valid values the login will fail with an `auth/api-key-not-valid` error.
 
 ## Project structure
 

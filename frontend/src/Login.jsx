@@ -2,6 +2,11 @@ import React, { useState } from "react";
 import { signInWithPopup } from "firebase/auth";
 import { auth, googleProvider } from "./firebase";
 
+const INVALID_API_KEY_CODES = new Set([
+  "auth/api-key-not-valid",
+  "auth/invalid-api-key",
+]);
+
 export default function Login({ onLogin }) {
   const [error, setError] = useState("");
 
@@ -17,10 +22,9 @@ export default function Login({ onLogin }) {
 
       onLogin(user);
     } catch (error) {
-      const message =
-        error.code === "auth/api-key-not-valid"
-          ? "Clé API Firebase invalide. Vérifiez votre configuration."
-          : "Erreur lors de la connexion.";
+      const message = INVALID_API_KEY_CODES.has(error?.code)
+        ? "Clé API Firebase invalide ou absente. Vérifiez votre fichier .env."
+        : "Erreur lors de la connexion.";
       setError(message);
       console.error(message, error);
     }
