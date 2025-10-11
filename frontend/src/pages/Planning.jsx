@@ -73,6 +73,20 @@ export default function Planning() {
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedMemberId, setSelectedMemberId] = useState(null);
+  const planningContextKey = useMemo(
+    () => (teamId ? `planning_context_${teamId}` : 'planning_context_solo'),
+    [teamId]
+  );
+  const [planningMode, setPlanningMode] = useState(() => {
+    const stored = planningContextKey ? localStorage.getItem(planningContextKey) : null;
+    if (stored === 'team' || stored === 'personal') {
+      if (stored === 'team' && !teamId) {
+        return 'personal';
+      }
+      return stored;
+    }
+    return teamId ? 'team' : 'personal';
+  });
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -87,12 +101,27 @@ export default function Planning() {
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
   const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
 
+  useEffect(() => {
+    const stored = planningContextKey ? localStorage.getItem(planningContextKey) : null;
+    const nextMode = teamId
+      ? stored === 'team' || stored === 'personal'
+        ? stored
+        : 'team'
+      : 'personal';
+    setPlanningMode((prev) => (prev === nextMode ? prev : nextMode));
+  }, [teamId, planningContextKey]);
+
+  useEffect(() => {
+    if (!planningContextKey) return;
+    localStorage.setItem(planningContextKey, planningMode);
+  }, [planningMode, planningContextKey]);
+
   const storageKey = useMemo(() => {
-    if (!teamId) {
-      return 'planning_selected_member_solo';
+    if (planningMode !== 'team' || !teamId) {
+      return null;
     }
     return `planning_selected_member_${teamId}`;
-  }, [teamId]);
+  }, [planningMode, teamId]);
 
   const availableMembers = useMemo(() => {
     const ids = new Map();
@@ -103,7 +132,7 @@ export default function Planning() {
         email: user.email || null,
       });
     }
-    if (Array.isArray(team?.members)) {
+    if (planningMode === 'team' && Array.isArray(team?.members)) {
       team.members.forEach((member) => {
         const uid = typeof member === 'string' ? member : member?.uid;
         if (!uid || ids.has(uid)) return;
@@ -119,7 +148,7 @@ export default function Planning() {
       });
     }
     return Array.from(ids.values());
-  }, [team?.members, user?.uid, user?.displayName, user?.email]);
+  }, [planningMode, team?.members, user?.uid, user?.displayName, user?.email]);
 
   const availableMemberIdsKey = useMemo(() => {
     const ids = availableMembers.map((member) => member.uid).filter(Boolean);
@@ -130,6 +159,11 @@ export default function Planning() {
   useEffect(() => {
     if (!user?.uid) return;
 
+    if (planningMode !== 'team') {
+      setSelectedMemberId(user.uid);
+      return;
+    }
+
     const storedValue = storageKey ? localStorage.getItem(storageKey) : null;
     const availableIds = availableMembers.map((member) => member.uid);
 
@@ -138,28 +172,34 @@ export default function Planning() {
     } else {
       setSelectedMemberId(user.uid);
     }
-  }, [user?.uid, storageKey, availableMemberIdsKey, availableMembers]);
+  }, [user?.uid, planningMode, storageKey, availableMemberIdsKey, availableMembers]);
 
   useEffect(() => {
+    if (planningMode !== 'team') return;
     if (!storageKey || !selectedMemberId) return;
     const availableIds = availableMembers.map((member) => member.uid);
     if (!availableIds.includes(selectedMemberId)) return;
     localStorage.setItem(storageKey, selectedMemberId);
-  }, [selectedMemberId, storageKey, availableMemberIdsKey, availableMembers]);
+  }, [selectedMemberId, storageKey, availableMemberIdsKey, availableMembers, planningMode]);
 
-  const viewedUserId = selectedMemberId || user?.uid;
-  const isReadOnlyMode = viewedUserId && viewedUserId !== user?.uid;
-  
-  console.log('Planning: Contexte utilisateur', { 
-    user: user?.uid, 
+  const viewedUserId = planningMode === 'team' ? selectedMemberId || user?.uid : user?.uid;
+  const isReadOnlyMode =
+    planningMode === 'team' && viewedUserId && viewedUserId !== user?.uid;
+
+  console.log('Planning: Contexte utilisateur', {
+    user: user?.uid,
     userDisplayName: user?.displayName,
-    team: team?.id, 
+    team: team?.id,
     selectedMemberId,
     viewedUserId,
-    isReadOnlyMode
+    isReadOnlyMode,
+    planningMode,
   });
 
   const memberOptions = useMemo(() => {
+    if (planningMode !== 'team') {
+      return [];
+    }
     const options = [];
     const seen = new Set();
 
@@ -181,15 +221,25 @@ export default function Planning() {
     });
 
     return options;
-  }, [availableMembers, user?.uid, user?.displayName, user?.email]);
+  }, [planningMode, availableMembers, user?.uid, user?.displayName, user?.email]);
 
   const handleMemberChange = useCallback((memberId) => {
+    if (planningMode !== 'team') return;
     if (!memberId) return;
     if (memberId === selectedMemberId) return;
     const availableIds = availableMembers.map((member) => member.uid);
     if (!availableIds.includes(memberId)) return;
     setSelectedMemberId(memberId);
-  }, [availableMembers, selectedMemberId]);
+  }, [planningMode, availableMembers, selectedMemberId]);
+
+  const handlePlanningModeChange = useCallback(
+    (mode) => {
+      if (mode === planningMode) return;
+      if (mode === 'team' && !teamId) return;
+      setPlanningMode(mode);
+    },
+    [planningMode, teamId]
+  );
 
 
 
@@ -255,15 +305,16 @@ export default function Planning() {
 
   // Hook pour les tâches hebdomadaires - seulement si on a un utilisateur
   const weekStartISO = weekStart.toISOString().split('T')[0];
-  const { 
-    tasks: weeklyTasks, 
-    occurrences: taskOccurrences, 
+  const effectiveTeamId = planningMode === 'team' ? teamId || null : null;
+  const {
+    tasks: weeklyTasks,
+    occurrences: taskOccurrences,
     loading: tasksLoading,
-    error: tasksError 
+    error: tasksError
   } = useTasks(
-    user?.uid ? (viewedUserId || user.uid) : null,
+    user?.uid ? (planningMode === 'team' ? viewedUserId || user.uid : user.uid) : null,
     weekStartISO,
-    teamId || null
+    effectiveTeamId
   );
   
   console.log('Planning: Hook useTasks', { 
@@ -284,7 +335,7 @@ export default function Planning() {
       return () => {};
     }
 
-    setTeamContext(teamId || null);
+    setTeamContext(planningMode === 'team' ? teamId || null : null);
     setLoading(true);
     setError(null);
 
@@ -346,6 +397,9 @@ export default function Planning() {
           });
         });
         const filtered = normalized.filter((event) => {
+          if (planningMode !== 'team') {
+            return !event.user_id || event.user_id === user.uid;
+          }
           if (!viewedUserId) return true;
           if (!event.user_id) {
             return viewedUserId === user.uid;
@@ -366,7 +420,7 @@ export default function Planning() {
     return () => {
       unsubEvents && unsubEvents();
     };
-  }, [user?.uid, teamId, weekStart, weekEnd, viewedUserId, user]);
+  }, [user?.uid, teamId, weekStart, weekEnd, viewedUserId, user, planningMode]);
 
 
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -508,7 +562,7 @@ export default function Planning() {
         client_name: data.client_name || '',
         day: DAY_KEYS[dayIndex] || 'monday',
         user_id: user.uid,
-        team_id: teamId || null,
+        team_id: planningMode === 'team' ? teamId || null : null,
       };
 
       await saveEventNew(eventData);
@@ -570,6 +624,10 @@ export default function Planning() {
         selectedMemberId={viewedUserId}
         onMemberChange={handleMemberChange}
         isReadOnlyMode={isReadOnlyMode}
+        planningMode={planningMode}
+        onPlanningModeChange={handlePlanningModeChange}
+        canUseTeamMode={Boolean(teamId)}
+        teamName={team?.name || null}
       />
 
       <div className="flex justify-end mb-2 space-x-2">
