@@ -1150,12 +1150,23 @@ async def update_client(
 
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    doc_ref = user_col(user["uid"], "clients").document(client_id)
+    """Delete a client (or archive it)"""
+    doc_ref = db.collection("clients").document(client_id)
     snap = await asyncio.to_thread(doc_ref.get)
+    
     if not snap.exists:
         raise HTTPException(status_code=404, detail="Client not found")
-    await asyncio.to_thread(doc_ref.delete)
-    return {"message": "Client deleted"}
+    
+    existing = snap.to_dict()
+    if existing.get("user_id") != user["uid"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this client")
+    
+    # Archive instead of delete (soft delete)
+    await asyncio.to_thread(doc_ref.update, {
+        "is_archived": True,
+        "updated_at": datetime.utcnow()
+    })
+    return {"message": "Client archived", "success": True}
 
 
 # Quotes endpoints
