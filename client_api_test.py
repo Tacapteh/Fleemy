@@ -207,7 +207,7 @@ class ClientAPITester:
         
         try:
             response = requests.patch(f"{self.api_url}/clients/{client_id}", json=invalid_update, headers=self.headers, timeout=10)
-            if response.status_code == 400:
+            if response.status_code in [400, 422]:  # Accept both 400 and 422 for validation errors
                 self.log_test("Update client with invalid email (validation)", True, f"Correctly rejected")
             else:
                 self.log_test("Update client with invalid email (validation)", False, f"Should have been rejected. Status: {response.status_code}")
