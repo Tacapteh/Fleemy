@@ -185,15 +185,18 @@ backend:
 
   - task: "Client API Endpoints - GET/POST/PATCH /api/clients"
     implemented: true
-    working: "NA"
+    working: true
     file: "backend/routes/clients.py + server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "IMPLEMENTED: Created clients.py with GET (list/search), POST (create), PATCH (update/archive) endpoints. Added to server.py routing. French phone validation, email validation, user_id filtering for security. Backend server restarted successfully."
+      - working: true
+        agent: "testing"
+        comment: "TESTED & FIXED: All client API endpoints working correctly. Fixed PATCH endpoint to use ClientUpdateRequest model for partial updates. GET /api/clients supports pagination (page, limit), search (search param), and archive filtering (include_archived). POST /api/clients validates required display_name, email format, and French phone format. PATCH /api/clients/{id} supports partial updates including archiving. DELETE /api/clients/{id} performs soft delete (sets is_archived=true). All endpoints properly require authentication and filter by user_id. Validation errors return appropriate HTTP status codes. 100% test success rate."
 
   - task: "Client Data Models - Pydantic schemas"
     implemented: true
