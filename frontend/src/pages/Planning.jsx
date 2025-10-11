@@ -72,6 +72,7 @@ export default function Planning() {
   const teamId = team?.id;
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedMemberId, setSelectedMemberId] = useState(null);
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -86,18 +87,109 @@ export default function Planning() {
   const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
   const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
 
-  // Déterminer l'utilisateur dont on consulte le planning
-  const viewedUserId = team?.viewedMember || user?.uid;
+  const storageKey = useMemo(() => {
+    if (!teamId) {
+      return 'planning_selected_member_solo';
+    }
+    return `planning_selected_member_${teamId}`;
+  }, [teamId]);
+
+  const availableMembers = useMemo(() => {
+    const ids = new Map();
+    if (user?.uid) {
+      ids.set(user.uid, {
+        uid: user.uid,
+        name: user.displayName || null,
+        email: user.email || null,
+      });
+    }
+    if (Array.isArray(team?.members)) {
+      team.members.forEach((member) => {
+        const uid = typeof member === 'string' ? member : member?.uid;
+        if (!uid || ids.has(uid)) return;
+        const name =
+          (typeof member === 'object' && member?.name) ||
+          (typeof member === 'object' && member?.email) ||
+          null;
+        ids.set(uid, {
+          uid,
+          name,
+          email: typeof member === 'object' ? member?.email || null : null,
+        });
+      });
+    }
+    return Array.from(ids.values());
+  }, [team?.members, user?.uid, user?.displayName, user?.email]);
+
+  const availableMemberIdsKey = useMemo(() => {
+    const ids = availableMembers.map((member) => member.uid).filter(Boolean);
+    ids.sort();
+    return ids.join('|');
+  }, [availableMembers]);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const storedValue = storageKey ? localStorage.getItem(storageKey) : null;
+    const availableIds = availableMembers.map((member) => member.uid);
+
+    if (storedValue && availableIds.includes(storedValue)) {
+      setSelectedMemberId(storedValue);
+    } else {
+      setSelectedMemberId(user.uid);
+    }
+  }, [user?.uid, storageKey, availableMemberIdsKey, availableMembers]);
+
+  useEffect(() => {
+    if (!storageKey || !selectedMemberId) return;
+    const availableIds = availableMembers.map((member) => member.uid);
+    if (!availableIds.includes(selectedMemberId)) return;
+    localStorage.setItem(storageKey, selectedMemberId);
+  }, [selectedMemberId, storageKey, availableMemberIdsKey, availableMembers]);
+
+  const viewedUserId = selectedMemberId || user?.uid;
   const isReadOnlyMode = viewedUserId && viewedUserId !== user?.uid;
   
   console.log('Planning: Contexte utilisateur', { 
     user: user?.uid, 
     userDisplayName: user?.displayName,
     team: team?.id, 
-    viewedMember: team?.viewedMember, 
+    selectedMemberId,
     viewedUserId,
     isReadOnlyMode
   });
+
+  const memberOptions = useMemo(() => {
+    const options = [];
+    const seen = new Set();
+
+    availableMembers.forEach((member) => {
+      if (!member?.uid || seen.has(member.uid)) return;
+      seen.add(member.uid);
+
+      const labelBase =
+        member?.name ||
+        member?.email ||
+        (member.uid === user?.uid
+          ? user?.displayName || user?.email || 'Moi'
+          : `Membre ${member.uid.slice(0, 6)}`);
+
+      options.push({
+        value: member.uid,
+        label: member.uid === user?.uid ? labelBase || 'Moi' : labelBase,
+      });
+    });
+
+    return options;
+  }, [availableMembers, user?.uid, user?.displayName, user?.email]);
+
+  const handleMemberChange = useCallback((memberId) => {
+    if (!memberId) return;
+    if (memberId === selectedMemberId) return;
+    const availableIds = availableMembers.map((member) => member.uid);
+    if (!availableIds.includes(memberId)) return;
+    setSelectedMemberId(memberId);
+  }, [availableMembers, selectedMemberId]);
 
 
 
@@ -215,6 +307,7 @@ export default function Planning() {
             const endDate = new Date(data.end);
             if (isNaN(startDate) || isNaN(endDate)) return;
             const date = startDate.toISOString().split('T')[0];
+            const ownerId = data.user_id || data.uid || data.owner_id || null;
             normalized.push({
               id: data.id || doc.id || `event_${idxDoc}`,
               date,
@@ -225,8 +318,8 @@ export default function Planning() {
               title: data.title || data.client || data.description || '',
               client: data.client || data.client_name || '',
               description: data.description || '',
-              readOnly: data.readOnly || false,
-              user_id: data.user_id,
+              readOnly: Boolean(data.readOnly) || (ownerId && ownerId !== user.uid),
+              user_id: ownerId,
             });
             return;
           }
@@ -238,6 +331,7 @@ export default function Planning() {
             ? data.slots
             : data?.events || [];
           items.forEach((item, idx) => {
+            const ownerId = item.user_id || item.uid || item.owner_id || null;
             normalized.push({
               id: item.id || `${doc?.id || 'auto'}_${idx}`,
               date,
@@ -246,12 +340,19 @@ export default function Planning() {
               end: toHM(item.end),
               status: item.status,
               title: item.title || item.client || item.description || '',
-              readOnly: item.readOnly || false,
-              user_id: item.user_id,
+              readOnly: Boolean(item.readOnly) || (ownerId && ownerId !== user.uid),
+              user_id: ownerId,
             });
           });
         });
-        setEvents(normalized);
+        const filtered = normalized.filter((event) => {
+          if (!viewedUserId) return true;
+          if (!event.user_id) {
+            return viewedUserId === user.uid;
+          }
+          return event.user_id === viewedUserId;
+        });
+        setEvents(filtered);
         setLoading(false);
       },
       (error) => {
@@ -265,12 +366,13 @@ export default function Planning() {
     return () => {
       unsubEvents && unsubEvents();
     };
-  }, [user?.uid, teamId, weekStart, weekEnd]);
+  }, [user?.uid, teamId, weekStart, weekEnd, viewedUserId, user]);
 
 
   const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
   const openSlot = (start) => {
+    if (isReadOnlyMode) return;
     const end = new Date(start);
     end.setHours(start.getHours() + 1);
     const dayIndex = (start.getDay() + 6) % 7;
@@ -285,6 +387,7 @@ export default function Planning() {
   };
 
   const openDate = (date) => {
+    if (isReadOnlyMode) return;
     setModal({ open: true, selectedDate: date, timeSlot: null, event: null, readOnly: false });
   };
 
@@ -300,7 +403,10 @@ export default function Planning() {
 
   const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
 
-  const openNewWeeklyTask = () => setWeeklyTaskModal({ open: true, task: null });
+  const openNewWeeklyTask = () => {
+    if (isReadOnlyMode) return;
+    setWeeklyTaskModal({ open: true, task: null });
+  };
   const handleTaskClick = (taskOccurrence) => {
     // Récupérer la tâche originale depuis weeklyTasks
     const originalTask = weeklyTasks.find(t => t.id === taskOccurrence.taskId);
@@ -460,6 +566,10 @@ export default function Planning() {
         onToday={onToday}
         view={view}
         onViewChange={setView}
+        memberOptions={memberOptions}
+        selectedMemberId={viewedUserId}
+        onMemberChange={handleMemberChange}
+        isReadOnlyMode={isReadOnlyMode}
       />
 
       <div className="flex justify-end mb-2 space-x-2">
