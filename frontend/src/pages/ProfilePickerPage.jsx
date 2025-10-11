@@ -1,0 +1,294 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, Users, Plus, LogIn } from 'lucide-react';
+import { auth } from '../firebase';
+import { contextStore } from '../stores/contextStore';
+import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
+import JoinTeamDialog from '../components/profiles/JoinTeamDialog';
+
+const ProfilePickerPage = () => {
+  const navigate = useNavigate();
+  const [teams, setTeams] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadTeams();
+  }, []);
+
+  const loadTeams = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        navigate('/');
+        return;
+      }
+
+      const token = await user.getIdToken();
+      const backendUrl = process.env.REACT_APP_BACKEND_URL;
+      
+      const response = await fetch(`${backendUrl}/api/teams/my`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setTeams(data.teams || []);
+      } else {
+        console.error('Error loading teams:', data.error);
+      }
+    } catch (err) {
+      console.error('Error loading teams:', err);
+      setError('Erreur lors du chargement des équipes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateLastContext = async (contextData) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      const backendUrl = process.env.REACT_APP_BACKEND_URL;
+      
+      await fetch(`${backendUrl}/api/auth/context`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(contextData),
+      });
+    } catch (err) {
+      console.error('Error updating context:', err);
+    }
+  };
+
+  const handleSelectSolo = async () => {
+    const context = { type: 'solo' };
+    contextStore.set(context);
+    await updateLastContext(context);
+    navigate('/planning');
+  };
+
+  const handleSelectTeam = async (team) => {
+    const context = {
+      type: 'team',
+      teamId: team.team_id,
+      teamName: team.name,
+    };
+    contextStore.set(context);
+    await updateLastContext({ type: 'team', team_id: team.team_id });
+    navigate(`/team/${team.team_id}/schedule`);
+  };
+
+  const handleCreateTeam = async (teamName) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Non connecté');
+
+      const token = await user.getIdToken();
+      const backendUrl = process.env.REACT_APP_BACKEND_URL;
+      
+      const response = await fetch(`${backendUrl}/api/teams`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: teamName }),
+      });
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Erreur lors de la création');
+      }
+
+      // Reload teams
+      await loadTeams();
+      
+      // Select the new team
+      handleSelectTeam({
+        team_id: data.team_id,
+        name: data.name,
+      });
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const handleJoinTeam = async (code) => {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Non connecté');
+
+      const token = await user.getIdToken();
+      const backendUrl = process.env.REACT_APP_BACKEND_URL;
+      
+      const response = await fetch(`${backendUrl}/api/teams/join`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Code invalide ou expiré');
+      }
+
+      // Reload teams
+      await loadTeams();
+      
+      // Select the joined team
+      if (!data.already_member) {
+        handleSelectTeam({
+          team_id: data.team_id,
+          name: data.name,
+        });
+      }
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-xl">Chargement...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
+      {/* Header */}
+      <div className="text-center mb-12">
+        <h1 className="text-5xl md:text-6xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>
+          Qui est-ce ?
+        </h1>
+        <p className="text-gray-300 text-lg">
+          Choisissez votre contexte de travail
+        </p>
+      </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200 max-w-md">
+          {error}
+        </div>
+      )}
+
+      {/* Grid de profils */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-5xl w-full mb-8">
+        {/* Solo Profile */}
+        <button
+          onClick={handleSelectSolo}
+          className="group relative aspect-square bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl overflow-hidden hover:ring-4 hover:ring-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+          data-testid="profile-solo-btn"
+          aria-label="Mode Solo"
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+            <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+              <User size={32} className="text-white" />
+            </div>
+            <span className="text-white font-semibold text-lg">Moi</span>
+            <span className="text-white/80 text-sm mt-1">Solo</span>
+          </div>
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+        </button>
+
+        {/* Team Profiles */}
+        {teams.map((team) => (
+          <button
+            key={team.team_id}
+            onClick={() => handleSelectTeam(team)}
+            className="group relative aspect-square bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden hover:ring-4 hover:ring-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+            data-testid={`profile-team-${team.team_id}-btn`}
+            aria-label={`Équipe ${team.name}`}
+          >
+            <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+              <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                <Users size={32} className="text-white" />
+              </div>
+              <span className="text-white font-semibold text-center text-sm leading-tight line-clamp-2">
+                {team.name}
+              </span>
+              <span className="text-white/80 text-xs mt-1">
+                {team.members_count} membre{team.members_count > 1 ? 's' : ''}
+              </span>
+            </div>
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+          </button>
+        ))}
+
+        {/* Create Team */}
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+          data-testid="create-team-btn"
+          aria-label="Créer une équipe"
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+            <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center">
+              <Plus size={32} className="text-white" />
+            </div>
+            <span className="text-white font-semibold text-center text-sm">
+              Créer une équipe
+            </span>
+          </div>
+        </button>
+
+        {/* Join Team */}
+        <button
+          onClick={() => setShowJoinDialog(true)}
+          className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+          data-testid="join-team-btn"
+          aria-label="Rejoindre une équipe"
+        >
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+            <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center">
+              <LogIn size={32} className="text-white" />
+            </div>
+            <span className="text-white font-semibold text-center text-sm">
+              Rejoindre une équipe
+            </span>
+          </div>
+        </button>
+      </div>
+
+      {/* Dialogs */}
+      <CreateTeamDialog
+        isOpen={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onCreateTeam={handleCreateTeam}
+      />
+      
+      <JoinTeamDialog
+        isOpen={showJoinDialog}
+        onClose={() => setShowJoinDialog(false)}
+        onJoinTeam={handleJoinTeam}
+      />
+
+      {/* Footer */}
+      <div className="mt-8 text-center">
+        <p className="text-gray-400 text-sm">
+          Vous pouvez changer de contexte à tout moment depuis le planning
+        </p>
+      </div>
+    </div>
+  );
+};
+
+export default ProfilePickerPage;

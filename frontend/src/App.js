@@ -5,9 +5,11 @@ import {
   Route,
   Navigate,
   Outlet,
+  useNavigate,
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, logout } from "./firebase";
+import { contextStore } from "./stores/contextStore";
 
 import Login from "./Login";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +17,7 @@ import Planning from "./pages/Planning";
 import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
 import Clients from "./pages/Clients";
+import ProfilePickerPage from "./pages/ProfilePickerPage";
 import Sidebar from "./components/Sidebar";
 import NotFound from "./pages/NotFound";
 
@@ -29,6 +32,71 @@ function Layout({ user, onLogout }) {
       </div>
     </div>
   );
+}
+
+// Composant pour gérer la redirection post-login
+function AuthGuard({ user, children }) {
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const checkContext = async () => {
+      if (!user) {
+        setChecking(false);
+        return;
+      }
+
+      try {
+        // Vérifier si un contexte existe
+        const savedContext = contextStore.get();
+        
+        if (savedContext) {
+          // Valider que le contexte est toujours valide
+          if (savedContext.type === 'solo') {
+            // Contexte solo toujours valide
+            setChecking(false);
+            return;
+          } else if (savedContext.type === 'team' && savedContext.teamId) {
+            // Vérifier que l'utilisateur est toujours membre de l'équipe
+            const token = await user.getIdToken();
+            const backendUrl = process.env.REACT_APP_BACKEND_URL;
+            
+            const response = await fetch(`${backendUrl}/api/teams/my`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            const data = await response.json();
+            const stillMember = data.teams?.some(t => t.team_id === savedContext.teamId);
+            
+            if (stillMember) {
+              // Contexte team toujours valide
+              setChecking(false);
+              return;
+            }
+          }
+        }
+        
+        // Pas de contexte valide, rediriger vers /profiles
+        navigate('/profiles');
+      } catch (err) {
+        console.error('Error checking context:', err);
+        navigate('/profiles');
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkContext();
+  }, [user, navigate]);
+
+  if (checking) {
+    return <div className="flex items-center justify-center h-screen">Vérification du contexte...</div>;
+  }
+
+  return children;
 }
 
 function App() {
@@ -49,6 +117,7 @@ function App() {
 
   const handleLogout = async () => {
     await logout();
+    contextStore.clear();
     setUser(null);
   };
 
@@ -63,14 +132,48 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Layout englobe toutes les pages et passe user via context */}
+        {/* Route de sélection de profil (sans sidebar) */}
+        <Route path="/profiles" element={<ProfilePickerPage />} />
+        
+        {/* Routes avec team schedule (sans sidebar pour l'instant) */}
+        <Route path="/team/:teamId/schedule" element={
+          <AuthGuard user={user}>
+            <Planning />
+          </AuthGuard>
+        } />
+        
+        {/* Layout englobe les autres pages et passe user via context */}
         <Route element={<Layout user={user} onLogout={handleLogout} />}>
-          <Route path="/" element={<Navigate to="/dashboard" />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/planning" element={<Planning />} />
-          <Route path="/quotes" element={<Quotes />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/clients" element={<Clients />} />
+          <Route path="/" element={
+            <AuthGuard user={user}>
+              <Navigate to="/dashboard" />
+            </AuthGuard>
+          } />
+          <Route path="/dashboard" element={
+            <AuthGuard user={user}>
+              <Dashboard />
+            </AuthGuard>
+          } />
+          <Route path="/planning" element={
+            <AuthGuard user={user}>
+              <Planning />
+            </AuthGuard>
+          } />
+          <Route path="/quotes" element={
+            <AuthGuard user={user}>
+              <Quotes />
+            </AuthGuard>
+          } />
+          <Route path="/invoices" element={
+            <AuthGuard user={user}>
+              <Invoices />
+            </AuthGuard>
+          } />
+          <Route path="/clients" element={
+            <AuthGuard user={user}>
+              <Clients />
+            </AuthGuard>
+          } />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
