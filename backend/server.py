@@ -19,6 +19,7 @@ import asyncio
 import json
 import calendar
 import httpx
+import re
 
 # Firebase Admin
 import firebase_admin
@@ -209,20 +210,24 @@ class Todo(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Address(BaseModel):
+    line1: str = ""
+    line2: Optional[str] = ""
+    postal_code: str = ""
+    city: str = ""
+    country: str = "France"
+
+
 class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    uid: str
-    first_name: str
-    last_name: str
-    name: str
+    user_id: str  # Renamed from uid for consistency
+    display_name: str
+    contact_name: Optional[str] = ""
     email: Optional[str] = ""
     phone: Optional[str] = ""
-    hourly_rate: float = 0.0
-    color: Optional[str] = "#3b82f6"
-    icon: Optional[str] = "👤"
-    address: Optional[str] = ""
-    company: Optional[str] = ""
+    address: Optional[Address] = None
     notes: Optional[str] = ""
+    is_archived: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -277,8 +282,8 @@ class Invoice(BaseModel):
 
 class EventCreateRequest(BaseModel):
     description: str
-    client_id: str
-    client_name: str
+    client_id: Optional[str] = ""  # ID from clients collection
+    client_name: str  # client_label for display
     day: str
     start_time: str
     end_time: str
@@ -306,13 +311,13 @@ class TodoCreateRequest(BaseModel):
 
 
 class ClientCreateRequest(BaseModel):
-    first_name: str
-    last_name: str
+    display_name: str
+    contact_name: Optional[str] = ""
     email: Optional[str] = ""
     phone: Optional[str] = ""
-    hourly_rate: Optional[float] = 0.0
-    color: Optional[str] = "#3b82f6"
-    icon: Optional[str] = "👤"
+    address: Optional[Address] = None
+    notes: Optional[str] = ""
+    is_archived: Optional[bool] = False
 
 
 class QuoteCreateRequest(BaseModel):
@@ -1005,57 +1010,163 @@ async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)
     return {"message": "Todo deleted"}
 
 
+# Validation helpers
+def validate_email(email: str) -> bool:
+    """Validate email format"""
+    if not email:
+        return True  # Optional field
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))
+
+
+def validate_french_phone(phone: str) -> bool:
+    """Validate French phone format"""
+    if not phone:
+        return True  # Optional field
+    # Remove spaces, dots, dashes
+    cleaned = re.sub(r'[\s\.\-]', '', phone)
+    # French formats: 0612345678 or +33612345678
+    pattern = r'^(?:(?:\+|00)33|0)[1-9](?:\d{8})$'
+    return bool(re.match(pattern, cleaned))
+
+
 # Clients endpoints
 @api_router.get("/clients")
-async def get_clients(user: Dict[str, Any] = Depends(verify_token)):
-    clients = await stream_docs(user_col(user["uid"], "clients").order_by("name"))
-    return clients
+async def get_clients(
+    user: Dict[str, Any] = Depends(verify_token),
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    include_archived: bool = False
+):
+    """Get clients with pagination and search"""
+    try:
+        # Collection reference using new collection name
+        clients_ref = db.collection("clients")
+        query = clients_ref.where("user_id", "==", user["uid"])
+        
+        # Filter archived clients
+        if not include_archived:
+            query = query.where("is_archived", "==", False)
+        
+        # Get all matching clients
+        all_clients = await stream_docs(query)
+        
+        # Apply search filter if provided
+        if search:
+            search_lower = search.lower()
+            all_clients = [
+                c for c in all_clients 
+                if search_lower in c.get("display_name", "").lower()
+            ]
+        
+        # Sort by display_name
+        all_clients.sort(key=lambda x: x.get("display_name", "").lower())
+        
+        # Apply pagination
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_clients = all_clients[start_idx:end_idx]
+        
+        return {
+            "clients": paginated_clients,
+            "total": len(all_clients),
+            "page": page,
+            "limit": limit,
+            "has_more": end_idx < len(all_clients)
+        }
+    except Exception as e:
+        logger.error("get_clients error: %s", e, exc_info=True)
+        return {"clients": [], "total": 0, "page": 1, "limit": limit, "has_more": False}
 
 
 @api_router.post("/clients")
 async def create_client(
     client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
+    """Create a new client with strict validation"""
     data = client_request.dict()
-    full_name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
-    data["name"] = full_name
-    client = Client(uid=user["uid"], **data)
-
+    
+    # Validate display_name is required
+    if not data.get("display_name") or not data["display_name"].strip():
+        raise HTTPException(status_code=400, detail="display_name is required")
+    
+    # Validate email format
+    if data.get("email") and not validate_email(data["email"]):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Validate phone format
+    if data.get("phone") and not validate_french_phone(data["phone"]):
+        raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
+    
+    # Create client with new structure
+    client = Client(user_id=user["uid"], **data)
+    
+    # Store in new global collection
     await asyncio.to_thread(
-        user_col(user["uid"], "clients").document(client.id).set, client.dict()
+        db.collection("clients").document(client.id).set, client.dict()
     )
     return client
 
 
-@api_router.put("/clients/{client_id}")
+@api_router.patch("/clients/{client_id}")
 async def update_client(
     client_id: str,
     client_request: ClientCreateRequest,
-    apply_rate: Optional[bool] = False,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    data = client_request.dict()
-    data["name"] = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+    """Update a client (PATCH method as specified)"""
+    # Verify ownership
+    doc_ref = db.collection("clients").document(client_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    existing = snap.to_dict()
+    if existing.get("user_id") != user["uid"]:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this client")
+    
+    data = client_request.dict(exclude_unset=True)
+    
+    # Validate display_name if provided
+    if "display_name" in data and (not data["display_name"] or not data["display_name"].strip()):
+        raise HTTPException(status_code=400, detail="display_name cannot be empty")
+    
+    # Validate email format
+    if data.get("email") and not validate_email(data["email"]):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Validate phone format
+    if data.get("phone") and not validate_french_phone(data["phone"]):
+        raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
+    
     update_data = {**data, "updated_at": datetime.utcnow()}
-    doc_ref = user_col(user["uid"], "clients").document(client_id)
     await asyncio.to_thread(doc_ref.update, update_data)
-    if apply_rate and data.get("hourly_rate") is not None:
-        events_query = user_col(user["uid"], "events").where("client_id", "==", client_id)
-        events = await asyncio.to_thread(lambda: list(events_query.stream()))
-        for ev in events:
-            await asyncio.to_thread(ev.reference.update, {"hourly_rate": data["hourly_rate"]})
+    
     updated = await asyncio.to_thread(doc_ref.get)
     return updated.to_dict()
 
 
 @api_router.delete("/clients/{client_id}")
 async def delete_client(client_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    doc_ref = user_col(user["uid"], "clients").document(client_id)
+    """Delete a client (or archive it)"""
+    doc_ref = db.collection("clients").document(client_id)
     snap = await asyncio.to_thread(doc_ref.get)
+    
     if not snap.exists:
         raise HTTPException(status_code=404, detail="Client not found")
-    await asyncio.to_thread(doc_ref.delete)
-    return {"message": "Client deleted"}
+    
+    existing = snap.to_dict()
+    if existing.get("user_id") != user["uid"]:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this client")
+    
+    # Archive instead of delete (soft delete)
+    await asyncio.to_thread(doc_ref.update, {
+        "is_archived": True,
+        "updated_at": datetime.utcnow()
+    })
+    return {"message": "Client archived", "success": True}
 
 
 # Quotes endpoints
