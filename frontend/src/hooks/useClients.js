@@ -1,10 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
+import { useFirebaseUser } from '../firebase';
 
 /**
  * Hook pour gérer les clients avec pagination et recherche
  */
-export default function useClients(user, options = {}) {
+export default function useClients(userOrOptions, maybeOptions = {}) {
+  const firebaseUser = useFirebaseUser();
+
+  const hasExplicitUser =
+    userOrOptions && typeof userOrOptions === 'object' && 'uid' in userOrOptions;
+
+  const options =
+    hasExplicitUser
+      ? (maybeOptions || {})
+      : (userOrOptions && typeof userOrOptions === 'object'
+          ? userOrOptions
+          : maybeOptions) || {};
+  const user = hasExplicitUser ? userOrOptions : firebaseUser;
+  const userId = user?.uid;
+
   const {
     page = 1,
     limit = 20,
@@ -20,7 +35,7 @@ export default function useClients(user, options = {}) {
   const [hasMore, setHasMore] = useState(false);
 
   const loadClients = useCallback(async (searchTerm = search, currentPage = page) => {
-    if (!user?.uid) return;
+    if (!userId) return;
     
     setLoading(true);
     setError(null);
@@ -37,7 +52,7 @@ export default function useClients(user, options = {}) {
       }
       
       const result = await apiFetch(`/clients?${params.toString()}`, {
-        headers: { 'X-User-Id': user.uid }
+        headers: { 'X-User-Id': userId }
       });
       
       setClients(result.clients || []);
@@ -50,7 +65,7 @@ export default function useClients(user, options = {}) {
     } finally {
       setLoading(false);
     }
-  }, [user?.uid, page, limit, search, include_archived]);
+  }, [userId, page, limit, search, include_archived]);
 
   useEffect(() => {
     if (autoLoad) {
@@ -59,11 +74,11 @@ export default function useClients(user, options = {}) {
   }, [autoLoad, loadClients]);
 
   const createClient = async (data) => {
-    if (!user?.uid) throw new Error('User not authenticated');
-    
+    if (!userId) throw new Error('User not authenticated');
+
     const result = await apiFetch('/clients', {
       method: 'POST',
-      headers: { 'X-User-Id': user.uid },
+      headers: { 'X-User-Id': userId },
       body: JSON.stringify(data)
     });
     
@@ -72,11 +87,11 @@ export default function useClients(user, options = {}) {
   };
 
   const updateClient = async (clientId, data) => {
-    if (!user?.uid) throw new Error('User not authenticated');
-    
+    if (!userId) throw new Error('User not authenticated');
+
     const result = await apiFetch(`/clients/${clientId}`, {
       method: 'PATCH',
-      headers: { 'X-User-Id': user.uid },
+      headers: { 'X-User-Id': userId },
       body: JSON.stringify(data)
     });
     
@@ -85,11 +100,11 @@ export default function useClients(user, options = {}) {
   };
 
   const deleteClient = async (clientId) => {
-    if (!user?.uid) throw new Error('User not authenticated');
-    
+    if (!userId) throw new Error('User not authenticated');
+
     await apiFetch(`/clients/${clientId}`, {
       method: 'DELETE',
-      headers: { 'X-User-Id': user.uid }
+      headers: { 'X-User-Id': userId }
     });
     
     await loadClients();
