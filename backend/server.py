@@ -1144,7 +1144,7 @@ async def create_client(
 @api_router.patch("/clients/{client_id}")
 async def update_client(
     client_id: str,
-    client_request: ClientCreateRequest,
+    client_request: ClientUpdateRequest,
     user: Dict[str, Any] = Depends(verify_token),
 ):
     """Update a client (PATCH method as specified)"""
