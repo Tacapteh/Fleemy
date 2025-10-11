@@ -1,6 +1,7 @@
 import React from 'react';
 import type { DisplayEvent } from '../selectors/planningSelectors';
 import TaskIconBadge from './TaskIconBadge';
+import { openTaskModal, confirmDeleteTask } from '../store/uiStore';
 
 interface EventCardProps {
   event: DisplayEvent;
@@ -29,6 +30,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
   const title = event.title || event.description || event.client || 'Événement';
   const statusClass = event.status ? ` status-${event.status}` : '';
   const isInteractive = typeof onClick === 'function';
+  const isReadOnly = Boolean(event.readOnly);
 
   return (
     <div
@@ -49,10 +51,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
         >
           {event.attachedTaskBadges.map((badge) => (
             <TaskIconBadge
-              key={`${badge.iconId}-${badge.label}-${badge.price ?? 'na'}`}
+              key={badge.taskId}
+              taskId={badge.taskId}
               iconId={badge.iconId}
               label={badge.label}
               price={badge.price}
+              onEdit={openTaskModal}
+              onDelete={confirmDeleteTask}
+              readOnly={isReadOnly}
             />
           ))}
         </div>
