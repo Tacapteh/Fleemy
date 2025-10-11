@@ -1,0 +1,148 @@
+<analysis>
+The AI engineer started by thoroughly exploring the project structure, identifying a React frontend, FastAPI backend, and an existing  and  directory, despite the request implying new creation. User clarified to replace the existing structure, enforce French phone format, and paginate with 20 clients per page. The AI engineer then proceeded with backend modifications, creating  and updating  and  for new client models and their integration into , , and  schemas. On the frontend, new types, a  hook, and a custom  component were created, alongside updates to  and . A Firestore index migration script was also added. The backend initially failed due to a missing  dependency, which was subsequently installed and the server restarted successfully. The current state is that the backend is confirmed running, but the API endpoints and frontend integration are yet to be fully tested.
+</analysis>
+
+<product_requirements>
+The goal is to implement a comprehensive client management feature for the Fleemy application (React, Tailwind, shadcn/ui, Zustand, Firestore, FastAPI). This involves:
+1.  **Client Data Model**: A new Firestore  collection with fields: uid=0(root) gid=0(root) groups=0(root), ,  (required),  (optional),  (optional),  (optional, French format),  (optional object),  (optional), , , .
+2.  **Backend API**: FastAPI to expose GET/POST/PATCH  endpoints, filtered by , with strict validation for  and .
+3.  **Frontend Clients Page ()**: A new page displaying a paginated list (20 clients/page) with search by name. Actions for Add/Edit/Archive clients via a modal form. The form includes  (required), , , , , with ARIA-invalid validations.
+4.  **Integration with Planning**: Replace the text  field in  (create/edit) with a Combobox linked to clients, storing  and retaining  for display.
+5.  **Integration with Quotes/Invoices**: Add a Client Combobox to  and  pages. On selection, pre-fill , ,  into the document and store .
+6.  **Selectors**: Update  to join  to  in read-only grids efficiently.
+7.  **Security**: Users can only read/write their own clients (). Team members (non-owners) have read-only access.
+8.  **Accessibility**: Forms with associated labels,  for errors, full keyboard navigation, AA contrasts.
+9.  **Mobile-first**: Compact client cards, actions in sheet/modal.
+10. **Files to Modify/Create**:
+    *   Backend: , schemas for Pydantic.
+    *   Frontend: , , .
+    *   Planning: , , .
+11. **Migration**: A unique script to create Firestore index on .
+</product_requirements>
+
+<key_technical_concepts>
+-   **Full-stack Development**: React (frontend), FastAPI (backend).
+-   **Data Storage**: Firestore (MongoDB for existing, but Firestore for new clients collection).
+-   **State Management**: Zustand (frontend).
+-   **Styling**: Tailwind CSS.
+-   **Component Library**: Shadcn/ui (initially considered, custom Combobox implemented due to absence).
+-   **Validation**: Pydantic (backend), custom frontend validation.
+</key_technical_concepts>
+
+<code_architecture>
+The application follows a standard full-stack architecture with separate  (React) and  (FastAPI) directories.
+
+
+
+-   : The main FastAPI application entry point. It was modified to include the new client routes.
+-    (New): This file was created to encapsulate all FastAPI routes for client management (GET, POST, PATCH).
+-    (New - implied, but models created in global.py): Defines Pydantic schemas for client data, ensuring strict validation for fields like email and phone number.
+-    (Modified): Updated to include new Pydantic models for , and integrate  into , , and  schemas.
+-    (New): Defines TypeScript interfaces for client and event data structures, crucial for type safety in the frontend.
+-    (New): A custom React hook to manage client data, likely handling fetching, pagination, search, and mutations.
+-    (New): A generic, reusable Combobox component for selecting clients or other items, used in various integration points.
+-    (Modified): Displays individual client information, adapted for the new data structure and mobile-first design.
+-    (Modified): Handles the creation and editing of client details, incorporating validation and the new client data model.
+-    (Modified): The main page to list, search, and manage clients, integrating pagination and client-specific components.
+-    (Modified): Updated to replace the plain text client input with the new  component for client selection.
+-    (New): Created to provide efficient lookup for client display names based on their IDs, avoiding superfluous requests.
+-    (New): Defines the Firestore index for the  collection, specifically on .
+-    (New): A Python script to deploy the defined Firestore indexes.
+</code_architecture>
+
+<pending_tasks>
+-   Test the newly implemented backend API endpoints for clients (GET/POST/PATCH).
+-   Implement and test the frontend integration of the client management page, including pagination, search, add/edit/archive functionalities, and form validations.
+-   Integrate the client Combobox into , , and  pages.
+-   Update  for client display names.
+-   Verify security rules for client access (user_id filtering, read-only for team members).
+-   Ensure full accessibility (ARIA, keyboard navigation, contrasts) and mobile-first design.
+-   Run the Firestore index migration script.
+</pending_tasks>
+
+<current_work>
+Immediately before this summary request, the AI engineer was focused on ensuring the backend was fully operational after implementing the new client features. The  module was identified as a missing dependency in , leading to a  during the backend restart. This issue was resolved by installing  via Looking in indexes: https://pypi.org/simple, https://d33sy5i8bnduwe.cloudfront.net/simple/
+Requirement already satisfied: httpx in /root/.venv/lib/python3.11/site-packages (0.28.1)
+Requirement already satisfied: anyio in /root/.venv/lib/python3.11/site-packages (from httpx) (4.11.0)
+Requirement already satisfied: certifi in /root/.venv/lib/python3.11/site-packages (from httpx) (2025.10.5)
+Requirement already satisfied: httpcore==1.* in /root/.venv/lib/python3.11/site-packages (from httpx) (1.0.9)
+Requirement already satisfied: idna in /root/.venv/lib/python3.11/site-packages (from httpx) (3.10)
+Requirement already satisfied: h11>=0.16 in /root/.venv/lib/python3.11/site-packages (from httpcore==1.*->httpx) (0.16.0)
+Requirement already satisfied: sniffio>=1.1 in /root/.venv/lib/python3.11/site-packages (from anyio->httpx) (1.3.1)
+Requirement already satisfied: typing_extensions>=4.5 in /root/.venv/lib/python3.11/site-packages (from anyio->httpx) (4.15.0) and then updating  with annotated-types==0.7.0
+anyio==4.11.0
+bcrypt==4.1.3
+black==25.9.0
+boto3==1.40.49
+botocore==1.40.49
+certifi==2025.10.5
+cffi==2.0.0
+charset-normalizer==3.4.3
+click==8.3.0
+cryptography==46.0.2
+dnspython==2.8.0
+ecdsa==0.19.1
+email-validator==2.3.0
+fastapi==0.110.1
+flake8==7.3.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.10
+iniconfig==2.1.0
+isort==6.1.0
+jmespath==1.0.1
+jq==1.10.0
+markdown-it-py==4.0.0
+mccabe==0.7.0
+mdurl==0.1.2
+motor==3.3.1
+mypy==1.18.2
+mypy_extensions==1.1.0
+numpy==2.3.3
+oauthlib==3.3.1
+packaging==25.0
+pandas==2.3.3
+passlib==1.7.4
+pathspec==0.12.1
+platformdirs==4.5.0
+pluggy==1.6.0
+pyasn1==0.6.1
+pycodestyle==2.14.0
+pycparser==2.23
+pydantic==2.12.0
+pydantic_core==2.41.1
+pyflakes==3.4.0
+Pygments==2.19.2
+PyJWT==2.10.1
+pymongo==4.5.0
+pytest==8.4.2
+python-dateutil==2.9.0.post0
+python-dotenv==1.1.1
+python-jose==3.5.0
+python-multipart==0.0.20
+pytokens==0.1.10
+pytz==2025.2
+requests==2.32.5
+requests-oauthlib==2.0.0
+rich==14.2.0
+rsa==4.9.1
+s3transfer==0.14.0
+s5cmd==0.2.0
+shellingham==1.5.4
+six==1.17.0
+sniffio==1.3.1
+starlette==0.37.2
+typer==0.19.2
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+tzdata==2025.2
+urllib3==2.5.0
+uvicorn==0.25.0
+watchfiles==1.1.0. Subsequently, the backend server was restarted using backend: stopped
+backend: started and confirmed to be running correctly based on the logs, which showed the server starting successfully without the  error. The last action indicates the backend is ready, and the next step involves testing the client endpoints using a valid Firebase token, which is currently unavailable.
+</current_work>
+
+<optional_next_step>
+Obtain a valid Firebase token to test the client backend endpoints.
+</optional_next_step>
