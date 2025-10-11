@@ -11,12 +11,24 @@ export default function WeekNavigationHeader({
   selectedMemberId,
   onMemberChange,
   isReadOnlyMode = false,
+  planningMode = 'personal',
+  onPlanningModeChange,
+  canUseTeamMode = false,
+  teamName = null,
 }) {
-  const showMemberSelector = Array.isArray(memberOptions) && memberOptions.length > 1;
+  const showMemberSelector =
+    planningMode === 'team' && Array.isArray(memberOptions) && memberOptions.length > 1;
   const selectedValue =
     selectedMemberId && memberOptions.some((option) => option.value === selectedMemberId)
       ? selectedMemberId
       : memberOptions[0]?.value || '';
+  const showTeamToggle = Boolean(onPlanningModeChange) && canUseTeamMode;
+
+  const handleModeClick = (mode) => {
+    if (!onPlanningModeChange) return;
+    if (mode === 'team' && !canUseTeamMode) return;
+    onPlanningModeChange(mode);
+  };
 
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between bg-gray-100 p-4 rounded-md shadow mb-4">
@@ -43,6 +55,11 @@ export default function WeekNavigationHeader({
 
       <div className="flex flex-col items-center gap-2 text-center md:flex-1">
         <h2 className="text-lg font-bold">{currentLabel}</h2>
+        {planningMode === 'team' && (
+          <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+            Planning d'équipe{teamName ? ` • ${teamName}` : ''}
+          </span>
+        )}
         {showMemberSelector && (
           <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600">
             <label htmlFor="planning-member-select" className="font-medium">
@@ -69,23 +86,47 @@ export default function WeekNavigationHeader({
         )}
       </div>
 
-      <div className="flex items-center gap-2 justify-center">
-        <button
-          onClick={() => onViewChange('week')}
-          className={`px-3 py-1 rounded ${
-            view === 'week' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
-          }`}
-        >
-          Semaine
-        </button>
-        <button
-          onClick={() => onViewChange('month')}
-          className={`px-3 py-1 rounded ${
-            view === 'month' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
-          }`}
-        >
-          Mois
-        </button>
+      <div className="flex flex-col gap-2 items-center justify-center">
+        {showTeamToggle && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleModeClick('personal')}
+              className={`px-3 py-1 rounded ${
+                planningMode === 'personal'
+                  ? 'bg-green-300'
+                  : 'bg-gray-300 hover:bg-gray-400'
+              }`}
+            >
+              Mon planning
+            </button>
+            <button
+              onClick={() => handleModeClick('team')}
+              className={`px-3 py-1 rounded ${
+                planningMode === 'team' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
+              }`}
+            >
+              Planning équipe
+            </button>
+          </div>
+        )}
+        <div className="flex items-center gap-2 justify-center">
+          <button
+            onClick={() => onViewChange('week')}
+            className={`px-3 py-1 rounded ${
+              view === 'week' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
+            }`}
+          >
+            Semaine
+          </button>
+          <button
+            onClick={() => onViewChange('month')}
+            className={`px-3 py-1 rounded ${
+              view === 'month' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
+            }`}
+          >
+            Mois
+          </button>
+        </div>
       </div>
     </div>
   );
