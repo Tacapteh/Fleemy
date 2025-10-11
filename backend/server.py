@@ -1010,11 +1010,74 @@ async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)
     return {"message": "Todo deleted"}
 
 
+# Validation helpers
+def validate_email(email: str) -> bool:
+    """Validate email format"""
+    if not email:
+        return True  # Optional field
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))
+
+
+def validate_french_phone(phone: str) -> bool:
+    """Validate French phone format"""
+    if not phone:
+        return True  # Optional field
+    # Remove spaces, dots, dashes
+    cleaned = re.sub(r'[\s\.\-]', '', phone)
+    # French formats: 0612345678 or +33612345678
+    pattern = r'^(?:(?:\+|00)33|0)[1-9](?:\d{8})$'
+    return bool(re.match(pattern, cleaned))
+
+
 # Clients endpoints
 @api_router.get("/clients")
-async def get_clients(user: Dict[str, Any] = Depends(verify_token)):
-    clients = await stream_docs(user_col(user["uid"], "clients").order_by("name"))
-    return clients
+async def get_clients(
+    user: Dict[str, Any] = Depends(verify_token),
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    include_archived: bool = False
+):
+    """Get clients with pagination and search"""
+    try:
+        # Collection reference using new collection name
+        clients_ref = db.collection("clients")
+        query = clients_ref.where("user_id", "==", user["uid"])
+        
+        # Filter archived clients
+        if not include_archived:
+            query = query.where("is_archived", "==", False)
+        
+        # Get all matching clients
+        all_clients = await stream_docs(query)
+        
+        # Apply search filter if provided
+        if search:
+            search_lower = search.lower()
+            all_clients = [
+                c for c in all_clients 
+                if search_lower in c.get("display_name", "").lower()
+            ]
+        
+        # Sort by display_name
+        all_clients.sort(key=lambda x: x.get("display_name", "").lower())
+        
+        # Apply pagination
+        start_idx = (page - 1) * limit
+        end_idx = start_idx + limit
+        paginated_clients = all_clients[start_idx:end_idx]
+        
+        return {
+            "clients": paginated_clients,
+            "total": len(all_clients),
+            "page": page,
+            "limit": limit,
+            "has_more": end_idx < len(all_clients)
+        }
+    except Exception as e:
+        logger.error("get_clients error: %s", e, exc_info=True)
+        return {"clients": [], "total": 0, "page": 1, "limit": limit, "has_more": False}
 
 
 @api_router.post("/clients")
