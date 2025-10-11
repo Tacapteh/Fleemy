@@ -310,13 +310,13 @@ class TodoCreateRequest(BaseModel):
 
 
 class ClientCreateRequest(BaseModel):
-    first_name: str
-    last_name: str
+    display_name: str
+    contact_name: Optional[str] = ""
     email: Optional[str] = ""
     phone: Optional[str] = ""
-    hourly_rate: Optional[float] = 0.0
-    color: Optional[str] = "#3b82f6"
-    icon: Optional[str] = "👤"
+    address: Optional[Address] = None
+    notes: Optional[str] = ""
+    is_archived: Optional[bool] = False
 
 
 class QuoteCreateRequest(BaseModel):
