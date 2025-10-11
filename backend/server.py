@@ -1084,13 +1084,27 @@ async def get_clients(
 async def create_client(
     client_request: ClientCreateRequest, user: Dict[str, Any] = Depends(verify_token)
 ):
+    """Create a new client with strict validation"""
     data = client_request.dict()
-    full_name = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
-    data["name"] = full_name
-    client = Client(uid=user["uid"], **data)
-
+    
+    # Validate display_name is required
+    if not data.get("display_name") or not data["display_name"].strip():
+        raise HTTPException(status_code=400, detail="display_name is required")
+    
+    # Validate email format
+    if data.get("email") and not validate_email(data["email"]):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Validate phone format
+    if data.get("phone") and not validate_french_phone(data["phone"]):
+        raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
+    
+    # Create client with new structure
+    client = Client(user_id=user["uid"], **data)
+    
+    # Store in new global collection
     await asyncio.to_thread(
-        user_col(user["uid"], "clients").document(client.id).set, client.dict()
+        db.collection("clients").document(client.id).set, client.dict()
     )
     return client
 
