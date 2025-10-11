@@ -50,13 +50,13 @@ export default function Clients() {
   };
 
   const handleDelete = async (client) => {
-    if (!window.confirm(`Archiver le client "${client.display_name}" ?`)) return;
+    if (!window.confirm(`Supprimer le client "${client.display_name}" ?`)) return;
     try {
       await deleteClient(client.id);
-      showToast('Client archivé avec succès');
+      showToast('Client supprimé avec succès');
     } catch (e) {
       console.error('Delete error:', e);
-      showToast('Erreur lors de l\'archivage', true);
+      showToast('Erreur lors de la suppression', true);
     }
   };
 

@@ -50,9 +50,9 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
               onClick={() => onDelete(client)}
               className="px-3 py-1 text-sm text-white bg-red-500 hover:bg-red-600 rounded transition-colors"
               data-testid="client-delete-button"
-              aria-label={`Archiver ${client.display_name}`}
+              aria-label={`Supprimer ${client.display_name}`}
             >
-              Archiver
+              Supprimer
             </button>
           </div>
         )}
