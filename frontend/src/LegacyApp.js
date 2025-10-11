@@ -56,6 +56,17 @@ const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+const extractArrayData = (response, key) => {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (key && Array.isArray(response?.[key])) return response[key];
+  if (key && response?.data && Array.isArray(response.data[key])) {
+    return response.data[key];
+  }
+  return [];
+};
+
 // Ensure time strings are always HH:MM with leading zeroes
 const normalizeTime = (time) => {
   if (!time) return "00:00";
@@ -4311,8 +4322,8 @@ const Quotes = ({ user }) => {
         apiCall("/quotes"),
         apiCall("/clients"),
       ]);
-      setQuotes(quotesResponse.data);
-      setClients(clientsResponse.data);
+      setQuotes(extractArrayData(quotesResponse, "quotes"));
+      setClients(extractArrayData(clientsResponse, "clients"));
     } catch (error) {
       console.error("Error loading quotes:", error);
     } finally {
@@ -5090,9 +5101,9 @@ const Invoices = ({ user }) => {
           apiCall("/clients"),
           apiCall("/quotes"),
         ]);
-      setInvoices(invoicesResponse.data);
-      setClients(clientsResponse.data);
-      setQuotes(quotesResponse.data);
+      setInvoices(extractArrayData(invoicesResponse, "invoices"));
+      setClients(extractArrayData(clientsResponse, "clients"));
+      setQuotes(extractArrayData(quotesResponse, "quotes"));
     } catch (error) {
       console.error("Error loading invoices:", error);
     } finally {
