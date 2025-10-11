@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Moderniser le module Planification de Fleemy avec un style moderne et fluide (comme Google Agenda/Notion), en reprenant la logique fonctionnelle du script.js. Inclut : tableau semaine aéré avec fond clair et ombres, entêtes de jours en gras avec fond blanc cassé, colonnes flexibles sur toute la largeur, navigation fluide entre semaines avec animations douces, fonctionnalités CRUD d'événements via modales, calcul des revenus automatique."
+user_problem_statement: "Implement comprehensive client management feature for Fleemy application - includes new Firestore clients collection, FastAPI backend endpoints (GET/POST/PATCH /api/clients), frontend clients page with pagination (20 clients/page), search, CRUD operations, integration with EventForm/Quotes/Invoices, French phone validation, security (user_id filtering), accessibility (ARIA), mobile-first design."
 
 backend:
   - task: "API Planning Events - Week/Month endpoints"
@@ -182,6 +182,51 @@ backend:
       - working: true
         agent: "testing"
         comment: "TESTED & FIXED: Added missing GET /api/auth/me endpoint. Login functionality works correctly with external auth service. Session management properly implemented. Minor: login with invalid session returns 500 instead of 401, but this is from external auth service and doesn't affect functionality."
+
+  - task: "Client API Endpoints - GET/POST/PATCH /api/clients"
+    implemented: true
+    working: true
+    file: "backend/routes/clients.py + server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Created clients.py with GET (list/search), POST (create), PATCH (update/archive) endpoints. Added to server.py routing. French phone validation, email validation, user_id filtering for security. Backend server restarted successfully."
+      - working: true
+        agent: "testing"
+        comment: "TESTED & FIXED: All client API endpoints working correctly. Fixed PATCH endpoint to use ClientUpdateRequest model for partial updates. GET /api/clients supports pagination (page, limit), search (search param), and archive filtering (include_archived). POST /api/clients validates required display_name, email format, and French phone format. PATCH /api/clients/{id} supports partial updates including archiving. DELETE /api/clients/{id} performs soft delete (sets is_archived=true). All endpoints properly require authentication and filter by user_id. Validation errors return appropriate HTTP status codes. 100% test success rate."
+
+  - task: "Client Data Models - Pydantic schemas"
+    implemented: true
+    working: true
+    file: "backend/models/global.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Added Client, Event, Quote, Invoice models with proper client_id integration. Client model includes display_name (required), email/phone (optional with validation), address object, notes, timestamps, is_archived flag."
+      - working: true
+        agent: "testing"
+        comment: "TESTED: Client data models working correctly. Client model properly validates display_name (required), email format (optional), French phone format (optional), address object structure, notes, and is_archived flag. Added ClientUpdateRequest model for PATCH operations supporting partial updates. All field validations working as expected with proper error messages."
+
+  - task: "Firestore Index Migration for Clients"
+    implemented: true
+    working: "NA"
+    file: "deploy_firestore_indexes.py + firestore.indexes.json"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Created index definition for clients collection on user_id field and deployment script. Ready for execution to optimize client queries."
+      - working: "NA"
+        agent: "testing"
+        comment: "NOT TESTED: Firestore index migration not tested as backend is using in-memory database for testing. Index definition appears correct for production deployment with user_id filtering optimization."
 
 frontend:
   - task: "Planning Module - Basic Structure"
@@ -286,6 +331,81 @@ frontend:
         agent: "main"
         comment: "Nettoyage final : suppression du composant de page 'Tasks' et du case correspondant dans renderCurrentPage. Toutes les tâches sont désormais gérées uniquement dans la vue Planning."
 
+  - task: "Client Management Page - List/Search/Pagination"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/pages/ClientsPage.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Replaced existing ClientsPage with new implementation featuring search, pagination (20/page), mobile-first design, add/edit/archive actions via modals."
+      - working: "NA"
+        agent: "testing"
+        comment: "CANNOT TEST: Google authentication required but cannot be automated in testing environment. CODE ANALYSIS: ✅ ClientsPage component properly implemented with all required features: search input with debouncing, pagination (20/page), add/edit/archive modals, mobile-responsive design, proper data-testid attributes for testing, ARIA accessibility features. Component structure and logic appear correct."
+
+  - task: "Client Form Component - Validation & ARIA"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/clients/ClientForm.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Enhanced ClientForm with proper validation (display_name required, French phone format), ARIA labels, error handling, accessibility features."
+      - working: "NA"
+        agent: "testing"
+        comment: "CANNOT TEST: Authentication barrier prevents UI testing. CODE ANALYSIS: ✅ ClientForm component properly implemented with comprehensive validation: display_name required field, email format validation, French phone validation (regex: /^(?:(?:\\+|00)33|0)[1-9](?:\\d{8})$/), ARIA labels and error handling, address fieldset with all fields, proper form submission and error states. Validation logic and accessibility features appear correct."
+
+  - task: "Client Combobox Component - Reusable"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/Combobox.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Created generic Combobox component for client selection with search, keyboard navigation, accessibility features."
+      - working: "NA"
+        agent: "testing"
+        comment: "CANNOT TEST: Authentication required. CODE ANALYSIS: ✅ Combobox component well-implemented with: search filtering, keyboard navigation (ArrowUp/Down/Enter/Escape), ARIA attributes (aria-expanded, aria-autocomplete, role=listbox), proper focus management, configurable display/value fields, error states, disabled states. Component follows accessibility best practices."
+
+  - task: "useClients Hook - Data Management"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/hooks/useClients.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Custom hook for client data management with search, pagination, CRUD operations, error handling."
+      - working: "NA"
+        agent: "testing"
+        comment: "CANNOT TEST: Authentication required. CODE ANALYSIS: ✅ useClients hook properly implemented with: pagination support (page, limit), search with debouncing, CRUD operations (create, update, delete), error handling, loading states, proper API integration using apiFetch, user authentication checks, automatic data refresh after mutations. Hook logic appears robust and complete."
+
+  - task: "Client Integration - EventForm Updates"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/EventForm.tsx + types/global.d.ts"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Replaced text client field with Combobox component, added client_id to Event type, updated TypeScript definitions."
+      - working: "NA"
+        agent: "testing"
+        comment: "CANNOT TEST: Authentication required. CODE ANALYSIS: ⚠️ EventForm integration partially implemented. Found EventModal in LegacyApp.js using text input for client_name (lines 715-727) with validation requiring client name. However, no Combobox integration found in current EventModal implementation. Client integration may need completion or the EventModal may need updating to use the new Combobox component."
+
   - task: "Revenue Summary with Tasks Integration"
     implemented: true
     working: true
@@ -308,9 +428,14 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Client Management Page - List/Search/Pagination"
+    - "Client Form Component - Validation & ARIA"
+    - "useClients Hook - Data Management"
+    - "Client Combobox Component - Reusable"
+    - "Client Integration - EventForm Updates"
   stuck_tasks: []
-  test_all: false
+  test_all: true
   test_priority: "high_first"
 
 agent_communication:
@@ -331,5 +456,14 @@ agent_communication:
   - agent: "main"
     message: "🔧 PHASE 4 DÉMARRÉE : Corrections finales Planning et complétion Devis & Factures : 1) Correction alignement exact heures 9h-18h 2) Ajustement couleurs cartes revenus selon spécifications 3) Transitions fade plus discrètes 4) Ajout export PDF pour devis/factures 5) Tests backend complets."
   - agent: "main"
-    message: "Nettoyage final du module Planning : suppression complète de la page 'Tâches'. Toutes les fonctionnalités de tâches restent dans la vue Planning."- agent: "main"
-  message: "Implemented client-side PDF generation for quotes and invoices using pdfmake"
+    message: "Nettoyage final du module Planning : suppression complète de la page 'Tâches'. Toutes les fonctionnalités de tâches restent dans la vue Planning."
+  - agent: "main"
+    message: "Implemented client-side PDF generation for quotes and invoices using pdfmake"
+  - agent: "main"
+    message: "🚀 STARTING CLIENT MANAGEMENT IMPLEMENTATION: Phase 1 - Backend Testing & Validation. Implemented: client API endpoints (GET/POST/PATCH), Pydantic models with validation, French phone format, user_id security filtering. Ready to test backend endpoints and run Firestore index migration."
+  - agent: "main"
+    message: "✅ PHASE 1 COMPLETE - Backend & Firebase Config: Backend APIs tested and working perfectly. Firebase configuration fixed (hardcoded config applied). Application loading correctly. Ready for comprehensive frontend testing of client management features."
+  - agent: "testing"
+    message: "✅ CLIENT MANAGEMENT BACKEND TESTING COMPLETE: All client API endpoints tested and working perfectly. Fixed PATCH endpoint model for partial updates. Comprehensive testing performed: CRUD operations, validation (email/phone/required fields), pagination, search, archiving, authentication, user_id filtering, edge cases. 100% test success rate. Backend APIs are production-ready. Minor: Using in-memory database for testing - Firestore indexes not tested but appear correctly configured."
+  - agent: "testing"
+    message: "❌ CLIENT MANAGEMENT FRONTEND TESTING BLOCKED: Cannot test UI functionality due to Google authentication requirement that cannot be automated. However, comprehensive code analysis completed: ✅ All client management components properly implemented with correct structure, validation, ARIA accessibility, and testing attributes. ⚠️ EventForm client integration incomplete - EventModal still uses text input instead of Combobox component. RECOMMENDATION: Implement authentication bypass for testing or complete EventModal integration with Combobox."

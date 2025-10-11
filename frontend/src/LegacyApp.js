@@ -5,6 +5,8 @@ import { apiFetch } from "./lib/api";
 import { showToast } from "./utils/toast";
 import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
+import Combobox from "./components/Combobox";
+import { useClients } from "./hooks/useClients";
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -612,6 +614,9 @@ const EventModal = ({
     client_name: "",
   });
   const [loading, setLoading] = useState(false);
+  
+  // Use clients hook for client selection
+  const { clients, loading: clientsLoading } = useClients({ search: '', page: 1, limit: 100 });
 
   useEffect(() => {
     if (event) {
@@ -672,8 +677,8 @@ const EventModal = ({
     e.preventDefault();
 
     // Validation : client obligatoire, description facultative
-    if (!formData.client_name.trim()) {
-      alert("Le nom du client est obligatoire.");
+    if (!formData.client_id || !formData.client_name.trim()) {
+      alert("Le choix d'un client est obligatoire.");
       return;
     }
 
@@ -713,16 +718,23 @@ const EventModal = ({
           <fieldset disabled={readOnly || loading}>
           <div className="form-group">
             <label className="form-label">Client *</label>
-            <input
-              type="text"
-              value={formData.client_name}
-              onChange={(e) =>
-                setFormData({ ...formData, client_name: e.target.value })
-              }
-              className="form-input"
+            <Combobox
+              options={clients || []}
+              value={formData.client_id}
+              onChange={(clientId) => {
+                const selectedClient = clients?.find(c => c.id === clientId);
+                setFormData({ 
+                  ...formData, 
+                  client_id: clientId, 
+                  client_name: selectedClient?.display_name || '' 
+                });
+              }}
+              displayField="display_name"
+              valueField="id"
+              placeholder="Sélectionner un client (obligatoire)"
+              disabled={loading || clientsLoading}
               required
-              disabled={loading}
-              placeholder="Nom du client (obligatoire)"
+              className="form-input"
             />
           </div>
 
