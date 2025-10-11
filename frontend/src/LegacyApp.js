@@ -721,13 +721,16 @@ const EventModal = ({
             <Combobox
               options={clients || []}
               value={formData.client_id}
-              onChange={(clientId) => {
-                const selectedClient = clients?.find(c => c.id === clientId);
-                setFormData({ 
-                  ...formData, 
-                  client_id: clientId, 
-                  client_name: selectedClient?.display_name || '' 
-                });
+              onChange={(clientId, selectedOption) => {
+                const clientFromList =
+                  selectedOption || clients?.find((c) => c.id === clientId);
+                const resolvedClientName =
+                  clientFromList?.display_name || clientFromList?.name || "";
+                setFormData((prev) => ({
+                  ...prev,
+                  client_id: clientId,
+                  client_name: resolvedClientName,
+                }));
               }}
               displayField="display_name"
               valueField="id"
@@ -3948,10 +3951,13 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
 
   const handleClientChange = (clientId) => {
     const selectedClient = clients.find((c) => c.id === clientId);
+    const clientName = selectedClient
+      ? selectedClient.display_name || selectedClient.name || ""
+      : "";
     setFormData((prev) => ({
       ...prev,
       client_id: clientId,
-      client_name: selectedClient ? selectedClient.name : "",
+      client_name: clientName,
     }));
   };
 
@@ -4066,7 +4072,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
               <option value="">Sélectionner un client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client?.name ?? ""}
+                  {client?.display_name ?? client?.name ?? ""}
                 </option>
               ))}
             </select>
@@ -4695,10 +4701,13 @@ const InvoiceModal = ({
 
   const handleClientChange = (clientId) => {
     const selectedClient = clients.find((c) => c.id === clientId);
+    const clientName = selectedClient
+      ? selectedClient.display_name || selectedClient.name || ""
+      : "";
     setFormData((prev) => ({
       ...prev,
       client_id: clientId,
-      client_name: selectedClient ? selectedClient.name : "",
+      client_name: clientName,
     }));
   };
 
@@ -4840,7 +4849,7 @@ const InvoiceModal = ({
               <option value="">Sélectionner un client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client?.name ?? ""}
+                  {client?.display_name ?? client?.name ?? ""}
                 </option>
               ))}
             </select>
