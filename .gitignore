@@ -182,3 +182,7 @@ backend/serviceAccountKey.json
 
 !frontend/.env.example
 !.env.example
+-e 
+# Environment files
+*.env
+*.env.*
