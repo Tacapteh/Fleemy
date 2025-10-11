@@ -132,14 +132,48 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Layout englobe toutes les pages et passe user via context */}
+        {/* Route de sélection de profil (sans sidebar) */}
+        <Route path="/profiles" element={<ProfilePickerPage />} />
+        
+        {/* Routes avec team schedule (sans sidebar pour l'instant) */}
+        <Route path="/team/:teamId/schedule" element={
+          <AuthGuard user={user}>
+            <Planning />
+          </AuthGuard>
+        } />
+        
+        {/* Layout englobe les autres pages et passe user via context */}
         <Route element={<Layout user={user} onLogout={handleLogout} />}>
-          <Route path="/" element={<Navigate to="/dashboard" />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/planning" element={<Planning />} />
-          <Route path="/quotes" element={<Quotes />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/clients" element={<Clients />} />
+          <Route path="/" element={
+            <AuthGuard user={user}>
+              <Navigate to="/dashboard" />
+            </AuthGuard>
+          } />
+          <Route path="/dashboard" element={
+            <AuthGuard user={user}>
+              <Dashboard />
+            </AuthGuard>
+          } />
+          <Route path="/planning" element={
+            <AuthGuard user={user}>
+              <Planning />
+            </AuthGuard>
+          } />
+          <Route path="/quotes" element={
+            <AuthGuard user={user}>
+              <Quotes />
+            </AuthGuard>
+          } />
+          <Route path="/invoices" element={
+            <AuthGuard user={user}>
+              <Invoices />
+            </AuthGuard>
+          } />
+          <Route path="/clients" element={
+            <AuthGuard user={user}>
+              <Clients />
+            </AuthGuard>
+          } />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
