@@ -101,6 +101,7 @@ const normalizeTaskDocument = (docSnapshot, fallbackUserId, prefetchedData) => {
   return {
     id: docSnapshot.id,
     user_id: userId,
+    team_id: data.team_id || null,
     label: data.label || data.title || data.name || 'Tâche sans titre',
     price: data.price || null,
     color: data.color || '#dbeafe',
@@ -262,12 +263,37 @@ export default function useTasks(userId, weekStartISO, teamId = null) {
       });
 
       const mergedTasks = Array.from(merged.values());
-      console.log('📊 useTasks: Mise à jour tasks depuis sources', { 
-        count: mergedTasks.length,
-        taskIds: mergedTasks.map(t => t.id),
-        tasks: mergedTasks
+      const filteredTasks = mergedTasks.filter((task) => {
+        const taskTeamId = task.team_id || null;
+        const taskOwnerId = task.user_id || null;
+
+        if (activeTeamId) {
+          if (taskTeamId !== activeTeamId) {
+            return false;
+          }
+          if (!userId) {
+            return true;
+          }
+          return taskOwnerId === userId;
+        }
+
+        if (taskTeamId) {
+          return false;
+        }
+
+        if (!userId) {
+          return true;
+        }
+
+        return taskOwnerId === userId || taskOwnerId === null;
       });
-      setTasks(mergedTasks);
+
+      console.log('📊 useTasks: Mise à jour tasks depuis sources', {
+        count: filteredTasks.length,
+        taskIds: filteredTasks.map(t => t.id),
+        tasks: filteredTasks
+      });
+      setTasks(filteredTasks);
       setLoading(false);
     };
 
