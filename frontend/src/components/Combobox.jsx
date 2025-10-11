@@ -9,6 +9,7 @@ export default function Combobox({
   value,
   onChange,
   onSelect,
+  onSearchChange,
   placeholder = 'Rechercher...',
   displayField = 'display_name',
   valueField = 'id',
@@ -45,13 +46,14 @@ export default function Combobox({
     setSearchTerm(newValue);
     setIsOpen(true);
     setHighlightedIndex(0);
-    if (onChange) onChange(newValue);
+    if (onSearchChange) onSearchChange(newValue);
   };
 
   const handleSelectOption = (option) => {
     setSearchTerm(option[displayField] || '');
     setIsOpen(false);
     setHighlightedIndex(-1);
+    if (onChange) onChange(option[valueField], option);
     if (onSelect) onSelect(option);
   };
 
