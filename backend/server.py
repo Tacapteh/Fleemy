@@ -141,9 +141,8 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 
-def _build_cors_error_response(request: Request, content: Dict[str, Any]) -> JSONResponse:
-    """Ensure custom error responses keep CORS headers."""
-    response = JSONResponse(status_code=200, content=content)
+def _apply_cors_headers(request: Request, response: Response) -> Response:
+    """Apply CORS headers consistently on any response when origin allowed."""
     origin = request.headers.get("origin")
     if origin:
         if origin in ALLOWED_ORIGINS or re.match(ALLOWED_ORIGIN_REGEX, origin):
@@ -158,11 +157,17 @@ def _build_cors_error_response(request: Request, content: Dict[str, Any]) -> JSO
                 response.headers["Vary"] = "Origin"
     return response
 
+
+def _build_cors_error_response(request: Request, content: Dict[str, Any]) -> JSONResponse:
+    """Ensure custom error responses keep CORS headers."""
+    response = JSONResponse(status_code=200, content=content)
+    return _apply_cors_headers(request, response)
+
 @app.middleware("http")
 async def error_handling_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
-        return response
+        return _apply_cors_headers(request, response)
     except RequestValidationError as exc:
         logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
         return _build_cors_error_response(
