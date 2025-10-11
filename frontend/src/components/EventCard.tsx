@@ -64,7 +64,9 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
         </div>
       )}
 
-      {event.client && <div className="subtitle truncate leading-tight break-words">{event.client}</div>}
+      {event.client && event.client !== title && (
+        <div className="subtitle truncate leading-tight break-words">{event.client}</div>
+      )}
       {event.description && !event.client && (
         <div className="subtitle truncate break-words leading-tight text-xs text-gray-600">{event.description}</div>
       )}
