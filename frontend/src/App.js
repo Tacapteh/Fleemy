@@ -34,6 +34,71 @@ function Layout({ user, onLogout }) {
   );
 }
 
+// Composant pour gérer la redirection post-login
+function AuthGuard({ user, children }) {
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const checkContext = async () => {
+      if (!user) {
+        setChecking(false);
+        return;
+      }
+
+      try {
+        // Vérifier si un contexte existe
+        const savedContext = contextStore.get();
+        
+        if (savedContext) {
+          // Valider que le contexte est toujours valide
+          if (savedContext.type === 'solo') {
+            // Contexte solo toujours valide
+            setChecking(false);
+            return;
+          } else if (savedContext.type === 'team' && savedContext.teamId) {
+            // Vérifier que l'utilisateur est toujours membre de l'équipe
+            const token = await user.getIdToken();
+            const backendUrl = process.env.REACT_APP_BACKEND_URL;
+            
+            const response = await fetch(`${backendUrl}/api/teams/my`, {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+            });
+
+            const data = await response.json();
+            const stillMember = data.teams?.some(t => t.team_id === savedContext.teamId);
+            
+            if (stillMember) {
+              // Contexte team toujours valide
+              setChecking(false);
+              return;
+            }
+          }
+        }
+        
+        // Pas de contexte valide, rediriger vers /profiles
+        navigate('/profiles');
+      } catch (err) {
+        console.error('Error checking context:', err);
+        navigate('/profiles');
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkContext();
+  }, [user, navigate]);
+
+  if (checking) {
+    return <div className="flex items-center justify-center h-screen">Vérification du contexte...</div>;
+  }
+
+  return children;
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
