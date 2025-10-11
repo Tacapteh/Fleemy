@@ -677,8 +677,8 @@ const EventModal = ({
     e.preventDefault();
 
     // Validation : client obligatoire, description facultative
-    if (!formData.client_name.trim()) {
-      alert("Le nom du client est obligatoire.");
+    if (!formData.client_id || !formData.client_name.trim()) {
+      alert("Le choix d'un client est obligatoire.");
       return;
     }
 
