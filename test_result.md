@@ -183,6 +183,42 @@ backend:
         agent: "testing"
         comment: "TESTED & FIXED: Added missing GET /api/auth/me endpoint. Login functionality works correctly with external auth service. Session management properly implemented. Minor: login with invalid session returns 500 instead of 401, but this is from external auth service and doesn't affect functionality."
 
+  - task: "Client API Endpoints - GET/POST/PATCH /api/clients"
+    implemented: true
+    working: "NA"
+    file: "backend/routes/clients.py + server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Created clients.py with GET (list/search), POST (create), PATCH (update/archive) endpoints. Added to server.py routing. French phone validation, email validation, user_id filtering for security. Backend server restarted successfully."
+
+  - task: "Client Data Models - Pydantic schemas"
+    implemented: true
+    working: "NA"
+    file: "backend/models/global.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Added Client, Event, Quote, Invoice models with proper client_id integration. Client model includes display_name (required), email/phone (optional with validation), address object, notes, timestamps, is_archived flag."
+
+  - task: "Firestore Index Migration for Clients"
+    implemented: true
+    working: "NA"
+    file: "deploy_firestore_indexes.py + firestore.indexes.json"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Created index definition for clients collection on user_id field and deployment script. Ready for execution to optimize client queries."
+
 frontend:
   - task: "Planning Module - Basic Structure"
     implemented: true
