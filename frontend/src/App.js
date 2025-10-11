@@ -26,7 +26,7 @@ import { apiFetch } from "./lib/api";
 function Layout({ user, onLogout }) {
   return (
     <div style={{ display: "flex" }}>
-      <Sidebar onLogout={onLogout} />
+      <Sidebar user={user} onLogout={onLogout} />
       <div style={{ flex: 1, padding: "20px" }}>
         {/* Outlet = là où s’affichent les pages */}
         <Outlet context={{ user }} />
