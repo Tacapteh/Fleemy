@@ -209,20 +209,24 @@ class Todo(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class Address(BaseModel):
+    line1: str = ""
+    line2: Optional[str] = ""
+    postal_code: str = ""
+    city: str = ""
+    country: str = "France"
+
+
 class Client(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    uid: str
-    first_name: str
-    last_name: str
-    name: str
+    user_id: str  # Renamed from uid for consistency
+    display_name: str
+    contact_name: Optional[str] = ""
     email: Optional[str] = ""
     phone: Optional[str] = ""
-    hourly_rate: float = 0.0
-    color: Optional[str] = "#3b82f6"
-    icon: Optional[str] = "👤"
-    address: Optional[str] = ""
-    company: Optional[str] = ""
+    address: Optional[Address] = None
     notes: Optional[str] = ""
+    is_archived: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
