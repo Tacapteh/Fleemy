@@ -31,9 +31,8 @@ const firebaseConfig = {
   messagingSenderId: "123456789012",
 };
 
-if (process.env.REACT_APP_FIREBASE_STORAGE_BUCKET) {
-  firebaseConfig.storageBucket = process.env.REACT_APP_FIREBASE_STORAGE_BUCKET;
-}
+// Optional storage bucket configuration
+firebaseConfig.storageBucket = "fleemy-app.appspot.com";
 
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
 const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
