@@ -1109,23 +1109,41 @@ async def create_client(
     return client
 
 
-@api_router.put("/clients/{client_id}")
+@api_router.patch("/clients/{client_id}")
 async def update_client(
     client_id: str,
     client_request: ClientCreateRequest,
-    apply_rate: Optional[bool] = False,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    data = client_request.dict()
-    data["name"] = f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+    """Update a client (PATCH method as specified)"""
+    # Verify ownership
+    doc_ref = db.collection("clients").document(client_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="Client not found")
+    
+    existing = snap.to_dict()
+    if existing.get("user_id") != user["uid"]:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this client")
+    
+    data = client_request.dict(exclude_unset=True)
+    
+    # Validate display_name if provided
+    if "display_name" in data and (not data["display_name"] or not data["display_name"].strip()):
+        raise HTTPException(status_code=400, detail="display_name cannot be empty")
+    
+    # Validate email format
+    if data.get("email") and not validate_email(data["email"]):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    # Validate phone format
+    if data.get("phone") and not validate_french_phone(data["phone"]):
+        raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
+    
     update_data = {**data, "updated_at": datetime.utcnow()}
-    doc_ref = user_col(user["uid"], "clients").document(client_id)
     await asyncio.to_thread(doc_ref.update, update_data)
-    if apply_rate and data.get("hourly_rate") is not None:
-        events_query = user_col(user["uid"], "events").where("client_id", "==", client_id)
-        events = await asyncio.to_thread(lambda: list(events_query.stream()))
-        for ev in events:
-            await asyncio.to_thread(ev.reference.update, {"hourly_rate": data["hourly_rate"]})
+    
     updated = await asyncio.to_thread(doc_ref.get)
     return updated.to_dict()
 
