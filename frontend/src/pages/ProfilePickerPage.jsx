@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Users, Plus, LogIn } from 'lucide-react';
+import { User, Users, Plus, LogIn, Share2 } from 'lucide-react';
 import { auth } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
 import JoinTeamDialog from '../components/profiles/JoinTeamDialog';
+import TeamInviteCodeDialog from '../components/profiles/TeamInviteCodeDialog';
 
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const ProfilePickerPage = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [error, setError] = useState('');
+  const [inviteDialogTeam, setInviteDialogTeam] = useState(null);
 
   useEffect(() => {
     loadTeams();
@@ -62,6 +64,8 @@ const ProfilePickerPage = () => {
   const handleSelectSolo = async () => {
     const context = { type: 'solo' };
     contextStore.set(context);
+    localStorage.removeItem('teamId');
+    localStorage.removeItem('teamName');
     await updateLastContext(context);
     navigate('/planning');
   };
@@ -73,8 +77,10 @@ const ProfilePickerPage = () => {
       teamName: team.name,
     };
     contextStore.set(context);
+    localStorage.setItem('teamId', team.team_id);
+    localStorage.setItem('teamName', team.name);
     await updateLastContext({ type: 'team', team_id: team.team_id });
-    navigate(`/team/${team.team_id}/schedule`);
+    navigate('/planning');
   };
 
   const handleCreateTeam = async (teamName) => {
@@ -94,10 +100,11 @@ const ProfilePickerPage = () => {
       // Reload teams
       await loadTeams();
 
-      // Select the new team
-      handleSelectTeam({
+      setInviteDialogTeam({
         team_id: data.team_id,
         name: data.name,
+        invite_code: data.invite_code,
+        owner_uid: user.uid,
       });
     } catch (err) {
       throw err;
@@ -179,28 +186,55 @@ const ProfilePickerPage = () => {
         </button>
 
         {/* Team Profiles */}
-        {teams.map((team) => (
-          <button
-            key={team.team_id}
-            onClick={() => handleSelectTeam(team)}
-            className="group relative aspect-square bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden hover:ring-4 hover:ring-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
-            data-testid={`profile-team-${team.team_id}-btn`}
-            aria-label={`Équipe ${team.name}`}
-          >
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-              <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                <Users size={32} className="text-white" />
+        {teams.map((team) => {
+          const isOwner = auth.currentUser?.uid && team.owner_uid === auth.currentUser.uid;
+
+          const openInviteDialog = (event) => {
+            event?.preventDefault();
+            event?.stopPropagation();
+            setInviteDialogTeam(team);
+          };
+
+          return (
+            <button
+              key={team.team_id}
+              onClick={() => handleSelectTeam(team)}
+              className="group relative aspect-square bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden hover:ring-4 hover:ring-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+              data-testid={`profile-team-${team.team_id}-btn`}
+              aria-label={`Équipe ${team.name}`}
+            >
+              {isOwner && team.invite_code && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={openInviteDialog}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      openInviteDialog(e);
+                    }
+                  }}
+                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/20 text-white/90 hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  aria-label="Afficher le code d'invitation"
+                  data-testid={`team-${team.team_id}-invite-btn`}
+                >
+                  <Share2 size={18} />
+                </span>
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                  <Users size={32} className="text-white" />
+                </div>
+                <span className="text-white font-semibold text-center text-sm leading-tight line-clamp-2">
+                  {team.name}
+                </span>
+                <span className="text-white/80 text-xs mt-1">
+                  {team.members_count} membre{team.members_count > 1 ? 's' : ''}
+                </span>
               </div>
-              <span className="text-white font-semibold text-center text-sm leading-tight line-clamp-2">
-                {team.name}
-              </span>
-              <span className="text-white/80 text-xs mt-1">
-                {team.members_count} membre{team.members_count > 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-          </button>
-        ))}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+            </button>
+          );
+        })}
 
         {/* Create Team */}
         <button
@@ -248,6 +282,16 @@ const ProfilePickerPage = () => {
         isOpen={showJoinDialog}
         onClose={() => setShowJoinDialog(false)}
         onJoinTeam={handleJoinTeam}
+      />
+
+      <TeamInviteCodeDialog
+        isOpen={Boolean(inviteDialogTeam)}
+        team={inviteDialogTeam}
+        onClose={() => setInviteDialogTeam(null)}
+        onOpenTeam={(teamData) => {
+          setInviteDialogTeam(null);
+          handleSelectTeam(teamData);
+        }}
       />
 
       {/* Footer */}
