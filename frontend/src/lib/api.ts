@@ -18,7 +18,18 @@ function buildApiUrl(path: string) {
   return `${rootUrl}${finalPath}`;
 }
 
-export async function apiFetch(path: string, options: RequestInit = {}) {
+type ApiError = Error & {
+  response?: {
+    status: number;
+    statusText: string;
+    data: unknown;
+  };
+};
+
+export async function apiFetch(
+  path: string,
+  options: RequestInit = {},
+): Promise<any> {
   const method = (options.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -34,10 +45,36 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
     method,
     headers,
   });
-  if (!res.ok) {
-    throw new Error(res.statusText);
+
+  const contentType = res.headers.get("content-type") || "";
+  const isJson = contentType.includes("application/json");
+  let data: unknown = null;
+
+  if (isJson) {
+    try {
+      data = await res.json();
+    } catch (error) {
+      data = null;
+    }
+  } else {
+    data = await res.text();
   }
-  return res.json();
+
+  if (!res.ok) {
+    const message =
+      (typeof data === "object" && data && (data as any).detail) ||
+      res.statusText ||
+      "Request failed";
+    const error = new Error(message) as ApiError;
+    error.response = {
+      status: res.status,
+      statusText: res.statusText,
+      data,
+    };
+    throw error;
+  }
+
+  return data;
 }
 
 export async function translateHtml(html: string, target: string) {
