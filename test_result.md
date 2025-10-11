@@ -414,13 +414,13 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Client API Endpoints - GET/POST/PATCH /api/clients"
-    - "Client Data Models - Pydantic schemas"
     - "Client Management Page - List/Search/Pagination"
     - "Client Form Component - Validation & ARIA"
     - "useClients Hook - Data Management"
+    - "Client Combobox Component - Reusable"
+    - "Client Integration - EventForm Updates"
   stuck_tasks: []
-  test_all: false
+  test_all: true
   test_priority: "high_first"
 
 agent_communication:
