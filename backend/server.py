@@ -255,6 +255,8 @@ class PlanningEvent(BaseModel):
     end_time: str  # "17:00"
     status: str  # "paid", "unpaid", "pending", "not_worked"
     hourly_rate: float = 50.0
+    team_id: Optional[str] = None
+    owner_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -271,6 +273,8 @@ class WeeklyTask(BaseModel):
     time_slots: List[Dict[str, str]] = (
         []
     )  # {"day": "monday", "start": "09:00", "end": "10:00"}
+    team_id: Optional[str] = None
+    owner_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -368,6 +372,7 @@ class EventCreateRequest(BaseModel):
     hourly_rate: Optional[float] = 50.0
     year: Optional[int] = None
     week: Optional[int] = None
+    team_id: Optional[str] = None
 
 
 class TaskCreateRequest(BaseModel):
@@ -378,6 +383,7 @@ class TaskCreateRequest(BaseModel):
     time_slots: List[Dict[str, str]] = []
     year: Optional[int] = None
     week: Optional[int] = None
+    team_id: Optional[str] = None
 
 
 class TodoCreateRequest(BaseModel):
@@ -483,6 +489,14 @@ async def stream_docs(query):
     return [d.to_dict() for d in docs]
 
 
+async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
+    team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
+    team = team_snap.to_dict() if team_snap.exists else None
+    if not team or user_uid not in (team.get("members", []) + [team.get("owner_uid")]):
+        raise HTTPException(status_code=403, detail="Not authorized for this team")
+    return team
+
+
 def generate_invite_code(length=8):
     """Generate a unique uppercase alphanumeric invite code."""
     chars = string.ascii_uppercase + string.digits
@@ -577,16 +591,7 @@ async def get_week_planning(
     logger.info("/planning/week/%s/%s called", year, week)
     try:
         if team_id:
-            team_snap = await asyncio.to_thread(
-                db.collection("teams").document(team_id).get
-            )
-            team = team_snap.to_dict() if team_snap.exists else None
-            if not team or user["uid"] not in (
-                team.get("members", []) + [team.get("owner_uid")]
-            ):
-                raise HTTPException(
-                    status_code=403, detail="Not authorized for this team"
-                )
+            await ensure_team_membership(team_id, user["uid"])
             events_ref = team_col(team_id, "events")
             tasks_ref = team_col(team_id, "tasks")
         else:
@@ -641,14 +646,7 @@ async def get_month_planning(
         }
 
         if team_id:
-            team_snap = await asyncio.to_thread(
-                db.collection("teams").document(team_id).get
-            )
-            team = team_snap.to_dict() if team_snap.exists else None
-            if not team or user["uid"] not in (
-                team.get("members", []) + [team.get("owner_uid")]
-            ):
-                raise HTTPException(status_code=403, detail="Not authorized for this team")
+            await ensure_team_membership(team_id, user["uid"])
             events_ref = team_col(team_id, "events")
             tasks_ref = team_col(team_id, "tasks")
         else:
@@ -788,34 +786,40 @@ async def create_event(
         year = event_request.year or now.year
         week = event_request.week or now.isocalendar()[1]
 
+        target_team_id = event_request.team_id or None
+        if target_team_id:
+            await ensure_team_membership(target_team_id, user["uid"])
+            events_ref = team_col(target_team_id, "events")
+        else:
+            events_ref = user_col(user["uid"], "events")
+
         event = PlanningEvent(
             uid=user["uid"],
             week=week,
             year=year,
             description=event_request.description,
-            client_id=event_request.client_id,
+            client_id=event_request.client_id or "",
             client_name=event_request.client_name,
             day=event_request.day,
             start_time=event_request.start_time,
             end_time=event_request.end_time,
             status=event_request.status,
-            hourly_rate=event_request.hourly_rate if event_request.hourly_rate is not None else 50.0,
+            hourly_rate=(
+                event_request.hourly_rate if event_request.hourly_rate is not None else 50.0
+            ),
+            team_id=target_team_id,
+            owner_id=user["uid"],
         )
+        event_payload = event.dict()
         await asyncio.to_thread(
-            user_col(user["uid"], "events").document(event.id).set, event.dict()
+            events_ref.document(event.id).set,
+            event_payload,
         )
-        owner_id = user["uid"]
-        user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-        team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
         await asyncio.to_thread(
             global_event_doc(year, week, event.id).set,
-            {**event.dict(), "owner_id": owner_id},
+            event_payload,
         )
-        if team_id:
-            await asyncio.to_thread(
-                team_col(team_id, "events").document(event.id).set, event.dict()
-            )
-        return {"success": True, "event": event.dict()}
+        return {"success": True, "event": event_payload}
     except Exception as e:
         logger.error("create_event error: %s", e, exc_info=True)
         return {"success": False, "error": str(e)}
@@ -827,50 +831,82 @@ async def update_event(
     event_request: EventCreateRequest,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    snap = await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event_id).get
-    )
+    target_team_id = event_request.team_id or None
+    if target_team_id:
+        await ensure_team_membership(target_team_id, user["uid"])
+        doc_ref = team_col(target_team_id, "events").document(event_id)
+    else:
+        doc_ref = user_col(user["uid"], "events").document(event_id)
+
+    snap = await asyncio.to_thread(doc_ref.get)
     if not snap.exists:
         return {"success": False, "error": "Event not found"}
 
     existing = snap.to_dict()
-    update_data = {**event_request.dict(), "updated_at": datetime.now(timezone.utc)}
-    await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event_id).update, update_data
-    )
-    owner_id = existing.get("owner_id", user["uid"])
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    await asyncio.to_thread(
-        global_event_doc(existing["year"], existing["week"], event_id).set,
-        {**existing, **update_data, "owner_id": owner_id},
-    )
-    if team_id:
+    owner_id = existing.get("owner_id", existing.get("uid", user["uid"]))
+    new_year = event_request.year or existing.get("year")
+    new_week = event_request.week or existing.get("week")
+    update_fields = {
+        "description": event_request.description,
+        "client_id": event_request.client_id or "",
+        "client_name": event_request.client_name,
+        "day": event_request.day,
+        "start_time": event_request.start_time,
+        "end_time": event_request.end_time,
+        "status": event_request.status,
+        "hourly_rate": (
+            event_request.hourly_rate
+            if event_request.hourly_rate is not None
+            else existing.get("hourly_rate", 50.0)
+        ),
+        "year": new_year,
+        "week": new_week,
+        "team_id": target_team_id,
+        "owner_id": owner_id,
+        "uid": owner_id,
+        "updated_at": datetime.now(timezone.utc),
+    }
+    await asyncio.to_thread(doc_ref.update, update_fields)
+
+    payload = {**existing, **update_fields}
+    existing_year = existing.get("year")
+    existing_week = existing.get("week")
+    if existing_year and existing_week:
         await asyncio.to_thread(
-            team_col(team_id, "events").document(event_id).update, update_data
+            global_event_doc(existing_year, existing_week, event_id).delete
         )
-    updated = await asyncio.to_thread(
-        user_col(user["uid"], "events").document(event_id).get
+    await asyncio.to_thread(
+        global_event_doc(new_year, new_week, event_id).set,
+        payload,
     )
-    return {"success": True, "event": updated.to_dict()}
+    return {"success": True, "event": payload}
 
 
 @api_router.delete("/planning/events/{event_id}")
-async def delete_event(event_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    doc_ref = user_col(user["uid"], "events").document(event_id)
+async def delete_event(
+    event_id: str,
+    team_id: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    team_id = team_id or None
+    if team_id:
+        await ensure_team_membership(team_id, user["uid"])
+        doc_ref = team_col(team_id, "events").document(event_id)
+    else:
+        doc_ref = user_col(user["uid"], "events").document(event_id)
+
     snap = await asyncio.to_thread(doc_ref.get)
     if not snap.exists:
         raise HTTPException(status_code=404, detail="Event not found")
+
     data = snap.to_dict()
     await asyncio.to_thread(doc_ref.delete)
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    owner_id = team_id if team_id else user["uid"]
-    await asyncio.to_thread(
-        global_event_doc(data["year"], data["week"], event_id).delete
-    )
-    if team_id:
-        await asyncio.to_thread(team_col(team_id, "events").document(event_id).delete)
+    year = data.get("year")
+    week = data.get("week")
+    if year and week:
+        await asyncio.to_thread(
+            global_event_doc(year, week, event_id).delete
+        )
     return {"success": True, "message": "deleted"}
 
 
@@ -887,14 +923,7 @@ async def get_earnings(
         raise HTTPException(status_code=404, detail="User not found")
 
     if team_id:
-        team_snap = await asyncio.to_thread(
-            db.collection("teams").document(team_id).get
-        )
-        team = team_snap.to_dict() if team_snap.exists else None
-        if not team or user["uid"] not in (
-            team.get("members", []) + [team.get("owner_uid")]
-        ):
-            raise HTTPException(status_code=403, detail="Not authorized for this team")
+        await ensure_team_membership(team_id, user["uid"])
         events_ref = team_col(team_id, "events")
         tasks_ref = team_col(team_id, "tasks")
     else:
@@ -978,23 +1007,31 @@ async def create_task(
     now = datetime.now(timezone.utc)
     year = task_request.year or now.year
     week = task_request.week or now.isocalendar()[1]
-    task_data = task_request.dict(exclude={"year", "week"})
-    task = WeeklyTask(uid=user["uid"], week=week, year=year, **task_data)
-    await asyncio.to_thread(
-        user_col(user["uid"], "tasks").document(task.id).set, task.dict()
+    target_team_id = task_request.team_id or None
+    if target_team_id:
+        await ensure_team_membership(target_team_id, user["uid"])
+        tasks_ref = team_col(target_team_id, "tasks")
+    else:
+        tasks_ref = user_col(user["uid"], "tasks")
+    task_data = task_request.dict(exclude={"year", "week", "team_id"})
+    task = WeeklyTask(
+        uid=user["uid"],
+        week=week,
+        year=year,
+        team_id=target_team_id,
+        owner_id=user["uid"],
+        **task_data,
     )
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    owner_id = team_id if team_id else user["uid"]
+    task_payload = task.dict()
     await asyncio.to_thread(
-        global_task_doc(year, week, owner_id, task.id).set,
-        {**task.dict(), "owner_id": owner_id},
+        tasks_ref.document(task.id).set,
+        task_payload,
     )
-    if team_id:
-        await asyncio.to_thread(
-            team_col(team_id, "tasks").document(task.id).set, task.dict()
-        )
-    return {"success": True, "task": task.dict()}
+    await asyncio.to_thread(
+        global_task_doc(year, week, user["uid"], task.id).set,
+        task_payload,
+    )
+    return {"success": True, "task": task_payload}
 
 
 @api_router.put("/planning/tasks/{task_id}")
@@ -1003,62 +1040,106 @@ async def update_task(
     task_request: TaskCreateRequest,
     user: Dict[str, Any] = Depends(verify_token),
 ):
-    snap = await asyncio.to_thread(
-        user_col(user["uid"], "tasks").document(task_id).get
-    )
+    doc_ref = user_col(user["uid"], "tasks").document(task_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    existing_team_id: Optional[str] = None
+
     if not snap.exists:
-        return {"success": False, "error": "Task not found"}
+        target_team_id = task_request.team_id
+        if not target_team_id:
+            return {"success": False, "error": "Task not found"}
+        await ensure_team_membership(target_team_id, user["uid"])
+        doc_ref = team_col(target_team_id, "tasks").document(task_id)
+        snap = await asyncio.to_thread(doc_ref.get)
+        if not snap.exists:
+            return {"success": False, "error": "Task not found"}
+        existing_team_id = target_team_id
+    else:
+        existing_team_id = snap.to_dict().get("team_id")
 
     existing = snap.to_dict()
+    owner_id = existing.get("owner_id", existing.get("uid", user["uid"]))
     incoming = task_request.dict(exclude_unset=True)
-    new_year = incoming.pop("year", existing["year"])
-    new_week = incoming.pop("week", existing["week"])
-    update_data = {
+    new_year = incoming.pop("year", existing.get("year"))
+    new_week = incoming.pop("week", existing.get("week"))
+    requested_team_id = incoming.pop("team_id", None)
+    if isinstance(requested_team_id, str) and not requested_team_id.strip():
+        requested_team_id = None
+    target_team_id = (
+        requested_team_id
+        if requested_team_id is not None
+        else existing_team_id
+    )
+    if target_team_id:
+        await ensure_team_membership(target_team_id, user["uid"])
+
+    update_fields = {
         **incoming,
         "year": new_year,
         "week": new_week,
+        "team_id": target_team_id,
+        "owner_id": owner_id,
+        "uid": owner_id,
         "updated_at": datetime.now(timezone.utc),
     }
-    await asyncio.to_thread(
-        user_col(user["uid"], "tasks").document(task_id).update, update_data
+
+    payload = {**existing, **update_fields}
+
+    destination_ref = (
+        team_col(target_team_id, "tasks").document(task_id)
+        if target_team_id
+        else user_col(user["uid"], "tasks").document(task_id)
     )
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    owner_id = team_id if team_id else user["uid"]
-    if existing["year"] != new_year or existing["week"] != new_week:
+
+    if destination_ref.path == doc_ref.path:
+        await asyncio.to_thread(doc_ref.update, update_fields)
+    else:
+        await asyncio.to_thread(destination_ref.set, payload)
+        await asyncio.to_thread(doc_ref.delete)
+
+    existing_year = existing.get("year")
+    existing_week = existing.get("week")
+    if existing_year and existing_week and (
+        existing_year != new_year or existing_week != new_week
+    ):
         await asyncio.to_thread(
-            global_task_doc(existing["year"], existing["week"], owner_id, task_id).delete
+            global_task_doc(existing_year, existing_week, owner_id, task_id).delete
         )
-    await asyncio.to_thread(
-        global_task_doc(new_year, new_week, owner_id, task_id).set,
-        {**existing, **update_data, "owner_id": owner_id},
-    )
-    if team_id:
+    if new_year and new_week:
         await asyncio.to_thread(
-            team_col(team_id, "tasks").document(task_id).update, update_data
+            global_task_doc(new_year, new_week, owner_id, task_id).set,
+            payload,
         )
-    updated = await asyncio.to_thread(
-        user_col(user["uid"], "tasks").document(task_id).get
-    )
-    return {"success": True, "task": updated.to_dict()}
+
+    return {"success": True, "task": payload}
 
 
 @api_router.delete("/planning/tasks/{task_id}")
-async def delete_task(task_id: str, user: Dict[str, Any] = Depends(verify_token)):
-    doc_ref = user_col(user["uid"], "tasks").document(task_id)
+async def delete_task(
+    task_id: str,
+    team_id: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    team_id = team_id or None
+    if team_id:
+        await ensure_team_membership(team_id, user["uid"])
+        doc_ref = team_col(team_id, "tasks").document(task_id)
+    else:
+        doc_ref = user_col(user["uid"], "tasks").document(task_id)
+
     snap = await asyncio.to_thread(doc_ref.get)
     if not snap.exists:
         raise HTTPException(status_code=404, detail="Task not found")
-    await asyncio.to_thread(doc_ref.delete)
-    user_snap = await asyncio.to_thread(user_doc(user["uid"]).get)
-    team_id = user_snap.to_dict().get("team_id") if user_snap.exists else None
-    owner_id = team_id if team_id else user["uid"]
+
     data = snap.to_dict()
-    await asyncio.to_thread(
-        global_task_doc(data["year"], data["week"], owner_id, task_id).delete
-    )
-    if team_id:
-        await asyncio.to_thread(team_col(team_id, "tasks").document(task_id).delete)
+    await asyncio.to_thread(doc_ref.delete)
+    year = data.get("year")
+    week = data.get("week")
+    owner_id = data.get("owner_id", data.get("uid", user["uid"]))
+    if year and week:
+        await asyncio.to_thread(
+            global_task_doc(year, week, owner_id, task_id).delete
+        )
     return {"success": True, "message": "deleted"}
 
 
