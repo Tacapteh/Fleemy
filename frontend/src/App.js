@@ -5,9 +5,11 @@ import {
   Route,
   Navigate,
   Outlet,
+  useNavigate,
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, logout } from "./firebase";
+import { contextStore } from "./stores/contextStore";
 
 import Login from "./Login";
 import Dashboard from "./pages/Dashboard";
@@ -15,6 +17,7 @@ import Planning from "./pages/Planning";
 import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
 import Clients from "./pages/Clients";
+import ProfilePickerPage from "./pages/ProfilePickerPage";
 import Sidebar from "./components/Sidebar";
 import NotFound from "./pages/NotFound";
 
