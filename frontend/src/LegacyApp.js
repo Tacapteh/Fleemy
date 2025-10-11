@@ -8,6 +8,26 @@ import WeekNavigationHeader from "./components/WeekNavigationHeader";
 import Combobox from "./components/Combobox";
 import useClients from "./hooks/useClients";
 
+const api = async ({ url, data, body, headers, ...options }) => {
+  const init = { ...options };
+  if (data !== undefined && body === undefined) {
+    init.body = JSON.stringify(data);
+  } else if (body !== undefined) {
+    init.body = body;
+  }
+
+  if (data !== undefined && body === undefined) {
+    init.headers = {
+      "Content-Type": "application/json",
+      ...(headers || {}),
+    };
+  } else if (headers) {
+    init.headers = headers;
+  }
+
+  return apiFetch(url, init);
+};
+
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -628,7 +648,17 @@ const EventModal = ({
   const [loading, setLoading] = useState(false);
   
   // Use clients hook for client selection
-  const { clients, loading: clientsLoading } = useClients({ search: '', page: 1, limit: 100 });
+  const {
+    clients,
+    loading: clientsLoading,
+    loadClients,
+  } = useClients({ search: '', page: 1, limit: 100 });
+
+  useEffect(() => {
+    if (isOpen) {
+      loadClients();
+    }
+  }, [isOpen, loadClients]);
 
   useEffect(() => {
     if (event) {
