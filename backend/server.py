@@ -6,6 +6,7 @@ from fastapi import (
     Depends,
     Response,
     Request,
+    Body,
 )
 from dotenv import load_dotenv, find_dotenv
 import os
@@ -392,6 +393,10 @@ class InvoiceCreateRequest(BaseModel):
     items: List[QuoteItem]
     tax_rate: float = 20.0
     due_date: str
+
+
+class InvoiceStatusUpdate(BaseModel):
+    status: str
 
 
 class TeamCreateRequest(BaseModel):
@@ -1471,10 +1476,17 @@ async def delete_invoice(invoice_id: str, user: Dict[str, Any] = Depends(verify_
 
 @api_router.put("/invoices/{invoice_id}/status")
 async def update_invoice_status(
-    invoice_id: str, status: str, user: Dict[str, Any] = Depends(verify_token)
+    invoice_id: str,
+    status_update: Optional[InvoiceStatusUpdate] = Body(None),
+    status: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
 ):
-    update_data = {"status": status, "updated_at": datetime.utcnow()}
-    if status == "paid":
+    new_status = status_update.status if status_update else status
+    if not new_status:
+        raise HTTPException(status_code=422, detail="Missing invoice status")
+
+    update_data = {"status": new_status, "updated_at": datetime.utcnow()}
+    if new_status == "paid":
         update_data["paid_date"] = datetime.utcnow()
 
     await asyncio.to_thread(

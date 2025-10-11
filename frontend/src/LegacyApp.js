@@ -25,7 +25,8 @@ const api = async ({ url, data, body, headers, ...options }) => {
     init.headers = headers;
   }
 
-  return apiFetch(url, init);
+  const payload = await apiFetch(url, init);
+  return { data: payload };
 };
 
 class ErrorBoundary extends React.Component {
