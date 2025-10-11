@@ -718,16 +718,23 @@ const EventModal = ({
           <fieldset disabled={readOnly || loading}>
           <div className="form-group">
             <label className="form-label">Client *</label>
-            <input
-              type="text"
-              value={formData.client_name}
-              onChange={(e) =>
-                setFormData({ ...formData, client_name: e.target.value })
-              }
-              className="form-input"
+            <Combobox
+              options={clients || []}
+              value={formData.client_id}
+              onChange={(clientId) => {
+                const selectedClient = clients?.find(c => c.id === clientId);
+                setFormData({ 
+                  ...formData, 
+                  client_id: clientId, 
+                  client_name: selectedClient?.display_name || '' 
+                });
+              }}
+              displayField="display_name"
+              valueField="id"
+              placeholder="Sélectionner un client (obligatoire)"
+              disabled={loading || clientsLoading}
               required
-              disabled={loading}
-              placeholder="Nom du client (obligatoire)"
+              className="form-input"
             />
           </div>
 
