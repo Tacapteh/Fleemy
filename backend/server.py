@@ -282,8 +282,8 @@ class Invoice(BaseModel):
 
 class EventCreateRequest(BaseModel):
     description: str
-    client_id: str
-    client_name: str
+    client_id: Optional[str] = ""  # ID from clients collection
+    client_name: str  # client_label for display
     day: str
     start_time: str
     end_time: str
