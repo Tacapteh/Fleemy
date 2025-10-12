@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2 } from 'lucide-react';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
@@ -81,7 +82,7 @@ const ProfilePickerPage = () => {
     localStorage.removeItem('teamId');
     localStorage.removeItem('teamName');
     await updateLastContext(context);
-    navigate('/planning');
+    navigate('/me');
   };
 
   const handleSelectTeam = async (team) => {
@@ -94,7 +95,7 @@ const ProfilePickerPage = () => {
     localStorage.setItem('teamId', team.team_id);
     localStorage.setItem('teamName', team.name);
     await updateLastContext({ type: 'team', team_id: team.team_id });
-    navigate('/planning');
+    navigate(`/team/${team.team_id}`);
   };
 
   const handleCreateTeam = async (teamName) => {
@@ -139,12 +140,24 @@ const ProfilePickerPage = () => {
         throw new Error(data?.error || 'Code invalide ou expiré');
       }
 
+      await setDoc(
+        doc(db, 'teams', data.team_id, 'memberships', user.uid),
+        { joinedAt: serverTimestamp() },
+        { merge: true }
+      );
+
+      await setDoc(
+        doc(db, 'teams', data.team_id, 'members', user.uid),
+        { uid: user.uid, team_id: data.team_id, updated_at: serverTimestamp() },
+        { merge: true }
+      );
+
       // Reload teams
       await loadTeams();
 
       // Select the joined team
       if (!data.already_member) {
-        handleSelectTeam({
+        await handleSelectTeam({
           team_id: data.team_id,
           name: data.name,
         });

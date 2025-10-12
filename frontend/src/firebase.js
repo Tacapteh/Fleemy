@@ -19,6 +19,7 @@ import {
   Timestamp,
   setDoc,
   getDoc,
+  getDocs,
   serverTimestamp,
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
@@ -153,181 +154,422 @@ const dateFromISOWeek = (year, week, dayName) => {
   return d;
 };
 
-// EVENTS
-export const saveEvent = async (eventData = {}) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid) {
-    throw new Error('Utilisateur non connecté');
+// Helpers spécifiques planning -------------------------------------------------
+const toFirestoreTimestamp = (value) => {
+  if (!value) return null;
+  if (value instanceof Timestamp) {
+    return value;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return Timestamp.fromDate(date);
+};
+
+const ensurePlanningContext = (context) => {
+  if (context?.type === 'personal' || !context) {
+    const ownerUid = context?.userId || getUid();
+    if (!ownerUid) {
+      throw new Error('Planning context requires authenticated user');
+    }
+    return {
+      type: 'personal',
+      ownerUid,
+      memberUid: ownerUid,
+      teamId: null,
+      eventsRef: collection(db, 'users', ownerUid, 'planning', 'events'),
+      weeklyTasksRef: collection(db, 'users', ownerUid, 'weeklyTasks'),
+    };
   }
 
-  const baseData = {
-    ...eventData,
-    start: normalizeDate(eventData.start),
-    end: normalizeDate(eventData.end),
-    user_id: currentUid,
-    team_id: currentTeamId || null,
-    created_at: serverTimestamp(),
-  };
-  delete baseData.id;
-  Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
+  if (context.type === 'team') {
+    const teamId = context.teamId;
+    const memberUid = context.memberUid;
+    if (!teamId || !memberUid) {
+      throw new Error('Team planning context requires teamId and memberUid');
+    }
+    return {
+      type: 'team',
+      ownerUid: memberUid,
+      memberUid,
+      teamId,
+      eventsRef: collection(db, 'teams', teamId, 'members', memberUid, 'planning', 'events'),
+      weeklyTasksRef: collection(db, 'teams', teamId, 'members', memberUid, 'weeklyTasks'),
+    };
+  }
 
-  const data = baseData;
+  throw new Error('Unsupported planning context');
+};
 
+const ensureTeamMemberContainer = async (teamId, memberUid) => {
+  if (!teamId || !memberUid) {
+    return;
+  }
   try {
-    const ref = await addDoc(collection(db, "events"), data);
-    return { id: ref.id, ...data };
+    await setDoc(
+      doc(db, 'teams', teamId, 'members', memberUid),
+      {
+        uid: memberUid,
+        team_id: teamId,
+        updated_at: serverTimestamp(),
+      },
+      { merge: true }
+    );
   } catch (error) {
-    console.error("saveEvent", "events", error);
-    throw error;
+    console.warn('ensureTeamMemberContainer error', error);
   }
 };
 
-export const watchEvents = (range, callback) => {
-  const currentUid = auth.currentUser?.uid;
-  if (!currentUid || !range?.from || !range?.to) {
-    if (unsubEvents) {
-      unsubEvents();
-      unsubEvents = null;
-    }
-    console.log("watchEvents skip: bad range/user");
-    return () => {};
+const normalizeEventDocument = (docSnap, ownerUid, teamId, viewerUid) => {
+  if (!docSnap || !docSnap.exists()) {
+    return null;
   }
-  if (unsubEvents) {
-    unsubEvents();
-    unsubEvents = null;
+  const data = docSnap.data();
+  if (!data) {
+    return null;
   }
 
-  let logged = false;
+  const startValue = data.start instanceof Timestamp ? data.start.toDate() : new Date(data.start);
+  const endValue = data.end instanceof Timestamp ? data.end.toDate() : new Date(data.end);
 
-  const fromDate = normalizeDate(range.from);
-  const toDateVal = normalizeDate(range.to);
-  if (
-    !(fromDate instanceof Date) ||
-    isNaN(fromDate.getTime()) ||
-    !(toDateVal instanceof Date) ||
-    isNaN(toDateVal.getTime())
-  ) {
-    console.log("watchEvents skip: bad range/user");
-    return () => {};
+  if (Number.isNaN(startValue.getTime()) || Number.isNaN(endValue.getTime())) {
+    return null;
   }
 
-  const weekStartTs = Timestamp.fromDate(fromDate);
-  const weekEndTs = Timestamp.fromDate(toDateVal);
+  const base = {
+    ...data,
+    id: docSnap.id,
+    start: startValue,
+    end: endValue,
+    user_id: data.user_id || ownerUid,
+    owner_uid: data.owner_uid || ownerUid,
+    team_id: teamId ?? data.team_id ?? null,
+  };
 
-  const constraints = [
-  where(currentTeamId ? "team_id" : "user_id", "==", currentTeamId || currentUid),
-  where("start", ">=", weekStartTs),
-  where("start", "<", weekEndTs),
-  orderBy("start"),
-];
+  return {
+    ...base,
+    readOnly: viewerUid ? ownerUid !== viewerUid : true,
+  };
+};
 
+const normalizeWeeklyTaskDocument = (docSnap, ownerUid, teamId, viewerUid) => {
+  if (!docSnap || !docSnap.exists()) {
+    return null;
+  }
+  const data = docSnap.data();
+  if (!data) {
+    return null;
+  }
 
-  const q = query(collection(db, "events"), ...constraints);
+  return {
+    id: docSnap.id,
+    label: data.label || data.title || 'Tâche sans titre',
+    title: data.title || data.label || 'Tâche sans titre',
+    price: data.price || null,
+    color: data.color || data.colorCode || '#dbeafe',
+    icon: data.icon || data.emoji || '📋',
+    time_ranges: Array.isArray(data.time_ranges) ? data.time_ranges : Array.isArray(data.time_slots) ? data.time_slots : [],
+    weekly: true,
+    user_id: data.user_id || ownerUid,
+    owner_uid: data.owner_uid || ownerUid,
+    team_id: teamId ?? data.team_id ?? null,
+    readOnly: viewerUid ? ownerUid !== viewerUid : true,
+    created_at: data.created_at || null,
+    updated_at: data.updated_at || null,
+  };
+};
 
+const buildRangeFromIso = (startIso, endIso) => {
+  if (!startIso || !endIso) {
+    return null;
+  }
+  const from = new Date(startIso + 'T00:00:00');
+  const to = new Date(endIso + 'T23:59:59');
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+    return null;
+  }
+  return { from, to };
+};
+
+export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   try {
-    unsubEvents = onSnapshot(
-      q,
+    const resolved = ensurePlanningContext(context);
+    const { eventsRef, ownerUid, teamId } = resolved;
+
+    if (!range?.from || !range?.to) {
+      onData?.([]);
+      return () => {};
+    }
+
+    const fromDate = normalizeDate(range.from);
+    const toDate = normalizeDate(range.to);
+    if (!(fromDate instanceof Date) || Number.isNaN(fromDate.getTime()) || !(toDate instanceof Date) || Number.isNaN(toDate.getTime())) {
+      onData?.([]);
+      return () => {};
+    }
+
+    const constraints = [
+      where('start', '>=', Timestamp.fromDate(fromDate)),
+      where('start', '<=', Timestamp.fromDate(toDate)),
+      orderBy('start', 'asc'),
+    ];
+
+    return onSnapshot(
+      query(eventsRef, ...constraints),
       (snapshot) => {
-        if (!logged) {
-          console.log("watchEvents OK", "events");
-          logged = true;
-        }
-        const events = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          const start =
-            data.start instanceof Timestamp ? data.start.toDate() : data.start;
-          const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
-          const readOnly = data.user_id !== currentUid;
-          events.push({ ...data, id: docSnap.id, start, end, readOnly });
-        });
-        callback(events);
+        const viewerUid = getUid();
+        const events = snapshot.docs
+          .map((docSnap) => normalizeEventDocument(docSnap, ownerUid, teamId, viewerUid))
+          .filter(Boolean);
+        onData?.(events);
       },
-      (err) => {
-        console.error("watchEvents", "events", err.message);
-        callback([]);
+      (error) => {
+        logPermissionError('planningEvents', getUid(), error);
+        onError?.(error);
       }
     );
-    return unsubEvents;
-  } catch (err) {
-    console.error("watchEvents", "events", err.message);
+  } catch (error) {
+    onError?.(error);
     return () => {};
   }
 };
 
-export const deleteEvent = async (eventId) => {
-  try {
-    const eventRef = doc(collection(db, "events"), eventId);
-    await deleteDoc(eventRef);
-  } catch (error) {
-    console.error("Erreur deleteEvent:", error);
-    throw error;
+export const watchWeekEvents = (context, weekStartISO, weekEndISO, onData, onError) => {
+  const range = buildRangeFromIso(weekStartISO, weekEndISO);
+  if (!range) {
+    onData?.([]);
+    return () => {};
   }
+  return watchPlanningEventsInRange(context, range, onData, onError);
 };
 
-// TASKS HEBDOMADAIRES
-export const saveWeeklyTask = async (taskData = {}) => {
+export const saveEventNew = async (context, eventData = {}) => {
+  const resolved = ensurePlanningContext(context);
+  const { eventsRef, ownerUid, teamId, type } = resolved;
   const currentUid = getUid();
+
   if (!currentUid) {
     throw new Error('Utilisateur non connecté');
   }
-
-  if (!taskData.time_ranges || !Array.isArray(taskData.time_ranges) || taskData.time_ranges.length === 0) {
-    throw new Error("Les tâches hebdomadaires doivent avoir time_ranges");
+  if (type === 'team' && ownerUid !== currentUid) {
+    throw new Error("Impossible de modifier le planning d'un autre membre");
   }
 
-  const baseData = {
-    label: taskData.title || taskData.label || 'Tâche sans titre',
-    title: taskData.title || taskData.label || 'Tâche sans titre', // Pour compatibilité avec les tâches existantes
-    price: taskData.price || null,
-    color: taskData.color || 'pastel-blue',
-    icon: taskData.icon || 'briefcase',
-    weekly: true, // Flag pour identifier les tâches hebdomadaires
-    time_ranges: taskData.time_ranges,
-    user_id: currentUid,
-    team_id: currentTeamId || null,
-    created_at: taskData.id ? undefined : serverTimestamp(),
+  const startTs = toFirestoreTimestamp(eventData.start);
+  const endTs = toFirestoreTimestamp(eventData.end);
+  if (!startTs || !endTs) {
+    throw new Error('Dates invalides pour l\'événement');
+  }
+
+  const payload = {
+    ...eventData,
+    start: startTs,
+    end: endTs,
+    user_id: ownerUid,
+    owner_uid: ownerUid,
+    team_id: teamId ?? null,
     updated_at: serverTimestamp(),
   };
 
-  // Nettoyer les valeurs undefined
-  Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
+  delete payload.id;
+  Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
 
-  // Utiliser la collection "tasks" existante au lieu de users/{uid}/tasks
-  const tasksPath = "tasks";
-  
-  try {
-    if (taskData.id) {
-      const ref = doc(db, tasksPath, taskData.id);
-      await setDoc(ref, baseData, { merge: true });
-      showToast('Tâche hebdomadaire mise à jour');
-      return { id: taskData.id, ...baseData };
-    } else {
-      const ref = await addDoc(collection(db, tasksPath), baseData);
-      showToast('Tâche hebdomadaire créée');
-      return { id: ref.id, ...baseData };
-    }
-  } catch (error) {
-    console.error("saveWeeklyTask", tasksPath, error);
-    showToast('Erreur lors de la sauvegarde de la tâche', true);
-    throw error;
+  if (teamId) {
+    await ensureTeamMemberContainer(teamId, ownerUid);
   }
+
+  if (eventData.id) {
+    await setDoc(doc(eventsRef, eventData.id), payload, { merge: true });
+    return {
+      ...eventData,
+      id: eventData.id,
+      start: startTs.toDate(),
+      end: endTs.toDate(),
+      user_id: ownerUid,
+      owner_uid: ownerUid,
+      team_id: teamId ?? null,
+    };
+  }
+
+  const newDocRef = doc(eventsRef);
+  await setDoc(newDocRef, {
+    ...payload,
+    created_at: serverTimestamp(),
+  });
+  return {
+    ...eventData,
+    id: newDocRef.id,
+    start: startTs.toDate(),
+    end: endTs.toDate(),
+    user_id: ownerUid,
+    owner_uid: ownerUid,
+    team_id: teamId ?? null,
+  };
 };
 
-export const deleteWeeklyTask = async (taskId) => {
+export const deleteEventNew = async (context, eventId) => {
+  const resolved = ensurePlanningContext(context);
+  const { eventsRef, ownerUid, type } = resolved;
   const currentUid = getUid();
+
   if (!currentUid) {
     throw new Error('Utilisateur non connecté');
   }
-  
+  if (!eventId) {
+    throw new Error('Identifiant de l\'événement requis');
+  }
+  if (type === 'team' && ownerUid !== currentUid) {
+    throw new Error("Impossible de modifier le planning d'un autre membre");
+  }
+
+  await deleteDoc(doc(eventsRef, eventId));
+};
+
+export const watchWeeklyTasksForContext = (context, onData, onError) => {
   try {
-    const taskRef = doc(db, "tasks", taskId);
-    await deleteDoc(taskRef);
-    showToast('Tâche hebdomadaire supprimée');
+    const resolved = ensurePlanningContext(context);
+    const { weeklyTasksRef, ownerUid, teamId } = resolved;
+
+    return onSnapshot(
+      weeklyTasksRef,
+      (snapshot) => {
+        const viewerUid = getUid();
+        const tasks = snapshot.docs
+          .map((docSnap) => normalizeWeeklyTaskDocument(docSnap, ownerUid, teamId, viewerUid))
+          .filter(Boolean);
+        onData?.(tasks);
+      },
+      (error) => {
+        logPermissionError('weeklyTasks', getUid(), error);
+        onError?.(error);
+      }
+    );
   } catch (error) {
-    console.error("Erreur deleteWeeklyTask:", error);
-    showToast('Erreur lors de la suppression de la tâche', true);
-    throw error;
+    onError?.(error);
+    return () => {};
+  }
+};
+
+export const saveWeeklyTask = async (context, taskData = {}) => {
+  const resolved = ensurePlanningContext(context);
+  const { weeklyTasksRef, ownerUid, teamId, type } = resolved;
+  const currentUid = getUid();
+
+  if (!currentUid) {
+    throw new Error('Utilisateur non connecté');
+  }
+  if (type === 'team' && ownerUid !== currentUid) {
+    throw new Error("Impossible de modifier les tâches d'un autre membre");
+  }
+
+  if (!Array.isArray(taskData.time_ranges) || taskData.time_ranges.length === 0) {
+    throw new Error('Les tâches hebdomadaires doivent contenir au moins un créneau');
+  }
+
+  const payload = {
+    label: taskData.label || taskData.title || 'Tâche sans titre',
+    title: taskData.title || taskData.label || 'Tâche sans titre',
+    price: taskData.price || null,
+    color: taskData.color || '#dbeafe',
+    icon: taskData.icon || 'briefcase',
+    weekly: true,
+    time_ranges: taskData.time_ranges,
+    user_id: ownerUid,
+    owner_uid: ownerUid,
+    team_id: teamId ?? null,
+    updated_at: serverTimestamp(),
+  };
+
+  delete payload.id;
+  Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
+
+  if (teamId) {
+    await ensureTeamMemberContainer(teamId, ownerUid);
+  }
+
+  if (taskData.id) {
+    await setDoc(doc(weeklyTasksRef, taskData.id), payload, { merge: true });
+    showToast('Tâche hebdomadaire mise à jour');
+    return { id: taskData.id, ...payload };
+  }
+
+  const newDocRef = doc(weeklyTasksRef);
+  await setDoc(newDocRef, {
+    ...payload,
+    created_at: serverTimestamp(),
+  });
+  showToast('Tâche hebdomadaire créée');
+  return { id: newDocRef.id, ...payload };
+};
+
+export const deleteWeeklyTask = async (context, taskId) => {
+  const resolved = ensurePlanningContext(context);
+  const { weeklyTasksRef, ownerUid, type } = resolved;
+  const currentUid = getUid();
+
+  if (!currentUid) {
+    throw new Error('Utilisateur non connecté');
+  }
+  if (!taskId) {
+    throw new Error('Identifiant de la tâche requis');
+  }
+  if (type === 'team' && ownerUid !== currentUid) {
+    throw new Error("Impossible de modifier les tâches d'un autre membre");
+  }
+
+  await deleteDoc(doc(weeklyTasksRef, taskId));
+  showToast('Tâche hebdomadaire supprimée');
+};
+
+export const listenTeamMemberships = (teamId, onData, onError) => {
+  if (!teamId) {
+    onData?.([]);
+    return () => {};
+  }
+
+  try {
+    const membershipsRef = collection(db, 'teams', teamId, 'memberships');
+    return onSnapshot(
+      membershipsRef,
+      (snapshot) => {
+        const members = snapshot.docs.map((docSnap) => ({ uid: docSnap.id, ...(docSnap.data() || {}) }));
+        onData?.(members);
+      },
+      (error) => {
+        onError?.(error);
+      }
+    );
+  } catch (error) {
+    onError?.(error);
+    return () => {};
+  }
+};
+
+export const fetchUserProfile = async (uid) => {
+  if (!uid) {
+    return null;
+  }
+
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (!snap.exists()) {
+      return { uid, displayName: null, email: null };
+    }
+    const data = snap.data();
+    return {
+      uid,
+      displayName:
+        data?.name ||
+        data?.displayName ||
+        data?.full_name ||
+        data?.fullName ||
+        null,
+      email: data?.email || null,
+    };
+  } catch (error) {
+    console.error('fetchUserProfile error', error);
+    return { uid, displayName: null, email: null };
   }
 };
 
@@ -477,30 +719,6 @@ export const getMonthRange = (year, month) => {
   end.setHours(23, 59, 59, 999);
 
   return { from: start, to: end };
-};
-
-// Nouvelles fonctions utilisant la collection "events"
-export const saveEventNew = saveEvent;
-export const deleteEventNew = deleteEvent;
-export const watchWeekEvents = (
-  userId,
-  weekStartISO,
-  weekEndISO,
-  onData,
-  onError
-) => {
-  if (!userId || !weekStartISO || !weekEndISO) {
-    console.error("watchWeekEvents: tous les paramètres sont requis");
-    return () => {};
-  }
-  try {
-    const from = new Date(weekStartISO + "T00:00:00");
-    const to = new Date(weekEndISO + "T23:59:59");
-    return watchEvents({ from, to }, onData);
-  } catch (error) {
-    onError && onError(error);
-    return () => {};
-  }
 };
 
 window.auth = auth;

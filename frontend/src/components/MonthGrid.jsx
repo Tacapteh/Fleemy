@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import '../styles/MonthCalendar.css';
 import {
-  watchEvents,
+  watchPlanningEventsInRange,
   watchTasks,
   getMonthRange,
   useFirebaseUser,
 } from '../firebase';
-
-function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent }) {
+function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, context }) {
   const user = useFirebaseUser();
   const [events, setEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -38,6 +37,16 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent }) {
   const monthRange = useMemo(() => getMonthRange(year, month), [year, month]);
 
   // Watch events - seulement si user connecté
+  const contextKey = useMemo(() => {
+    if (!context) {
+      return 'none';
+    }
+    if (context.type === 'team') {
+      return `team:${context.teamId || ''}:${context.memberUid || ''}`;
+    }
+    return `personal:${context.userId || ''}`;
+  }, [context?.type, context?.teamId, context?.memberUid, context?.userId]);
+
   useEffect(() => {
     if (!user) {
       setEvents([]);
@@ -45,7 +54,19 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent }) {
       return;
     }
 
-    const unsubscribe = watchEvents(monthRange, (newEvents) => {
+    if (!monthRange?.from || !monthRange?.to) {
+      setEvents([]);
+      setEventsByDay({});
+      return;
+    }
+
+    if (context && context.type === 'team' && !context.memberUid) {
+      setEvents([]);
+      setEventsByDay({});
+      return;
+    }
+
+    const unsubscribe = watchPlanningEventsInRange(context, monthRange, (newEvents) => {
       setEvents(newEvents);
       
       // Organiser les événements par jour
@@ -64,7 +85,7 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent }) {
     });
 
     return unsubscribe;
-  }, [user, monthRange]);
+  }, [user, monthRange, contextKey, context]);
 
   // Watch tasks - seulement si user connecté
   useEffect(() => {
