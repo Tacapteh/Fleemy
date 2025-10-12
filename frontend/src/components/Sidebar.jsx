@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
-  { id: 'planning', name: 'Planning', icon: '📅', to: '/planning' },
+  { id: 'planning', name: 'Planning', icon: '📅', to: '/me' },
   { id: 'quotes', name: 'Devis', icon: '📋', to: '/quotes' },
   { id: 'invoices', name: 'Factures', icon: '🧾', to: '/invoices' },
   { id: 'clients', name: 'Clients', icon: '👥', to: '/clients' },

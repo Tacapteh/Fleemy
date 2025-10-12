@@ -1,906 +1,651 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
-
 import EventModal from '../components/EventModal';
 import WeeklyTaskModal from '../components/WeeklyTaskModal';
-
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
 import {
   useFirebaseUser,
-  deleteWeeklyTask,
+  watchWeekEvents,
   saveEventNew,
   deleteEventNew,
-  watchWeekEvents,
+  deleteWeeklyTask,
   setTeamContext,
+  listenTeamMemberships,
+  fetchUserProfile,
 } from '../firebase';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
-import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 
-// Helpers -------------------------------------------------------------
-const safeReadLocalStorage = (key) => {
-  if (typeof window === 'undefined' || !window.localStorage) {
+const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const DEFAULT_START = '09:00';
+const DEFAULT_END = '10:00';
+
+const toIsoDate = (date) => {
+  if (!(date instanceof Date)) {
     return null;
   }
-  try {
-    return localStorage.getItem(key);
-  } catch (error) {
-    return null;
-  }
+  return date.toISOString().split('T')[0];
 };
 
-const safeWriteLocalStorage = (key, value) => {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return;
+const toTimeString = (value) => {
+  if (!value) return DEFAULT_START;
+  if (typeof value === 'string' && value.includes(':')) {
+    return value;
   }
-  try {
-    if (value === null || value === undefined) {
-      localStorage.removeItem(key);
-    } else {
-      localStorage.setItem(key, value);
-    }
-  } catch (error) {
-    console.warn("Impossible d'écrire localStorage", { key, error });
+  if (value instanceof Date) {
+    return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
   }
+  return DEFAULT_START;
 };
 
-function toHM(v) {
-  let date = null;
-  if (typeof v === 'string') {
-    if (v.includes(':')) {
-      const [h, m] = v.split(':');
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    }
-    const n = Number(v);
-    if (!isNaN(n)) {
-      const h = Math.floor(n / 60);
-      const m = n % 60;
-      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    }
-    date = new Date(v);
-  } else if (typeof v === 'number') {
-    const h = Math.floor(v / 60);
-    const m = v % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-  } else if (v instanceof Date) {
-    date = v;
-  } else if (v && typeof v.toDate === 'function') {
-    date = v.toDate();
-  }
-  if (date instanceof Date && !isNaN(date.getTime())) {
-    return `${String(date.getHours()).padStart(2, '0')}:${String(
-      date.getMinutes(),
-    ).padStart(2, '0')}`;
-  }
-  return '00:00';
-}
+const startOfWeek = (date) => {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
-function toYMDFromDoc(doc, data) {
-  if (data?.date) return data.date;
-  if (doc?.id) {
-    const m = doc.id.match(/_(\d{4}-\d{2}-\d{2})/);
-    if (m) return m[1];
-  }
-  return null;
-}
+const endOfWeek = (weekStart) => {
+  const end = new Date(weekStart);
+  end.setDate(weekStart.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+};
 
-function dayIndex(d) {
-  const date = new Date(d);
-  if (isNaN(date.getTime())) return null;
-  return (date.getDay() + 6) % 7;
-}
+const formatWeekLabel = (date) => {
+  const start = startOfWeek(date);
+  const end = endOfWeek(start);
+  const startStr = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+  const endStr = end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  return `Semaine du ${startStr} au ${endStr}`;
+};
+
+const formatMonthLabel = (date) => date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+
+const buildMemberLabel = (member, currentUser) => {
+  if (!member) {
+    return 'Membre';
+  }
+  const base = member.displayName || member.email || null;
+  if (member.uid === currentUser?.uid) {
+    return base || currentUser.displayName || currentUser.email || 'Moi';
+  }
+  if (base) {
+    return base;
+  }
+  return `Membre ${member.uid.slice(0, 6)}`;
+};
 
 export default function Planning() {
   const user = useFirebaseUser();
-  const navigate = useNavigate();
-  const { teamId: routeTeamParam } = useParams();
-  const routeTeamId = routeTeamParam || null;
+  const { teamId: routeTeamId } = useParams();
+  const isTeamContext = Boolean(routeTeamId);
+  const teamId = routeTeamId || null;
 
-  const [activeTeamId, setActiveTeamId] = useState(() => routeTeamId || safeReadLocalStorage('teamId'));
-  const [activeTeamName, setActiveTeamName] = useState(() => safeReadLocalStorage('teamName'));
-  const { team } = useTeam(activeTeamId || undefined);
-  const teamId = team?.id || activeTeamId || null;
-  const [availableTeams, setAvailableTeams] = useState([]);
-  const [teamsLoading, setTeamsLoading] = useState(false);
-  const [teamsError, setTeamsError] = useState(null);
+  const [view, setView] = useState('week');
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState(null);
 
-  useEffect(() => {
-    if (routeTeamId && routeTeamId !== activeTeamId) {
-      setActiveTeamId(routeTeamId);
-    }
-  }, [routeTeamId, activeTeamId]);
+  const [modal, setModal] = useState({ open: false, event: null, selectedDate: null, readOnly: false });
+  const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
+
+  const [members, setMembers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState(null);
+  const [selectedMemberId, setSelectedMemberId] = useState(null);
+  const profileCacheRef = useRef(new Map());
+
+  const { team } = useTeam(isTeamContext ? routeTeamId : null);
+  const teamName = team?.name || null;
+
+  const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
+  const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
+  const weekStartISO = useMemo(() => toIsoDate(weekStart), [weekStart]);
+  const weekEndISO = useMemo(() => toIsoDate(weekEnd), [weekEnd]);
 
   useEffect(() => {
     if (!user?.uid) {
-      setAvailableTeams([]);
-      setTeamsError(null);
+      return;
+    }
+    if (isTeamContext && teamId) {
+      contextStore.set({ type: 'team', teamId, teamName: teamName || null });
+      setTeamContext(teamId);
+    } else {
+      contextStore.set({ type: 'solo' });
+      setTeamContext(null);
+    }
+  }, [isTeamContext, teamId, teamName, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setMembers([]);
+      setMembersError(null);
+      setMembersLoading(false);
+      setSelectedMemberId(null);
       return;
     }
 
-    let cancelled = false;
-    const loadTeams = async () => {
-      setTeamsLoading(true);
-      try {
-        const data = await apiFetch('/teams/my');
-        const teamsList = Array.isArray(data?.teams) ? data.teams : [];
-        if (cancelled) {
-          return;
-        }
-        setTeamsError(null);
-        setAvailableTeams(teamsList);
-        setActiveTeamId((current) => {
-          if (!teamsList.length) {
-            return null;
-          }
-          if (current && teamsList.some((t) => t.team_id === current)) {
-            return current;
-          }
-          return teamsList[0].team_id;
-        });
-      } catch (err) {
-        if (cancelled) {
-          return;
-        }
-        console.error('Erreur chargement équipes:', err);
-        if (err?.response?.status === 403) {
-          setTeamsError("Accès refusé : vous n'avez pas les permissions nécessaires pour consulter cette équipe.");
-        } else {
-          setTeamsError("Impossible de charger les équipes.");
-        }
-        setAvailableTeams([]);
-      } finally {
-        if (!cancelled) {
-          setTeamsLoading(false);
-        }
-      }
-    };
-
-    loadTeams();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.uid]);
-
-  useEffect(() => {
-    if (team?.name) {
-      setActiveTeamName(team.name);
+    if (!isTeamContext) {
+      const personalMember = {
+        uid: user.uid,
+        displayName: user.displayName || null,
+        email: user.email || null,
+      };
+      setMembers([personalMember]);
+      setMembersError(null);
+      setMembersLoading(false);
+      setSelectedMemberId(user.uid);
       return;
     }
 
     if (!teamId) {
-      setActiveTeamName(null);
       return;
     }
 
-    const matchingTeam = availableTeams.find((candidate) => candidate.team_id === teamId);
-    if (matchingTeam?.name) {
-      setActiveTeamName(matchingTeam.name);
-    }
-  }, [team?.name, teamId, availableTeams]);
-  const [view, setView] = useState('week');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedMemberId, setSelectedMemberId] = useState(null);
-  const planningContextKey = useMemo(
-    () => (teamId ? `planning_context_${teamId}` : 'planning_context_solo'),
-    [teamId]
-  );
-  const [planningMode, setPlanningMode] = useState(() => {
-    const stored = planningContextKey ? safeReadLocalStorage(planningContextKey) : null;
-    if (stored === 'team' || stored === 'personal') {
-      if (stored === 'team' && !teamId) {
-        return 'personal';
+    setMembersLoading(true);
+    setMembersError(null);
+
+    const unsubscribe = listenTeamMemberships(
+      teamId,
+      async (rawMembers) => {
+        const uids = rawMembers
+          .map((member) => member?.uid)
+          .filter(Boolean);
+
+        if (!uids.includes(user.uid)) {
+          uids.unshift(user.uid);
+        }
+
+        const enriched = await Promise.all(
+          uids.map(async (uid) => {
+            if (profileCacheRef.current.has(uid)) {
+              return profileCacheRef.current.get(uid);
+            }
+            const profile = await fetchUserProfile(uid);
+            const entry = {
+              uid,
+              displayName: profile?.displayName || (uid === user.uid ? user.displayName || null : null),
+              email: profile?.email || (uid === user.uid ? user.email || null : null),
+            };
+            profileCacheRef.current.set(uid, entry);
+            return entry;
+          })
+        );
+
+        setMembers(enriched);
+        setMembersLoading(false);
+        setMembersError(null);
+
+        setSelectedMemberId((current) => {
+          if (current && uids.includes(current)) {
+            return current;
+          }
+          if (uids.includes(user.uid)) {
+            return user.uid;
+          }
+          return uids[0] || null;
+        });
+      },
+      (error) => {
+        console.error('listenTeamMemberships error', error);
+        setMembers([]);
+        setMembersError("Impossible de charger les membres de l'équipe");
+        setMembersLoading(false);
       }
-      return stored;
-    }
-    return teamId ? 'team' : 'personal';
-  });
+    );
 
-  useEffect(() => {
-    if (planningMode === 'team' && teamId) {
-      contextStore.set({
-        type: 'team',
-        teamId,
-        teamName: activeTeamName || null,
-      });
-      safeWriteLocalStorage('teamId', teamId);
-      if (activeTeamName) {
-        safeWriteLocalStorage('teamName', activeTeamName);
-      }
-    } else if (planningMode === 'personal') {
-      contextStore.set({ type: 'solo' });
-    }
-  }, [planningMode, teamId, activeTeamName]);
+    return () => unsubscribe();
+  }, [isTeamContext, teamId, user?.uid]);
 
-  const [events, setEvents] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const [showSkeleton, setShowSkeleton] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setShowSkeleton(false), 300);
-    return () => clearTimeout(t);
-  }, []);
-
-  const [modal, setModal] = useState({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
-  const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
-
-  useEffect(() => {
-    const stored = planningContextKey ? safeReadLocalStorage(planningContextKey) : null;
-    const nextMode = teamId
-      ? stored === 'team' || stored === 'personal'
-        ? stored
-        : 'team'
-      : 'personal';
-    setPlanningMode((prev) => (prev === nextMode ? prev : nextMode));
-  }, [teamId, planningContextKey]);
-
-  useEffect(() => {
-    if (!planningContextKey) return;
-    safeWriteLocalStorage(planningContextKey, planningMode);
-  }, [planningMode, planningContextKey]);
-
-  const storageKey = useMemo(() => {
-    if (planningMode !== 'team' || !teamId) {
+  const planningContext = useMemo(() => {
+    if (!user?.uid) {
       return null;
     }
-    return `planning_selected_member_${teamId}`;
-  }, [planningMode, teamId]);
-
-  const availableMembers = useMemo(() => {
-    const ids = new Map();
-    if (user?.uid) {
-      ids.set(user.uid, {
-        uid: user.uid,
-        name: user.displayName || null,
-        email: user.email || null,
-      });
+    if (isTeamContext) {
+      if (!teamId || !selectedMemberId) {
+        return null;
+      }
+      return { type: 'team', teamId, memberUid: selectedMemberId };
     }
-    if (planningMode === 'team' && Array.isArray(team?.members)) {
-      team.members.forEach((member) => {
-        const uid = typeof member === 'string' ? member : member?.uid;
-        if (!uid || ids.has(uid)) return;
-        const name =
-          (typeof member === 'object' && member?.name) ||
-          (typeof member === 'object' && member?.email) ||
-          null;
-        ids.set(uid, {
-          uid,
-          name,
-          email: typeof member === 'object' ? member?.email || null : null,
-        });
-      });
-    }
-    return Array.from(ids.values());
-  }, [planningMode, team?.members, user?.uid, user?.displayName, user?.email]);
+    return { type: 'personal', userId: user.uid };
+  }, [isTeamContext, teamId, selectedMemberId, user?.uid]);
 
-  const availableMemberIdsKey = useMemo(() => {
-    const ids = availableMembers.map((member) => member.uid).filter(Boolean);
-    ids.sort();
-    return ids.join('|');
-  }, [availableMembers]);
+  const planningContextKey = useMemo(() => {
+    if (!planningContext) return 'none';
+    if (planningContext.type === 'team') {
+      return `team:${planningContext.teamId}:${planningContext.memberUid}`;
+    }
+    return `personal:${planningContext.userId}`;
+  }, [planningContext]);
+
+  const readOnly = useMemo(() => {
+    if (!isTeamContext) {
+      return false;
+    }
+    if (!selectedMemberId || !user?.uid) {
+      return true;
+    }
+    return selectedMemberId !== user.uid;
+  }, [isTeamContext, selectedMemberId, user?.uid]);
 
   useEffect(() => {
-    if (!user?.uid) return;
-
-    if (planningMode !== 'team') {
-      setSelectedMemberId(user.uid);
+    if (!planningContext || !weekStartISO || !weekEndISO) {
+      setEvents([]);
       return;
     }
 
-    const storedValue = storageKey ? localStorage.getItem(storageKey) : null;
-    const availableIds = availableMembers.map((member) => member.uid);
+    setEventsLoading(true);
+    setEventsError(null);
 
-    if (storedValue && availableIds.includes(storedValue)) {
-      setSelectedMemberId(storedValue);
-    } else {
-      setSelectedMemberId(user.uid);
-    }
-  }, [user?.uid, planningMode, storageKey, availableMemberIdsKey, availableMembers]);
-
-  useEffect(() => {
-    if (planningMode !== 'team') return;
-    if (!storageKey || !selectedMemberId) return;
-    const availableIds = availableMembers.map((member) => member.uid);
-    if (!availableIds.includes(selectedMemberId)) return;
-    localStorage.setItem(storageKey, selectedMemberId);
-  }, [selectedMemberId, storageKey, availableMemberIdsKey, availableMembers, planningMode]);
-
-  const viewedUserId = planningMode === 'team' ? selectedMemberId || user?.uid : user?.uid;
-  const isReadOnlyMode =
-    planningMode === 'team' && viewedUserId && viewedUserId !== user?.uid;
-
-  console.log('Planning: Contexte utilisateur', {
-    user: user?.uid,
-    userDisplayName: user?.displayName,
-    team: team?.id,
-    selectedMemberId,
-    viewedUserId,
-    isReadOnlyMode,
-    planningMode,
-  });
-
-  const teamOptions = useMemo(() => {
-    if (!Array.isArray(availableTeams)) {
-      return [];
-    }
-
-    const options = [];
-    const seen = new Set();
-
-    availableTeams.forEach((availableTeam) => {
-      if (!availableTeam?.team_id || seen.has(availableTeam.team_id)) {
-        return;
+    const unsubscribe = watchWeekEvents(
+      planningContext,
+      weekStartISO,
+      weekEndISO,
+      (loadedEvents) => {
+        setEvents(loadedEvents);
+        setEventsLoading(false);
+      },
+      (error) => {
+        console.error('watchWeekEvents error', error);
+        setEvents([]);
+        setEventsLoading(false);
+        setEventsError('Impossible de charger les événements');
       }
-      seen.add(availableTeam.team_id);
-      options.push({
-        value: availableTeam.team_id,
-        label: availableTeam.name || 'Équipe',
-      });
-    });
-
-    if (teamId && !seen.has(teamId)) {
-      seen.add(teamId);
-      options.push({
-        value: teamId,
-        label: activeTeamName || team?.name || 'Équipe',
-      });
-    }
-
-    return options;
-  }, [availableTeams, teamId, activeTeamName, team?.name]);
-
-  const memberOptions = useMemo(() => {
-    if (planningMode !== 'team') {
-      return [];
-    }
-    const options = [];
-    const seen = new Set();
-
-    availableMembers.forEach((member) => {
-      if (!member?.uid || seen.has(member.uid)) return;
-      seen.add(member.uid);
-
-      const labelBase =
-        member?.name ||
-        member?.email ||
-        (member.uid === user?.uid
-          ? user?.displayName || user?.email || 'Moi'
-          : `Membre ${member.uid.slice(0, 6)}`);
-
-      options.push({
-        value: member.uid,
-        label: member.uid === user?.uid ? labelBase || 'Moi' : labelBase,
-      });
-    });
-
-    return options;
-  }, [planningMode, availableMembers, user?.uid, user?.displayName, user?.email]);
-
-  const handleMemberChange = useCallback((memberId) => {
-    if (planningMode !== 'team') return;
-    if (!memberId) return;
-    if (memberId === selectedMemberId) return;
-    const availableIds = availableMembers.map((member) => member.uid);
-    if (!availableIds.includes(memberId)) return;
-    setSelectedMemberId(memberId);
-  }, [planningMode, availableMembers, selectedMemberId]);
-
-  const handleTeamChange = useCallback(
-    (nextTeamId) => {
-      if (!nextTeamId || nextTeamId === activeTeamId) {
-        return;
-      }
-      setActiveTeamId(nextTeamId);
-      setPlanningMode('team');
-      if (routeTeamId) {
-        navigate(`/team/${nextTeamId}/schedule`, { replace: true });
-      }
-    },
-    [activeTeamId, navigate, routeTeamId]
-  );
-
-  const handlePlanningModeChange = useCallback(
-    (mode) => {
-      if (mode === planningMode) return;
-      if (mode === 'team') {
-        if (!teamId && !teamOptions.length) {
-          return;
-        }
-        if (!teamId && teamOptions.length) {
-          const fallbackTeamId = teamOptions[0].value;
-          if (fallbackTeamId && fallbackTeamId !== activeTeamId) {
-            setActiveTeamId(fallbackTeamId);
-          }
-        }
-        setPlanningMode('team');
-        return;
-      }
-      setPlanningMode('personal');
-    },
-    [planningMode, teamId, teamOptions, activeTeamId]
-  );
-
-
-
-  const startOfWeek = (d) => {
-    const date = new Date(d);
-    const day = (date.getDay() + 6) % 7;
-    date.setDate(date.getDate() - day);
-    date.setHours(0, 0, 0, 0);
-    return date;
-  };
-
-  const weekLabel = (d) => {
-    const start = startOfWeek(d);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    const startStr = start.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-    });
-    const endStr = end.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-    return `Semaine du ${startStr} au ${endStr}`;
-  };
-
-  const monthLabel = (d) =>
-    d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-
-  const onPrev = () =>
-    setCurrentDate((d) =>
-      view === 'week'
-        ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 7)
-        : new Date(d.getFullYear(), d.getMonth() - 1, 1),
     );
-  const onNext = () =>
-    setCurrentDate((d) =>
-      view === 'week'
-        ? new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7)
-        : new Date(d.getFullYear(), d.getMonth() + 1, 1),
-    );
-  const onToday = () => setCurrentDate(new Date());
 
-  const currentLabel =
-    view === 'week' ? weekLabel(currentDate) : monthLabel(currentDate);
+    return () => unsubscribe();
+  }, [planningContextKey, weekStartISO, weekEndISO, planningContext]);
 
-  const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
-  const weekEnd = useMemo(() => {
-    const end = new Date(weekStart);
-    end.setDate(weekStart.getDate() + 6);
-    return end;
-  }, [weekStart]);
-  
-  const weekRange = useMemo(() => {
-    const from = new Date(weekStart);
-    from.setHours(0, 0, 0, 0);
-    const to = new Date(from);
-    to.setDate(from.getDate() + 6);
-    to.setHours(23, 59, 59, 999);
-    return { from, to };
-  }, [weekStart]);
-
-  // Hook pour les tâches hebdomadaires - seulement si on a un utilisateur
-  const weekStartISO = weekStart.toISOString().split('T')[0];
-  const effectiveTeamId = planningMode === 'team' ? teamId || null : null;
   const {
     tasks: weeklyTasks,
     occurrences: taskOccurrences,
     loading: tasksLoading,
-    error: tasksError
-  } = useTasks(
-    user?.uid ? (planningMode === 'team' ? viewedUserId || user.uid : user.uid) : null,
-    weekStartISO,
-    effectiveTeamId
-  );
-  
-  console.log('Planning: Hook useTasks', { 
-    userId: user?.uid,
-    viewedUserId, 
-    finalUserId: user?.uid ? (viewedUserId || user.uid) : null,
-    weekStartISO, 
-    weeklyTasksCount: weeklyTasks.length, 
-    taskOccurrencesCount: taskOccurrences.length,
-    tasksLoading,
-    tasksError
-  });
+    error: tasksError,
+  } = useTasks(planningContext, weekStartISO);
 
-  useEffect(() => {
-    if (!user) {
-      setTeamContext(null);
-      setEvents([]);
-      return () => {};
-    }
-
-    setTeamContext(planningMode === 'team' ? teamId || null : null);
-    setLoading(true);
-    setError(null);
-
-    const weekStartISO = weekStart.toISOString().split('T')[0]; // YYYY-MM-DD
-    const weekEndISO = weekEnd.toISOString().split('T')[0]; // YYYY-MM-DD
-
-    const unsubEvents = watchWeekEvents(
-      user.uid,
-      weekStartISO,
-      weekEndISO,
-      (snapshot) => {
-        const docs = Array.isArray(snapshot?.docs) ? snapshot.docs : snapshot;
-        const normalized = [];
-        docs.forEach((doc, idxDoc) => {
-          const data = typeof doc.data === 'function' ? doc.data() : doc;
-
-          // New format: direct event objects { start, end, ... }
-          if (data.start && data.end) {
-            const startDate = new Date(data.start);
-            const endDate = new Date(data.end);
-            if (isNaN(startDate) || isNaN(endDate)) return;
-            const date = startDate.toISOString().split('T')[0];
-            const ownerId = data.user_id || data.uid || data.owner_id || null;
-            normalized.push({
-              id: data.id || doc.id || `event_${idxDoc}`,
-              date,
-              day: Number.isInteger(data.day) ? data.day : dayIndex(date),
-              start: startDate,
-              end: endDate,
-              status: data.status,
-              title: data.title || data.client || data.description || '',
-              client: data.client || data.client_name || '',
-              description: data.description || '',
-              readOnly: Boolean(data.readOnly) || (ownerId && ownerId !== user.uid),
-              user_id: ownerId,
-              team_id: data.team_id || null,
-            });
-            return;
-          }
-
-          // Legacy format: documents containing `slots` or `events`
-          const date = toYMDFromDoc(doc, data);
-          if (!date) return;
-          const items = Array.isArray(data?.slots)
-            ? data.slots
-            : data?.events || [];
-          items.forEach((item, idx) => {
-            const ownerId = item.user_id || item.uid || item.owner_id || null;
-            normalized.push({
-              id: item.id || `${doc?.id || 'auto'}_${idx}`,
-              date,
-              day: Number.isInteger(item.day) ? item.day : dayIndex(date),
-              start: toHM(item.start),
-              end: toHM(item.end),
-              status: item.status,
-              title: item.title || item.client || item.description || '',
-              readOnly: Boolean(item.readOnly) || (ownerId && ownerId !== user.uid),
-              user_id: ownerId,
-              team_id: item.team_id || data.team_id || null,
-            });
-          });
-        });
-        const filtered = normalized.filter((event) => {
-          const eventTeamId = event.team_id || null;
-          const eventOwnerId = event.user_id || null;
-
-          if (planningMode !== 'team') {
-            if (eventTeamId) {
-              return false;
-            }
-            if (!eventOwnerId) {
-              return true;
-            }
-            return eventOwnerId === user.uid;
-          }
-
-          if (!teamId) {
-            return false;
-          }
-
-          if (eventTeamId !== teamId) {
-            return false;
-          }
-
-          if (!viewedUserId) return true;
-          if (!eventOwnerId) {
-            return viewedUserId === user.uid;
-          }
-          return eventOwnerId === viewedUserId;
-        });
-        setEvents(filtered);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Erreur watchWeekEvents:', error);
-        setError(error.message);
-        setEvents([]);
-        setLoading(false);
+  const handleDeleteWeeklyTask = useCallback(
+    async (taskId) => {
+      if (!planningContext || readOnly) {
+        return;
       }
-    );
-
-    return () => {
-      unsubEvents && unsubEvents();
-    };
-  }, [user?.uid, teamId, weekStart, weekEnd, viewedUserId, user, planningMode]);
-
-
-  const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-
-  const openSlot = (start) => {
-    if (isReadOnlyMode) return;
-    const end = new Date(start);
-    end.setHours(start.getHours() + 1);
-    const dayIndex = (start.getDay() + 6) % 7;
-    const format = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    setModal({
-      open: true,
-      timeSlot: { day: dayIndex, start: format(start), end: format(end) },
-      selectedDate: start,
-      event: null,
-      readOnly: false,
-    });
-  };
-
-  const openDate = (date) => {
-    if (isReadOnlyMode) return;
-    setModal({ open: true, selectedDate: date, timeSlot: null, event: null, readOnly: false });
-  };
-
-  const openWeek = (date) => {
-    setView('week');
-    setCurrentDate(date);
-  };
-
-  const openEvent = (event) => {
-    const readOnly = event.readOnly || (event.user_id && event.user_id !== user.uid);
-    setModal({ open: true, event, timeSlot: null, selectedDate: null, readOnly });
-  };
-
-  const closeModal = () => setModal({ open: false, timeSlot: null, selectedDate: null, event: null, readOnly: false });
-
-  const openNewWeeklyTask = () => {
-    if (isReadOnlyMode) return;
-    setWeeklyTaskModal({ open: true, task: null });
-  };
-  const handleTaskClick = (taskOccurrence) => {
-    // Récupérer la tâche originale depuis weeklyTasks
-    const originalTask = weeklyTasks.find(t => t.id === taskOccurrence.taskId);
-    if (originalTask) {
-      setWeeklyTaskModal({ open: true, task: originalTask });
-    } else {
-      console.error('Tâche originale non trouvée:', taskOccurrence.taskId);
-    }
-  };
-  const closeWeeklyTaskModal = useCallback(() => setWeeklyTaskModal({ open: false, task: null }), [setWeeklyTaskModal]);
-
-  const handleSaveWeeklyTask = () => {
-    showToast('Tâche hebdomadaire sauvegardée avec succès');
-    closeWeeklyTaskModal();
-  };
-
-  const handleDeleteWeeklyTask = useCallback(async (id) => {
-    if (!user || isReadOnlyMode) return;
-    try {
-      await deleteWeeklyTask(id);
-      showToast('Tâche hebdomadaire supprimée');
-    } catch (e) {
-      console.error('delete weekly task', e);
-      showToast('Erreur lors de la suppression de la tâche hebdomadaire', true);
-    } finally {
-      closeWeeklyTaskModal();
-    }
-  }, [user, isReadOnlyMode, closeWeeklyTaskModal]);
+      try {
+        await deleteWeeklyTask(planningContext, taskId);
+      } catch (error) {
+        console.error('deleteWeeklyTask error', error);
+        showToast('Erreur lors de la suppression de la tâche', true);
+      } finally {
+        setWeeklyTaskModal({ open: false, task: null });
+      }
+    },
+    [planningContext, readOnly]
+  );
 
   useEffect(() => {
+    const cleanupFns = [];
+
     const unsubscribeOpen = subscribeToUIEvent('openTaskModal', (taskId) => {
-      const originalTask = weeklyTasks.find((task) => task.id === taskId);
-      if (originalTask) {
-        setWeeklyTaskModal({ open: true, task: originalTask });
-      } else {
-        console.warn('Tâche originale non trouvée:', taskId);
+      if (!taskId) return;
+      const original = weeklyTasks.find((task) => task.id === taskId);
+      if (original) {
+        setWeeklyTaskModal({ open: true, task: original });
       }
     });
 
     const unsubscribeDelete = subscribeToUIEvent('confirmDeleteTask', (taskId) => {
-      if (isReadOnlyMode) {
+      if (readOnly) {
         return;
       }
-
-      const originalTask = weeklyTasks.find((task) => task.id === taskId);
-      if (!originalTask) {
-        console.warn('Tâche originale non trouvée:', taskId);
+      const original = weeklyTasks.find((task) => task.id === taskId);
+      if (!original) {
         return;
       }
-
-      const confirmed = window.confirm(`Supprimer la tâche "${originalTask.label}" ?`);
+      const confirmed = window.confirm(`Supprimer la tâche "${original.label}" ?`);
       if (!confirmed) {
         return;
       }
-
       handleDeleteWeeklyTask(taskId);
     });
 
+    cleanupFns.push(unsubscribeOpen, unsubscribeDelete);
+
     return () => {
-      unsubscribeOpen();
-      unsubscribeDelete();
+      cleanupFns.forEach((fn) => {
+        if (typeof fn === 'function') fn();
+      });
     };
-  }, [weeklyTasks, isReadOnlyMode, handleDeleteWeeklyTask]);
+  }, [weeklyTasks, readOnly, handleDeleteWeeklyTask]);
 
-  const handleSaveEvent = async (data) => {
-    if (!user || modal.readOnly) return;
-    try {
-      const dayIndex = data.day;
-      const startDate = new Date(weekStart);
-      startDate.setDate(weekStart.getDate() + dayIndex);
-      const [sh, sm] = toHM(data.start).split(':').map(Number);
-      startDate.setHours(sh, sm, 0, 0);
-      const endDate = new Date(weekStart);
-      endDate.setDate(weekStart.getDate() + dayIndex);
-      const [eh, em] = toHM(data.end).split(':').map(Number);
-      endDate.setHours(eh, em, 0, 0);
+  const openCreateModal = useCallback(
+    (date) => {
+      if (readOnly || !planningContext) return;
+      const start = date ? new Date(date) : new Date();
+      start.setHours(9, 0, 0, 0);
+      setModal({ open: true, event: null, selectedDate: start, readOnly: false });
+    },
+    [readOnly, planningContext]
+  );
 
-      const { from, to } = weekRange;
-      if (startDate < from || endDate > to) {
-        console.warn('Event en dehors de la plage, création annulée');
+  const openEventModal = useCallback(
+    (event) => {
+      if (!event) return;
+      setModal({ open: true, event, selectedDate: new Date(event.start), readOnly });
+    },
+    [readOnly]
+  );
+
+  const closeModal = useCallback(() => {
+    setModal({ open: false, event: null, selectedDate: null, readOnly: false });
+  }, []);
+
+  const openWeeklyTaskModal = useCallback(() => {
+    if (readOnly || !planningContext) return;
+    setWeeklyTaskModal({ open: true, task: null });
+  }, [readOnly, planningContext]);
+
+  const closeWeeklyTaskModal = useCallback(() => {
+    setWeeklyTaskModal({ open: false, task: null });
+  }, []);
+
+  const handleSaveEvent = useCallback(
+    async (data) => {
+      if (!planningContext || readOnly || modal.readOnly) {
         return;
       }
+      try {
+        const dayIndex = data.day ?? data.dayIndex ?? 0;
+        const eventDate = new Date(weekStart);
+        eventDate.setDate(weekStart.getDate() + dayIndex);
+        const [startHour, startMinute] = toTimeString(data.start || DEFAULT_START).split(':').map(Number);
+        const [endHour, endMinute] = toTimeString(data.end || DEFAULT_END).split(':').map(Number);
 
-      // Utiliser la nouvelle structure avec saveEventNew
-      const duration = Math.round((endDate - startDate) / (1000 * 60)); // minutes
+        const start = new Date(eventDate);
+        start.setHours(startHour, startMinute, 0, 0);
+        const end = new Date(eventDate);
+        end.setHours(endHour, endMinute, 0, 0);
 
-      const eventData = {
-        id: data.id, // si c'est un update, sinon sera généré
-        start: startDate.toISOString(),
-        end: endDate.toISOString(),
-        client: data.client_name || data.description || '',
-        status: data.status || data.type || 'unpaid', // défaut unpaid
-        hourly_rate: data.hourly_rate || 50,
-        duration: duration,
-        task_id: data.task_id || null,
-        // Champs additionnels pour compatibilité
-        description: data.description || '',
-        client_id: data.client_id || '',
-        client_name: data.client_name || '',
-        day: DAY_KEYS[dayIndex] || 'monday',
-        user_id: user.uid,
-        team_id: planningMode === 'team' ? teamId || null : null,
-      };
+        if (end <= start) {
+          showToast("L'heure de fin doit être après l'heure de début", true);
+          return;
+        }
 
-      await saveEventNew(eventData);
-      showToast('Événement sauvegardé avec succès');
+        const payload = {
+          id: data.id,
+          start: start.toISOString(),
+          end: end.toISOString(),
+          client: data.client_name || data.description || '',
+          status: data.status || data.type || 'unpaid',
+          hourly_rate: data.hourly_rate || 50,
+          duration: Math.round((end - start) / (60 * 1000)),
+          task_id: data.task_id || null,
+          description: data.description || '',
+          client_id: data.client_id || '',
+          client_name: data.client_name || '',
+          day: DAY_KEYS[dayIndex] || 'monday',
+        };
 
-    } catch (e) {
-      console.error('save event', e);
-      showToast('Erreur lors de la sauvegarde', true);
-    } finally {
-      closeModal();
-    }
-  };
+        await saveEventNew(planningContext, payload);
+        showToast('Événement sauvegardé avec succès');
+      } catch (error) {
+        console.error('saveEventNew error', error);
+        showToast('Erreur lors de la sauvegarde', true);
+      } finally {
+        closeModal();
+      }
+    },
+    [planningContext, readOnly, modal.readOnly, weekStart, closeModal]
+  );
 
-  const handleDeleteEvent = async (id) => {
-    if (!user || modal.readOnly) return;
-    try {
-      // Vérifier que l'événement existe avant suppression
-      const event = events.find(e => e.id === id);
-      if (!event) {
-        console.error('Event non trouvé pour suppression:', id);
+  const handleDeleteEvent = useCallback(
+    async (id) => {
+      if (!planningContext || readOnly || modal.readOnly) {
         return;
       }
+      try {
+        await deleteEventNew(planningContext, id);
+        showToast('Événement supprimé avec succès');
+      } catch (error) {
+        console.error('deleteEventNew error', error);
+        showToast('Erreur lors de la suppression', true);
+      } finally {
+        closeModal();
+      }
+    },
+    [planningContext, readOnly, modal.readOnly, closeModal]
+  );
 
-      await deleteEventNew(id);
-      showToast('Événement supprimé avec succès');
+  const handleMemberChange = useCallback((event) => {
+    const nextMember = event.target.value;
+    setSelectedMemberId(nextMember || null);
+  }, []);
 
-    } catch (e) {
-      console.error('delete event', e);
-      showToast('Erreur lors de la suppression', true);
-    } finally {
-      closeModal();
+  const goToToday = useCallback(() => {
+    setCurrentDate(new Date());
+  }, []);
+
+  const goToPrevious = useCallback(() => {
+    setCurrentDate((date) =>
+      view === 'week'
+        ? new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7)
+        : new Date(date.getFullYear(), date.getMonth() - 1, 1)
+    );
+  }, [view]);
+
+  const goToNext = useCallback(() => {
+    setCurrentDate((date) =>
+      view === 'week'
+        ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7)
+        : new Date(date.getFullYear(), date.getMonth() + 1, 1)
+    );
+  }, [view]);
+
+  const currentLabel = view === 'week' ? formatWeekLabel(currentDate) : formatMonthLabel(currentDate);
+
+  const taskSources = weeklyTasks.length ? weeklyTasks : taskOccurrences;
+
+  const showSkeleton = eventsLoading || tasksLoading;
+
+  useEffect(() => {
+    if (!isTeamContext) {
+      return;
     }
-  };
+    if (!teamId) {
+      return;
+    }
+    if (membersError) {
+      return;
+    }
+    if (members.length === 0 && !membersLoading) {
+      showToast("Aucun membre trouvé pour cette équipe", true);
+    }
+  }, [isTeamContext, teamId, members, membersLoading, membersError]);
 
-  if (!user) {
-    return <div>Chargement...</div>;
-  }
+  const pageTitle = isTeamContext
+    ? teamName || 'Planning équipe'
+    : 'Mon planning';
+
+  const subtitle = isTeamContext
+    ? 'Consultez et organisez les plannings de votre équipe'
+    : 'Gérez vos événements et vos tâches hebdomadaires';
 
   return (
-    <>
-      {error && (
-        <div className="bg-red-100 text-red-700 p-2 rounded mb-2">
-          Impossible de charger les événements
+    <div className="space-y-6">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">{pageTitle}</h1>
+          <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
+          {eventsError && (
+            <p className="mt-2 text-sm text-red-600">{eventsError}</p>
+          )}
+          {tasksError && (
+            <p className="mt-1 text-sm text-red-600">{tasksError}</p>
+          )}
+          {membersError && (
+            <p className="mt-1 text-sm text-red-600">{membersError}</p>
+          )}
         </div>
-      )}
-      {tasksError && (
-        <div className="bg-orange-100 text-orange-700 p-2 rounded mb-2">
-          Erreur lors du chargement des tâches :{' '}
-          {tasksError.includes('Accès refusé')
-            ? "Accès refusé : vous n'avez pas les permissions nécessaires pour consulter ces tâches."
-            : tasksError}
-        </div>
-      )}
-      {teamsError && (
-        <div className="bg-yellow-100 text-yellow-800 p-2 rounded mb-2">
-          {teamsError}
-        </div>
-      )}
-      <WeekNavigationHeader
-        currentLabel={currentLabel}
-        onPrev={onPrev}
-        onNext={onNext}
-        onToday={onToday}
-        view={view}
-        onViewChange={setView}
-        memberOptions={memberOptions}
-        selectedMemberId={viewedUserId}
-        onMemberChange={handleMemberChange}
-        isReadOnlyMode={isReadOnlyMode}
-        planningMode={planningMode}
-        onPlanningModeChange={handlePlanningModeChange}
-        canUseTeamMode={teamOptions.length > 0}
-        teamName={activeTeamName || team?.name || null}
-        teamOptions={teamOptions}
-        selectedTeamId={planningMode === 'team' ? teamId : null}
-        onTeamChange={handleTeamChange}
-        teamsLoading={teamsLoading}
-      />
 
-      <div className="flex justify-end mb-2 space-x-2">
-        <button
-          onClick={() => openDate(new Date(currentDate))}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isReadOnlyMode}
-        >
-          + Événement
-        </button>
-        <button
-          onClick={openNewWeeklyTask}
-          className="px-3 py-1 bg-blue-300 rounded hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={isReadOnlyMode}
-        >
-          + Tâche hebdomadaire
-        </button>
+        {isTeamContext && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <label htmlFor="team-member-select" className="text-sm font-medium text-gray-700">
+              Voir le planning de :
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                id="team-member-select"
+                value={selectedMemberId || ''}
+                onChange={handleMemberChange}
+                disabled={membersLoading || members.length === 0}
+                className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+              >
+                {members.map((member) => (
+                  <option key={member.uid} value={member.uid}>
+                    {buildMemberLabel(member, user)}
+                  </option>
+                ))}
+              </select>
+              {readOnly && (
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                  Lecture seule
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      {loading && showSkeleton ? (
-        <div>Chargement des événements...</div>
-      ) : view === 'week' ? (
-        <PlannerGrid
-          events={events}
-          tasks={weeklyTasks.length ? weeklyTasks : taskOccurrences}
-          onSlotSelect={openSlot}
-          onEventClick={openEvent}
-          onTaskClick={handleTaskClick}
-          weekStart={weekStart}
-          isReadOnlyMode={isReadOnlyMode}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <WeekNavigationHeader
+          currentLabel={currentLabel}
+          onPrev={goToPrevious}
+          onNext={goToNext}
+          onToday={goToToday}
         />
-      ) : (
-        <MonthGrid
-          year={currentDate.getFullYear()}
-          month={currentDate.getMonth()}
-          onDateSelect={openWeek}
-          onCreateEvent={openDate}
-          onEventClick={openEvent}
-        />
-      )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setView('week')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                view === 'week' ? 'bg-blue-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Semaine
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('month')}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                view === 'month' ? 'bg-blue-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              Mois
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => openCreateModal(new Date())}
+            disabled={readOnly || !planningContext}
+            className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              readOnly || !planningContext
+                ? 'cursor-not-allowed bg-gray-200 text-gray-500'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            + Événement
+          </button>
+          <button
+            type="button"
+            onClick={openWeeklyTaskModal}
+            disabled={readOnly || !planningContext}
+            className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              readOnly || !planningContext
+                ? 'cursor-not-allowed bg-gray-200 text-gray-500'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            }`}
+          >
+            + Tâche hebdo
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center gap-6 text-sm text-gray-600">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-green-200" />
+            <span>Payé</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-red-200" />
+            <span>Impayé</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-orange-200" />
+            <span>En attente</span>
+          </div>
+        </div>
+
+        {view === 'week' ? (
+          <PlannerGrid
+            events={events}
+            tasks={taskSources}
+            weekStart={weekStart}
+            onSlotSelect={(date) => openCreateModal(date)}
+            onAddEvent={(date) => openCreateModal(date)}
+            onEventClick={openEventModal}
+            onTaskClick={(occurrence) => {
+              if (readOnly) return;
+              const original = weeklyTasks.find((task) => task.id === occurrence.taskId);
+              if (original) {
+                setWeeklyTaskModal({ open: true, task: original });
+              }
+            }}
+            isReadOnlyMode={readOnly}
+          />
+        ) : (
+          <MonthGrid
+            year={currentDate.getFullYear()}
+            month={currentDate.getMonth()}
+            onDateSelect={(date) => {
+              setView('week');
+              setCurrentDate(date);
+            }}
+            onEventClick={openEventModal}
+            onCreateEvent={openCreateModal}
+            context={planningContext}
+          />
+        )}
+
+        {showSkeleton && (
+          <div className="mt-4 text-sm text-gray-500">Chargement des données…</div>
+        )}
+      </div>
+
       <EventModal
         isOpen={modal.open}
         onClose={closeModal}
+        selectedDate={modal.selectedDate}
+        event={modal.event}
+        readOnly={modal.readOnly || readOnly}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
-        event={modal.event}
-        timeSlot={modal.timeSlot}
-        selectedDate={modal.selectedDate}
-        readOnly={modal.readOnly}
       />
+
       <WeeklyTaskModal
         isOpen={weeklyTaskModal.open}
-        onClose={closeWeeklyTaskModal}
-        onSave={handleSaveWeeklyTask}
-        onDelete={handleDeleteWeeklyTask}
         task={weeklyTaskModal.task}
+        onClose={closeWeeklyTaskModal}
+        onDelete={(task) => task?.id && handleDeleteWeeklyTask(task.id)}
+        context={planningContext}
+        readOnly={readOnly}
       />
-    </>
+    </div>
   );
 }

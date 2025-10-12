@@ -1,68 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{uid}/{document=} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     function isTeamMember(teamId) {
-      return request.auth != null &&
-        teamId is string &&
-        teamId.size() > 0 &&
-        (let team = get(/databases/$(database)/documents/teams/$(teamId)).data;
-          team != null && (
-            team.owner_uid == request.auth.uid ||
-            (team.members is list && team.members.hasAny([request.auth.uid]))
-          )
-        );
+      return exists(/databases/$(database)/documents/teams/$(teamId)/memberships/$(request.auth.uid));
     }
 
-    match /events/{eventId} {
-      allow create: if request.auth != null &&
-        request.resource.data.user_id == request.auth.uid &&
-        (
-          !request.resource.data.keys().hasAny(['team_id']) ||
-          request.resource.data.team_id == null ||
-          isTeamMember(request.resource.data.team_id)
-        );
-      allow read: if request.auth != null && (
-        (resource.data.team_id == null && resource.data.user_id == request.auth.uid) ||
-        isTeamMember(resource.data.team_id)
-      );
-      allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
-    }
+    match /teams/{teamId} {
+      allow read: if isTeamMember(teamId);
 
-    match /tasks/{taskId} {
-      allow create: if request.auth != null &&
-        request.resource.data.user_id == request.auth.uid &&
-        (
-          !request.resource.data.keys().hasAny(['team_id']) ||
-          request.resource.data.team_id == null ||
-          isTeamMember(request.resource.data.team_id)
-        );
-      allow read: if request.auth != null && (
-        (resource.data.team_id == null && resource.data.user_id == request.auth.uid) ||
-        isTeamMember(resource.data.team_id)
-      );
-      allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
-    }
-
-    match /users/{userId} {
-      allow create: if request.auth != null && request.auth.uid == userId &&
-        request.resource.data.user_id == request.auth.uid;
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow update, delete: if request.auth != null && request.auth.uid == userId &&
-        resource.data.user_id == request.auth.uid;
-
-      match /tasks/{taskId} {
-        allow create: if request.auth != null && request.auth.uid == userId &&
-          request.resource.data.user_id == request.auth.uid;
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow update, delete: if request.auth != null && request.auth.uid == userId &&
-          resource.data.user_id == request.auth.uid;
+      match /members/{memberUid}/{document=} {
+        allow read: if isTeamMember(teamId);
+        allow write: if request.auth != null && request.auth.uid == memberUid;
       }
 
-      // Transitional support for legacy subcollection path
-      match /events/{eventId} {
-        allow create: if request.auth != null && request.auth.uid == userId && request.resource.data.user_id == request.auth.uid;
-        allow read: if request.auth != null && request.auth.uid == userId;
-        allow update, delete: if request.auth != null && request.auth.uid == userId && resource.data.user_id == request.auth.uid;
+      match /memberships/{uid} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }
   }

@@ -131,13 +131,6 @@ function App() {
         {/* Route de sélection de profil (sans sidebar) */}
         <Route path="/profiles" element={<ProfilePickerPage />} />
         
-        {/* Routes avec team schedule (sans sidebar pour l'instant) */}
-        <Route path="/team/:teamId/schedule" element={
-          <AuthGuard user={user}>
-            <Planning />
-          </AuthGuard>
-        } />
-        
         {/* Layout englobe les autres pages et passe user via context */}
         <Route element={<Layout user={user} onLogout={handleLogout} />}>
           <Route path="/" element={
@@ -145,14 +138,19 @@ function App() {
               <Navigate to="/dashboard" />
             </AuthGuard>
           } />
+          <Route path="/me" element={
+            <AuthGuard user={user}>
+              <Planning />
+            </AuthGuard>
+          } />
+          <Route path="/team/:teamId" element={
+            <AuthGuard user={user}>
+              <Planning />
+            </AuthGuard>
+          } />
           <Route path="/dashboard" element={
             <AuthGuard user={user}>
               <Dashboard />
-            </AuthGuard>
-          } />
-          <Route path="/planning" element={
-            <AuthGuard user={user}>
-              <Planning />
             </AuthGuard>
           } />
           <Route path="/quotes" element={
