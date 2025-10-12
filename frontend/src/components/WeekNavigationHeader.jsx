@@ -5,7 +5,7 @@ export default function WeekNavigationHeader({
   onPrev,
   onNext,
   onToday,
-  view,
+  view = 'week',
   onViewChange,
   memberOptions = [],
   selectedMemberId,
@@ -41,6 +41,13 @@ export default function WeekNavigationHeader({
     if (!onPlanningModeChange) return;
     if (mode === 'team' && !canUseTeamMode) return;
     onPlanningModeChange(mode);
+  };
+
+  const handleViewChange = (mode) => {
+    if (typeof onViewChange !== 'function') {
+      return;
+    }
+    onViewChange(mode);
   };
 
   return (
@@ -156,7 +163,7 @@ export default function WeekNavigationHeader({
         )}
         <div className="flex items-center gap-2 justify-center">
           <button
-            onClick={() => onViewChange('week')}
+            onClick={() => handleViewChange('week')}
             className={`px-3 py-1 rounded ${
               view === 'week' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
             }`}
@@ -164,7 +171,7 @@ export default function WeekNavigationHeader({
             Semaine
           </button>
           <button
-            onClick={() => onViewChange('month')}
+            onClick={() => handleViewChange('month')}
             className={`px-3 py-1 rounded ${
               view === 'month' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
             }`}

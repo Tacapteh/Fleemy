@@ -538,28 +538,10 @@ export default function Planning() {
           onPrev={goToPrevious}
           onNext={goToNext}
           onToday={goToToday}
+          view={view}
+          onViewChange={setView}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setView('week')}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                view === 'week' ? 'bg-blue-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Semaine
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('month')}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                view === 'month' ? 'bg-blue-500 text-white shadow' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Mois
-            </button>
-          </div>
           <button
             type="button"
             onClick={!readOnly ? () => openCreateModal(new Date()) : undefined}

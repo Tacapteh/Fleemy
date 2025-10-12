@@ -178,7 +178,7 @@ const ensurePlanningContext = (context) => {
       ownerUid,
       memberUid: ownerUid,
       teamId: null,
-      eventsRef: collection(db, 'users', ownerUid, 'planning', 'events'),
+      eventsRef: collection(db, 'users', ownerUid, 'planningEvents'),
       weeklyTasksRef: collection(db, 'users', ownerUid, 'weeklyTasks'),
     };
   }
@@ -194,7 +194,7 @@ const ensurePlanningContext = (context) => {
       ownerUid: memberUid,
       memberUid,
       teamId,
-      eventsRef: collection(db, 'teams', teamId, 'members', memberUid, 'planning', 'events'),
+      eventsRef: collection(db, 'teams', teamId, 'members', memberUid, 'planningEvents'),
       weeklyTasksRef: collection(db, 'teams', teamId, 'members', memberUid, 'weeklyTasks'),
     };
   }
