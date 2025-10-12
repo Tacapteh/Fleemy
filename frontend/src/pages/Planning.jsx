@@ -597,7 +597,11 @@ export default function Planning() {
             return eventOwnerId === user.uid;
           }
 
-          if (!teamId || (eventTeamId && eventTeamId !== teamId)) {
+          if (!teamId) {
+            return false;
+          }
+
+          if (eventTeamId !== teamId) {
             return false;
           }
 
