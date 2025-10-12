@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
@@ -140,17 +140,22 @@ const ProfilePickerPage = () => {
         throw new Error(data?.error || 'Code invalide ou expiré');
       }
 
+      const membershipRef = doc(db, 'teams', data.team_id, 'memberships', user.uid);
       await setDoc(
-        doc(db, 'teams', data.team_id, 'memberships', user.uid),
-        { joinedAt: serverTimestamp() },
+        membershipRef,
+        {
+          joinedAt: serverTimestamp(),
+          displayName: user.displayName || null,
+          email: user.email || null,
+        },
         { merge: true }
       );
 
-      await setDoc(
-        doc(db, 'teams', data.team_id, 'members', user.uid),
-        { uid: user.uid, team_id: data.team_id, updated_at: serverTimestamp() },
-        { merge: true }
-      );
+      const memberRef = doc(db, 'teams', data.team_id, 'members', user.uid);
+      const memberSnap = await getDoc(memberRef);
+      if (!memberSnap.exists()) {
+        await setDoc(memberRef, {});
+      }
 
       // Reload teams
       await loadTeams();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
@@ -15,7 +15,6 @@ import {
   deleteWeeklyTask,
   setTeamContext,
   listenTeamMemberships,
-  fetchUserProfile,
 } from '../firebase';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
@@ -101,7 +100,6 @@ export default function Planning() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(null);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
-  const profileCacheRef = useRef(new Map());
 
   const { team } = useTeam(isTeamContext ? routeTeamId : null);
   const teamName = team?.name || null;
@@ -155,43 +153,50 @@ export default function Planning() {
 
     const unsubscribe = listenTeamMemberships(
       teamId,
-      async (rawMembers) => {
-        const uids = rawMembers
-          .map((member) => member?.uid)
-          .filter(Boolean);
+      (rawMembers = []) => {
+        const seen = new Set();
+        const resolvedMembers = [];
 
-        if (!uids.includes(user.uid)) {
-          uids.unshift(user.uid);
+        const appendMember = (member) => {
+          if (!member || !member.uid || seen.has(member.uid)) {
+            return;
+          }
+          seen.add(member.uid);
+          resolvedMembers.push({
+            ...member,
+            uid: member.uid,
+            displayName:
+              member.displayName ||
+              (member.uid === user.uid ? user.displayName || null : null),
+            email:
+              member.email || (member.uid === user.uid ? user.email || null : null),
+          });
+        };
+
+        const membershipEntries = Array.isArray(rawMembers) ? rawMembers : [];
+        membershipEntries.forEach(appendMember);
+
+        if (!seen.has(user.uid)) {
+          seen.add(user.uid);
+          resolvedMembers.unshift({
+            uid: user.uid,
+            displayName: user.displayName || null,
+            email: user.email || null,
+          });
         }
 
-        const enriched = await Promise.all(
-          uids.map(async (uid) => {
-            if (profileCacheRef.current.has(uid)) {
-              return profileCacheRef.current.get(uid);
-            }
-            const profile = await fetchUserProfile(uid);
-            const entry = {
-              uid,
-              displayName: profile?.displayName || (uid === user.uid ? user.displayName || null : null),
-              email: profile?.email || (uid === user.uid ? user.email || null : null),
-            };
-            profileCacheRef.current.set(uid, entry);
-            return entry;
-          })
-        );
-
-        setMembers(enriched);
+        setMembers(resolvedMembers);
         setMembersLoading(false);
         setMembersError(null);
 
         setSelectedMemberId((current) => {
-          if (current && uids.includes(current)) {
+          if (current && seen.has(current)) {
             return current;
           }
-          if (uids.includes(user.uid)) {
+          if (seen.has(user.uid)) {
             return user.uid;
           }
-          return uids[0] || null;
+          return resolvedMembers[0]?.uid || null;
         });
       },
       (error) => {
@@ -203,7 +208,7 @@ export default function Planning() {
     );
 
     return () => unsubscribe();
-  }, [isTeamContext, teamId, user?.uid]);
+  }, [isTeamContext, teamId, user?.uid, user?.displayName, user?.email]);
 
   const planningContext = useMemo(() => {
     if (!user?.uid) {
@@ -273,7 +278,10 @@ export default function Planning() {
 
   const handleDeleteWeeklyTask = useCallback(
     async (taskId) => {
-      if (!planningContext || readOnly) {
+      if (readOnly) {
+        return;
+      }
+      if (!planningContext) {
         return;
       }
       try {
@@ -292,6 +300,9 @@ export default function Planning() {
     const cleanupFns = [];
 
     const unsubscribeOpen = subscribeToUIEvent('openTaskModal', (taskId) => {
+      if (readOnly) {
+        return;
+      }
       if (!taskId) return;
       const original = weeklyTasks.find((task) => task.id === taskId);
       if (original) {
@@ -551,7 +562,7 @@ export default function Planning() {
           </div>
           <button
             type="button"
-            onClick={() => openCreateModal(new Date())}
+            onClick={!readOnly ? () => openCreateModal(new Date()) : undefined}
             disabled={readOnly || !planningContext}
             className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly || !planningContext
@@ -563,7 +574,7 @@ export default function Planning() {
           </button>
           <button
             type="button"
-            onClick={openWeeklyTaskModal}
+            onClick={!readOnly ? openWeeklyTaskModal : undefined}
             disabled={readOnly || !planningContext}
             className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly || !planningContext
@@ -642,7 +653,7 @@ export default function Planning() {
         isOpen={weeklyTaskModal.open}
         task={weeklyTaskModal.task}
         onClose={closeWeeklyTaskModal}
-        onDelete={(task) => task?.id && handleDeleteWeeklyTask(task.id)}
+        onDelete={!readOnly ? (task) => task?.id && handleDeleteWeeklyTask(task.id) : undefined}
         context={planningContext}
         readOnly={readOnly}
       />
