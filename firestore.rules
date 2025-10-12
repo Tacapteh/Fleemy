@@ -1,22 +1,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isTeamMember(teamId) {
+      return request.auth != null &&
+        teamId is string &&
+        teamId.size() > 0 &&
+        (let team = get(/databases/$(database)/documents/teams/$(teamId)).data;
+          team != null && (
+            team.owner_uid == request.auth.uid ||
+            (team.members is list && team.members.hasAny([request.auth.uid]))
+          )
+        );
+    }
+
     match /events/{eventId} {
-      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+      allow create: if request.auth != null &&
+        request.resource.data.user_id == request.auth.uid &&
+        (
+          !request.resource.data.keys().hasAny(['team_id']) ||
+          request.resource.data.team_id == null ||
+          isTeamMember(request.resource.data.team_id)
+        );
       allow read: if request.auth != null && (
-        resource.data.user_id == request.auth.uid ||
-        (resource.data.team_id != null &&
-         resource.data.team_id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team_id)
+        (resource.data.team_id == null && resource.data.user_id == request.auth.uid) ||
+        isTeamMember(resource.data.team_id)
       );
       allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
     }
 
     match /tasks/{taskId} {
-      allow create: if request.auth != null && request.resource.data.user_id == request.auth.uid;
+      allow create: if request.auth != null &&
+        request.resource.data.user_id == request.auth.uid &&
+        (
+          !request.resource.data.keys().hasAny(['team_id']) ||
+          request.resource.data.team_id == null ||
+          isTeamMember(request.resource.data.team_id)
+        );
       allow read: if request.auth != null && (
-        resource.data.user_id == request.auth.uid ||
-        (resource.data.team_id != null &&
-         resource.data.team_id == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.team_id)
+        (resource.data.team_id == null && resource.data.user_id == request.auth.uid) ||
+        isTeamMember(resource.data.team_id)
       );
       allow update, delete: if request.auth != null && resource.data.user_id == request.auth.uid;
     }
