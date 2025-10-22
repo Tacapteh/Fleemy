@@ -328,20 +328,47 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       orderBy('start', 'asc'),
     ];
 
-    return onSnapshot(
-      query(eventsRef, ...constraints),
-      (snapshot) => {
-        const viewerUid = getUid();
-        const events = snapshot.docs
-          .map((docSnap) => normalizeEventDocument(docSnap, ownerUid, teamId, viewerUid))
-          .filter(Boolean);
-        onData?.(events);
-      },
-      (error) => {
-        logPermissionError('planningEvents', getUid(), error);
-        onError?.(error);
-      }
-    );
+    const startSubscription = () =>
+      onSnapshot(
+        query(eventsRef, ...constraints),
+        (snapshot) => {
+          const viewerUid = getUid();
+          const events = snapshot.docs
+            .map((docSnap) => normalizeEventDocument(docSnap, ownerUid, teamId, viewerUid))
+            .filter(Boolean);
+          onData?.(events);
+        },
+        (error) => {
+          logPermissionError('planningEvents', getUid(), error);
+          onError?.(error);
+        }
+      );
+
+    if (teamId) {
+      const viewerUid = getUid();
+      let unsubscribe = () => {};
+      let active = true;
+
+      ensureTeamMemberContainer(teamId, viewerUid)
+        .catch((membershipError) => {
+          console.warn('watchPlanningEvents ensure membership error', membershipError);
+        })
+        .finally(() => {
+          if (!active) {
+            return;
+          }
+          unsubscribe = startSubscription();
+        });
+
+      return () => {
+        active = false;
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
+    }
+
+    return startSubscription();
   } catch (error) {
     onError?.(error);
     return () => {};
@@ -444,20 +471,47 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
     const resolved = ensurePlanningContext(context);
     const { weeklyTasksRef, ownerUid, teamId } = resolved;
 
-    return onSnapshot(
-      weeklyTasksRef,
-      (snapshot) => {
-        const viewerUid = getUid();
-        const tasks = snapshot.docs
-          .map((docSnap) => normalizeWeeklyTaskDocument(docSnap, ownerUid, teamId, viewerUid))
-          .filter(Boolean);
-        onData?.(tasks);
-      },
-      (error) => {
-        logPermissionError('weeklyTasks', getUid(), error);
-        onError?.(error);
-      }
-    );
+    const startSubscription = () =>
+      onSnapshot(
+        weeklyTasksRef,
+        (snapshot) => {
+          const viewerUid = getUid();
+          const tasks = snapshot.docs
+            .map((docSnap) => normalizeWeeklyTaskDocument(docSnap, ownerUid, teamId, viewerUid))
+            .filter(Boolean);
+          onData?.(tasks);
+        },
+        (error) => {
+          logPermissionError('weeklyTasks', getUid(), error);
+          onError?.(error);
+        }
+      );
+
+    if (teamId) {
+      const viewerUid = getUid();
+      let unsubscribe = () => {};
+      let active = true;
+
+      ensureTeamMemberContainer(teamId, viewerUid)
+        .catch((membershipError) => {
+          console.warn('watchWeeklyTasks ensure membership error', membershipError);
+        })
+        .finally(() => {
+          if (!active) {
+            return;
+          }
+          unsubscribe = startSubscription();
+        });
+
+      return () => {
+        active = false;
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
+    }
+
+    return startSubscription();
   } catch (error) {
     onError?.(error);
     return () => {};
