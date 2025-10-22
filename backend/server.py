@@ -93,6 +93,10 @@ app.add_middleware(
 
 async def verify_token(request: Request):
     """Validate the Firebase token sent in the Authorization header."""  # ✅ CHECKED auth
+    if request.method.upper() == "OPTIONS":
+        logger.info("Skipping auth verification for preflight request on %s", request.url.path)
+        return {"uid": "preflight"}
+
     auth_header = request.headers.get("Authorization")
     logger.info("Header Authorization reçu: %s", auth_header)
 
@@ -185,6 +189,29 @@ def _build_cors_error_response(request: Request, content: Dict[str, Any]) -> JSO
     """Ensure custom error responses keep CORS headers."""
     response = JSONResponse(status_code=200, content=content)
     return _apply_cors_headers(request, response)
+
+
+@app.options("/{full_path:path}")
+async def handle_preflight(full_path: str, request: Request) -> Response:
+    """Handle browser CORS preflight checks with the same policy as CORSMiddleware."""
+    response = Response(status_code=200)
+
+    requested_method = request.headers.get("Access-Control-Request-Method")
+    requested_headers = request.headers.get("Access-Control-Request-Headers")
+
+    if requested_method:
+        response.headers["Access-Control-Allow-Methods"] = requested_method
+    else:
+        response.headers.setdefault("Access-Control-Allow-Methods", "*")
+
+    if requested_headers:
+        response.headers["Access-Control-Allow-Headers"] = requested_headers
+    else:
+        response.headers.setdefault("Access-Control-Allow-Headers", "*")
+
+    response.headers.setdefault("Access-Control-Max-Age", "86400")
+    return _apply_cors_headers(request, response)
+
 
 @app.middleware("http")
 async def error_handling_middleware(request: Request, call_next):
