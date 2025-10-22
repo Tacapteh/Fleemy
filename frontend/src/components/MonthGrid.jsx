@@ -95,26 +95,38 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
       return;
     }
 
+    if (!monthRange?.from || !monthRange?.to) {
+      setTasks([]);
+      setTasksByDay({});
+      return;
+    }
+
+    if (context && context.type === 'team' && !context.memberUid) {
+      setTasks([]);
+      setTasksByDay({});
+      return;
+    }
+
     const unsubscribe = watchTasks(monthRange, (newTasks) => {
       setTasks(newTasks);
-      
+
       // Organiser les tâches par jour
       const byDay = {};
       newTasks.forEach(task => {
         const taskDate = new Date(task.start);
         const dayKey = `${taskDate.getFullYear()}-${taskDate.getMonth()}-${taskDate.getDate()}`;
-        
+
         if (!byDay[dayKey]) {
           byDay[dayKey] = [];
         }
         byDay[dayKey].push(task);
       });
-      
+
       setTasksByDay(byDay);
-    });
+    }, context);
 
     return unsubscribe;
-  }, [user, monthRange]);
+  }, [user, monthRange, contextKey, context]);
 
   const handleSelect = (value) => {
     if (!user) {

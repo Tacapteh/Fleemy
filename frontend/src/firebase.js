@@ -1285,6 +1285,60 @@ export const fetchUserProfile = async (uid) => {
   }
 };
 
+const resolveTasksCollection = (context, viewerUid) => {
+  const effectiveViewer = viewerUid ?? null;
+
+  if (context?.type === 'team') {
+    const { teamId, memberUid } = context;
+    if (!teamId || !memberUid) {
+      return null;
+    }
+    return {
+      collection: collection(db, 'teams', teamId, 'members', memberUid, 'tasks'),
+      path: `teams/${teamId}/members/${memberUid}/tasks`,
+      ownerUid: memberUid,
+      teamId,
+    };
+  }
+
+  if (context?.type === 'personal') {
+    const ownerUid = context.userId || effectiveViewer;
+    if (!ownerUid) {
+      return null;
+    }
+    return {
+      collection: collection(db, 'users', ownerUid, 'tasks'),
+      path: `users/${ownerUid}/tasks`,
+      ownerUid,
+      teamId: null,
+    };
+  }
+
+  if (currentTeamId) {
+    const memberUid = context?.memberUid || effectiveViewer;
+    if (!memberUid) {
+      return null;
+    }
+    return {
+      collection: collection(db, 'teams', currentTeamId, 'members', memberUid, 'tasks'),
+      path: `teams/${currentTeamId}/members/${memberUid}/tasks`,
+      ownerUid: memberUid,
+      teamId: currentTeamId,
+    };
+  }
+
+  const ownerUid = effectiveViewer;
+  if (!ownerUid) {
+    return null;
+  }
+  return {
+    collection: collection(db, 'users', ownerUid, 'tasks'),
+    path: `users/${ownerUid}/tasks`,
+    ownerUid,
+    teamId: null,
+  };
+};
+
 // TASKS (existing function remains unchanged)
 export const saveTask = async (taskData = {}) => {
   const currentUid = getUid();
@@ -1297,6 +1351,7 @@ export const saveTask = async (taskData = {}) => {
     start: normalizeDate(taskData.start),
     end: normalizeDate(taskData.end),
     user_id: currentUid,
+    owner_uid: currentUid,
     team_id: currentTeamId || null,
     // Only set created_at for new tasks
     ...(taskData.id ? {} : { created_at: serverTimestamp() }),
@@ -1305,32 +1360,42 @@ export const saveTask = async (taskData = {}) => {
   delete baseData.id;
   Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
 
-  const data = baseData;
-  const path = "tasks";
+  const context = currentTeamId
+    ? { type: 'team', teamId: currentTeamId, memberUid: currentUid }
+    : { type: 'personal', userId: currentUid };
+  const resolved = resolveTasksCollection(context, currentUid);
+
+  if (!resolved?.collection) {
+    throw new Error("Impossible de déterminer l'emplacement de stockage des tâches");
+  }
 
   try {
-    if (id) {
-      const ref = doc(collection(db, path), id);
-      await setDoc(ref, data, { merge: true });
-      return { id, ...data };
-    } else {
-      const ref = await addDoc(collection(db, path), data);
-      return { id: ref.id, ...data };
+    if (resolved.teamId) {
+      await ensureTeamMemberContainer(resolved.teamId, currentUid);
     }
+
+    if (id) {
+      const ref = doc(resolved.collection, id);
+      await setDoc(ref, baseData, { merge: true });
+      return { id, ...baseData };
+    }
+
+    const ref = await addDoc(resolved.collection, baseData);
+    return { id: ref.id, ...baseData };
   } catch (error) {
-    console.error("saveTask", path, error);
-    return;
+    console.error('saveTask error', resolved.path, error);
+    throw error;
   }
 };
 
-export const watchTasks = (range, callback) => {
-  const currentUid = getUid();
-  if (!range?.from || !range?.to || !currentUid) {
+export const watchTasks = (range, callback, context = null) => {
+  const viewerUid = getUid();
+  if (!range?.from || !range?.to || (!viewerUid && !context?.userId && !context?.memberUid)) {
     if (unsubTasks) {
       unsubTasks();
       unsubTasks = null;
     }
-    console.log("watchTasks skip: bad range/user");
+    console.log('watchTasks skip: bad range/user');
     return () => {};
   }
   if (unsubTasks) {
@@ -1346,33 +1411,38 @@ export const watchTasks = (range, callback) => {
     !(toDateVal instanceof Date) ||
     isNaN(toDateVal.getTime())
   ) {
-    console.log("watchTasks skip: bad range/user");
+    console.log('watchTasks skip: bad range/user');
     return () => {};
+  }
+
+  const resolved = resolveTasksCollection(context, viewerUid);
+  if (!resolved?.collection) {
+    console.log('watchTasks skip: unresolved collection');
+    return () => {};
+  }
+
+  if (resolved.teamId && viewerUid) {
+    ensureTeamMemberContainer(resolved.teamId, viewerUid).catch(() => {});
   }
 
   const fromTimestamp = Timestamp.fromDate(fromDate);
   const toTimestamp = Timestamp.fromDate(toDateVal);
 
-  const field = currentTeamId ? "team_id" : "user_id";
-  const fieldValue = currentTeamId ? currentTeamId : currentUid;
-
   let logged = false;
 
-  const tasksPath = "tasks";
   const q = query(
-    collection(db, tasksPath),
-    where(field, "==", fieldValue),
-    where("weekly", "!=", true), // Exclure les tâches hebdomadaires
-    where("start", "<=", toTimestamp),
-    orderBy("weekly", "asc"), // Nécessaire pour la contrainte d'inégalité
-    orderBy("start", "asc")
+    resolved.collection,
+    where('weekly', '!=', true), // Exclure les tâches hebdomadaires
+    where('start', '<=', toTimestamp),
+    orderBy('weekly', 'asc'), // Nécessaire pour la contrainte d'inégalité
+    orderBy('start', 'asc')
   );
 
   const unsubRoot = onSnapshot(
     q,
     (snapshot) => {
       if (!logged) {
-        console.log("watchTasks OK", tasksPath);
+        console.log('watchTasks OK', resolved.path);
         logged = true;
       }
       const tasks = [];
@@ -1380,19 +1450,19 @@ export const watchTasks = (range, callback) => {
         const data = docSnap.data();
         // Ignorer les tâches hebdomadaires même si elles passent le filtre
         if (data.weekly === true) return;
-        
+
         const start =
           data.start instanceof Timestamp ? data.start.toDate() : data.start;
         const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
         if (end >= fromDate) {
-          const readOnly = data.user_id !== currentUid;
+          const readOnly = viewerUid ? data.user_id !== viewerUid : true;
           tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
         }
       });
       callback(tasks);
     },
     (err) => {
-      logPermissionError(tasksPath, currentUid, err);
+      logPermissionError(resolved.path, viewerUid, err);
       callback([]);
     }
   );
@@ -1403,10 +1473,21 @@ export const watchTasks = (range, callback) => {
 
 export const deleteTask = async (taskId) => {
   try {
-    const taskRef = doc(collection(db, "tasks"), taskId);
+    const currentUid = getUid();
+    if (!currentUid) {
+      throw new Error('Utilisateur non connecté');
+    }
+    const context = currentTeamId
+      ? { type: 'team', teamId: currentTeamId, memberUid: currentUid }
+      : { type: 'personal', userId: currentUid };
+    const resolved = resolveTasksCollection(context, currentUid);
+    if (!resolved?.collection) {
+      throw new Error("Impossible de déterminer l'emplacement de stockage des tâches");
+    }
+    const taskRef = doc(resolved.collection, taskId);
     await deleteDoc(taskRef);
   } catch (error) {
-    console.error("Erreur deleteTask:", error);
+    console.error('Erreur deleteTask:', error);
     throw error;
   }
 };
