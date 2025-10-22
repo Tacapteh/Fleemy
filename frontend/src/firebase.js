@@ -72,6 +72,219 @@ const logPermissionError = (path, uid, err) => {
   }
 };
 
+const DAY_KEYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const DEFAULT_EVENT_START = "09:00";
+const DEFAULT_EVENT_END = "10:00";
+
+const isPermissionDeniedError = (error) => {
+  if (!error) return false;
+  const code = error.code || error.status;
+  if (code === "permission-denied" || code === "unauthenticated") {
+    return true;
+  }
+  const message = String(error.message || "").toLowerCase();
+  return (
+    message.includes("missing or insufficient permissions") ||
+    message.includes("permission_denied")
+  );
+};
+
+const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
+  if (value == null) {
+    return fallback;
+  }
+
+  if (typeof value === "string") {
+    if (value.includes("T")) {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return `${String(parsed.getHours()).padStart(2, "0")}:${String(
+          parsed.getMinutes(),
+        ).padStart(2, "0")}`;
+      }
+    }
+    const parts = value.split(":");
+    if (parts.length > 0) {
+      const rawHour = Number.parseInt(parts[0], 10);
+      const rawMinute = Number.parseInt(parts[1] ?? "0", 10);
+      if (!Number.isNaN(rawHour)) {
+        const hour = Math.max(0, Math.min(rawHour, 23));
+        const minute = Math.max(0, Math.min(Number.isNaN(rawMinute) ? 0 : rawMinute, 59));
+        return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      }
+    }
+  }
+
+  if (value instanceof Date) {
+    if (!Number.isNaN(value.getTime())) {
+      return `${String(value.getHours()).padStart(2, "0")}:${String(
+        value.getMinutes(),
+      ).padStart(2, "0")}`;
+    }
+  }
+
+  const date = toDateSafe(value);
+  if (date) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(
+      date.getMinutes(),
+    ).padStart(2, "0")}`;
+  }
+
+  return fallback;
+};
+
+const getIsoWeekInfo = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return { week: null, year: null };
+  }
+  const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const dayNumber = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNumber);
+  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((utcDate - yearStart) / 86400000 + 1) / 7);
+  return { week, year: utcDate.getUTCFullYear() };
+};
+
+const ensureDayKey = (day, fallbackDate) => {
+  if (typeof day === "string" && day) {
+    const normalized = day.toLowerCase();
+    if (DAY_KEYS.includes(normalized)) {
+      return normalized;
+    }
+  }
+  if (typeof day === "number" && day >= 0 && day < DAY_KEYS.length) {
+    return DAY_KEYS[day];
+  }
+  if (fallbackDate instanceof Date && !Number.isNaN(fallbackDate.getTime())) {
+    const index = (fallbackDate.getDay() + 6) % 7;
+    return DAY_KEYS[index];
+  }
+  return DAY_KEYS[0];
+};
+
+async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
+  const { ownerUid, teamId } = resolved;
+  const apiFetch = await getApiFetch();
+
+  const startDate =
+    (typeof startTs?.toDate === "function" && startTs.toDate()) ||
+    toDateSafe(eventData.start) ||
+    new Date();
+  const tentativeEnd =
+    (typeof endTs?.toDate === "function" && endTs.toDate()) ||
+    toDateSafe(eventData.end) ||
+    new Date(startDate.getTime() + 60 * 60 * 1000);
+  const endDate =
+    tentativeEnd && tentativeEnd > startDate
+      ? tentativeEnd
+      : new Date(startDate.getTime() + 60 * 60 * 1000);
+
+  const { week, year } = getIsoWeekInfo(startDate);
+  const parsedRate = Number(
+    typeof eventData.hourly_rate === "number"
+      ? eventData.hourly_rate
+      : eventData.hourly_rate ?? 0,
+  );
+  const hourlyRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 50;
+
+  const body = {
+    description: eventData.description || "",
+    client_id: eventData.client_id || "",
+    client_name: eventData.client_name || "",
+    day: ensureDayKey(eventData.day, startDate),
+    start_time: toHourMinuteString(eventData.start, DEFAULT_EVENT_START),
+    end_time: toHourMinuteString(eventData.end, DEFAULT_EVENT_END),
+    status: eventData.status || eventData.type || "pending",
+    hourly_rate: hourlyRate,
+  };
+
+  if (typeof year === "number" && !Number.isNaN(year)) {
+    body.year = year;
+  }
+  if (typeof week === "number" && !Number.isNaN(week)) {
+    body.week = week;
+  }
+  if (teamId) {
+    body.team_id = teamId;
+  }
+
+  const method = eventData.id ? "PUT" : "POST";
+  const path = eventData.id ? `/planning/events/${eventData.id}` : "/planning/events";
+
+  const response = await apiFetch(path, {
+    method,
+    body: JSON.stringify(body),
+  });
+
+  if (!response || response.success === false) {
+    const errorMessage = response?.error || "Impossible de sauvegarder l'événement";
+    throw new Error(errorMessage);
+  }
+
+  const rawEvent = response.event || response;
+  const owner = ownerUid;
+  const team = teamId ?? null;
+  const viewerUid = getUid();
+
+  const durationMinutes = Math.max(
+    Number.parseInt(rawEvent?.duration, 10) || Math.round((endDate - startDate) / 60000),
+    0,
+  );
+
+  const normalizedDay = ensureDayKey(rawEvent?.day ?? eventData.day, startDate);
+  const normalizedRate = Number.isFinite(Number(rawEvent?.hourly_rate))
+    ? Number(rawEvent.hourly_rate)
+    : hourlyRate;
+
+  const enriched = {
+    ...rawEvent,
+    id:
+      rawEvent?.id ||
+      eventData.id ||
+      rawEvent?.uid ||
+      `${owner}-${Math.abs(startDate.getTime())}`,
+    description: rawEvent?.description ?? eventData.description ?? "",
+    client_name: rawEvent?.client_name ?? eventData.client_name ?? "",
+    client_id: rawEvent?.client_id ?? eventData.client_id ?? "",
+    status: rawEvent?.status ?? eventData.status ?? eventData.type ?? "pending",
+    hourly_rate: normalizedRate,
+    day: normalizedDay,
+    start: startDate,
+    end: endDate,
+    duration: durationMinutes,
+    team_id: team,
+    user_id: owner,
+    owner_uid: owner,
+  };
+
+  const normalized = normalizeEventData(
+    enriched.id,
+    enriched,
+    owner,
+    team,
+    viewerUid,
+  );
+
+  if (normalized) {
+    return { ...normalized, source: "api-fallback" };
+  }
+
+  return {
+    ...enriched,
+    readOnly: viewerUid ? owner !== viewerUid : true,
+    source: "api-fallback",
+  };
+}
+
 let apiFetchModulePromise = null;
 const getApiFetch = async () => {
   if (!apiFetchModulePromise) {
@@ -552,37 +765,50 @@ export const saveEventNew = async (context, eventData = {}) => {
   delete payload.id;
   Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
 
-  if (teamId) {
-    await ensureTeamMemberContainer(teamId, ownerUid);
-  }
+  try {
+    if (teamId) {
+      await ensureTeamMemberContainer(teamId, ownerUid);
+    }
 
-  if (eventData.id) {
-    await setDoc(doc(eventsRef, eventData.id), payload, { merge: true });
+    if (eventData.id) {
+      await setDoc(doc(eventsRef, eventData.id), payload, { merge: true });
+      return {
+        ...eventData,
+        id: eventData.id,
+        start: startTs.toDate(),
+        end: endTs.toDate(),
+        user_id: ownerUid,
+        owner_uid: ownerUid,
+        team_id: teamId ?? null,
+        source: "firestore",
+      };
+    }
+
+    const newDocRef = doc(eventsRef);
+    await setDoc(newDocRef, {
+      ...payload,
+      created_at: serverTimestamp(),
+    });
     return {
       ...eventData,
-      id: eventData.id,
+      id: newDocRef.id,
       start: startTs.toDate(),
       end: endTs.toDate(),
       user_id: ownerUid,
       owner_uid: ownerUid,
       team_id: teamId ?? null,
+      source: "firestore",
     };
+  } catch (error) {
+    if (!isPermissionDeniedError(error)) {
+      throw error;
+    }
+    try {
+      return await saveEventViaApiFallback(resolved, eventData, startTs, endTs);
+    } catch (fallbackError) {
+      throw fallbackError;
+    }
   }
-
-  const newDocRef = doc(eventsRef);
-  await setDoc(newDocRef, {
-    ...payload,
-    created_at: serverTimestamp(),
-  });
-  return {
-    ...eventData,
-    id: newDocRef.id,
-    start: startTs.toDate(),
-    end: endTs.toDate(),
-    user_id: ownerUid,
-    owner_uid: ownerUid,
-    team_id: teamId ?? null,
-  };
 };
 
 export const deleteEventNew = async (context, eventId) => {

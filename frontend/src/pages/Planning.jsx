@@ -472,7 +472,25 @@ export default function Planning() {
           day: DAY_KEYS[dayIndex] || 'monday',
         };
 
-        await saveEventNew(planningContext, payload);
+        const savedEvent = await saveEventNew(planningContext, payload);
+        if (savedEvent?.source === 'api-fallback' && savedEvent?.id) {
+          setEvents((current) => {
+            const others = Array.isArray(current)
+              ? current.filter((evt) => evt && evt.id !== savedEvent.id)
+              : [];
+            const nextEvents = [...others, savedEvent];
+            nextEvents.sort((a, b) => {
+              const aTime = a?.start instanceof Date
+                ? a.start.getTime()
+                : new Date(a?.start || 0).getTime();
+              const bTime = b?.start instanceof Date
+                ? b.start.getTime()
+                : new Date(b?.start || 0).getTime();
+              return aTime - bTime;
+            });
+            return nextEvents;
+          });
+        }
         showToast('Événement sauvegardé avec succès');
       } catch (error) {
         console.error('saveEventNew error', error);

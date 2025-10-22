@@ -15,7 +15,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Tuple
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import asyncio
 import json
 import calendar
@@ -520,6 +520,172 @@ async def stream_docs(query):
     return [d.to_dict() for d in docs]
 
 
+_DAY_NAME_TO_ISO = {
+    "monday": 1,
+    "mon": 1,
+    "lundi": 1,
+    "lun": 1,
+    "tuesday": 2,
+    "tue": 2,
+    "tues": 2,
+    "mardi": 2,
+    "wed": 3,
+    "wednesday": 3,
+    "mercredi": 3,
+    "thu": 4,
+    "thur": 4,
+    "thurs": 4,
+    "thursday": 4,
+    "jeudi": 4,
+    "fri": 5,
+    "friday": 5,
+    "vendredi": 5,
+    "sat": 6,
+    "saturday": 6,
+    "samedi": 6,
+    "sun": 7,
+    "sunday": 7,
+    "dimanche": 7,
+}
+
+
+def _day_to_iso(day: Any) -> int:
+    """Return ISO weekday (1=Mon..7=Sun) from various representations."""
+    if isinstance(day, int):
+        # Old data sometimes stores monday=0..sunday=6
+        if 1 <= day <= 7:
+            return day
+        if 0 <= day <= 6:
+            return (day % 7) + 1
+    if isinstance(day, str):
+        key = day.strip().lower()
+        if key.isdigit():
+            try:
+                value = int(key)
+                if 1 <= value <= 7:
+                    return value
+                if 0 <= value <= 6:
+                    return (value % 7) + 1
+            except ValueError:
+                pass
+        if key in _DAY_NAME_TO_ISO:
+            return _DAY_NAME_TO_ISO[key]
+    return 1
+
+
+def _parse_time_components(value: Any) -> Tuple[int, int]:
+    try:
+        if isinstance(value, str):
+            parts = value.split(":")
+            hour = int(parts[0]) if parts and parts[0] else 0
+            minute = int(parts[1]) if len(parts) > 1 and parts[1] else 0
+            return max(0, min(hour, 23)), max(0, min(minute, 59))
+        if isinstance(value, (int, float)):
+            hour = int(value)
+            return max(0, min(hour, 23)), 0
+    except Exception:
+        pass
+    return 0, 0
+
+
+def _compute_event_datetimes(
+    year: Optional[int],
+    week: Optional[int],
+    day: Any,
+    start_time: Any,
+    end_time: Any,
+) -> Tuple[datetime, datetime]:
+    now = datetime.now(timezone.utc)
+    try:
+        target_year = int(year) if year else now.year
+    except Exception:
+        target_year = now.year
+    try:
+        target_week = int(week) if week else now.isocalendar()[1]
+    except Exception:
+        target_week = now.isocalendar()[1]
+
+    iso_day = _day_to_iso(day)
+
+    try:
+        base = datetime.fromisocalendar(target_year, target_week, iso_day)
+    except Exception:
+        base = now
+
+    start_hour, start_minute = _parse_time_components(start_time)
+    end_hour, end_minute = _parse_time_components(end_time)
+
+    start_dt = base.replace(
+        hour=start_hour,
+        minute=start_minute,
+        second=0,
+        microsecond=0,
+    )
+    end_dt = base.replace(
+        hour=end_hour,
+        minute=end_minute,
+        second=0,
+        microsecond=0,
+    )
+
+    if start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+    if end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+    if end_dt <= start_dt:
+        end_dt = start_dt + timedelta(hours=1)
+
+    return start_dt, end_dt
+
+
+def _planning_event_doc(owner_id: str, team_id: Optional[str], event_id: str):
+    if team_id:
+        return (
+            db.collection("teams")
+            .document(team_id)
+            .collection("members")
+            .document(owner_id)
+            .collection("planningEvents")
+            .document(event_id)
+        )
+    return user_doc(owner_id).collection("planningEvents").document(event_id)
+
+
+def _build_planning_event_payload(event_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    try:
+        start_dt, end_dt = _compute_event_datetimes(
+            event_data.get("year"),
+            event_data.get("week"),
+            event_data.get("day"),
+            event_data.get("start_time"),
+            event_data.get("end_time"),
+        )
+    except Exception:
+        return None
+
+    owner_id = event_data.get("owner_id") or event_data.get("uid")
+    payload = {
+        "title": event_data.get("description", ""),
+        "description": event_data.get("description", ""),
+        "client_id": event_data.get("client_id", ""),
+        "client_name": event_data.get("client_name", ""),
+        "client": event_data.get("client_name", ""),
+        "status": event_data.get("status", "pending"),
+        "hourly_rate": event_data.get("hourly_rate", 50.0),
+        "day": event_data.get("day"),
+        "start": start_dt,
+        "end": end_dt,
+        "duration": max(int((end_dt - start_dt).total_seconds() // 60), 0),
+        "user_id": owner_id,
+        "owner_uid": owner_id,
+        "team_id": event_data.get("team_id"),
+        "created_at": event_data.get("created_at"),
+        "updated_at": event_data.get("updated_at"),
+    }
+    return payload
+
+
 def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
@@ -974,14 +1140,33 @@ async def create_event(
             owner_id=user["uid"],
         )
         event_payload = event.dict()
-        await asyncio.to_thread(
-            events_ref.document(event.id).set,
-            event_payload,
-        )
-        await asyncio.to_thread(
-            global_event_doc(year, week, event.id).set,
-            event_payload,
-        )
+        planning_payload = _build_planning_event_payload(event_payload)
+
+        tasks = [
+            asyncio.to_thread(
+                events_ref.document(event.id).set,
+                event_payload,
+            ),
+            asyncio.to_thread(
+                global_event_doc(year, week, event.id).set,
+                event_payload,
+            ),
+        ]
+
+        if planning_payload:
+            planning_ref = _planning_event_doc(
+                event_payload.get("owner_id", user["uid"]),
+                target_team_id,
+                event.id,
+            )
+            tasks.append(
+                asyncio.to_thread(
+                    planning_ref.set,
+                    planning_payload,
+                )
+            )
+
+        await asyncio.gather(*tasks)
         return {"success": True, "event": event_payload}
     except Exception as e:
         logger.error("create_event error: %s", e, exc_info=True)
@@ -1032,16 +1217,32 @@ async def update_event(
     await asyncio.to_thread(doc_ref.update, update_fields)
 
     payload = {**existing, **update_fields}
+    planning_payload = _build_planning_event_payload(payload)
     existing_year = existing.get("year")
     existing_week = existing.get("week")
+    tasks = []
     if existing_year and existing_week:
-        await asyncio.to_thread(
-            global_event_doc(existing_year, existing_week, event_id).delete
+        tasks.append(
+            asyncio.to_thread(
+                global_event_doc(existing_year, existing_week, event_id).delete
+            )
         )
-    await asyncio.to_thread(
-        global_event_doc(new_year, new_week, event_id).set,
-        payload,
+    tasks.append(
+        asyncio.to_thread(
+            global_event_doc(new_year, new_week, event_id).set,
+            payload,
+        )
     )
+    if planning_payload:
+        planning_ref = _planning_event_doc(owner_id, target_team_id, event_id)
+        tasks.append(
+            asyncio.to_thread(
+                planning_ref.set,
+                planning_payload,
+            )
+        )
+    if tasks:
+        await asyncio.gather(*tasks)
     return {"success": True, "event": payload}
 
 
@@ -1063,13 +1264,19 @@ async def delete_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     data = snap.to_dict()
-    await asyncio.to_thread(doc_ref.delete)
+    owner_id = data.get("owner_id", data.get("uid", user["uid"]))
+    tasks = [asyncio.to_thread(doc_ref.delete)]
     year = data.get("year")
     week = data.get("week")
     if year and week:
-        await asyncio.to_thread(
-            global_event_doc(year, week, event_id).delete
+        tasks.append(
+            asyncio.to_thread(
+                global_event_doc(year, week, event_id).delete
+            )
         )
+    planning_ref = _planning_event_doc(owner_id, team_id, event_id)
+    tasks.append(asyncio.to_thread(planning_ref.delete))
+    await asyncio.gather(*tasks)
     return {"success": True, "message": "deleted"}
 
 
