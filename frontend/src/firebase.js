@@ -72,6 +72,19 @@ const logPermissionError = (path, uid, err) => {
   }
 };
 
+let apiFetchModulePromise = null;
+const getApiFetch = async () => {
+  if (!apiFetchModulePromise) {
+    apiFetchModulePromise = import("./lib/api")
+      .then((mod) => mod.apiFetch)
+      .catch((error) => {
+        apiFetchModulePromise = null;
+        throw error;
+      });
+  }
+  return apiFetchModulePromise;
+};
+
 export function useFirebaseUser() {
   const [user, setUser] = useState(null);
   useEffect(() => {
@@ -206,18 +219,18 @@ const ensureTeamMemberContainer = async (teamId, memberUid) => {
   if (!teamId || !memberUid) {
     return;
   }
+  const currentUid = getUid();
+  if (!currentUid || currentUid !== memberUid) {
+    return;
+  }
   try {
-    await setDoc(
-      doc(db, 'teams', teamId, 'members', memberUid),
-      {
-        uid: memberUid,
-        team_id: teamId,
-        updated_at: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const apiFetch = await getApiFetch();
+    await apiFetch(`/teams/${teamId}/memberships/ensure`, {
+      method: "POST",
+      body: JSON.stringify({ include_joined_at: false }),
+    });
   } catch (error) {
-    console.warn('ensureTeamMemberContainer error', error);
+    console.warn("ensureTeamMemberContainer error", error);
   }
 };
 

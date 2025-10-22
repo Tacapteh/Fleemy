@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2 } from 'lucide-react';
-import { auth, db } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
@@ -90,36 +89,13 @@ const ProfilePickerPage = () => {
       return;
     }
 
-    const includeJoinedAt = options.includeJoinedAt === true;
-
     try {
-      const membershipRef = doc(db, 'teams', teamId, 'memberships', user.uid);
-      const memberRef = doc(db, 'teams', teamId, 'members', user.uid);
-
-      const membershipData = {
-        displayName: user.displayName || null,
-        email: user.email || null,
-        lastSeenAt: serverTimestamp(),
-      };
-
-      if (includeJoinedAt) {
-        membershipData.joinedAt = serverTimestamp();
-      }
-
-      await Promise.all([
-        setDoc(membershipRef, membershipData, { merge: true }),
-        setDoc(
-          memberRef,
-          {
-            uid: user.uid,
-            displayName: user.displayName || null,
-            email: user.email || null,
-            team_id: teamId,
-            updated_at: serverTimestamp(),
-          },
-          { merge: true }
-        ),
-      ]);
+      await apiFetch(`/teams/${teamId}/memberships/ensure`, {
+        method: 'POST',
+        body: JSON.stringify({
+          include_joined_at: options.includeJoinedAt === true,
+        }),
+      });
     } catch (err) {
       console.error('Error ensuring membership document:', err);
     }
@@ -187,22 +163,9 @@ const ProfilePickerPage = () => {
         throw new Error(data?.error || 'Code invalide ou expiré');
       }
 
-      const membershipRef = doc(db, 'teams', data.team_id, 'memberships', user.uid);
-      await setDoc(
-        membershipRef,
-        {
-          joinedAt: serverTimestamp(),
-          displayName: user.displayName || null,
-          email: user.email || null,
-        },
-        { merge: true }
-      );
-
-      const memberRef = doc(db, 'teams', data.team_id, 'members', user.uid);
-      const memberSnap = await getDoc(memberRef);
-      if (!memberSnap.exists()) {
-        await setDoc(memberRef, {});
-      }
+      await ensureMembershipForUser(data.team_id, user, {
+        includeJoinedAt: !data.already_member,
+      });
 
       // Reload teams
       await loadTeams();

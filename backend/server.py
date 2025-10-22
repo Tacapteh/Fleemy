@@ -444,6 +444,10 @@ class TeamJoinRequest(BaseModel):
     code: str
 
 
+class EnsureMembershipRequest(BaseModel):
+    include_joined_at: bool = False
+
+
 class LastContextUpdate(BaseModel):
     type: str  # "solo" or "team"
     team_id: Optional[str] = None
@@ -495,6 +499,92 @@ async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
     if not team or user_uid not in (team.get("members", []) + [team.get("owner_uid")]):
         raise HTTPException(status_code=403, detail="Not authorized for this team")
     return team
+
+
+async def ensure_membership_documents(
+    team_id: str,
+    user_info: Dict[str, Any],
+    include_joined_at: bool = False,
+) -> Dict[str, bool]:
+    """Ensure the Firestore membership/member docs exist for the user."""
+    uid = user_info.get("uid")
+    if not uid:
+        raise HTTPException(status_code=400, detail="Missing user identifier")
+
+    display_name = (
+        user_info.get("name")
+        or user_info.get("displayName")
+        or user_info.get("email")
+    )
+    email = user_info.get("email")
+
+    try:
+        profile_snap = await asyncio.to_thread(user_doc(uid).get)
+        if profile_snap.exists:
+            profile_data = profile_snap.to_dict() or {}
+            display_name = profile_data.get("name") or display_name
+            email = profile_data.get("email") or email
+    except Exception as profile_error:  # pragma: no cover - defensive logging
+        logger.warning(
+            "Failed to fetch user profile for membership: %s", profile_error
+        )
+
+    membership_ref = (
+        db.collection("teams")
+        .document(team_id)
+        .collection("memberships")
+        .document(uid)
+    )
+    member_ref = (
+        db.collection("teams")
+        .document(team_id)
+        .collection("members")
+        .document(uid)
+    )
+
+    membership_snap, member_snap = await asyncio.gather(
+        asyncio.to_thread(membership_ref.get),
+        asyncio.to_thread(member_ref.get),
+    )
+
+    membership_payload: Dict[str, Any] = {
+        "displayName": display_name,
+        "email": email,
+        "lastSeenAt": firestore.SERVER_TIMESTAMP,
+    }
+    if include_joined_at and not getattr(membership_snap, "exists", False):
+        membership_payload["joinedAt"] = firestore.SERVER_TIMESTAMP
+
+    member_payload: Dict[str, Any] = {
+        "uid": uid,
+        "displayName": display_name,
+        "email": email,
+        "team_id": team_id,
+        "updated_at": firestore.SERVER_TIMESTAMP,
+    }
+    if not getattr(member_snap, "exists", False):
+        member_payload["created_at"] = firestore.SERVER_TIMESTAMP
+
+    await asyncio.gather(
+        asyncio.to_thread(membership_ref.set, membership_payload, merge=True),
+        asyncio.to_thread(member_ref.set, member_payload, merge=True),
+    )
+
+    created_membership = not getattr(membership_snap, "exists", False)
+    created_member = not getattr(member_snap, "exists", False)
+
+    logger.info(
+        "Ensured membership docs for user %s in team %s (created membership=%s member=%s)",
+        uid,
+        team_id,
+        created_membership,
+        created_member,
+    )
+
+    return {
+        "membership_created": created_membership,
+        "member_created": created_member,
+    }
 
 
 def generate_invite_code(length=8):
@@ -1659,9 +1749,15 @@ async def create_team(
         await asyncio.to_thread(
             db.collection("teams").document(team.team_id).set, team.dict()
         )
-        
+
+        await ensure_membership_documents(
+            team.team_id,
+            user,
+            include_joined_at=True,
+        )
+
         logger.info("Team created: %s by user %s", team.team_id, user["uid"])
-        
+
         return {
             "success": True,
             "team_id": team.team_id,
@@ -1732,9 +1828,15 @@ async def join_team(
                 "updated_at": firestore.SERVER_TIMESTAMP,
             }
         )
-        
+
         logger.info("User %s joined team %s", user["uid"], team_id)
-        
+
+        await ensure_membership_documents(
+            team_id,
+            user,
+            include_joined_at=True,
+        )
+
         return {
             "success": True,
             "team_id": team_id,
@@ -1744,6 +1846,28 @@ async def join_team(
         raise
     except Exception as e:
         logger.error("join_team error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.post("/teams/{team_id}/memberships/ensure")
+async def ensure_membership_endpoint(
+    team_id: str,
+    ensure_request: EnsureMembershipRequest = Body(default=EnsureMembershipRequest()),
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Ensure membership/member documents exist for the authenticated user."""
+    try:
+        await ensure_team_membership(team_id, user["uid"])
+        result = await ensure_membership_documents(
+            team_id,
+            user,
+            include_joined_at=ensure_request.include_joined_at,
+        )
+        return {"success": True, "team_id": team_id, **result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("ensure_membership error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
