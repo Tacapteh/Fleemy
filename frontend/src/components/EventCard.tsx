@@ -3,6 +3,44 @@ import type { DisplayEvent } from '../selectors/planningSelectors';
 import TaskIconBadge from './TaskIconBadge';
 import { openTaskModal, confirmDeleteTask } from '../store/uiStore';
 
+const normalizeOptionalString = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  return '';
+};
+
+const resolveClientLabel = (event: DisplayEvent): string => {
+  const fromDisplayName = normalizeOptionalString((event as { clientDisplayName?: string }).clientDisplayName);
+  if (fromDisplayName) {
+    return fromDisplayName;
+  }
+
+  const fromClientName = normalizeOptionalString((event as { client_name?: string }).client_name);
+  if (fromClientName) {
+    return fromClientName;
+  }
+
+  const rawClient = (event as { client?: unknown }).client;
+  if (typeof rawClient === 'string') {
+    const label = normalizeOptionalString(rawClient);
+    if (label) {
+      return label;
+    }
+  } else if (rawClient && typeof rawClient === 'object') {
+    const clientObject = rawClient as { display_name?: string; name?: string; label?: string };
+    const fromObject =
+      normalizeOptionalString(clientObject.display_name) ||
+      normalizeOptionalString(clientObject.name) ||
+      normalizeOptionalString(clientObject.label);
+    if (fromObject) {
+      return fromObject;
+    }
+  }
+
+  return '';
+};
+
 interface EventCardProps {
   event: DisplayEvent;
   onClick?: (event: DisplayEvent) => void;
@@ -27,10 +65,23 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
     [event, onClick]
   );
 
-  const title = event.title || event.description || event.client || 'Événement';
+  const explicitTitle = normalizeOptionalString(event.title);
+  const clientLabel = resolveClientLabel(event);
+  const description = normalizeOptionalString(event.description);
+
+  const title = explicitTitle || clientLabel || description || 'Événement';
   const statusClass = event.status ? ` status-${event.status}` : '';
   const isInteractive = typeof onClick === 'function';
   const isReadOnly = Boolean(event.readOnly);
+
+  let subtitle = '';
+  let subtitleClass = 'subtitle truncate break-words leading-tight text-xs text-gray-600';
+  if (clientLabel && clientLabel !== title) {
+    subtitle = clientLabel;
+    subtitleClass = 'subtitle truncate leading-tight break-words';
+  } else if (description && description !== title) {
+    subtitle = description;
+  }
 
   return (
     <div
@@ -64,12 +115,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
         </div>
       )}
 
-      {event.client && event.client !== title && (
-        <div className="subtitle truncate leading-tight break-words">{event.client}</div>
-      )}
-      {event.description && !event.client && (
-        <div className="subtitle truncate break-words leading-tight text-xs text-gray-600">{event.description}</div>
-      )}
+      {subtitle && <div className={subtitleClass}>{subtitle}</div>}
     </div>
   );
 };

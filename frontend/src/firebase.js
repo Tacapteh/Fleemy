@@ -575,6 +575,8 @@ const buildFallbackQueryParams = (context, fromDate, toDate) => {
   return params;
 };
 
+const REALTIME_FALLBACK_INTERVAL_MS = 5000;
+
 const fetchPlanningEventsFallback = async (context, fromDate, toDate) => {
   try {
     const params = buildFallbackQueryParams(context, fromDate, toDate);
@@ -665,33 +667,90 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     ];
 
     const startSubscription = () => {
-      let fallbackAttempted = false;
-      return onSnapshot(
-        query(eventsRef, ...constraints),
-        (snapshot) => {
-          const viewerUid = getUid();
-          const events = snapshot.docs
-            .map((docSnap) => normalizeEventDocument(docSnap, ownerUid, teamId, viewerUid))
-            .filter(Boolean);
-          onData?.(events);
-        },
-        async (error) => {
-          if (error?.code === 'permission-denied' && !fallbackAttempted) {
-            fallbackAttempted = true;
-            try {
-              const fallbackEvents = await fetchPlanningEventsFallback(context, fromDate, toDate);
-              if (fallbackEvents) {
-                onData?.(fallbackEvents);
-                return;
-              }
-            } catch (fallbackError) {
+      let stopFallback = null;
+      let fallbackErrorNotified = false;
+
+      const stopExistingFallback = () => {
+        if (typeof stopFallback === 'function') {
+          stopFallback();
+        }
+        stopFallback = null;
+      };
+
+      const startFallback = () => {
+        if (stopFallback) {
+          return stopFallback;
+        }
+
+        let cancelled = false;
+        let timer = null;
+
+        const fetchAndEmit = async () => {
+          try {
+            const fallbackEvents = await fetchPlanningEventsFallback(context, fromDate, toDate);
+            if (!cancelled && fallbackEvents) {
+              fallbackErrorNotified = false;
+              onData?.(fallbackEvents);
+            }
+          } catch (fallbackError) {
+            if (!cancelled) {
               console.error('planningEvents fallback failed', fallbackError);
+              if (!fallbackErrorNotified) {
+                onError?.(fallbackError);
+                fallbackErrorNotified = true;
+              }
             }
           }
+        };
+
+        fetchAndEmit();
+        timer = setInterval(fetchAndEmit, REALTIME_FALLBACK_INTERVAL_MS);
+
+        stopFallback = () => {
+          cancelled = true;
+          if (timer) {
+            clearInterval(timer);
+          }
+          timer = null;
+        };
+
+        return stopFallback;
+      };
+
+      const handleSnapshot = (snapshot) => {
+        stopExistingFallback();
+        const viewerUid = getUid();
+        const events = snapshot.docs
+          .map((docSnap) => normalizeEventDocument(docSnap, ownerUid, teamId, viewerUid))
+          .filter(Boolean);
+        onData?.(events);
+      };
+
+      const handleError = (error) => {
+        if (error?.code === 'permission-denied') {
           logPermissionError('planningEvents', getUid(), error);
-          onError?.(error);
+          startFallback();
+          return;
         }
-      );
+        stopExistingFallback();
+        logPermissionError('planningEvents', getUid(), error);
+        onError?.(error);
+      };
+
+      let unsubscribe = () => {};
+      try {
+        unsubscribe = onSnapshot(query(eventsRef, ...constraints), handleSnapshot, handleError);
+      } catch (error) {
+        handleError(error);
+        unsubscribe = () => {};
+      }
+
+      return () => {
+        stopExistingFallback();
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
     };
 
     if (teamId) {
