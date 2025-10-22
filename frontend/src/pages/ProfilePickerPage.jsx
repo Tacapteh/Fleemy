@@ -154,13 +154,13 @@ const ProfilePickerPage = () => {
     }
   };
 
-  const handleSelectSolo = async () => {
+  const handleSelectSolo = () => {
     const context = { type: 'solo' };
     contextStore.set(context);
     localStorage.removeItem('teamId');
     localStorage.removeItem('teamName');
-    await updateLastContext(context);
     navigate('/me');
+    updateLastContext(context);
   };
 
   const ensureMembershipForUser = async (teamId, user, options = {}) => {
@@ -180,10 +180,10 @@ const ProfilePickerPage = () => {
     }
   };
 
-  const handleSelectTeam = async (team) => {
+  const handleSelectTeam = (team) => {
     const user = auth.currentUser;
     if (team?.team_id && user?.uid) {
-      await ensureMembershipForUser(team.team_id, user);
+      ensureMembershipForUser(team.team_id, user);
     }
 
     const context = {
@@ -194,8 +194,8 @@ const ProfilePickerPage = () => {
     contextStore.set(context);
     localStorage.setItem('teamId', team.team_id);
     localStorage.setItem('teamName', team.name);
-    await updateLastContext({ type: 'team', team_id: team.team_id });
     navigate(`/team/${team.team_id}`);
+    updateLastContext({ type: 'team', team_id: team.team_id });
   };
 
   const handleCreateTeam = async (teamName) => {
