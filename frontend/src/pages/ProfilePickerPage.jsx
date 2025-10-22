@@ -85,7 +85,52 @@ const ProfilePickerPage = () => {
     navigate('/me');
   };
 
+  const ensureMembershipForUser = async (teamId, user, options = {}) => {
+    if (!teamId || !user?.uid) {
+      return;
+    }
+
+    const includeJoinedAt = options.includeJoinedAt === true;
+
+    try {
+      const membershipRef = doc(db, 'teams', teamId, 'memberships', user.uid);
+      const memberRef = doc(db, 'teams', teamId, 'members', user.uid);
+
+      const membershipData = {
+        displayName: user.displayName || null,
+        email: user.email || null,
+        lastSeenAt: serverTimestamp(),
+      };
+
+      if (includeJoinedAt) {
+        membershipData.joinedAt = serverTimestamp();
+      }
+
+      await Promise.all([
+        setDoc(membershipRef, membershipData, { merge: true }),
+        setDoc(
+          memberRef,
+          {
+            uid: user.uid,
+            displayName: user.displayName || null,
+            email: user.email || null,
+            team_id: teamId,
+            updated_at: serverTimestamp(),
+          },
+          { merge: true }
+        ),
+      ]);
+    } catch (err) {
+      console.error('Error ensuring membership document:', err);
+    }
+  };
+
   const handleSelectTeam = async (team) => {
+    const user = auth.currentUser;
+    if (team?.team_id && user?.uid) {
+      await ensureMembershipForUser(team.team_id, user);
+    }
+
     const context = {
       type: 'team',
       teamId: team.team_id,
@@ -111,6 +156,8 @@ const ProfilePickerPage = () => {
       if (!data?.success) {
         throw new Error(data?.error || 'Erreur lors de la création');
       }
+
+      await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
 
       // Reload teams
       await loadTeams();
