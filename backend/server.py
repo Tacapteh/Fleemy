@@ -13,7 +13,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import uuid
 from datetime import datetime, timezone
 import asyncio
@@ -493,6 +493,24 @@ async def stream_docs(query):
     return [d.to_dict() for d in docs]
 
 
+def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    try:
+        if not isinstance(value, str):
+            value = str(value)
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
 async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
     team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
     team = team_snap.to_dict() if team_snap.exists else None
@@ -585,6 +603,34 @@ async def ensure_membership_documents(
         "membership_created": created_membership,
         "member_created": created_member,
     }
+
+
+async def resolve_planning_context(
+    team_id: Optional[str],
+    member_uid: Optional[str],
+    requester_uid: str,
+) -> Tuple[Any, Any, Optional[str]]:
+    if team_id:
+        await ensure_team_membership(team_id, requester_uid)
+        target_member = member_uid or requester_uid
+        member_ref = (
+            db.collection("teams")
+            .document(team_id)
+            .collection("members")
+            .document(target_member)
+        )
+        events_ref = member_ref.collection("planningEvents")
+        tasks_ref = member_ref.collection("weeklyTasks")
+        return events_ref, tasks_ref, target_member
+
+    target_uid = member_uid or requester_uid
+    if target_uid != requester_uid:
+        raise HTTPException(status_code=403, detail="Not authorized for this user")
+
+    user_ref = user_doc(target_uid)
+    events_ref = user_ref.collection("planningEvents")
+    tasks_ref = user_ref.collection("weeklyTasks")
+    return events_ref, tasks_ref, target_uid
 
 
 def generate_invite_code(length=8):
@@ -1231,6 +1277,94 @@ async def delete_task(
             global_task_doc(year, week, owner_id, task_id).delete
         )
     return {"success": True, "message": "deleted"}
+
+
+def _serialize_planning_payload(data: Dict[str, Any], team_id: Optional[str], owner_uid: Optional[str]) -> Dict[str, Any]:
+    payload = {**data}
+    if "start" in payload:
+        payload["start"] = _serialize_timestamp(payload.get("start"))
+    if "end" in payload:
+        payload["end"] = _serialize_timestamp(payload.get("end"))
+    if "created_at" in payload:
+        payload["created_at"] = _serialize_timestamp(payload.get("created_at"))
+    if "updated_at" in payload:
+        payload["updated_at"] = _serialize_timestamp(payload.get("updated_at"))
+    if owner_uid and not payload.get("owner_uid"):
+        payload["owner_uid"] = owner_uid
+    if owner_uid and not payload.get("user_id"):
+        payload["user_id"] = owner_uid
+    if team_id and not payload.get("team_id"):
+        payload["team_id"] = team_id
+    return payload
+
+
+@api_router.get("/planning/v2/events")
+async def list_planning_events_v2(
+    from_iso: Optional[str] = None,
+    to_iso: Optional[str] = None,
+    team_id: Optional[str] = None,
+    member_uid: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    try:
+        events_ref, _tasks_ref, target_member = await resolve_planning_context(
+            team_id,
+            member_uid,
+            user["uid"],
+        )
+
+        query_ref = events_ref.order_by("start")
+        start_dt = _parse_iso_datetime(from_iso)
+        end_dt = _parse_iso_datetime(to_iso)
+
+        if start_dt:
+            query_ref = query_ref.where("start", ">=", start_dt)
+        if end_dt:
+            query_ref = query_ref.where("start", "<=", end_dt)
+
+        docs = await asyncio.to_thread(lambda: list(query_ref.stream()))
+        events: List[Dict[str, Any]] = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            payload = _serialize_planning_payload(data, team_id, target_member)
+            payload["id"] = doc.id
+            events.append(payload)
+
+        return {"success": True, "events": events}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("planning v2 events error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Impossible de récupérer les événements")
+
+
+@api_router.get("/planning/v2/weekly-tasks")
+async def list_weekly_tasks_v2(
+    team_id: Optional[str] = None,
+    member_uid: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    try:
+        _events_ref, tasks_ref, target_member = await resolve_planning_context(
+            team_id,
+            member_uid,
+            user["uid"],
+        )
+
+        docs = await asyncio.to_thread(lambda: list(tasks_ref.stream()))
+        tasks: List[Dict[str, Any]] = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            payload = _serialize_planning_payload(data, team_id, target_member)
+            payload["id"] = doc.id
+            tasks.append(payload)
+
+        return {"success": True, "tasks": tasks}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("planning v2 weekly tasks error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Impossible de récupérer les tâches hebdomadaires")
 
 
 @api_router.get("/todos")
