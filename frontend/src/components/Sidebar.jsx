@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
@@ -57,14 +57,22 @@ export default function Sidebar({ user, onLogout }) {
               <p className="text-xs text-gray-500 truncate">{user.email || ''}</p>
             </div>
           </div>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="w-full text-left text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
+          <div className="flex gap-2">
+            <Link
+              to="/profiles"
+              className="flex-1 text-center text-sm text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 transition"
             >
-              Se déconnecter
-            </button>
-          )}
+              Changer d'équipes
+            </Link>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex-1 text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 transition"
+              >
+                Se déconnecter
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

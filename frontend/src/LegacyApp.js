@@ -266,12 +266,22 @@ const Sidebar = ({
             </p>
           </div>
         </div>
-        <button
-          onClick={onLogout}
-          className="w-full text-left text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded"
-        >
-          Se déconnecter
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              window.location.href = "/profiles";
+            }}
+            className="flex-1 text-sm text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 transition"
+          >
+            Changer d'équipes
+          </button>
+          <button
+            onClick={onLogout}
+            className="flex-1 text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 transition"
+          >
+            Se déconnecter
+          </button>
+        </div>
       </div>
     </div>
   );
