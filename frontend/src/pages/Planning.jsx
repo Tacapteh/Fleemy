@@ -10,6 +10,7 @@ import useTasks from '../hooks/useTasks';
 import {
   useFirebaseUser,
   watchWeekEvents,
+  fetchWeekEventsOnce,
   saveEventNew,
   deleteEventNew,
   deleteWeeklyTask,
@@ -20,10 +21,12 @@ import { apiFetch } from '../lib/api';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
+import { getCachedPlanningData, setCachedPlanningData } from '../utils/planningCache';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DEFAULT_START = '09:00';
 const DEFAULT_END = '10:00';
+const EVENTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
 const toIsoDate = (date) => {
   if (!(date instanceof Date)) {
@@ -287,6 +290,13 @@ export default function Planning() {
     return `personal:${planningContext.userId}`;
   }, [planningContext]);
 
+  const eventsCacheKey = useMemo(() => {
+    if (!planningContext || planningContextKey === 'none' || !weekStartISO || !weekEndISO) {
+      return null;
+    }
+    return `events:${planningContextKey}:${weekStartISO}:${weekEndISO}`;
+  }, [planningContext, planningContextKey, weekStartISO, weekEndISO]);
+
   const readOnly = useMemo(() => {
     if (!isTeamContext) {
       return false;
@@ -307,29 +317,80 @@ export default function Planning() {
 
     if (!planningContext || !weekStartISO || !weekEndISO) {
       setEvents([]);
-      return;
+      setEventsLoading(false);
+      setEventsError(null);
+      return () => {};
     }
 
-    setEventsLoading(true);
+    let unsubscribe = () => {};
+    let cancelled = false;
+    let hasRealtimeUpdate = false;
+
+    const cachedEvents = eventsCacheKey ? getCachedPlanningData(eventsCacheKey) : null;
+    if (Array.isArray(cachedEvents)) {
+      setEvents(cachedEvents);
+      setEventsLoading(false);
+    } else {
+      setEvents([]);
+      setEventsLoading(true);
+    }
     setEventsError(null);
 
-    const unsubscribe = watchWeekEvents(
+    const prefetchEvents = async () => {
+      if (!eventsCacheKey) {
+        return;
+      }
+      try {
+        const fallbackEvents = await fetchWeekEventsOnce(planningContext, weekStartISO, weekEndISO);
+        if (cancelled || hasRealtimeUpdate || !Array.isArray(fallbackEvents)) {
+          return;
+        }
+        setEvents(fallbackEvents);
+        setEventsLoading(false);
+        setCachedPlanningData(eventsCacheKey, fallbackEvents, EVENTS_CACHE_TTL);
+      } catch (prefetchError) {
+        if (!cancelled) {
+          console.warn('prefetchWeekEvents error', prefetchError);
+        }
+      }
+    };
+
+    prefetchEvents();
+
+    unsubscribe = watchWeekEvents(
       planningContext,
       weekStartISO,
       weekEndISO,
       (loadedEvents) => {
+        if (cancelled) {
+          return;
+        }
+        hasRealtimeUpdate = true;
         setEvents(loadedEvents);
         setEventsLoading(false);
+        if (eventsCacheKey) {
+          setCachedPlanningData(eventsCacheKey, loadedEvents, EVENTS_CACHE_TTL);
+        }
       },
       (error) => {
+        if (cancelled) {
+          return;
+        }
         console.error('watchWeekEvents error', error);
-        setEvents([]);
+        if (!Array.isArray(cachedEvents)) {
+          setEvents([]);
+        }
         setEventsLoading(false);
         setEventsError('Impossible de charger les événements');
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [
     planningContextKey,
     weekStartISO,
@@ -337,6 +398,7 @@ export default function Planning() {
     planningContext,
     isTeamContext,
     teamMembershipReady,
+    eventsCacheKey,
   ]);
 
   const {
