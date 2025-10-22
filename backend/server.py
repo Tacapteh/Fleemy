@@ -1871,6 +1871,56 @@ async def ensure_membership_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _serialize_timestamp(value: Any) -> Optional[str]:
+    """Convert Firestore timestamp/datetime values to ISO strings for JSON responses."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=timezone.utc).isoformat()
+            return value.astimezone(timezone.utc).isoformat()
+        # Firestore Timestamp objects also expose isoformat()
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+    except Exception:  # pragma: no cover - defensive conversion
+        pass
+    return None
+
+
+@api_router.get("/teams/{team_id}/memberships")
+async def get_team_memberships(
+    team_id: str,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Return the list of memberships for the given team."""
+    try:
+        await ensure_team_membership(team_id, user["uid"])
+
+        memberships_ref = team_col(team_id, "memberships")
+        membership_docs = await asyncio.to_thread(lambda: list(memberships_ref.stream()))
+
+        members: List[Dict[str, Any]] = []
+        for membership_doc in membership_docs:
+            data = membership_doc.to_dict() or {}
+            members.append(
+                {
+                    "uid": membership_doc.id,
+                    "displayName": data.get("displayName") or data.get("name"),
+                    "email": data.get("email"),
+                    "joinedAt": _serialize_timestamp(data.get("joinedAt")),
+                    "lastSeenAt": _serialize_timestamp(data.get("lastSeenAt")),
+                }
+            )
+
+        return {"success": True, "members": members}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_team_memberships error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Impossible de récupérer les membres")
+
+
 @api_router.get("/teams/my")
 async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
     """Get all teams where the user is a member."""
