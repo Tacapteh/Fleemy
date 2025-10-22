@@ -32,9 +32,16 @@ export async function apiFetch(
 ): Promise<any> {
   const method = (options.method || "GET").toUpperCase();
   const baseHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as any),
   };
+
+  if (
+    method !== "GET" &&
+    method !== "HEAD" &&
+    !("Content-Type" in baseHeaders)
+  ) {
+    baseHeaders["Content-Type"] = "application/json";
+  }
   const url = buildApiUrl(path);
 
   const performFetch = async (forceRefresh = false): Promise<Response> => {
