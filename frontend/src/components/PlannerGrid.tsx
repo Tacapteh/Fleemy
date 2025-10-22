@@ -17,24 +17,6 @@ import TaskBadge from './TaskBadge';
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SLOT_HEIGHT = 64;
 
-const StatusLegend = React.memo(() => (
-  <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-    <span className="text-sm font-medium text-gray-700">Statuts :</span>
-    <div className="flex items-center gap-2">
-      <div className="w-4 h-4 bg-green-200 border border-gray-200 rounded" />
-      <span className="text-xs text-gray-600">Payé</span>
-    </div>
-    <div className="flex items-center gap-2">
-      <div className="w-4 h-4 bg-red-200 border border-gray-200 rounded" />
-      <span className="text-xs text-gray-600">Impayé</span>
-    </div>
-    <div className="flex items-center gap-2">
-      <div className="w-4 h-4 bg-orange-200 border border-gray-200 rounded" />
-      <span className="text-xs text-gray-600">En attente</span>
-    </div>
-  </div>
-));
-
 interface PlannerGridProps {
   events?: PlannerEventInput[];
   tasks?: unknown[];
@@ -337,8 +319,6 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
   return (
     <div ref={wrapperRef} className="week-shell">
-      <StatusLegend />
-
       <div className="week-day-headers">
         {days.map((day) => (
           <div key={day.name} className="day-header-label">
