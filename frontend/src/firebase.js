@@ -234,35 +234,91 @@ const ensureTeamMemberContainer = async (teamId, memberUid) => {
   }
 };
 
-const normalizeEventDocument = (docSnap, ownerUid, teamId, viewerUid) => {
-  if (!docSnap || !docSnap.exists()) {
-    return null;
+const toDateSafe = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value);
   }
-  const data = docSnap.data();
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    const parsed = value.toDate();
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    return parsed;
+  }
+  return null;
+};
+
+const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
   if (!data) {
     return null;
   }
 
-  const startValue = data.start instanceof Timestamp ? data.start.toDate() : new Date(data.start);
-  const endValue = data.end instanceof Timestamp ? data.end.toDate() : new Date(data.end);
+  const startValue = toDateSafe(data.start);
+  const endValue = toDateSafe(data.end);
 
-  if (Number.isNaN(startValue.getTime()) || Number.isNaN(endValue.getTime())) {
+  if (!startValue || !endValue) {
     return null;
   }
 
-  const base = {
-    ...data,
-    id: docSnap.id,
-    start: startValue,
-    end: endValue,
-    user_id: data.user_id || ownerUid,
-    owner_uid: data.owner_uid || ownerUid,
-    team_id: teamId ?? data.team_id ?? null,
-  };
+  const resolvedOwner = data.owner_uid || data.user_id || ownerUid;
 
   return {
-    ...base,
-    readOnly: viewerUid ? ownerUid !== viewerUid : true,
+    ...data,
+    id,
+    start: startValue,
+    end: endValue,
+    user_id: resolvedOwner,
+    owner_uid: resolvedOwner,
+    team_id: teamId ?? data.team_id ?? null,
+    readOnly: viewerUid ? resolvedOwner !== viewerUid : true,
+  };
+};
+
+const normalizeEventDocument = (docSnap, ownerUid, teamId, viewerUid) => {
+  if (!docSnap || !docSnap.exists()) {
+    return null;
+  }
+  return normalizeEventData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
+};
+
+const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
+  if (!data) {
+    return null;
+  }
+
+  const resolvedOwner = data.owner_uid || data.user_id || ownerUid;
+
+  return {
+    id,
+    label: data.label || data.title || data.name || 'Tâche sans titre',
+    title: data.title || data.label || data.name || 'Tâche sans titre',
+    price: data.price ?? null,
+    color: data.color || data.colorCode || '#dbeafe',
+    icon: data.icon || data.emoji || '📋',
+    time_ranges: Array.isArray(data.time_ranges)
+      ? data.time_ranges
+      : Array.isArray(data.time_slots)
+      ? data.time_slots
+      : [],
+    weekly: true,
+    user_id: resolvedOwner,
+    owner_uid: resolvedOwner,
+    team_id: teamId ?? data.team_id ?? null,
+    readOnly: viewerUid ? resolvedOwner !== viewerUid : true,
+    created_at: data.created_at || null,
+    updated_at: data.updated_at || null,
   };
 };
 
@@ -270,27 +326,94 @@ const normalizeWeeklyTaskDocument = (docSnap, ownerUid, teamId, viewerUid) => {
   if (!docSnap || !docSnap.exists()) {
     return null;
   }
-  const data = docSnap.data();
-  if (!data) {
+  return normalizeWeeklyTaskData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
+};
+
+const toIsoDateString = (value) => {
+  const date = toDateSafe(value);
+  if (!date) {
     return null;
   }
+  return date.toISOString();
+};
 
-  return {
-    id: docSnap.id,
-    label: data.label || data.title || 'Tâche sans titre',
-    title: data.title || data.label || 'Tâche sans titre',
-    price: data.price || null,
-    color: data.color || data.colorCode || '#dbeafe',
-    icon: data.icon || data.emoji || '📋',
-    time_ranges: Array.isArray(data.time_ranges) ? data.time_ranges : Array.isArray(data.time_slots) ? data.time_slots : [],
-    weekly: true,
-    user_id: data.user_id || ownerUid,
-    owner_uid: data.owner_uid || ownerUid,
-    team_id: teamId ?? data.team_id ?? null,
-    readOnly: viewerUid ? ownerUid !== viewerUid : true,
-    created_at: data.created_at || null,
-    updated_at: data.updated_at || null,
-  };
+const buildFallbackQueryParams = (context, fromDate, toDate) => {
+  const params = new URLSearchParams();
+  if (fromDate) {
+    const iso = toIsoDateString(fromDate);
+    if (iso) {
+      params.set('from', iso);
+    }
+  }
+  if (toDate) {
+    const iso = toIsoDateString(toDate);
+    if (iso) {
+      params.set('to', iso);
+    }
+  }
+  if (context?.type === 'team') {
+    if (context.teamId) {
+      params.set('team_id', context.teamId);
+    }
+    if (context.memberUid) {
+      params.set('member_uid', context.memberUid);
+    }
+  }
+  return params;
+};
+
+const fetchPlanningEventsFallback = async (context, fromDate, toDate) => {
+  try {
+    const params = buildFallbackQueryParams(context, fromDate, toDate);
+    const apiFetch = await getApiFetch();
+    const query = params.toString();
+    const response = await apiFetch(`/planning/v2/events${query ? `?${query}` : ''}`);
+    const events = Array.isArray(response?.events) ? response.events : [];
+    const viewerUid = getUid();
+    const teamId = context?.type === 'team' ? context.teamId ?? null : null;
+    const defaultOwner = context?.type === 'team' ? context.memberUid : context?.userId;
+
+    return events
+      .map((event) => {
+        const ownerUid = event.owner_uid || event.user_id || defaultOwner || viewerUid;
+        return normalizeEventData(event.id || event.uid || `${ownerUid}-${event.start}`, event, ownerUid, teamId, viewerUid);
+      })
+      .filter(Boolean);
+  } catch (error) {
+    console.error('fetchPlanningEventsFallback error', error);
+    throw error;
+  }
+};
+
+const fetchWeeklyTasksFallback = async (context) => {
+  try {
+    const params = new URLSearchParams();
+    if (context?.type === 'team') {
+      if (context.teamId) {
+        params.set('team_id', context.teamId);
+      }
+      if (context.memberUid) {
+        params.set('member_uid', context.memberUid);
+      }
+    }
+    const apiFetch = await getApiFetch();
+    const query = params.toString();
+    const response = await apiFetch(`/planning/v2/weekly-tasks${query ? `?${query}` : ''}`);
+    const tasks = Array.isArray(response?.tasks) ? response.tasks : [];
+    const viewerUid = getUid();
+    const teamId = context?.type === 'team' ? context.teamId ?? null : null;
+    const defaultOwner = context?.type === 'team' ? context.memberUid : context?.userId;
+
+    return tasks
+      .map((task) => {
+        const ownerUid = task.owner_uid || task.user_id || defaultOwner || viewerUid;
+        return normalizeWeeklyTaskData(task.id || task.uid || `${ownerUid}-${task.label || task.name || 'task'}`, task, ownerUid, teamId, viewerUid);
+      })
+      .filter(Boolean);
+  } catch (error) {
+    console.error('fetchWeeklyTasksFallback error', error);
+    throw error;
+  }
 };
 
 const buildRangeFromIso = (startIso, endIso) => {
@@ -328,8 +451,9 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       orderBy('start', 'asc'),
     ];
 
-    const startSubscription = () =>
-      onSnapshot(
+    const startSubscription = () => {
+      let fallbackAttempted = false;
+      return onSnapshot(
         query(eventsRef, ...constraints),
         (snapshot) => {
           const viewerUid = getUid();
@@ -338,11 +462,24 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
             .filter(Boolean);
           onData?.(events);
         },
-        (error) => {
+        async (error) => {
+          if (error?.code === 'permission-denied' && !fallbackAttempted) {
+            fallbackAttempted = true;
+            try {
+              const fallbackEvents = await fetchPlanningEventsFallback(context, fromDate, toDate);
+              if (fallbackEvents) {
+                onData?.(fallbackEvents);
+                return;
+              }
+            } catch (fallbackError) {
+              console.error('planningEvents fallback failed', fallbackError);
+            }
+          }
           logPermissionError('planningEvents', getUid(), error);
           onError?.(error);
         }
       );
+    };
 
     if (teamId) {
       const viewerUid = getUid();
@@ -471,8 +608,9 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
     const resolved = ensurePlanningContext(context);
     const { weeklyTasksRef, ownerUid, teamId } = resolved;
 
-    const startSubscription = () =>
-      onSnapshot(
+    const startSubscription = () => {
+      let fallbackAttempted = false;
+      return onSnapshot(
         weeklyTasksRef,
         (snapshot) => {
           const viewerUid = getUid();
@@ -481,11 +619,24 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
             .filter(Boolean);
           onData?.(tasks);
         },
-        (error) => {
+        async (error) => {
+          if (error?.code === 'permission-denied' && !fallbackAttempted) {
+            fallbackAttempted = true;
+            try {
+              const fallbackTasks = await fetchWeeklyTasksFallback(context);
+              if (fallbackTasks) {
+                onData?.(fallbackTasks);
+                return;
+              }
+            } catch (fallbackError) {
+              console.error('weeklyTasks fallback failed', fallbackError);
+            }
+          }
           logPermissionError('weeklyTasks', getUid(), error);
           onError?.(error);
         }
       );
+    };
 
     if (teamId) {
       const viewerUid = getUid();
