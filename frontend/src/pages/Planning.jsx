@@ -540,13 +540,23 @@ export default function Planning() {
     if (!teamId) {
       return;
     }
+    if (!teamMembershipReady) {
+      return;
+    }
     if (membersError) {
       return;
     }
     if (members.length === 0 && !membersLoading) {
       showToast("Aucun membre trouvé pour cette équipe", true);
     }
-  }, [isTeamContext, teamId, members, membersLoading, membersError]);
+  }, [
+    isTeamContext,
+    teamId,
+    teamMembershipReady,
+    members,
+    membersLoading,
+    membersError,
+  ]);
 
   const pageTitle = isTeamContext
     ? teamName || 'Planning équipe'
