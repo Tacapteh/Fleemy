@@ -16,6 +16,7 @@ import {
   setTeamContext,
   listenTeamMemberships,
 } from '../firebase';
+import { apiFetch } from '../lib/api';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
@@ -100,6 +101,7 @@ export default function Planning() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(null);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
+  const [teamMembershipReady, setTeamMembershipReady] = useState(!isTeamContext);
 
   const { team } = useTeam(isTeamContext ? routeTeamId : null);
   const teamName = team?.name || null;
@@ -121,6 +123,45 @@ export default function Planning() {
       setTeamContext(null);
     }
   }, [isTeamContext, teamId, teamName, user?.uid]);
+
+  useEffect(() => {
+    if (!isTeamContext) {
+      setTeamMembershipReady(true);
+      return;
+    }
+
+    if (!user?.uid || !teamId) {
+      setTeamMembershipReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTeamMembershipReady(false);
+
+    const ensureMembership = async () => {
+      try {
+        await apiFetch(`/teams/${teamId}/memberships/ensure`, {
+          method: 'POST',
+          body: JSON.stringify({ include_joined_at: false }),
+        });
+        if (!cancelled) {
+          setTeamMembershipReady(true);
+        }
+      } catch (error) {
+        console.error('ensureTeamMembership error', error);
+        if (!cancelled) {
+          showToast("Impossible de vérifier votre appartenance à l'équipe", true);
+          setTeamMembershipReady(true);
+        }
+      }
+    };
+
+    ensureMembership();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isTeamContext, teamId, user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -146,6 +187,14 @@ export default function Planning() {
 
     if (!teamId) {
       return;
+    }
+
+    if (!teamMembershipReady) {
+      setMembers([]);
+      setMembersLoading(true);
+      setMembersError(null);
+      setSelectedMemberId(null);
+      return () => {};
     }
 
     setMembersLoading(true);
@@ -208,20 +257,27 @@ export default function Planning() {
     );
 
     return () => unsubscribe();
-  }, [isTeamContext, teamId, user?.uid, user?.displayName, user?.email]);
+  }, [
+    isTeamContext,
+    teamId,
+    teamMembershipReady,
+    user?.uid,
+    user?.displayName,
+    user?.email,
+  ]);
 
   const planningContext = useMemo(() => {
     if (!user?.uid) {
       return null;
     }
     if (isTeamContext) {
-      if (!teamId || !selectedMemberId) {
+      if (!teamMembershipReady || !teamId || !selectedMemberId) {
         return null;
       }
       return { type: 'team', teamId, memberUid: selectedMemberId };
     }
     return { type: 'personal', userId: user.uid };
-  }, [isTeamContext, teamId, selectedMemberId, user?.uid]);
+  }, [isTeamContext, teamId, selectedMemberId, teamMembershipReady, user?.uid]);
 
   const planningContextKey = useMemo(() => {
     if (!planningContext) return 'none';
@@ -242,6 +298,13 @@ export default function Planning() {
   }, [isTeamContext, selectedMemberId, user?.uid]);
 
   useEffect(() => {
+    if (isTeamContext && !teamMembershipReady) {
+      setEvents([]);
+      setEventsLoading(true);
+      setEventsError(null);
+      return () => {};
+    }
+
     if (!planningContext || !weekStartISO || !weekEndISO) {
       setEvents([]);
       return;
@@ -267,7 +330,14 @@ export default function Planning() {
     );
 
     return () => unsubscribe();
-  }, [planningContextKey, weekStartISO, weekEndISO, planningContext]);
+  }, [
+    planningContextKey,
+    weekStartISO,
+    weekEndISO,
+    planningContext,
+    isTeamContext,
+    teamMembershipReady,
+  ]);
 
   const {
     tasks: weeklyTasks,
