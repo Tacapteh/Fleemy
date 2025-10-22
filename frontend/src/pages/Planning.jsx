@@ -639,7 +639,7 @@ export default function Planning() {
   ]);
 
   const pageTitle = isTeamContext
-    ? teamName || 'Planning équipe'
+    ? `Planning ${teamName || 'équipe'}`
     : 'Mon planning';
 
   const subtitle = isTeamContext
@@ -730,21 +730,6 @@ export default function Planning() {
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center gap-6 text-sm text-gray-600">
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-green-200" />
-            <span>Payé</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-red-200" />
-            <span>Impayé</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-orange-200" />
-            <span>En attente</span>
-          </div>
-        </div>
-
         {view === 'week' ? (
           <PlannerGrid
             events={events}
@@ -775,6 +760,21 @@ export default function Planning() {
             context={planningContext}
           />
         )}
+
+        <div className="mt-4 flex items-center gap-6 text-sm text-gray-600">
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-green-200" />
+            <span>Payé</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-red-200" />
+            <span>Impayé</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-3 w-3 rounded-full bg-orange-200" />
+            <span>En attente</span>
+          </div>
+        </div>
 
         {showSkeleton && (
           <div className="mt-4 text-sm text-gray-500">Chargement des données…</div>
