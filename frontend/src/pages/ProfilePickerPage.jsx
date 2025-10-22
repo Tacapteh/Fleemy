@@ -7,62 +7,11 @@ import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
 import JoinTeamDialog from '../components/profiles/JoinTeamDialog';
 import TeamInviteCodeDialog from '../components/profiles/TeamInviteCodeDialog';
-
-const TEAMS_CACHE_KEY = 'fleemy_profile_picker_teams_cache';
-const TEAMS_CACHE_TTL_MS = 60_000; // 1 minute cache to speed up perceived loading
-
-const readCachedTeams = () => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(TEAMS_CACHE_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw);
-    if (
-      typeof parsed?.cachedAt === 'number' &&
-      Array.isArray(parsed?.teams) &&
-      Date.now() - parsed.cachedAt < TEAMS_CACHE_TTL_MS
-    ) {
-      return parsed.teams;
-    }
-  } catch (cacheError) {
-    console.warn('Unable to read cached teams:', cacheError);
-  }
-
-  return null;
-};
-
-const writeCachedTeams = (teams) => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.sessionStorage.setItem(
-      TEAMS_CACHE_KEY,
-      JSON.stringify({ cachedAt: Date.now(), teams }),
-    );
-  } catch (cacheError) {
-    console.warn('Unable to cache teams:', cacheError);
-  }
-};
-
-const clearCachedTeams = () => {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  try {
-    window.sessionStorage.removeItem(TEAMS_CACHE_KEY);
-  } catch (cacheError) {
-    console.warn('Unable to clear cached teams:', cacheError);
-  }
-};
+import {
+  readTeamsCache,
+  clearTeamsCache,
+  ensureTeamsCache,
+} from '../utils/teamCache';
 
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
@@ -88,36 +37,23 @@ const ProfilePickerPage = () => {
 
         setError('');
 
-        const data = await apiFetch('/teams/my');
+        const result = await ensureTeamsCache(
+          () => apiFetch('/teams/my'),
+          { forceRefresh: true },
+        );
 
-        const resolvedTeams = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.teams)
-            ? data.teams
-            : Array.isArray(data?.data)
-              ? data.data
-              : null;
-
-        if (Array.isArray(resolvedTeams)) {
-          setTeams(resolvedTeams);
-          writeCachedTeams(resolvedTeams);
-          return;
-        }
-
-        if (data?.success) {
-          const teamsList = data.teams || [];
-          setTeams(teamsList);
-          writeCachedTeams(teamsList);
+        if (result.success) {
+          setTeams(Array.isArray(result.teams) ? result.teams : []);
         } else {
-          console.error('Error loading teams:', data?.error || data);
+          console.error('Error loading teams:', result.raw?.error || result.raw);
           setTeams([]);
-          setError(data?.error || 'Erreur lors du chargement des équipes');
-          clearCachedTeams();
+          setError(result.raw?.error || 'Erreur lors du chargement des équipes');
+          clearTeamsCache();
         }
       } catch (err) {
         console.error('Error loading teams:', err);
         setError('Erreur lors du chargement des équipes');
-        clearCachedTeams();
+        clearTeamsCache();
       } finally {
         if (!skipSpinner) {
           setLoading(false);
@@ -130,7 +66,7 @@ const ProfilePickerPage = () => {
   useEffect(() => {
     let usedCache = false;
 
-    const cachedTeams = readCachedTeams();
+    const cachedTeams = readTeamsCache();
     if (cachedTeams) {
       setTeams(cachedTeams);
       setLoading(false);

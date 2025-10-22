@@ -21,6 +21,11 @@ import ProfilePickerPage from "./pages/ProfilePickerPage";
 import Sidebar from "./components/Sidebar";
 import NotFound from "./pages/NotFound";
 import { apiFetch } from "./lib/api";
+import {
+  hasFreshTeamsCache,
+  ensureTeamsCache,
+  clearTeamsCache,
+} from "./utils/teamCache";
 
 // Composant qui gère la mise en page commune (Sidebar + Outlet)
 function Layout({ user, onLogout }) {
@@ -59,26 +64,38 @@ function AuthGuard({ user, children }) {
             return;
           } else if (savedContext.type === 'team' && savedContext.teamId) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
-            const data = await apiFetch('/teams/my');
+            const result = await ensureTeamsCache(
+              () => apiFetch('/teams/my'),
+              { forceRefresh: true },
+            );
 
-            if (!data?.success) {
-              console.error('Error checking team membership:', data?.error);
-            } else {
-              const stillMember = data.teams?.some((t) => t.team_id === savedContext.teamId);
+            if (result.success) {
+              const stillMember = Array.isArray(result.teams)
+                ? result.teams.some((t) => t.team_id === savedContext.teamId)
+                : false;
 
               if (stillMember) {
                 // Contexte team toujours valide
                 setChecking(false);
                 return;
               }
+            } else {
+              console.error('Error checking team membership:', result.raw?.error || result.raw);
+              clearTeamsCache();
             }
           }
         }
 
         // Pas de contexte valide, rediriger vers /profiles
+        if (!hasFreshTeamsCache()) {
+          ensureTeamsCache(() => apiFetch('/teams/my')).catch((prefetchError) => {
+            console.error('Error preloading teams before profile picker:', prefetchError);
+          });
+        }
         navigate('/profiles');
       } catch (err) {
         console.error('Error checking context:', err);
+        clearTeamsCache();
         navigate('/profiles');
       } finally {
         setChecking(false);
@@ -111,10 +128,48 @@ function App() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    if (!user) {
+      clearTeamsCache();
+      return;
+    }
+
+    if (hasFreshTeamsCache()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const prefetchTeams = async () => {
+      try {
+        const result = await ensureTeamsCache(() => apiFetch('/teams/my'));
+        if (cancelled) {
+          return;
+        }
+
+        if (!result.success) {
+          console.error('Error prefetching teams:', result.raw?.error || result.raw);
+        }
+      } catch (prefetchError) {
+        if (!cancelled) {
+          console.error('Error prefetching teams:', prefetchError);
+          clearTeamsCache();
+        }
+      }
+    };
+
+    prefetchTeams();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const handleLogout = async () => {
     await logout();
     contextStore.clear();
     setUser(null);
+    clearTeamsCache();
   };
 
   if (initializing) {
