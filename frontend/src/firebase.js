@@ -589,28 +589,110 @@ export const deleteWeeklyTask = async (context, taskId) => {
   showToast('Tâche hebdomadaire supprimée');
 };
 
+const buildMembershipEntries = (entries = []) => {
+  const mapped = Array.isArray(entries) ? entries : [];
+  return mapped
+    .map((entry) => {
+      if (!entry) return null;
+      const uid = entry.uid || entry.user_id || entry.userId;
+      if (!uid) return null;
+      return {
+        uid,
+        displayName: entry.displayName || entry.name || null,
+        email: entry.email || null,
+      };
+    })
+    .filter(Boolean);
+};
+
 export const listenTeamMemberships = (teamId, onData, onError) => {
   if (!teamId) {
     onData?.([]);
     return () => {};
   }
 
-  try {
-    const membershipsRef = collection(db, 'teams', teamId, 'memberships');
-    return onSnapshot(
-      membershipsRef,
-      (snapshot) => {
-        const members = snapshot.docs.map((docSnap) => ({ uid: docSnap.id, ...(docSnap.data() || {}) }));
+  let stopFallback = null;
+  const stopExistingFallback = () => {
+    if (typeof stopFallback === 'function') {
+      stopFallback();
+    }
+    stopFallback = null;
+  };
+
+  const startFallback = () => {
+    if (stopFallback) {
+      return stopFallback;
+    }
+
+    let cancelled = false;
+    let timer = null;
+
+    const fetchMembers = async () => {
+      try {
+        const apiFetch = await getApiFetch();
+        const response = await apiFetch(`/teams/${teamId}/memberships`);
+        if (cancelled) {
+          return;
+        }
+        const members = buildMembershipEntries(response?.members);
         onData?.(members);
-      },
-      (error) => {
-        onError?.(error);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('fallback fetchTeamMemberships error', error);
+          onError?.(error);
+        }
       }
-    );
-  } catch (error) {
+    };
+
+    fetchMembers();
+    timer = setInterval(fetchMembers, 60_000);
+
+    stopFallback = () => {
+      cancelled = true;
+      if (timer) {
+        clearInterval(timer);
+      }
+      timer = null;
+    };
+
+    return stopFallback;
+  };
+
+  const membershipsRef = collection(db, 'teams', teamId, 'memberships');
+
+  let unsubscribeRealtime = () => {};
+
+  const handleSnapshot = (snapshot) => {
+    stopExistingFallback();
+    const members = snapshot.docs.map((docSnap) => ({ uid: docSnap.id, ...(docSnap.data() || {}) }));
+    const normalized = buildMembershipEntries(members);
+    onData?.(normalized);
+  };
+
+  const handleError = (error) => {
+    if (error?.code === 'permission-denied') {
+      console.warn('listenTeamMemberships permission denied, switching to API fallback');
+      stopExistingFallback();
+      startFallback();
+      return;
+    }
+    logPermissionError('teamMemberships', getUid(), error);
     onError?.(error);
-    return () => {};
+  };
+
+  try {
+    unsubscribeRealtime = onSnapshot(membershipsRef, handleSnapshot, handleError);
+  } catch (error) {
+    handleError(error);
+    unsubscribeRealtime = () => {};
   }
+
+  return () => {
+    stopExistingFallback();
+    if (typeof unsubscribeRealtime === 'function') {
+      unsubscribeRealtime();
+    }
+  };
 };
 
 export const fetchUserProfile = async (uid) => {
