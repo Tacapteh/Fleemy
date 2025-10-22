@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2 } from 'lucide-react';
 import { auth } from '../firebase';
@@ -7,6 +7,62 @@ import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
 import JoinTeamDialog from '../components/profiles/JoinTeamDialog';
 import TeamInviteCodeDialog from '../components/profiles/TeamInviteCodeDialog';
+
+const TEAMS_CACHE_KEY = 'fleemy_profile_picker_teams_cache';
+const TEAMS_CACHE_TTL_MS = 60_000; // 1 minute cache to speed up perceived loading
+
+const readCachedTeams = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(TEAMS_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed?.cachedAt === 'number' &&
+      Array.isArray(parsed?.teams) &&
+      Date.now() - parsed.cachedAt < TEAMS_CACHE_TTL_MS
+    ) {
+      return parsed.teams;
+    }
+  } catch (cacheError) {
+    console.warn('Unable to read cached teams:', cacheError);
+  }
+
+  return null;
+};
+
+const writeCachedTeams = (teams) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      TEAMS_CACHE_KEY,
+      JSON.stringify({ cachedAt: Date.now(), teams }),
+    );
+  } catch (cacheError) {
+    console.warn('Unable to cache teams:', cacheError);
+  }
+};
+
+const clearCachedTeams = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(TEAMS_CACHE_KEY);
+  } catch (cacheError) {
+    console.warn('Unable to clear cached teams:', cacheError);
+  }
+};
 
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
@@ -17,49 +73,72 @@ const ProfilePickerPage = () => {
   const [error, setError] = useState('');
   const [inviteDialogTeam, setInviteDialogTeam] = useState(null);
 
+  const loadTeams = useCallback(
+    async ({ skipSpinner = false } = {}) => {
+      if (!skipSpinner) {
+        setLoading(true);
+      }
+
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          navigate('/');
+          return;
+        }
+
+        setError('');
+
+        const data = await apiFetch('/teams/my');
+
+        const resolvedTeams = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.teams)
+            ? data.teams
+            : Array.isArray(data?.data)
+              ? data.data
+              : null;
+
+        if (Array.isArray(resolvedTeams)) {
+          setTeams(resolvedTeams);
+          writeCachedTeams(resolvedTeams);
+          return;
+        }
+
+        if (data?.success) {
+          const teamsList = data.teams || [];
+          setTeams(teamsList);
+          writeCachedTeams(teamsList);
+        } else {
+          console.error('Error loading teams:', data?.error || data);
+          setTeams([]);
+          setError(data?.error || 'Erreur lors du chargement des équipes');
+          clearCachedTeams();
+        }
+      } catch (err) {
+        console.error('Error loading teams:', err);
+        setError('Erreur lors du chargement des équipes');
+        clearCachedTeams();
+      } finally {
+        if (!skipSpinner) {
+          setLoading(false);
+        }
+      }
+    },
+    [navigate],
+  );
+
   useEffect(() => {
-    loadTeams();
-  }, []);
+    let usedCache = false;
 
-  const loadTeams = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        navigate('/');
-        return;
-      }
-
-      setError('');
-
-      const data = await apiFetch('/teams/my');
-
-      const resolvedTeams = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.teams)
-          ? data.teams
-          : Array.isArray(data?.data)
-            ? data.data
-            : null;
-
-      if (Array.isArray(resolvedTeams)) {
-        setTeams(resolvedTeams);
-        return;
-      }
-
-      if (data?.success) {
-        setTeams(data.teams || []);
-      } else {
-        console.error('Error loading teams:', data?.error || data);
-        setTeams([]);
-        setError(data?.error || 'Erreur lors du chargement des équipes');
-      }
-    } catch (err) {
-      console.error('Error loading teams:', err);
-      setError('Erreur lors du chargement des équipes');
-    } finally {
+    const cachedTeams = readCachedTeams();
+    if (cachedTeams) {
+      setTeams(cachedTeams);
       setLoading(false);
+      usedCache = true;
     }
-  };
+
+    loadTeams({ skipSpinner: usedCache });
+  }, [loadTeams]);
 
   const updateLastContext = async (contextData) => {
     try {
