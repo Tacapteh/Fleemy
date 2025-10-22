@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { watchWeeklyTasksForContext } from '../firebase';
+import { fetchWeeklyTasksOnce, watchWeeklyTasksForContext } from '../firebase';
+import { getCachedPlanningData, setCachedPlanningData } from '../utils/planningCache';
 
 const DAY_NAME_TO_INDEX = {
   monday: 0,
@@ -25,6 +26,8 @@ const DAY_NAME_TO_INDEX = {
   sun: 6,
   dimanche: 6,
 };
+
+const TASKS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const toDayIndex = (value) => {
   if (typeof value === 'number' && value >= 0 && value <= 6) {
@@ -101,6 +104,14 @@ export default function useTasks(context, weekStartISO) {
 
   const contextKey = useMemo(() => contextKeyFromObject(context), [context]);
 
+  const tasksCacheKey = useMemo(() => {
+    if (!context || !contextKey || contextKey === 'none') {
+      return null;
+    }
+    const weekKey = weekStartISO || 'no-week';
+    return `weekly-tasks:${contextKey}:${weekKey}`;
+  }, [context, contextKey, weekStartISO]);
+
   useEffect(() => {
     if (!context || !contextKey || contextKey === 'none') {
       setTasks([]);
@@ -109,16 +120,59 @@ export default function useTasks(context, weekStartISO) {
       return () => {};
     }
 
-    setLoading(true);
+    let unsubscribe = () => {};
+    let cancelled = false;
+    let hasRealtimeUpdate = false;
+
+    const cachedTasks = tasksCacheKey ? getCachedPlanningData(tasksCacheKey) : null;
+    if (Array.isArray(cachedTasks)) {
+      setTasks(cachedTasks);
+      setLoading(false);
+    } else {
+      setTasks([]);
+      setLoading(true);
+    }
     setError(null);
 
-    const unsubscribe = watchWeeklyTasksForContext(
+    const prefetchTasks = async () => {
+      if (!tasksCacheKey) {
+        return;
+      }
+      try {
+        const fallbackTasks = await fetchWeeklyTasksOnce(context);
+        if (cancelled || hasRealtimeUpdate || !Array.isArray(fallbackTasks)) {
+          return;
+        }
+        setTasks(fallbackTasks);
+        setLoading(false);
+        setCachedPlanningData(tasksCacheKey, fallbackTasks, TASKS_CACHE_TTL);
+      } catch (prefetchError) {
+        if (!cancelled) {
+          console.warn('useTasks: prefetch error', prefetchError);
+        }
+      }
+    };
+
+    prefetchTasks();
+
+    unsubscribe = watchWeeklyTasksForContext(
       context,
       (list) => {
-        setTasks(Array.isArray(list) ? list : []);
+        if (cancelled) {
+          return;
+        }
+        hasRealtimeUpdate = true;
+        const normalized = Array.isArray(list) ? list : [];
+        setTasks(normalized);
         setLoading(false);
+        if (tasksCacheKey) {
+          setCachedPlanningData(tasksCacheKey, normalized, TASKS_CACHE_TTL);
+        }
       },
       (err) => {
+        if (cancelled) {
+          return;
+        }
         console.error('useTasks: erreur récupération tâches', err);
         setTasks([]);
         setLoading(false);
@@ -131,11 +185,12 @@ export default function useTasks(context, weekStartISO) {
     );
 
     return () => {
+      cancelled = true;
       if (typeof unsubscribe === 'function') {
         unsubscribe();
       }
     };
-  }, [context, contextKey]);
+  }, [context, contextKey, tasksCacheKey]);
 
   const occurrences = useMemo(() => {
     if (!tasks.length || !weekDates) {

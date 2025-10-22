@@ -734,6 +734,19 @@ export const watchWeekEvents = (context, weekStartISO, weekEndISO, onData, onErr
   return watchPlanningEventsInRange(context, range, onData, onError);
 };
 
+export const fetchWeekEventsOnce = async (context, weekStartISO, weekEndISO) => {
+  const range = buildRangeFromIso(weekStartISO, weekEndISO);
+  if (!range) {
+    return [];
+  }
+  try {
+    return await fetchPlanningEventsFallback(context, range.from, range.to);
+  } catch (error) {
+    console.warn('fetchWeekEventsOnce error', error);
+    return [];
+  }
+};
+
 export const saveEventNew = async (context, eventData = {}) => {
   const resolved = ensurePlanningContext(context);
   const { eventsRef, ownerUid, teamId, type } = resolved;
@@ -892,6 +905,15 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
   } catch (error) {
     onError?.(error);
     return () => {};
+  }
+};
+
+export const fetchWeeklyTasksOnce = async (context) => {
+  try {
+    return await fetchWeeklyTasksFallback(context);
+  } catch (error) {
+    console.warn('fetchWeeklyTasksOnce error', error);
+    return [];
   }
 };
 
