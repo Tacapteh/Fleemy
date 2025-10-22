@@ -669,6 +669,8 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     const startSubscription = () => {
       let stopFallback = null;
       let fallbackErrorNotified = false;
+      let hasRetriedAfterEnsure = false;
+      let closed = false;
 
       const stopExistingFallback = () => {
         if (typeof stopFallback === 'function') {
@@ -677,7 +679,23 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         stopFallback = null;
       };
 
+      const ensureViewerMembership = () => {
+        if (!teamId) {
+          return Promise.resolve();
+        }
+        const viewerUid = getUid();
+        if (!viewerUid) {
+          return Promise.resolve();
+        }
+        return ensureTeamMemberContainer(teamId, viewerUid).catch((membershipError) => {
+          console.warn('watchPlanningEvents ensure membership error', membershipError);
+        });
+      };
+
       const startFallback = () => {
+        if (closed) {
+          return () => {};
+        }
         if (stopFallback) {
           return stopFallback;
         }
@@ -726,8 +744,40 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         onData?.(events);
       };
 
+      let unsubscribe = () => {};
+
+      const subscribeRealtime = () => {
+        if (closed) {
+          return;
+        }
+        try {
+          if (typeof unsubscribe === 'function') {
+            unsubscribe();
+          }
+          unsubscribe = onSnapshot(query(eventsRef, ...constraints), handleSnapshot, handleError);
+        } catch (error) {
+          handleError(error);
+          unsubscribe = () => {};
+        }
+      };
+
       const handleError = (error) => {
         if (error?.code === 'permission-denied') {
+          if (!hasRetriedAfterEnsure) {
+            hasRetriedAfterEnsure = true;
+            ensureViewerMembership()
+              .catch(() => {})
+              .finally(() => {
+                if (closed) {
+                  return;
+                }
+                if (typeof unsubscribe === 'function') {
+                  unsubscribe();
+                }
+                subscribeRealtime();
+              });
+            return;
+          }
           logPermissionError('planningEvents', getUid(), error);
           startFallback();
           return;
@@ -737,15 +787,10 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         onError?.(error);
       };
 
-      let unsubscribe = () => {};
-      try {
-        unsubscribe = onSnapshot(query(eventsRef, ...constraints), handleSnapshot, handleError);
-      } catch (error) {
-        handleError(error);
-        unsubscribe = () => {};
-      }
+      subscribeRealtime();
 
       return () => {
+        closed = true;
         stopExistingFallback();
         if (typeof unsubscribe === 'function') {
           unsubscribe();
@@ -1077,7 +1122,35 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
     stopFallback = null;
   };
 
+  let unsubscribeRealtime = () => {};
+  let cancelled = false;
+  let ensuredMembershipPromise = null;
+  let hasRetriedAfterEnsure = false;
+
+  const ensureMembership = () => {
+    if (!teamId || cancelled) {
+      return Promise.resolve();
+    }
+    if (!ensuredMembershipPromise) {
+      ensuredMembershipPromise = (async () => {
+        const currentUid = getUid();
+        if (!currentUid) {
+          return;
+        }
+        try {
+          await ensureTeamMemberContainer(teamId, currentUid);
+        } catch (error) {
+          console.warn('listenTeamMemberships ensure membership error', error);
+        }
+      })();
+    }
+    return ensuredMembershipPromise;
+  };
+
   const startFallback = () => {
+    if (cancelled) {
+      return () => {};
+    }
     if (stopFallback) {
       return stopFallback;
     }
@@ -1118,8 +1191,6 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
 
   const membershipsRef = collection(db, 'teams', teamId, 'memberships');
 
-  let unsubscribeRealtime = () => {};
-
   const handleSnapshot = (snapshot) => {
     stopExistingFallback();
     const members = snapshot.docs.map((docSnap) => ({ uid: docSnap.id, ...(docSnap.data() || {}) }));
@@ -1129,6 +1200,25 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
 
   const handleError = (error) => {
     if (error?.code === 'permission-denied') {
+      if (!hasRetriedAfterEnsure) {
+        hasRetriedAfterEnsure = true;
+        ensureMembership()
+          .catch(() => {})
+          .finally(() => {
+            if (cancelled) {
+              return;
+            }
+            try {
+              if (typeof unsubscribeRealtime === 'function') {
+                unsubscribeRealtime();
+              }
+              unsubscribeRealtime = onSnapshot(membershipsRef, handleSnapshot, handleError);
+            } catch (retryError) {
+              handleError(retryError);
+            }
+          });
+        return;
+      }
       console.warn('listenTeamMemberships permission denied, switching to API fallback');
       stopExistingFallback();
       startFallback();
@@ -1138,14 +1228,29 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
     onError?.(error);
   };
 
-  try {
-    unsubscribeRealtime = onSnapshot(membershipsRef, handleSnapshot, handleError);
-  } catch (error) {
-    handleError(error);
-    unsubscribeRealtime = () => {};
-  }
+  const subscribeRealtime = () => {
+    if (cancelled) {
+      return;
+    }
+    try {
+      if (typeof unsubscribeRealtime === 'function') {
+        unsubscribeRealtime();
+      }
+      unsubscribeRealtime = onSnapshot(membershipsRef, handleSnapshot, handleError);
+    } catch (error) {
+      handleError(error);
+      unsubscribeRealtime = () => {};
+    }
+  };
+
+  ensureMembership().finally(() => {
+    if (!cancelled) {
+      subscribeRealtime();
+    }
+  });
 
   return () => {
+    cancelled = true;
     stopExistingFallback();
     if (typeof unsubscribeRealtime === 'function') {
       unsubscribeRealtime();
