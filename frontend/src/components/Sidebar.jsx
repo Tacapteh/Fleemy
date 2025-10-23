@@ -1,15 +1,39 @@
 import React from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { contextStore } from '../stores/contextStore';
 
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
-  { id: 'planning', name: 'Planning', icon: '📅', to: '/me' },
+  { id: 'planning', name: 'Planning', icon: '📅' },
   { id: 'quotes', name: 'Devis', icon: '📋', to: '/quotes' },
   { id: 'invoices', name: 'Factures', icon: '🧾', to: '/invoices' },
   { id: 'clients', name: 'Clients', icon: '👥', to: '/clients' },
 ];
 
+const getMenuItemClass = (isActive) =>
+  `w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
+    isActive
+      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+      : 'text-gray-600 hover:bg-gray-100'
+  }`;
+
 export default function Sidebar({ user, onLogout }) {
+  const location = useLocation();
+
+  const planningPath = React.useMemo(() => {
+    const context = contextStore.get();
+    if (context?.type === 'team' && context.teamId) {
+      return `/team/${context.teamId}`;
+    }
+    if (location.pathname.startsWith('/team/')) {
+      return location.pathname;
+    }
+    return '/me';
+  }, [location.pathname]);
+
+  const isPlanningActive =
+    location.pathname === '/me' || location.pathname.startsWith('/team/');
+
   return (
     <div className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col min-h-screen">
       <div className="p-6 border-b border-gray-200">
@@ -25,20 +49,25 @@ export default function Sidebar({ user, onLogout }) {
         <ul className="space-y-2">
           {menuItems.map((item) => (
             <li key={item.id}>
-              <NavLink
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
-                    isActive
-                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`
-                }
-              >
-                <span className="text-lg">{item.icon}</span>
-                <span className="font-medium">{item.name}</span>
-              </NavLink>
+              {item.id === 'planning' ? (
+                <Link
+                  to={planningPath}
+                  className={getMenuItemClass(isPlanningActive)}
+                  aria-current={isPlanningActive ? 'page' : undefined}
+                >
+                  <span className="text-lg">{item.icon}</span>
+                  <span className="font-medium">{item.name}</span>
+                </Link>
+              ) : (
+                <NavLink
+                  to={item.to}
+                  end={item.to === '/'}
+                  className={({ isActive }) => getMenuItemClass(isActive)}
+                >
+                  <span className="text-lg">{item.icon}</span>
+                  <span className="font-medium">{item.name}</span>
+                </NavLink>
+              )}
             </li>
           ))}
         </ul>

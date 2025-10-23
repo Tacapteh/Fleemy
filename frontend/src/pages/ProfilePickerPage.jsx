@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Users, Plus, LogIn, Share2 } from 'lucide-react';
+import { User, Users, Plus, LogIn, Share2, Trash2 } from 'lucide-react';
 import { auth } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
@@ -12,6 +12,7 @@ import {
   clearTeamsCache,
   ensureTeamsCache,
 } from '../utils/teamCache';
+import { showToast } from '../utils/toast';
 
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const ProfilePickerPage = () => {
   const [error, setError] = useState('');
   const [inviteDialogTeam, setInviteDialogTeam] = useState(null);
   const [contextError, setContextError] = useState('');
+  const [deletingTeamId, setDeletingTeamId] = useState(null);
 
   useEffect(() => {
     const selector = 'meta[http-equiv="Cross-Origin-Opener-Policy"]';
@@ -91,7 +93,7 @@ const ProfilePickerPage = () => {
     loadTeams({ skipSpinner: usedCache });
   }, [loadTeams]);
 
-  const updateLastContext = async (contextData) => {
+  const updateLastContext = useCallback(async (contextData) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
@@ -106,7 +108,7 @@ const ProfilePickerPage = () => {
       console.error('Error updating context:', err);
       setContextError('Impossible de mettre à jour le contexte (réseau/CORS). Réessayez.');
     }
-  };
+  }, []);
 
   const handleSelectSolo = () => {
     const context = { type: 'solo' };
@@ -151,6 +153,55 @@ const ProfilePickerPage = () => {
     navigate(`/team/${team.team_id}`);
     updateLastContext({ type: 'team', team_id: team.team_id });
   };
+
+  const handleDeleteTeam = useCallback(
+    async (team) => {
+      if (!team?.team_id) {
+        return;
+      }
+
+      const confirmed = window.confirm(`Supprimer l'équipe "${team.name}" ?`);
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setError('');
+        setContextError('');
+        setDeletingTeamId(team.team_id);
+
+        await apiFetch(`/teams/${team.team_id}`, { method: 'DELETE' });
+
+        showToast(`Équipe "${team.name}" supprimée`);
+        clearTeamsCache();
+
+        setTeams((currentTeams) =>
+          Array.isArray(currentTeams)
+            ? currentTeams.filter((current) => current.team_id !== team.team_id)
+            : [],
+        );
+
+        const currentContext = contextStore.get();
+        if (currentContext?.type === 'team' && currentContext.teamId === team.team_id) {
+          const soloContext = { type: 'solo' };
+          contextStore.set(soloContext);
+          localStorage.removeItem('teamId');
+          localStorage.removeItem('teamName');
+          await updateLastContext(soloContext);
+        }
+
+        await loadTeams({ skipSpinner: true });
+      } catch (err) {
+        console.error('Error deleting team:', err);
+        const message = err?.message || "Impossible de supprimer l'équipe";
+        setError(message);
+        showToast(message, true);
+      } finally {
+        setDeletingTeamId(null);
+      }
+    },
+    [loadTeams, updateLastContext],
+  );
 
   const handleCreateTeam = async (teamName) => {
     try {
@@ -289,6 +340,12 @@ const ProfilePickerPage = () => {
             setInviteDialogTeam(team);
           };
 
+          const deleteTeam = (event) => {
+            event?.preventDefault();
+            event?.stopPropagation();
+            handleDeleteTeam(team);
+          };
+
           return (
             <button
               key={team.team_id}
@@ -316,6 +373,18 @@ const ProfilePickerPage = () => {
                 >
                   <Share2 size={18} />
                 </span>
+              )}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={deleteTeam}
+                  disabled={deletingTeamId === team.team_id}
+                  className="absolute bottom-3 right-3 z-10 p-2 rounded-full bg-white/20 text-white/90 hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-60 disabled:cursor-not-allowed"
+                  aria-label={`Supprimer l'équipe ${team.name}`}
+                  data-testid={`team-${team.team_id}-delete-btn`}
+                >
+                  <Trash2 size={18} />
+                </button>
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
                 <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
