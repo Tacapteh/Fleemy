@@ -849,7 +849,11 @@ export async function fetchUserTeamsFromFirestore() {
 
     return Array.from(uniqueTeams.values());
   } catch (error) {
-    logPermissionError('teams', uid, error);
+    if (isPermissionDeniedError(error)) {
+      return [];
+    }
+
+    logPermissionError('teams', uid, error, { level: 'warn', toast: false });
     throw error;
   }
 }
