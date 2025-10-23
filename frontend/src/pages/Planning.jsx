@@ -22,11 +22,65 @@ import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
 import { getCachedPlanningData, setCachedPlanningData } from '../utils/planningCache';
+import { readTeamsCache } from '../utils/teamCache';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DEFAULT_START = '09:00';
 const DEFAULT_END = '10:00';
 const EVENTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+const matchTeamId = (team, teamId) => {
+  if (!team || !teamId) {
+    return false;
+  }
+
+  return (
+    team.team_id === teamId ||
+    team.teamId === teamId ||
+    team.id === teamId
+  );
+};
+
+const resolveCachedTeamName = (teamId) => {
+  if (!teamId) {
+    return null;
+  }
+
+  const contextTeamName = typeof contextStore.getTeamName === 'function'
+    ? contextStore.getTeamName()
+    : null;
+
+  if (contextTeamName) {
+    return contextTeamName;
+  }
+
+  const cachedTeams = readTeamsCache();
+  if (Array.isArray(cachedTeams)) {
+    const cachedTeam = cachedTeams.find((team) => matchTeamId(team, teamId));
+    if (cachedTeam?.name) {
+      return cachedTeam.name;
+    }
+    if (cachedTeam?.displayName) {
+      return cachedTeam.displayName;
+    }
+    if (cachedTeam?.label) {
+      return cachedTeam.label;
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const storedName = window.localStorage.getItem('teamName');
+      if (storedName) {
+        return storedName;
+      }
+    } catch (storageError) {
+      console.warn('Unable to read cached team name from localStorage', storageError);
+    }
+  }
+
+  return null;
+};
 
 const toIsoDate = (date) => {
   if (!(date instanceof Date)) {
@@ -109,6 +163,15 @@ export default function Planning() {
   const { team } = useTeam(isTeamContext ? routeTeamId : null);
   const teamName = team?.name || null;
 
+  const cachedTeamName = useMemo(() => {
+    if (!isTeamContext || !teamId) {
+      return null;
+    }
+    return resolveCachedTeamName(teamId);
+  }, [isTeamContext, teamId]);
+
+  const resolvedTeamName = teamName || cachedTeamName || null;
+
   const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
   const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
   const weekStartISO = useMemo(() => toIsoDate(weekStart), [weekStart]);
@@ -119,13 +182,13 @@ export default function Planning() {
       return;
     }
     if (isTeamContext && teamId) {
-      contextStore.set({ type: 'team', teamId, teamName: teamName || null });
+      contextStore.set({ type: 'team', teamId, teamName: resolvedTeamName });
       setTeamContext(teamId);
     } else {
       contextStore.set({ type: 'solo' });
       setTeamContext(null);
     }
-  }, [isTeamContext, teamId, teamName, user?.uid]);
+  }, [isTeamContext, teamId, resolvedTeamName, user?.uid]);
 
   useEffect(() => {
     if (!isTeamContext) {
@@ -650,7 +713,9 @@ export default function Planning() {
   ]);
 
   const pageTitle = isTeamContext
-    ? `Planning ${teamName || 'équipe'}`
+    ? resolvedTeamName
+      ? `Planning ${resolvedTeamName}`
+      : 'Planning équipe'
     : 'Mon planning';
 
   const subtitle = isTeamContext
