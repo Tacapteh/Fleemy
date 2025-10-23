@@ -742,6 +742,14 @@ const ensurePlanningContext = async (context) => {
     return { status: 'deferred' };
   }
 
+  if (contextType === 'team' && teamId && sessionUid) {
+    try {
+      await ensureTeamMemberContainer(teamId, sessionUid, { suppressErrors: true });
+    } catch (membershipError) {
+      console.warn('ensurePlanningContext membership ensure failed', membershipError);
+    }
+  }
+
   const readOnly = Boolean(ownerUid && ownerUid !== sessionUid);
   let planningCollectionPath = `users/${targetUid}/planningEvents`;
   let baseRef = collection(db, 'users', targetUid, 'planningEvents');
