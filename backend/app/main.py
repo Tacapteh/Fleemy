@@ -4,14 +4,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "https://fleemy.web.app",
+    "https://fleemy-21118.web.app",
+    "https://fleemy.firebaseapp.com",
+    "https://fleemy-21118.firebaseapp.com",
+    "https://fleemy.vercel.app",
+]
+ALLOWED_ORIGIN_REGEX = (
+    r"https://(?:[a-z0-9-]+\.)?fleemy\.vercel\.app$"
+    r"|https://fleemy(?:-[a-z0-9]+)?\.web\.app$"
+    r"|https://fleemy(?:-[a-z0-9]+)?\.firebaseapp\.com$"
+)
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://fleemy.vercel.app",
-        "http://localhost:5173",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
