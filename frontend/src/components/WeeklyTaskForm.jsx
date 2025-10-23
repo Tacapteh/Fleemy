@@ -6,16 +6,147 @@ import TaskModalStyles from './TaskModalStyles';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
+const DEFAULT_TIME_RANGE = { day: 0, start: '09:00', end: '10:00' };
+const START_HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) =>
+  `${String(index).padStart(2, '0')}:00`
+);
+const END_HOUR_OPTIONS = [...START_HOUR_OPTIONS.slice(1), '24:00'];
+
+const createDefaultTimeRange = () => ({ ...DEFAULT_TIME_RANGE });
+
+const toDayIndex = (value) => {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 6) {
+    return value;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isNaN(parsed) && parsed >= 0 && parsed <= 6) {
+    return parsed;
+  }
+  return null;
+};
+
+const normalizeHourValue = (value, { allowEndOfDay = false } = {}) => {
+  if (value == null) {
+    return null;
+  }
+
+  const raw = typeof value === 'number' ? String(value) : String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const match = raw.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = match[2] != null ? Number.parseInt(match[2], 10) : 0;
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+
+  if (allowEndOfDay && hours === 24) {
+    if (minutes === 0) {
+      return '24:00';
+    }
+    return null;
+  }
+
+  if (hours < 0 || hours > 23) {
+    return null;
+  }
+
+  if (minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  const normalizedMinutes = 0;
+
+  return `${String(hours).padStart(2, '0')}:${String(normalizedMinutes).padStart(2, '0')}`;
+};
+
+const timeStringToMinutes = (time) => {
+  if (typeof time !== 'string') {
+    return null;
+  }
+  const parts = time.split(':');
+  if (parts.length !== 2) {
+    return null;
+  }
+  const hours = Number.parseInt(parts[0], 10);
+  const minutes = Number.parseInt(parts[1], 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+  return hours * 60 + minutes;
+};
+
+const normalizeTimeRange = (range, { adjustEndIfNeeded = false } = {}) => {
+  if (!range) {
+    return null;
+  }
+
+  const day = toDayIndex(range.day ?? range.dayIndex ?? range.weekday);
+  const start = normalizeHourValue(range.start);
+  const end = normalizeHourValue(range.end, { allowEndOfDay: true });
+
+  if (day == null || !start || !end) {
+    return null;
+  }
+
+  const startMinutes = timeStringToMinutes(start);
+  const endMinutes = timeStringToMinutes(end);
+
+  if (startMinutes == null || endMinutes == null) {
+    return null;
+  }
+
+  let finalEndMinutes = endMinutes;
+  if (endMinutes <= startMinutes) {
+    if (!adjustEndIfNeeded) {
+      return null;
+    }
+    finalEndMinutes = Math.min(startMinutes + 60, 24 * 60);
+    if (finalEndMinutes <= startMinutes) {
+      return null;
+    }
+  }
+
+  const finalEnd =
+    finalEndMinutes === endMinutes
+      ? end
+      : `${String(Math.floor(finalEndMinutes / 60)).padStart(2, '0')}:00`;
+
+  return { day, start, end: finalEnd };
+};
+
+const ensureTimeRanges = (ranges) => {
+  if (!Array.isArray(ranges)) {
+    return [createDefaultTimeRange()];
+  }
+
+  const normalized = ranges
+    .map((range) => normalizeTimeRange(range, { adjustEndIfNeeded: true }))
+    .filter(Boolean);
+  if (!normalized.length) {
+    return [createDefaultTimeRange()];
+  }
+  return normalized;
+};
+
 const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, context, readOnly = false }) => {
-  const [task, setTask] = useState({
+  const [task, setTask] = useState(() => ({
     label: initialTask?.label || '',
-    price: initialTask?.price || '',
+    price:
+      initialTask?.price != null && initialTask.price !== ''
+        ? String(initialTask.price)
+        : '',
     color: initialTask?.color || DEFAULT_TASK_COLOR,
     icon: initialTask?.icon || 'briefcase',
-    time_ranges: initialTask?.time_ranges || [
-      { day: 0, start: '09:00', end: '10:00' }
-    ]
-  });
+    time_ranges: ensureTimeRanges(initialTask?.time_ranges),
+  }));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -25,29 +156,57 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
       ...current,
       time_ranges: [
         ...current.time_ranges,
-        { day: 0, start: '09:00', end: '10:00' }
-      ]
+        createDefaultTimeRange(),
+      ],
     }));
   };
 
   const updateTimeRange = (index, field, value) => {
-    const newRanges = [...task.time_ranges];
+    setTask((current) => {
+      const newRanges = current.time_ranges.map((range, rangeIndex) => {
+        if (rangeIndex !== index) {
+          return range;
+        }
 
-    if (field === 'start' || field === 'end') {
-      const timeParts = value.split(':');
-      if (timeParts.length === 2) {
-        value = `${timeParts[0]}:00`;
-      }
-    }
+        if (field === 'day') {
+          const day = toDayIndex(value);
+          if (day == null) {
+            return range;
+          }
+          return { ...range, day };
+        }
 
-    newRanges[index] = { ...newRanges[index], [field]: value };
-    setTask({ ...task, time_ranges: newRanges });
+        if (field === 'start') {
+          const startValue = normalizeHourValue(value);
+          if (!startValue) {
+            return range;
+          }
+          return { ...range, start: startValue };
+        }
+
+        if (field === 'end') {
+          const endValue = normalizeHourValue(value, { allowEndOfDay: true });
+          if (!endValue) {
+            return range;
+          }
+          return { ...range, end: endValue };
+        }
+
+        return range;
+      });
+
+      return { ...current, time_ranges: newRanges };
+    });
   };
 
   const removeTimeRange = (index) => {
-    if (task.time_ranges.length === 1) return;
-    const newRanges = task.time_ranges.filter((_, i) => i !== index);
-    setTask({ ...task, time_ranges: newRanges });
+    setTask((current) => {
+      if (current.time_ranges.length === 1) {
+        return current;
+      }
+      const newRanges = current.time_ranges.filter((_, i) => i !== index);
+      return { ...current, time_ranges: newRanges };
+    });
   };
 
   const validateTimeRange = (range) => {
@@ -55,15 +214,22 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
       return 'Jour invalide';
     }
 
-    const timeRegex = /^([01]?[0-9]|2[0-3]):([0-5][0-9])$/;
-    if (!timeRegex.test(range.start) || !timeRegex.test(range.end)) {
-      return "Format d'heure invalide (HH:MM)";
+    const start = normalizeHourValue(range.start);
+    if (!start) {
+      return "Format d'heure invalide (heures pleines uniquement)";
     }
 
-    const [startH, startM] = range.start.split(':').map(Number);
-    const [endH, endM] = range.end.split(':').map(Number);
-    const startMinutes = startH * 60 + startM;
-    const endMinutes = endH * 60 + endM;
+    const end = normalizeHourValue(range.end, { allowEndOfDay: true });
+    if (!end) {
+      return "Format d'heure invalide (heures pleines uniquement)";
+    }
+
+    const startMinutes = timeStringToMinutes(start);
+    const endMinutes = timeStringToMinutes(end);
+
+    if (startMinutes == null || endMinutes == null) {
+      return "Format d'heure invalide (heures pleines uniquement)";
+    }
 
     if (startMinutes >= endMinutes) {
       return "L'heure de fin doit être après l'heure de début";
@@ -107,10 +273,27 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
     setIsSubmitting(true);
 
     try {
+      const sanitizedRanges = task.time_ranges
+        .map((range) => normalizeTimeRange(range))
+        .filter(Boolean);
+      if (!sanitizedRanges.length) {
+        setError('Au moins un créneau horaire valide est requis');
+        setIsSubmitting(false);
+        return;
+      }
+
+      let priceValueRaw = '';
+      if (typeof task.price === 'string') {
+        priceValueRaw = task.price;
+      } else if (task.price != null) {
+        priceValueRaw = String(task.price);
+      }
+      const priceValue = priceValueRaw.trim();
       const taskData = {
         ...task,
+        time_ranges: sanitizedRanges,
         id: initialTask?.id || undefined,
-        price: task.price ? parseFloat(task.price) : null,
+        price: priceValue ? parseFloat(priceValue) : null,
       };
 
       const savedTask = await saveWeeklyTask(context, taskData);
@@ -190,31 +373,35 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
                       ))}
                     </select>
 
-                    <input
-                      type="time"
+                    <select
                       value={range.start}
                       onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
                       className="time-input"
                       aria-label={`Heure de début ${index + 1}`}
-                      step="3600"
-                      min="00:00"
-                      max="23:00"
                       disabled={readOnly || isSubmitting}
-                    />
+                    >
+                      {START_HOUR_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
 
                     <span className="time-separator">à</span>
 
-                    <input
-                      type="time"
+                    <select
                       value={range.end}
                       onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
                       className="time-input"
                       aria-label={`Heure de fin ${index + 1}`}
-                      step="3600"
-                      min="01:00"
-                      max="24:00"
                       disabled={readOnly || isSubmitting}
-                    />
+                    >
+                      {END_HOUR_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <button

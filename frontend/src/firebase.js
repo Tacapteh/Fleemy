@@ -985,22 +985,49 @@ const normalizeWeeklyTaskDocument = (docSnap, ownerUid, teamId, viewerUid) => {
   return normalizeWeeklyTaskData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
 };
 
-const normalizeWeeklyTaskTimeString = (value) => {
-  if (typeof value !== "string") {
+const normalizeWeeklyTaskTimeString = (
+  value,
+  { allowEndOfDay = false, enforceFullHour = false } = {}
+) => {
+  if (typeof value !== "string" && typeof value !== "number") {
     return null;
   }
-  const parts = value.split(":");
-  if (parts.length < 2) {
+
+  const raw = typeof value === "number" ? String(value) : value.trim();
+  if (!raw) {
     return null;
   }
+
+  const parts = raw.split(":");
+  if (parts.length < 1 || parts.length > 2) {
+    return null;
+  }
+
   const hours = Number.parseInt(parts[0], 10);
-  const minutes = Number.parseInt(parts[1], 10);
+  const minutes = parts.length === 2 ? Number.parseInt(parts[1], 10) : 0;
+
   if (Number.isNaN(hours) || Number.isNaN(minutes)) {
     return null;
   }
-  const clampedHours = Math.max(0, Math.min(hours, 23));
-  const clampedMinutes = Math.max(0, Math.min(minutes, 59));
-  return `${String(clampedHours).padStart(2, "0")}:${String(clampedMinutes).padStart(2, "0")}`;
+
+  if (allowEndOfDay && hours === 24) {
+    if (minutes === 0) {
+      return "24:00";
+    }
+    return null;
+  }
+
+  if (hours < 0 || hours > 23) {
+    return null;
+  }
+
+  if (minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  const normalizedMinutes = enforceFullHour ? 0 : minutes;
+
+  return `${String(hours).padStart(2, "0")}:${String(normalizedMinutes).padStart(2, "0")}`;
 };
 
 const sanitizeWeeklyTaskTimeRanges = (ranges) => {
@@ -1024,8 +1051,13 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
         return null;
       }
 
-      const start = normalizeWeeklyTaskTimeString(range.start);
-      const end = normalizeWeeklyTaskTimeString(range.end);
+      const start = normalizeWeeklyTaskTimeString(range.start, {
+        enforceFullHour: true,
+      });
+      const end = normalizeWeeklyTaskTimeString(range.end, {
+        enforceFullHour: true,
+        allowEndOfDay: true,
+      });
 
       if (!start || !end) {
         return null;
