@@ -61,13 +61,21 @@ export { getUid };
 
 const recentErrors = new Map();
 
-const logPermissionError = (path, uid, err) => {
+const logPermissionError = (path, uid, err, options = {}) => {
   if (err?.code !== "permission-denied") return;
+  const { toast = true, level = "error" } = options;
   const key = `${path}|${err.message}`;
   const now = Date.now();
   if (!recentErrors.has(key) || now - recentErrors.get(key) > 3000) {
-    console.error(`Permission error path=${path} uid=${uid}:`, err.message);
-    showToast("Accès refusé : vérifiez vos règles ou l'UID du document", true);
+    const message = `Permission error path=${path} uid=${uid}: ${err.message}`;
+    if (level === "warn") {
+      console.warn(message);
+    } else {
+      console.error(message);
+    }
+    if (toast) {
+      showToast("Accès refusé : vérifiez vos règles ou l'UID du document", true);
+    }
     recentErrors.set(key, now);
   }
 };
@@ -825,7 +833,11 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
               });
             return;
           }
-          logPermissionError('planningEvents', getUid(), error);
+          const viewerUid = getUid();
+          logPermissionError('planningEvents', viewerUid, error, {
+            toast: !teamId,
+            level: teamId ? 'warn' : 'error',
+          });
           stopExistingFallback();
           startFallback();
           return;
