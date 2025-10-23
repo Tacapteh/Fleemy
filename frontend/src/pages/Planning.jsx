@@ -570,7 +570,18 @@ export default function Planning() {
         return;
       }
       try {
-        await deleteEventNew(planningContext, id);
+        const deletionResult = await deleteEventNew(planningContext, id);
+        if (deletionResult?.source === 'api-fallback') {
+          setEvents((current) => {
+            const nextEvents = Array.isArray(current)
+              ? current.filter((event) => event && event.id !== id)
+              : [];
+            if (eventsCacheKey) {
+              setCachedPlanningData(eventsCacheKey, nextEvents, EVENTS_CACHE_TTL);
+            }
+            return nextEvents;
+          });
+        }
         showToast('Événement supprimé avec succès');
       } catch (error) {
         console.error('deleteEventNew error', error);
@@ -579,7 +590,7 @@ export default function Planning() {
         closeModal();
       }
     },
-    [planningContext, readOnly, modal.readOnly, closeModal]
+    [planningContext, readOnly, modal.readOnly, closeModal, eventsCacheKey]
   );
 
   const handleMemberChange = useCallback((event) => {
