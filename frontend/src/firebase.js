@@ -56,8 +56,97 @@ console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
-const getUid = () => auth.currentUser?.uid || null;
+
+let lastKnownUid = null;
+let authSessionResolved = false;
+let authTrackingInitialized = false;
+let authInitWarningEmitted = false;
+const pendingUidResolvers = new Set();
+
+const notifyPendingUidResolvers = () => {
+  if (!pendingUidResolvers.size) {
+    return;
+  }
+  Array.from(pendingUidResolvers).forEach((resolver) => {
+    try {
+      resolver(lastKnownUid);
+    } catch (resolverError) {
+      console.error('waitForAuthenticatedUid listener error', resolverError);
+      pendingUidResolvers.delete(resolver);
+    }
+  });
+};
+
+const ensureAuthTracking = () => {
+  if (authTrackingInitialized) {
+    return;
+  }
+  authTrackingInitialized = true;
+  onAuthStateChanged(
+    auth,
+    (user) => {
+      lastKnownUid = user?.uid || null;
+      authSessionResolved = true;
+      authInitWarningEmitted = false;
+      notifyPendingUidResolvers();
+    },
+    (error) => {
+      authSessionResolved = true;
+      console.error('Firebase auth tracking error', error);
+      notifyPendingUidResolvers();
+    }
+  );
+};
+
+const getUid = () => {
+  ensureAuthTracking();
+  return auth.currentUser?.uid || lastKnownUid || null;
+};
 export { getUid };
+
+export const waitForAuthenticatedUid = async ({ requireUser = true, warnOnPending = false, onCancel } = {}) => {
+  ensureAuthTracking();
+  const currentUid = getUid();
+  if (currentUid) {
+    return currentUid;
+  }
+  if (warnOnPending && !authSessionResolved && !authInitWarningEmitted) {
+    console.warn('Auth non encore initialisée');
+    authInitWarningEmitted = true;
+  }
+  if (!requireUser && authSessionResolved) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const resolveOnce = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(value);
+    };
+    const listener = (uid) => {
+      if (uid) {
+        pendingUidResolvers.delete(listener);
+        resolveOnce(uid);
+        return;
+      }
+      if (!requireUser && authSessionResolved) {
+        pendingUidResolvers.delete(listener);
+        resolveOnce(null);
+      }
+    };
+    if (typeof onCancel === 'function') {
+      onCancel(() => {
+        if (pendingUidResolvers.delete(listener)) {
+          resolveOnce(null);
+        }
+      });
+    }
+    pendingUidResolvers.add(listener);
+  });
+};
 
 const recentErrors = new Map();
 
@@ -401,33 +490,46 @@ const toFirestoreTimestamp = (value) => {
   return Timestamp.fromDate(date);
 };
 
-const ensurePlanningContext = (context) => {
-  if (context?.type === 'personal' || !context) {
-    const ownerUid = context?.userId || getUid();
+const ensurePlanningContext = (context, options = {}) => {
+  const { requireOwner = true } = options;
+  const normalizedContext = context && typeof context === 'object' ? context : {};
+  const contextType = normalizedContext.type || 'personal';
+
+  if (contextType === 'personal') {
+    const ownerUid = normalizedContext.userId || getUid();
     if (!ownerUid) {
-      throw new Error('Planning context requires authenticated user');
+      if (requireOwner) {
+        throw new Error('Planning context requires authenticated user');
+      }
+      return null;
     }
+    const viewerUid = getUid();
+    const readOnly = Boolean(viewerUid && ownerUid !== viewerUid);
     return {
       type: 'personal',
       ownerUid,
       memberUid: ownerUid,
       teamId: null,
+      readOnly,
       eventsRef: collection(db, 'users', ownerUid, 'planningEvents'),
       weeklyTasksRef: collection(db, 'users', ownerUid, 'weeklyTasks'),
     };
   }
 
-  if (context.type === 'team') {
-    const teamId = context.teamId;
-    const memberUid = context.memberUid;
+  if (contextType === 'team') {
+    const teamId = normalizedContext.teamId;
+    const memberUid = normalizedContext.memberUid;
     if (!teamId || !memberUid) {
       throw new Error('Team planning context requires teamId and memberUid');
     }
+    const viewerUid = getUid();
+    const readOnly = Boolean(viewerUid && memberUid !== viewerUid);
     return {
       type: 'team',
       ownerUid: memberUid,
       memberUid,
       teamId,
+      readOnly,
       eventsRef: collection(db, 'teams', teamId, 'members', memberUid, 'planningEvents'),
       weeklyTasksRef: collection(db, 'teams', teamId, 'members', memberUid, 'weeklyTasks'),
     };
@@ -470,7 +572,10 @@ const normalizeTeamSnapshot = (docSnap) => {
 };
 
 export async function fetchUserTeamsFromFirestore() {
-  const uid = getUid();
+  let uid = getUid();
+  if (!uid) {
+    uid = await waitForAuthenticatedUid({ warnOnPending: true });
+  }
   if (!uid) {
     throw new Error("Impossible de récupérer les équipes sans utilisateur authentifié");
   }
@@ -715,6 +820,8 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     return () => {};
   }
 
+  let effectiveContext = context;
+
   const startWithResolvedContext = (resolved) => {
     const { eventsRef, ownerUid, teamId } = resolved;
 
@@ -764,7 +871,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
 
         const fetchAndEmit = async () => {
           try {
-            const fallbackEvents = await fetchPlanningEventsFallback(context, fromDate, toDate);
+            const fallbackEvents = await fetchPlanningEventsFallback(effectiveContext, fromDate, toDate);
             if (!cancelled && fallbackEvents) {
               fallbackErrorNotified = false;
               onData?.(fallbackEvents);
@@ -889,72 +996,62 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     return startSubscription();
   };
 
-  const startWithContext = () => {
-    const resolved = ensurePlanningContext(context);
+  const startWithContext = (ctx = effectiveContext) => {
+    const resolved = ensurePlanningContext(ctx);
     return startWithResolvedContext(resolved);
   };
 
-  const requiresAuthResolution = (!context || context.type === 'personal') && !context?.userId;
+  const requiresAuthResolution =
+    (!effectiveContext || effectiveContext.type === 'personal' || !effectiveContext?.type) &&
+    !effectiveContext?.userId;
 
-  if (requiresAuthResolution && !getUid()) {
-    let active = true;
-    let unsubscribeAuth = null;
+  if (requiresAuthResolution) {
+    let cancelled = false;
     let unsubscribeWatch = () => {};
-    let started = false;
+    let removeWaiter = null;
 
-    const cleanup = () => {
+    (async () => {
+      try {
+        const ownerUid = await waitForAuthenticatedUid({
+          warnOnPending: true,
+          onCancel: (cancelFn) => {
+            removeWaiter = cancelFn;
+          },
+        });
+        removeWaiter = null;
+        if (!ownerUid) {
+          if (!cancelled) {
+            onData?.([]);
+          }
+          return;
+        }
+        effectiveContext = {
+          type: effectiveContext?.type || 'personal',
+          ...(effectiveContext || {}),
+          userId: ownerUid,
+        };
+        const resolved = ensurePlanningContext(effectiveContext);
+        if (cancelled) {
+          return;
+        }
+        unsubscribeWatch = startWithResolvedContext(resolved);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        onError?.(error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
       if (typeof unsubscribeWatch === 'function') {
         unsubscribeWatch();
       }
-      unsubscribeWatch = () => {};
-      if (typeof unsubscribeAuth === 'function') {
-        unsubscribeAuth();
+      if (typeof removeWaiter === 'function') {
+        removeWaiter();
+        removeWaiter = null;
       }
-      unsubscribeAuth = null;
-    };
-
-    const tryStartWatch = () => {
-      if (!active || started) {
-        return;
-      }
-      try {
-        unsubscribeWatch = startWithContext();
-        started = true;
-      } catch (error) {
-        if (error?.message?.includes('requires authenticated user')) {
-          return;
-        }
-        onError?.(error);
-      }
-    };
-
-    unsubscribeAuth = onAuthStateChanged(
-      auth,
-      (user) => {
-        if (!active) {
-          return;
-        }
-        if (user?.uid) {
-          tryStartWatch();
-          if (typeof unsubscribeAuth === 'function') {
-            unsubscribeAuth();
-            unsubscribeAuth = null;
-          }
-        } else {
-          onData?.([]);
-        }
-      },
-      (error) => {
-        if (!active) {
-          return;
-        }
-        onError?.(error);
-      }
-    );
-
-    return () => {
-      active = false;
-      cleanup();
     };
   }
 
@@ -990,11 +1087,14 @@ export const fetchWeekEventsOnce = async (context, weekStartISO, weekEndISO) => 
 
 export const saveEventNew = async (context, eventData = {}) => {
   const resolved = ensurePlanningContext(context);
-  const { eventsRef, ownerUid, teamId, type } = resolved;
+  const { eventsRef, ownerUid, teamId, type, readOnly } = resolved;
   const currentUid = getUid();
 
   if (!currentUid) {
     throw new Error('Utilisateur non connecté');
+  }
+  if (readOnly) {
+    throw new Error('Contexte planning accessible uniquement en lecture');
   }
   if (type === 'team' && ownerUid !== currentUid) {
     throw new Error("Impossible de modifier le planning d'un autre membre");
@@ -1067,7 +1167,7 @@ export const saveEventNew = async (context, eventData = {}) => {
 
 export const deleteEventNew = async (context, eventId) => {
   const resolved = ensurePlanningContext(context);
-  const { eventsRef, ownerUid, type } = resolved;
+  const { eventsRef, ownerUid, type, readOnly } = resolved;
   const currentUid = getUid();
 
   if (!currentUid) {
@@ -1075,6 +1175,9 @@ export const deleteEventNew = async (context, eventId) => {
   }
   if (!eventId) {
     throw new Error('Identifiant de l\'événement requis');
+  }
+  if (readOnly) {
+    throw new Error('Contexte planning accessible uniquement en lecture');
   }
   if (type === 'team' && ownerUid !== currentUid) {
     throw new Error("Impossible de modifier le planning d'un autre membre");
@@ -1084,8 +1187,9 @@ export const deleteEventNew = async (context, eventId) => {
 };
 
 export const watchWeeklyTasksForContext = (context, onData, onError) => {
-  try {
-    const resolved = ensurePlanningContext(context);
+  let effectiveContext = context;
+
+  const startWithResolvedContext = (resolved) => {
     const { weeklyTasksRef, ownerUid, teamId } = resolved;
 
     const startSubscription = () => {
@@ -1103,7 +1207,7 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
           if (isPermissionDeniedError(error) && !fallbackAttempted) {
             fallbackAttempted = true;
             try {
-              const fallbackTasks = await fetchWeeklyTasksFallback(context);
+              const fallbackTasks = await fetchWeeklyTasksFallback(effectiveContext);
               if (fallbackTasks) {
                 onData?.(fallbackTasks);
                 return;
@@ -1143,6 +1247,69 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
     }
 
     return startSubscription();
+  };
+
+  const startWithContext = (ctx = effectiveContext) => {
+    const resolved = ensurePlanningContext(ctx);
+    return startWithResolvedContext(resolved);
+  };
+
+  const requiresAuthResolution =
+    (!effectiveContext || effectiveContext.type === 'personal' || !effectiveContext?.type) &&
+    !effectiveContext?.userId;
+
+  if (requiresAuthResolution) {
+    let cancelled = false;
+    let unsubscribeWatch = () => {};
+    let removeWaiter = null;
+
+    (async () => {
+      try {
+        const ownerUid = await waitForAuthenticatedUid({
+          warnOnPending: true,
+          onCancel: (cancelFn) => {
+            removeWaiter = cancelFn;
+          },
+        });
+        removeWaiter = null;
+        if (!ownerUid) {
+          if (!cancelled) {
+            onData?.([]);
+          }
+          return;
+        }
+        effectiveContext = {
+          type: effectiveContext?.type || 'personal',
+          ...(effectiveContext || {}),
+          userId: ownerUid,
+        };
+        const resolved = ensurePlanningContext(effectiveContext);
+        if (cancelled) {
+          return;
+        }
+        unsubscribeWatch = startWithResolvedContext(resolved);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        onError?.(error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (typeof unsubscribeWatch === 'function') {
+        unsubscribeWatch();
+      }
+      if (typeof removeWaiter === 'function') {
+        removeWaiter();
+        removeWaiter = null;
+      }
+    };
+  }
+
+  try {
+    return startWithContext();
   } catch (error) {
     onError?.(error);
     return () => {};
@@ -1160,11 +1327,14 @@ export const fetchWeeklyTasksOnce = async (context) => {
 
 export const saveWeeklyTask = async (context, taskData = {}) => {
   const resolved = ensurePlanningContext(context);
-  const { weeklyTasksRef, ownerUid, teamId, type } = resolved;
+  const { weeklyTasksRef, ownerUid, teamId, type, readOnly } = resolved;
   const currentUid = getUid();
 
   if (!currentUid) {
     throw new Error('Utilisateur non connecté');
+  }
+  if (readOnly) {
+    throw new Error('Contexte planning accessible uniquement en lecture');
   }
   if (type === 'team' && ownerUid !== currentUid) {
     throw new Error("Impossible de modifier les tâches d'un autre membre");
@@ -1212,7 +1382,7 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
 
 export const deleteWeeklyTask = async (context, taskId) => {
   const resolved = ensurePlanningContext(context);
-  const { weeklyTasksRef, ownerUid, type } = resolved;
+  const { weeklyTasksRef, ownerUid, type, readOnly } = resolved;
   const currentUid = getUid();
 
   if (!currentUid) {
@@ -1220,6 +1390,9 @@ export const deleteWeeklyTask = async (context, taskId) => {
   }
   if (!taskId) {
     throw new Error('Identifiant de la tâche requis');
+  }
+  if (readOnly) {
+    throw new Error('Contexte planning accessible uniquement en lecture');
   }
   if (type === 'team' && ownerUid !== currentUid) {
     throw new Error("Impossible de modifier les tâches d'un autre membre");
