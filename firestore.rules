@@ -5,18 +5,7 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
       match /planningEvents/{eventId} {
-        allow read: if
-          matchesPlanningOwner(uid) &&
-          matchesPlanningTeam(null) &&
-          canReadPlanningFor(uid, null);
-        allow create, update: if
-          matchesPlanningOwner(uid) &&
-          matchesPlanningTeam(null) &&
-          canWritePlanningFor(uid);
-        allow delete: if
-          matchesPlanningOwner(uid) &&
-          matchesPlanningTeam(null) &&
-          canWritePlanningFor(uid);
+        allow read, write: if request.auth != null && request.auth.uid == uid;
       }
 
       match /{document=**} {
