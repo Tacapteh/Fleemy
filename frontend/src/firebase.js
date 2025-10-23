@@ -733,6 +733,7 @@ const ensurePlanningContext = async (context) => {
       normalizedContext.ownerUid ||
       normalizedContext.memberUid ||
       (typeof context === 'string' ? context : null);
+    memberUid = ownerUid;
   }
 
   const targetUid = ownerUid || sessionUid;
@@ -742,8 +743,15 @@ const ensurePlanningContext = async (context) => {
   }
 
   const readOnly = Boolean(ownerUid && ownerUid !== sessionUid);
-  const baseRef = collection(db, 'users', targetUid, 'planningEvents');
-  const weeklyTasksRef = collection(db, 'users', targetUid, 'weeklyTasks');
+  let planningCollectionPath = `users/${targetUid}/planningEvents`;
+  let baseRef = collection(db, 'users', targetUid, 'planningEvents');
+  let weeklyTasksRef = collection(db, 'users', targetUid, 'weeklyTasks');
+
+  if (contextType === 'team' && teamId && memberUid) {
+    planningCollectionPath = `teams/${teamId}/members/${memberUid}/planningEvents`;
+    baseRef = collection(db, 'teams', teamId, 'members', memberUid, 'planningEvents');
+    weeklyTasksRef = collection(db, 'teams', teamId, 'members', memberUid, 'weeklyTasks');
+  }
 
   return {
     status: 'ok',
@@ -753,10 +761,11 @@ const ensurePlanningContext = async (context) => {
     weeklyTasksRef,
     targetUid,
     ownerUid: targetUid,
-    memberUid: targetUid,
+    memberUid: memberUid || targetUid,
     teamId: teamId || null,
     sessionUid,
     readOnly,
+    planningCollectionPath,
   };
 };
 
@@ -1187,7 +1196,19 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     }
   };
 
-  const pathForTarget = (targetUid) => `users/${targetUid}/planningEvents`;
+  const pathForResolvedContext = (resolved) => {
+    if (!resolved) {
+      return null;
+    }
+    if (resolved.planningCollectionPath) {
+      return resolved.planningCollectionPath;
+    }
+    if (resolved.type === 'team' && resolved.teamId && resolved.memberUid) {
+      return `teams/${resolved.teamId}/members/${resolved.memberUid}/planningEvents`;
+    }
+    const uid = resolved.targetUid || resolved.ownerUid;
+    return uid ? `users/${uid}/planningEvents` : null;
+  };
 
   const startSubscription = async () => {
     try {
@@ -1211,8 +1232,8 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
 
       cleanupRestart();
 
-      const { baseRef, targetUid, sessionUid, readOnly, teamId, type } = resolved;
-      const path = pathForTarget(targetUid);
+      const { baseRef, targetUid, sessionUid, readOnly, teamId, type, memberUid: resolvedMemberUid } = resolved;
+      const path = pathForResolvedContext(resolved) || `users/${targetUid}/planningEvents`;
 
       cleanupSubscription();
 
@@ -1220,7 +1241,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         ...(effectiveContext || {}),
         type: type || effectiveContext?.type || 'personal',
         userId: targetUid,
-        memberUid: targetUid,
+        memberUid: resolvedMemberUid || targetUid,
         ownerUid: targetUid,
         teamId: teamId || null,
       };
@@ -1563,14 +1584,14 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
 
       cleanupRestart();
 
-      const { weeklyTasksRef, targetUid, teamId, sessionUid, type } = resolved;
+      const { weeklyTasksRef, targetUid, teamId, sessionUid, type, memberUid: resolvedMemberUid } = resolved;
       cleanupSubscription();
 
       effectiveContext = {
         ...(effectiveContext || {}),
         type: type || effectiveContext?.type || 'personal',
         userId: targetUid,
-        memberUid: targetUid,
+        memberUid: resolvedMemberUid || targetUid,
         ownerUid: targetUid,
         teamId: teamId || null,
       };
