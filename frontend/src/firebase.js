@@ -1234,6 +1234,14 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
 
       const { baseRef, targetUid, sessionUid, readOnly, teamId, type, memberUid: resolvedMemberUid } = resolved;
       const path = pathForResolvedContext(resolved) || `users/${targetUid}/planningEvents`;
+      const viewerUid = sessionUid || getUid();
+
+      const shouldUseFallbackOnly =
+        typeof path === 'string' &&
+        path.startsWith('users/') &&
+        targetUid &&
+        viewerUid &&
+        targetUid !== viewerUid;
 
       cleanupSubscription();
 
@@ -1262,6 +1270,24 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         readOnly,
       });
 
+      if (shouldUseFallbackOnly) {
+        try {
+          const fallbackEvents = await fetchPlanningEventsFallback(
+            effectiveContext,
+            fromDate,
+            toDate,
+          );
+          if (!active) {
+            return;
+          }
+          onData?.(Array.isArray(fallbackEvents) ? fallbackEvents : []);
+        } catch (fallbackError) {
+          console.error('planningEvents fallback-only error', fallbackError);
+          onError?.(fallbackError);
+        }
+        return;
+      }
+
       const handleSnapshot = (snapshot) => {
         const events = snapshot.docs
           .map((docSnap) => normalizeEventDocument(docSnap, targetUid, teamId || null, sessionUid))
@@ -1270,6 +1296,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       };
 
       const handleError = async (error) => {
+        logPermissionError(path, sessionUid || getUid(), error, { toast: false, level: 'warn' });
         console.error('onSnapshot planningEvents', { path, targetUid }, error);
         if (isPermissionDeniedError(error)) {
           try {
