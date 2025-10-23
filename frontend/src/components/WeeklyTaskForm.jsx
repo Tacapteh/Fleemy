@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { saveWeeklyTask } from '../firebase';
-import { TASK_ICON_KEYS } from '../constants/icons';
-import { TASK_COLOR_KEYS, getTaskColor, DEFAULT_TASK_COLOR } from '../constants/colors';
+import { TASK_ICON_KEYS, getTaskIcon } from '../constants/icons';
+import {
+  TASK_COLOR_KEYS,
+  getTaskColor,
+  DEFAULT_TASK_COLOR,
+  PASTEL_COLORS,
+} from '../constants/colors';
 import TaskModalStyles from './TaskModalStyles';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -309,8 +314,10 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
     }
   };
 
-  const iconOptions = TASK_ICON_KEYS.slice(0, 20);
+  const iconOptions = TASK_ICON_KEYS.slice(0, 24);
   const colorOptions = TASK_COLOR_KEYS;
+
+  const getColorLabel = (colorKey) => PASTEL_COLORS[colorKey]?.name || colorKey;
 
   return (
     <div className="task-form-overlay">
@@ -444,36 +451,67 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
 
             <div className="task-form-field">
               <label>Icône</label>
-              <select
-                value={task.icon}
-                onChange={(e) => setTask({ ...task, icon: e.target.value })}
-                disabled={readOnly || isSubmitting}
-              >
-                {iconOptions.map((icon) => (
-                  <option key={icon} value={icon}>
-                    {icon}
-                  </option>
-                ))}
-              </select>
+              <div className="task-form-icons" role="list">
+                {iconOptions.map((iconKey) => {
+                  const isSelected = task.icon === iconKey;
+                  return (
+                    <button
+                      key={iconKey}
+                      type="button"
+                      className={`task-form-icon ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        if (!readOnly && !isSubmitting) {
+                          setTask({ ...task, icon: iconKey });
+                        }
+                      }}
+                      disabled={readOnly || isSubmitting}
+                      aria-pressed={isSelected}
+                      aria-label={`Icône ${iconKey}`}
+                      title={iconKey}
+                    >
+                      <span aria-hidden>{getTaskIcon(iconKey)}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="task-form-field">
               <label>Couleur</label>
-              <select
-                value={task.color}
-                onChange={(e) => setTask({ ...task, color: e.target.value })}
-                disabled={readOnly || isSubmitting}
-              >
-                {colorOptions.map((colorKey) => (
-                  <option key={colorKey} value={colorKey}>
-                    {colorKey}
-                  </option>
-                ))}
-              </select>
+              <div className="task-form-colors" role="list">
+                {colorOptions.map((colorKey) => {
+                  const colorStyles = getTaskColor(colorKey);
+                  const isSelected = task.color === colorKey;
+                  return (
+                    <button
+                      key={colorKey}
+                      type="button"
+                      className={`task-form-color ${isSelected ? 'selected' : ''}`}
+                      style={{
+                        backgroundColor: colorStyles.backgroundColor,
+                        borderColor: colorStyles.borderColor,
+                      }}
+                      onClick={() => {
+                        if (!readOnly && !isSubmitting) {
+                          setTask({ ...task, color: colorKey });
+                        }
+                      }}
+                      disabled={readOnly || isSubmitting}
+                      aria-pressed={isSelected}
+                      aria-label={`Couleur ${getColorLabel(colorKey)}`}
+                      title={getColorLabel(colorKey)}
+                    >
+                      <span className="sr-only">{getColorLabel(colorKey)}</span>
+                    </button>
+                  );
+                })}
+              </div>
               <div
                 className="color-preview"
                 style={getTaskColor(task.color)}
+                aria-hidden="true"
               />
+              <p className="task-form-helper">{getColorLabel(task.color)}</p>
             </div>
           </div>
 
