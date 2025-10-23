@@ -71,9 +71,16 @@ ALLOWED_ORIGINS = {
     "http://localhost:5173",
     "https://fleemy.web.app",
     "https://fleemy-21118.web.app",
+    "https://fleemy.firebaseapp.com",
+    "https://fleemy-21118.firebaseapp.com",
     "https://fleemy.vercel.app",
 }
-ALLOWED_ORIGIN_REGEX = r"https://([a-z0-9-]+\.)?fleemy\.vercel\.app$"
+ALLOWED_ORIGIN_REGEX = (
+    r"https://(?:[a-z0-9-]+\.)?fleemy\.vercel\.app$"
+    r"|https://fleemy(?:-[a-z0-9]+)?\.web\.app$"
+    r"|https://fleemy(?:-[a-z0-9]+)?\.firebaseapp\.com$"
+)
+ALLOWED_ORIGIN_PATTERN = re.compile(ALLOWED_ORIGIN_REGEX)
 
 logger.info(
     "CORS activé pour : %s et regex %s",
@@ -151,7 +158,7 @@ def _apply_cors_headers(request: Request, response: Response) -> Response:
     """Apply CORS headers consistently on any response when origin allowed."""
     origin = request.headers.get("origin")
     if origin:
-        if origin in ALLOWED_ORIGINS or re.match(ALLOWED_ORIGIN_REGEX, origin):
+        if origin in ALLOWED_ORIGINS or ALLOWED_ORIGIN_PATTERN.match(origin):
             response.headers["Access-Control-Allow-Origin"] = origin
             response.headers["Access-Control-Allow-Credentials"] = "true"
             # For preflight responses make sure browsers receive the same
@@ -185,9 +192,11 @@ def _apply_cors_headers(request: Request, response: Response) -> Response:
     return response
 
 
-def _build_cors_error_response(request: Request, content: Dict[str, Any]) -> JSONResponse:
-    """Ensure custom error responses keep CORS headers."""
-    response = JSONResponse(status_code=200, content=content)
+def _build_cors_error_response(
+    request: Request, content: Dict[str, Any], status_code: int
+) -> JSONResponse:
+    """Ensure custom error responses keep CORS headers while keeping status."""
+    response = JSONResponse(status_code=status_code, content=content)
     return _apply_cors_headers(request, response)
 
 
@@ -221,7 +230,9 @@ async def error_handling_middleware(request: Request, call_next):
     except RequestValidationError as exc:
         logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
         return _build_cors_error_response(
-            request, {"success": False, "error": str(exc)}
+            request,
+            {"success": False, "error": str(exc)},
+            status_code=422,
         )
     except HTTPException as exc:
         logger.error(
@@ -232,13 +243,17 @@ async def error_handling_middleware(request: Request, call_next):
             exc_info=True,
         )
         return _build_cors_error_response(
-            request, {"success": False, "error": exc.detail}
+            request,
+            {"success": False, "error": exc.detail},
+            status_code=exc.status_code,
         )
     except Exception as exc:
         logger.error("Unhandled server error on %s: %s", request.url.path, exc, exc_info=True)
         # Never expose raw 500 errors to the client
         return _build_cors_error_response(
-            request, {"success": False, "error": str(exc)}
+            request,
+            {"success": False, "error": str(exc)},
+            status_code=500,
         )
 
 
