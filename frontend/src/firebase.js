@@ -495,6 +495,37 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
   };
 }
 
+async function deleteEventViaApiFallback(resolved, eventId) {
+  const { teamId, ownerUid, sessionUid } = resolved || {};
+  const apiFetch = await getApiFetch();
+
+  const params = new URLSearchParams();
+  if (teamId) {
+    params.set("team_id", teamId);
+  }
+
+  const query = params.toString();
+  const response = await apiFetch(
+    `/planning/events/${eventId}${query ? `?${query}` : ""}`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  if (!response || response.success === false) {
+    const errorMessage = response?.error || "Impossible de supprimer l'événement";
+    throw new Error(errorMessage);
+  }
+
+  return {
+    success: true,
+    source: "api-fallback",
+    id: eventId,
+    owner_uid: ownerUid || sessionUid || getUid(),
+    team_id: teamId ?? null,
+  };
+}
+
 let apiFetchModulePromise = null;
 const getApiFetch = async () => {
   if (!apiFetchModulePromise) {
@@ -1486,11 +1517,12 @@ export const deleteEventNew = async (context, eventId) => {
     throw new Error('Contexte planning accessible uniquement en lecture');
   }
   if (teamId) {
-    throw new Error("La suppression d'un événement d'équipe doit passer par le backend");
+    return deleteEventViaApiFallback(resolved, eventId);
   }
 
   const eventsCollection = collection(db, 'users', sessionUid, 'planningEvents');
   await deleteDoc(doc(eventsCollection, eventId));
+  return { success: true, source: 'firestore', id: eventId };
 };
 
 
