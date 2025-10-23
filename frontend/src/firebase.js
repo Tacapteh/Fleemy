@@ -1244,12 +1244,11 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       const path = pathForResolvedContext(resolved) || `users/${targetUid}/planningEvents`;
       const viewerUid = sessionUid || getUid();
 
+      const pathIsUserPlanningCollection = typeof path === 'string' && path.startsWith('users/');
       const shouldUseFallbackOnly =
-        typeof path === 'string' &&
-        path.startsWith('users/') &&
+        pathIsUserPlanningCollection &&
         targetUid &&
-        viewerUid &&
-        targetUid !== viewerUid;
+        (!viewerUid || targetUid !== viewerUid);
 
       cleanupSubscription();
 
@@ -1303,15 +1302,17 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         onData?.(events);
       };
 
-      const handleError = async (error) => {
-        logPermissionError(path, sessionUid || getUid(), error, { toast: false, level: 'warn' });
-        console.error('onSnapshot planningEvents', { path, targetUid }, error);
-        if (isPermissionDeniedError(error)) {
-          try {
-            const fallbackEvents = await fetchPlanningEventsFallback(
-              effectiveContext,
-              fromDate,
-              toDate,
+        const handleError = async (error) => {
+          const isPermissionIssue = isPermissionDeniedError(error);
+          logPermissionError(path, sessionUid || getUid(), error, { toast: false, level: 'warn' });
+          const logFn = isPermissionIssue ? console.warn : console.error;
+          logFn('onSnapshot planningEvents', { path, targetUid }, error);
+          if (isPermissionIssue) {
+            try {
+              const fallbackEvents = await fetchPlanningEventsFallback(
+                effectiveContext,
+                fromDate,
+                toDate,
             );
             if (!active) {
               return;
@@ -1630,6 +1631,26 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
         ownerUid: targetUid,
         teamId: teamId || null,
       };
+
+      const viewerUid = sessionUid || getUid();
+      const shouldUseFallbackOnly =
+        !teamId &&
+        targetUid &&
+        (!viewerUid || targetUid !== viewerUid);
+
+      if (shouldUseFallbackOnly) {
+        try {
+          const fallbackTasks = await fetchWeeklyTasksFallback(effectiveContext);
+          if (!active) {
+            return;
+          }
+          onData?.(Array.isArray(fallbackTasks) ? fallbackTasks : []);
+        } catch (fallbackError) {
+          console.error('weeklyTasks fallback-only error', fallbackError);
+          onError?.(fallbackError);
+        }
+        return;
+      }
 
       let fallbackAttempted = false;
       const handleError = async (error) => {
