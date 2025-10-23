@@ -57,96 +57,181 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 
-let lastKnownUid = null;
-let authSessionResolved = false;
-let authTrackingInitialized = false;
-let authInitWarningEmitted = false;
-const pendingUidResolvers = new Set();
+let cachedAuthPromise = null;
+let authReady = false;
+let lastResolvedUser = null;
 
-const notifyPendingUidResolvers = () => {
-  if (!pendingUidResolvers.size) {
-    return;
+export const waitForAuth = () => {
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    authReady = true;
+    lastResolvedUser = currentUser;
+    return Promise.resolve(currentUser);
   }
-  Array.from(pendingUidResolvers).forEach((resolver) => {
-    try {
-      resolver(lastKnownUid);
-    } catch (resolverError) {
-      console.error('waitForAuthenticatedUid listener error', resolverError);
-      pendingUidResolvers.delete(resolver);
-    }
+  if (authReady) {
+    return Promise.resolve(lastResolvedUser);
+  }
+  if (cachedAuthPromise) {
+    return cachedAuthPromise;
+  }
+  cachedAuthPromise = new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        lastResolvedUser = user || null;
+        authReady = true;
+        cachedAuthPromise = null;
+        unsubscribe();
+        resolve(lastResolvedUser);
+      },
+      (error) => {
+        console.error('waitForAuth error', error);
+        lastResolvedUser = null;
+        authReady = true;
+        cachedAuthPromise = null;
+        unsubscribe();
+        resolve(null);
+      }
+    );
   });
+  return cachedAuthPromise;
 };
 
-const ensureAuthTracking = () => {
-  if (authTrackingInitialized) {
-    return;
-  }
-  authTrackingInitialized = true;
-  onAuthStateChanged(
-    auth,
-    (user) => {
-      lastKnownUid = user?.uid || null;
-      authSessionResolved = true;
-      authInitWarningEmitted = false;
-      notifyPendingUidResolvers();
-    },
-    (error) => {
-      authSessionResolved = true;
-      console.error('Firebase auth tracking error', error);
-      notifyPendingUidResolvers();
-    }
-  );
-};
-
-const getUid = () => {
-  ensureAuthTracking();
-  return auth.currentUser?.uid || lastKnownUid || null;
-};
-export { getUid };
+export const getUid = () => auth.currentUser?.uid || null;
 
 export const waitForAuthenticatedUid = async ({ requireUser = true, warnOnPending = false, onCancel } = {}) => {
-  ensureAuthTracking();
-  const currentUid = getUid();
-  if (currentUid) {
-    return currentUid;
+  const immediateUid = getUid();
+  if (immediateUid) {
+    return immediateUid;
   }
-  if (warnOnPending && !authSessionResolved && !authInitWarningEmitted) {
+  if (warnOnPending && !authReady) {
     console.warn('Auth non encore initialisée');
-    authInitWarningEmitted = true;
   }
-  if (!requireUser && authSessionResolved) {
+
+  const firstResolution = await waitForAuth();
+  if (firstResolution?.uid) {
+    return firstResolution.uid;
+  }
+  if (!requireUser) {
     return null;
   }
+
   return new Promise((resolve) => {
     let settled = false;
-    const resolveOnce = (value) => {
+    const settle = (value) => {
       if (settled) {
         return;
       }
       settled = true;
       resolve(value);
     };
-    const listener = (uid) => {
-      if (uid) {
-        pendingUidResolvers.delete(listener);
-        resolveOnce(uid);
-        return;
-      }
-      if (!requireUser && authSessionResolved) {
-        pendingUidResolvers.delete(listener);
-        resolveOnce(null);
-      }
-    };
-    if (typeof onCancel === 'function') {
-      onCancel(() => {
-        if (pendingUidResolvers.delete(listener)) {
-          resolveOnce(null);
+
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (user?.uid) {
+          unsubscribe();
+          settle(user.uid);
         }
-      });
+      },
+      (error) => {
+        console.error('waitForAuthenticatedUid error', error);
+        unsubscribe();
+        settle(null);
+      }
+    );
+
+    const cancel = () => {
+      unsubscribe();
+      settle(null);
+    };
+
+    if (typeof onCancel === 'function') {
+      onCancel(cancel);
     }
-    pendingUidResolvers.add(listener);
   });
 };
+
+const planningRealtimeRegistry = new Set();
+const planningAuthSubscribers = new Set();
+
+const registerPlanningListener = (unsubscribe) => {
+  if (typeof unsubscribe !== 'function') {
+    return () => {};
+  }
+  let active = true;
+  const wrapped = () => {
+    if (!active) {
+      return;
+    }
+    active = false;
+    planningRealtimeRegistry.delete(wrapped);
+    try {
+      unsubscribe();
+    } catch (error) {
+      console.error('Error while unsubscribing planning listener', error);
+    }
+  };
+  planningRealtimeRegistry.add(wrapped);
+  return wrapped;
+};
+
+const clearPlanningListeners = () => {
+  if (!planningRealtimeRegistry.size) {
+    return;
+  }
+  Array.from(planningRealtimeRegistry).forEach((unsubscribe) => {
+    try {
+      unsubscribe();
+    } catch (error) {
+      console.error('Error while clearing planning listener', error);
+    }
+  });
+  planningRealtimeRegistry.clear();
+};
+
+const registerPlanningAuthRestart = (callback) => {
+  if (typeof callback !== 'function') {
+    return () => {};
+  }
+  planningAuthSubscribers.add(callback);
+  return () => {
+    planningAuthSubscribers.delete(callback);
+  };
+};
+
+const notifyPlanningAuthSubscribers = () => {
+  if (!planningAuthSubscribers.size) {
+    return;
+  }
+  const pending = Array.from(planningAuthSubscribers);
+  planningAuthSubscribers.clear();
+  pending.forEach((callback) => {
+    try {
+      callback();
+    } catch (error) {
+      console.error('Planning auth restart callback error', error);
+    }
+  });
+};
+
+let planningAuthTrackerInitialized = false;
+
+const ensurePlanningAuthTracker = () => {
+  if (planningAuthTrackerInitialized) {
+    return;
+  }
+  planningAuthTrackerInitialized = true;
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      notifyPlanningAuthSubscribers();
+      return;
+    }
+    clearPlanningListeners();
+  });
+};
+
+ensurePlanningAuthTracker();
 
 const recentErrors = new Map();
 
@@ -518,52 +603,67 @@ const toFirestoreTimestamp = (value) => {
   return Timestamp.fromDate(date);
 };
 
-const ensurePlanningContext = (context, options = {}) => {
-  const { requireOwner = true } = options;
-  const normalizedContext = context && typeof context === 'object' ? context : {};
-  const contextType = normalizedContext.type || 'personal';
-
-  if (contextType === 'personal') {
-    const ownerUid = normalizedContext.userId || getUid();
-    if (!ownerUid) {
-      if (requireOwner) {
-        throw new Error('Planning context requires authenticated user');
-      }
-      return null;
-    }
-    const viewerUid = getUid();
-    const readOnly = Boolean(viewerUid && ownerUid !== viewerUid);
-    return {
-      type: 'personal',
-      ownerUid,
-      memberUid: ownerUid,
-      teamId: null,
-      readOnly,
-      eventsRef: collection(db, 'users', ownerUid, 'planningEvents'),
-      weeklyTasksRef: collection(db, 'users', ownerUid, 'weeklyTasks'),
-    };
+const ensurePlanningContext = async (context) => {
+  await waitForAuth();
+  const sessionUser = auth.currentUser;
+  if (!sessionUser) {
+    console.warn('Auth non initialisée : écoute différée');
+    return { status: 'deferred' };
   }
+
+  const sessionUid = sessionUser.uid;
+  const normalizedContext = context && typeof context === 'object' ? context : {};
+  const contextType = normalizedContext.type === 'team' ? 'team' : 'personal';
+
+  let ownerUid = null;
+  let teamId = null;
+  let memberUid = null;
 
   if (contextType === 'team') {
-    const teamId = normalizedContext.teamId;
-    const memberUid = normalizedContext.memberUid;
-    if (!teamId || !memberUid) {
-      throw new Error('Team planning context requires teamId and memberUid');
+    teamId = normalizedContext.teamId || null;
+    memberUid =
+      normalizedContext.memberUid ||
+      normalizedContext.userId ||
+      normalizedContext.ownerUid ||
+      (typeof context === 'string' ? context : null);
+    if (!teamId) {
+      throw new Error('Team planning context requires teamId');
     }
-    const viewerUid = getUid();
-    const readOnly = Boolean(viewerUid && memberUid !== viewerUid);
-    return {
-      type: 'team',
-      ownerUid: memberUid,
-      memberUid,
-      teamId,
-      readOnly,
-      eventsRef: collection(db, 'teams', teamId, 'members', memberUid, 'planningEvents'),
-      weeklyTasksRef: collection(db, 'teams', teamId, 'members', memberUid, 'weeklyTasks'),
-    };
+    if (!memberUid) {
+      throw new Error('Team planning context requires memberUid');
+    }
+    ownerUid = memberUid;
+  } else {
+    ownerUid =
+      normalizedContext.userId ||
+      normalizedContext.ownerUid ||
+      normalizedContext.memberUid ||
+      (typeof context === 'string' ? context : null);
   }
 
-  throw new Error('Unsupported planning context');
+  const targetUid = ownerUid || sessionUid;
+  if (!targetUid) {
+    console.warn('Auth non initialisée : écoute différée');
+    return { status: 'deferred' };
+  }
+
+  const readOnly = Boolean(ownerUid && ownerUid !== sessionUid);
+  const baseRef = collection(db, 'users', targetUid, 'planningEvents');
+  const weeklyTasksRef = collection(db, 'users', targetUid, 'weeklyTasks');
+
+  return {
+    status: 'ok',
+    type: contextType,
+    baseRef,
+    eventsRef: baseRef,
+    weeklyTasksRef,
+    targetUid,
+    ownerUid: targetUid,
+    memberUid: targetUid,
+    teamId: teamId || null,
+    sessionUid,
+    readOnly,
+  };
 };
 
 const ensureTeamMemberContainer = async (teamId, memberUid, options = {}) => {
@@ -771,7 +871,6 @@ const buildFallbackQueryParams = (context, fromDate, toDate) => {
   return params;
 };
 
-const REALTIME_FALLBACK_INTERVAL_MS = 5000;
 
 const fetchPlanningEventsFallback = async (context, fromDate, toDate) => {
   try {
@@ -839,6 +938,7 @@ const buildRangeFromIso = (startIso, endIso) => {
   return { from, to };
 };
 
+
 export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   if (!range?.from || !range?.to) {
     onData?.([]);
@@ -858,264 +958,125 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   }
 
   let effectiveContext = context;
+  let unsubscribe = null;
+  let removeRestart = null;
+  let active = true;
 
-  const startWithResolvedContext = (resolved) => {
-    const { eventsRef, ownerUid, teamId } = resolved;
+  const cleanupSubscription = () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  };
 
-    const constraints = [
-      where('owner_uid', '==', ownerUid),
-      where('start', '>=', Timestamp.fromDate(fromDate)),
-      where('start', '<=', Timestamp.fromDate(toDate)),
-      orderBy('start', 'asc'),
-    ];
+  const cleanupRestart = () => {
+    if (typeof removeRestart === 'function') {
+      removeRestart();
+      removeRestart = null;
+    }
+  };
 
-    const startSubscription = () => {
-      let stopFallback = null;
-      let fallbackErrorNotified = false;
-      let hasRetriedAfterEnsure = false;
-      let closed = false;
+  const pathForTarget = (targetUid) => `users/${targetUid}/planningEvents`;
 
-      const stopExistingFallback = () => {
-        if (typeof stopFallback === 'function') {
-          stopFallback();
-        }
-        stopFallback = null;
-      };
+  const startSubscription = async () => {
+    try {
+      const resolved = await ensurePlanningContext(effectiveContext);
+      if (!active) {
+        return;
+      }
 
-      const ensureViewerMembership = () => {
-        if (!teamId) {
-          return Promise.resolve();
-        }
-        const viewerUid = getUid();
-        if (!viewerUid) {
-          return Promise.resolve();
-        }
-        return ensureTeamMemberContainer(teamId, viewerUid).catch((membershipError) => {
-          console.warn('watchPlanningEvents ensure membership error', membershipError);
+      if (!resolved || resolved.status === 'deferred') {
+        cleanupSubscription();
+        cleanupRestart();
+        onData?.([]);
+        removeRestart = registerPlanningAuthRestart(() => {
+          if (!active) {
+            return;
+          }
+          startSubscription();
         });
+        return;
+      }
+
+      cleanupRestart();
+
+      const { baseRef, targetUid, sessionUid, readOnly, teamId, type } = resolved;
+      const path = pathForTarget(targetUid);
+
+      cleanupSubscription();
+
+      effectiveContext = {
+        ...(effectiveContext || {}),
+        type: type || effectiveContext?.type || 'personal',
+        userId: targetUid,
+        memberUid: targetUid,
+        ownerUid: targetUid,
+        teamId: teamId || null,
       };
 
-      const startFallback = () => {
-        if (closed) {
-          return () => {};
-        }
-        if (stopFallback) {
-          return stopFallback;
-        }
+      const fromTimestamp = Timestamp.fromDate(fromDate);
+      const toTimestamp = Timestamp.fromDate(toDate);
+      const constraints = [
+        where('owner_uid', '==', targetUid),
+        where('start', '>=', fromTimestamp),
+        where('start', '<=', toTimestamp),
+        orderBy('start', 'asc'),
+      ];
 
-        let cancelled = false;
-        let timer = null;
-
-        const fetchAndEmit = async () => {
-          try {
-            const fallbackEvents = await fetchPlanningEventsFallback(effectiveContext, fromDate, toDate);
-            if (!cancelled && fallbackEvents) {
-              fallbackErrorNotified = false;
-              onData?.(fallbackEvents);
-            }
-          } catch (fallbackError) {
-            if (!cancelled) {
-              console.error('planningEvents fallback failed', fallbackError);
-              if (!fallbackErrorNotified) {
-                onError?.(fallbackError);
-                fallbackErrorNotified = true;
-              }
-            }
-          }
-        };
-
-        fetchAndEmit();
-        timer = setInterval(fetchAndEmit, REALTIME_FALLBACK_INTERVAL_MS);
-
-        stopFallback = () => {
-          cancelled = true;
-          if (timer) {
-            clearInterval(timer);
-          }
-          timer = null;
-        };
-
-        return stopFallback;
-      };
+      console.info('planningEvents subscribe', {
+        sessionUid,
+        targetUid,
+        path,
+        readOnly,
+      });
 
       const handleSnapshot = (snapshot) => {
-        stopExistingFallback();
-        const viewerUid = getUid();
         const events = snapshot.docs
-          .map((docSnap) => normalizeEventDocument(docSnap, ownerUid, teamId, viewerUid))
+          .map((docSnap) => normalizeEventDocument(docSnap, targetUid, teamId || null, sessionUid))
           .filter(Boolean);
         onData?.(events);
       };
 
-      let unsubscribe = () => {};
-
-      const subscribeRealtime = () => {
-        if (closed) {
-          return;
-        }
-        try {
-          if (typeof unsubscribe === 'function') {
-            unsubscribe();
-          }
-          unsubscribe = onSnapshot(query(eventsRef, ...constraints), handleSnapshot, handleError);
-        } catch (error) {
-          handleError(error);
-          unsubscribe = () => {};
-        }
-      };
-
-      const handleError = (error) => {
+      const handleError = async (error) => {
+        console.error('onSnapshot planningEvents', { path, targetUid }, error);
         if (isPermissionDeniedError(error)) {
-          if (!hasRetriedAfterEnsure) {
-            hasRetriedAfterEnsure = true;
-            ensureViewerMembership()
-              .catch(() => {})
-              .finally(() => {
-                if (closed) {
-                  return;
-                }
-                if (typeof unsubscribe === 'function') {
-                  unsubscribe();
-                }
-                subscribeRealtime();
-              });
-            return;
+          try {
+            const fallbackEvents = await fetchPlanningEventsFallback(
+              effectiveContext,
+              fromDate,
+              toDate,
+            );
+            if (!active) {
+              return;
+            }
+            if (fallbackEvents) {
+              onData?.(fallbackEvents);
+              return;
+            }
+          } catch (fallbackError) {
+            console.error('planningEvents fallback failed', fallbackError);
           }
-          const viewerUid = getUid();
-          logPermissionError('planningEvents', viewerUid, error, {
-            toast: !teamId,
-            level: teamId ? 'warn' : 'error',
-          });
-          stopExistingFallback();
-          startFallback();
-          return;
         }
-        stopExistingFallback();
-        logPermissionError('planningEvents', getUid(), error);
         onError?.(error);
       };
 
-      subscribeRealtime();
-
-      return () => {
-        closed = true;
-        stopExistingFallback();
-        if (typeof unsubscribe === 'function') {
-          unsubscribe();
-        }
-      };
-    };
-
-    if (teamId) {
-      const viewerUid = getUid();
-      let unsubscribe = () => {};
-      let active = true;
-
-      const startIfActive = () => {
-        if (!active) {
-          return;
-        }
-        unsubscribe = startSubscription();
-      };
-
-      ensureTeamMemberContainer(teamId, viewerUid, { suppressErrors: false })
-        .then(() => {
-          startIfActive();
-        })
-        .catch((membershipError) => {
-          if (!active) {
-            return;
-          }
-          const permissionError = toPermissionDeniedError(membershipError);
-          if (permissionError) {
-            onData?.([]);
-            logPermissionError('planningEvents', viewerUid, permissionError, {
-              toast: false,
-              level: 'warn',
-            });
-            onError?.(permissionError);
-            return;
-          }
-          console.warn('watchPlanningEvents ensure membership error', membershipError);
-          startIfActive();
-        });
-
-      return () => {
-        active = false;
-        if (typeof unsubscribe === 'function') {
-          unsubscribe();
-        }
-      };
+      const rawUnsubscribe = onSnapshot(query(baseRef, ...constraints), handleSnapshot, handleError);
+      unsubscribe = registerPlanningListener(rawUnsubscribe);
+    } catch (error) {
+      if (!active) {
+        return;
+      }
+      onError?.(error);
     }
-
-    return startSubscription();
   };
 
-  const startWithContext = (ctx = effectiveContext) => {
-    const resolved = ensurePlanningContext(ctx);
-    return startWithResolvedContext(resolved);
+  startSubscription();
+
+  return () => {
+    active = false;
+    cleanupSubscription();
+    cleanupRestart();
   };
-
-  const requiresAuthResolution =
-    (!effectiveContext || effectiveContext.type === 'personal' || !effectiveContext?.type) &&
-    !effectiveContext?.userId;
-
-  if (requiresAuthResolution) {
-    let cancelled = false;
-    let unsubscribeWatch = () => {};
-    let removeWaiter = null;
-
-    (async () => {
-      try {
-        const ownerUid = await waitForAuthenticatedUid({
-          warnOnPending: true,
-          onCancel: (cancelFn) => {
-            removeWaiter = cancelFn;
-          },
-        });
-        removeWaiter = null;
-        if (!ownerUid) {
-          if (!cancelled) {
-            onData?.([]);
-          }
-          return;
-        }
-        effectiveContext = {
-          type: effectiveContext?.type || 'personal',
-          ...(effectiveContext || {}),
-          userId: ownerUid,
-        };
-        const resolved = ensurePlanningContext(effectiveContext);
-        if (cancelled) {
-          return;
-        }
-        unsubscribeWatch = startWithResolvedContext(resolved);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        onError?.(error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (typeof unsubscribeWatch === 'function') {
-        unsubscribeWatch();
-      }
-      if (typeof removeWaiter === 'function') {
-        removeWaiter();
-        removeWaiter = null;
-      }
-    };
-  }
-
-  try {
-    return startWithContext();
-  } catch (error) {
-    onError?.(error);
-    return () => {};
-  }
 };
 
 export const watchWeekEvents = (context, weekStartISO, weekEndISO, onData, onError) => {
@@ -1140,742 +1101,234 @@ export const fetchWeekEventsOnce = async (context, weekStartISO, weekEndISO) => 
   }
 };
 
-export const saveEventNew = async (context, eventData = {}) => {
-  const resolved = ensurePlanningContext(context);
-  const { eventsRef, ownerUid, teamId, type, readOnly } = resolved;
-  const currentUid = getUid();
 
+// Écriture client : uniquement les événements personnels. Pour une équipe, déléguer au backend.
+export const saveEventNew = async (context, eventData = {}) => {
+  const resolved = await ensurePlanningContext(context);
+  if (!resolved || resolved.status === 'deferred') {
+    throw new Error('Utilisateur non connecté');
+  }
+
+  const { sessionUid, readOnly } = resolved;
+  const currentUid = sessionUid || getUid();
   if (!currentUid) {
     throw new Error('Utilisateur non connecté');
+  }
+  if (!eventData) {
+    eventData = {};
   }
   if (readOnly) {
     throw new Error('Contexte planning accessible uniquement en lecture');
   }
-  if (type === 'team' && ownerUid !== currentUid) {
-    throw new Error("Impossible de modifier le planning d'un autre membre");
-  }
+
+  const explicitTeamId = eventData.team_id;
+  const teamId = explicitTeamId && explicitTeamId !== '' ? explicitTeamId : null;
+  const resolvedTeamId = resolved.teamId || null;
+  const effectiveTeamId = teamId || resolvedTeamId;
 
   const startTs = toFirestoreTimestamp(eventData.start);
   const endTs = toFirestoreTimestamp(eventData.end);
   if (!startTs || !endTs) {
-    throw new Error('Dates invalides pour l\'événement');
+    throw new Error("Dates invalides pour l'événement");
   }
 
   const payload = {
     ...eventData,
     start: startTs,
     end: endTs,
-    user_id: ownerUid,
-    owner_uid: ownerUid,
-    team_id: teamId ?? null,
+    user_id: currentUid,
+    owner_uid: currentUid,
+    team_id: null,
     updated_at: serverTimestamp(),
   };
 
   delete payload.id;
   Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
 
-  try {
-    if (teamId) {
-      await ensureTeamMemberContainer(teamId, ownerUid);
-    }
+  if (effectiveTeamId) {
+    return saveEventViaApiFallback(
+      { ownerUid: currentUid, teamId: effectiveTeamId, type: 'team' },
+      eventData,
+      startTs,
+      endTs,
+    );
+  }
 
+  const eventsCollection = collection(db, 'users', currentUid, 'planningEvents');
+
+  try {
     if (eventData.id) {
-      await setDoc(doc(eventsRef, eventData.id), payload, { merge: true });
+      const docRef = doc(eventsCollection, eventData.id);
+      await setDoc(docRef, payload, { merge: true });
       return {
         ...eventData,
         id: eventData.id,
         start: startTs.toDate(),
         end: endTs.toDate(),
-        user_id: ownerUid,
-        owner_uid: ownerUid,
-        team_id: teamId ?? null,
-        source: "firestore",
+        user_id: currentUid,
+        owner_uid: currentUid,
+        team_id: null,
+        source: 'firestore',
       };
     }
 
-    const newDocRef = doc(eventsRef);
-    await setDoc(newDocRef, {
+    const docRef = await addDoc(eventsCollection, {
       ...payload,
       created_at: serverTimestamp(),
     });
     return {
       ...eventData,
-      id: newDocRef.id,
+      id: docRef.id,
       start: startTs.toDate(),
       end: endTs.toDate(),
-      user_id: ownerUid,
-      owner_uid: ownerUid,
-      team_id: teamId ?? null,
-      source: "firestore",
+      user_id: currentUid,
+      owner_uid: currentUid,
+      team_id: null,
+      source: 'firestore',
     };
   } catch (error) {
     if (!isPermissionDeniedError(error)) {
       throw error;
     }
-    try {
-      return await saveEventViaApiFallback(resolved, eventData, startTs, endTs);
-    } catch (fallbackError) {
-      throw fallbackError;
-    }
+    return saveEventViaApiFallback(
+      { ownerUid: currentUid, teamId: null, type: 'personal' },
+      eventData,
+      startTs,
+      endTs,
+    );
   }
 };
 
-export const deleteEventNew = async (context, eventId) => {
-  const resolved = ensurePlanningContext(context);
-  const { eventsRef, ownerUid, type, readOnly } = resolved;
-  const currentUid = getUid();
 
-  if (!currentUid) {
+// Suppression client : uniquement sur users/<uid>/planningEvents.
+export const deleteEventNew = async (context, eventId) => {
+  if (!eventId) {
+    throw new Error("Identifiant de l'événement requis");
+  }
+
+  const resolved = await ensurePlanningContext(context);
+  if (!resolved || resolved.status === 'deferred') {
     throw new Error('Utilisateur non connecté');
   }
-  if (!eventId) {
-    throw new Error('Identifiant de l\'événement requis');
+
+  const { sessionUid, readOnly, teamId } = resolved;
+  if (!sessionUid) {
+    throw new Error('Utilisateur non connecté');
   }
   if (readOnly) {
     throw new Error('Contexte planning accessible uniquement en lecture');
   }
-  if (type === 'team' && ownerUid !== currentUid) {
-    throw new Error("Impossible de modifier le planning d'un autre membre");
+  if (teamId) {
+    throw new Error("La suppression d'un événement d'équipe doit passer par le backend");
   }
 
-  await deleteDoc(doc(eventsRef, eventId));
+  const eventsCollection = collection(db, 'users', sessionUid, 'planningEvents');
+  await deleteDoc(doc(eventsCollection, eventId));
 };
+
 
 export const watchWeeklyTasksForContext = (context, onData, onError) => {
   let effectiveContext = context;
+  let unsubscribe = null;
+  let removeRestart = null;
+  let active = true;
 
-  const startWithResolvedContext = (resolved) => {
-    const { weeklyTasksRef, ownerUid, teamId } = resolved;
+  const cleanupSubscription = () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  };
 
-    const startSubscription = () => {
-      let fallbackAttempted = false;
-      return onSnapshot(
-        weeklyTasksRef,
-        (snapshot) => {
-          const viewerUid = getUid();
-          const tasks = snapshot.docs
-            .map((docSnap) => normalizeWeeklyTaskDocument(docSnap, ownerUid, teamId, viewerUid))
-            .filter(Boolean);
-          onData?.(tasks);
-        },
-        async (error) => {
-          if (isPermissionDeniedError(error) && !fallbackAttempted) {
-            fallbackAttempted = true;
-            try {
-              const fallbackTasks = await fetchWeeklyTasksFallback(effectiveContext);
-              if (fallbackTasks) {
-                onData?.(fallbackTasks);
-                return;
-              }
-            } catch (fallbackError) {
-              console.error('weeklyTasks fallback failed', fallbackError);
-            }
-          }
-          logPermissionError('weeklyTasks', getUid(), error);
-          onError?.(error);
-        }
-      );
-    };
+  const cleanupRestart = () => {
+    if (typeof removeRestart === 'function') {
+      removeRestart();
+      removeRestart = null;
+    }
+  };
 
-    if (teamId) {
-      const viewerUid = getUid();
-      let unsubscribe = () => {};
-      let active = true;
+  const startSubscription = async () => {
+    try {
+      const resolved = await ensurePlanningContext(effectiveContext);
+      if (!active) {
+        return;
+      }
 
-      const startIfActive = () => {
-        if (!active) {
-          return;
-        }
-        unsubscribe = startSubscription();
-      };
-
-      ensureTeamMemberContainer(teamId, viewerUid, { suppressErrors: false })
-        .then(() => {
-          startIfActive();
-        })
-        .catch((membershipError) => {
+      if (!resolved || resolved.status === 'deferred') {
+        cleanupSubscription();
+        cleanupRestart();
+        onData?.([]);
+        removeRestart = registerPlanningAuthRestart(() => {
           if (!active) {
             return;
           }
-          const permissionError = toPermissionDeniedError(membershipError);
-          if (permissionError) {
-            onData?.([]);
-            logPermissionError('weeklyTasks', viewerUid, permissionError, {
-              toast: false,
-              level: 'warn',
-            });
-            onError?.(permissionError);
-            return;
-          }
-          console.warn('watchWeeklyTasks ensure membership error', membershipError);
-          startIfActive();
+          startSubscription();
         });
-
-      return () => {
-        active = false;
-        if (typeof unsubscribe === 'function') {
-          unsubscribe();
-        }
-      };
-    }
-
-    return startSubscription();
-  };
-
-  const startWithContext = (ctx = effectiveContext) => {
-    const resolved = ensurePlanningContext(ctx);
-    return startWithResolvedContext(resolved);
-  };
-
-  const requiresAuthResolution =
-    (!effectiveContext || effectiveContext.type === 'personal' || !effectiveContext?.type) &&
-    !effectiveContext?.userId;
-
-  if (requiresAuthResolution) {
-    let cancelled = false;
-    let unsubscribeWatch = () => {};
-    let removeWaiter = null;
-
-    (async () => {
-      try {
-        const ownerUid = await waitForAuthenticatedUid({
-          warnOnPending: true,
-          onCancel: (cancelFn) => {
-            removeWaiter = cancelFn;
-          },
-        });
-        removeWaiter = null;
-        if (!ownerUid) {
-          if (!cancelled) {
-            onData?.([]);
-          }
-          return;
-        }
-        effectiveContext = {
-          type: effectiveContext?.type || 'personal',
-          ...(effectiveContext || {}),
-          userId: ownerUid,
-        };
-        const resolved = ensurePlanningContext(effectiveContext);
-        if (cancelled) {
-          return;
-        }
-        unsubscribeWatch = startWithResolvedContext(resolved);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-        onError?.(error);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (typeof unsubscribeWatch === 'function') {
-        unsubscribeWatch();
-      }
-      if (typeof removeWaiter === 'function') {
-        removeWaiter();
-        removeWaiter = null;
-      }
-    };
-  }
-
-  try {
-    return startWithContext();
-  } catch (error) {
-    onError?.(error);
-    return () => {};
-  }
-};
-
-export const fetchWeeklyTasksOnce = async (context) => {
-  try {
-    return await fetchWeeklyTasksFallback(context);
-  } catch (error) {
-    console.warn('fetchWeeklyTasksOnce error', error);
-    return [];
-  }
-};
-
-export const saveWeeklyTask = async (context, taskData = {}) => {
-  const resolved = ensurePlanningContext(context);
-  const { weeklyTasksRef, ownerUid, teamId, type, readOnly } = resolved;
-  const currentUid = getUid();
-
-  if (!currentUid) {
-    throw new Error('Utilisateur non connecté');
-  }
-  if (readOnly) {
-    throw new Error('Contexte planning accessible uniquement en lecture');
-  }
-  if (type === 'team' && ownerUid !== currentUid) {
-    throw new Error("Impossible de modifier les tâches d'un autre membre");
-  }
-
-  if (!Array.isArray(taskData.time_ranges) || taskData.time_ranges.length === 0) {
-    throw new Error('Les tâches hebdomadaires doivent contenir au moins un créneau');
-  }
-
-  const payload = {
-    label: taskData.label || taskData.title || 'Tâche sans titre',
-    title: taskData.title || taskData.label || 'Tâche sans titre',
-    price: taskData.price || null,
-    color: taskData.color || '#dbeafe',
-    icon: taskData.icon || 'briefcase',
-    weekly: true,
-    time_ranges: taskData.time_ranges,
-    user_id: ownerUid,
-    owner_uid: ownerUid,
-    team_id: teamId ?? null,
-    updated_at: serverTimestamp(),
-  };
-
-  delete payload.id;
-  Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
-
-  if (teamId) {
-    await ensureTeamMemberContainer(teamId, ownerUid);
-  }
-
-  if (taskData.id) {
-    await setDoc(doc(weeklyTasksRef, taskData.id), payload, { merge: true });
-    showToast('Tâche hebdomadaire mise à jour');
-    return { id: taskData.id, ...payload };
-  }
-
-  const newDocRef = doc(weeklyTasksRef);
-  await setDoc(newDocRef, {
-    ...payload,
-    created_at: serverTimestamp(),
-  });
-  showToast('Tâche hebdomadaire créée');
-  return { id: newDocRef.id, ...payload };
-};
-
-export const deleteWeeklyTask = async (context, taskId) => {
-  const resolved = ensurePlanningContext(context);
-  const { weeklyTasksRef, ownerUid, type, readOnly } = resolved;
-  const currentUid = getUid();
-
-  if (!currentUid) {
-    throw new Error('Utilisateur non connecté');
-  }
-  if (!taskId) {
-    throw new Error('Identifiant de la tâche requis');
-  }
-  if (readOnly) {
-    throw new Error('Contexte planning accessible uniquement en lecture');
-  }
-  if (type === 'team' && ownerUid !== currentUid) {
-    throw new Error("Impossible de modifier les tâches d'un autre membre");
-  }
-
-  await deleteDoc(doc(weeklyTasksRef, taskId));
-  showToast('Tâche hebdomadaire supprimée');
-};
-
-const buildMembershipEntries = (entries = []) => {
-  const mapped = Array.isArray(entries) ? entries : [];
-  return mapped
-    .map((entry) => {
-      if (!entry) return null;
-      const uid = entry.uid || entry.user_id || entry.userId;
-      if (!uid) return null;
-      return {
-        uid,
-        displayName: entry.displayName || entry.name || null,
-        email: entry.email || null,
-      };
-    })
-    .filter(Boolean);
-};
-
-export const listenTeamMemberships = (teamId, onData, onError) => {
-  if (!teamId) {
-    onData?.([]);
-    return () => {};
-  }
-
-  let stopFallback = null;
-  const stopExistingFallback = () => {
-    if (typeof stopFallback === 'function') {
-      stopFallback();
-    }
-    stopFallback = null;
-  };
-
-  let unsubscribeRealtime = () => {};
-  let cancelled = false;
-  let ensuredMembershipPromise = null;
-  let hasRetriedAfterEnsure = false;
-
-  const ensureMembership = () => {
-    if (!teamId || cancelled) {
-      return Promise.resolve();
-    }
-    if (!ensuredMembershipPromise) {
-      ensuredMembershipPromise = (async () => {
-        const currentUid = getUid();
-        if (!currentUid) {
-          return;
-        }
-        try {
-          await ensureTeamMemberContainer(teamId, currentUid);
-        } catch (error) {
-          console.warn('listenTeamMemberships ensure membership error', error);
-        }
-      })();
-    }
-    return ensuredMembershipPromise;
-  };
-
-  const startFallback = () => {
-    if (cancelled) {
-      return () => {};
-    }
-    if (stopFallback) {
-      return stopFallback;
-    }
-
-    let fallbackCancelled = false;
-    let timer = null;
-
-    const fetchMembers = async () => {
-      try {
-        const apiFetch = await getApiFetch();
-        const response = await apiFetch(`/teams/${teamId}/memberships`);
-        if (fallbackCancelled) {
-          return;
-        }
-        const members = buildMembershipEntries(response?.members);
-        onData?.(members);
-      } catch (error) {
-        if (!fallbackCancelled) {
-          console.error('fallback fetchTeamMemberships error', error);
-          onError?.(error);
-        }
-      }
-    };
-
-    fetchMembers();
-    timer = setInterval(fetchMembers, 60_000);
-
-    stopFallback = () => {
-      fallbackCancelled = true;
-      if (timer) {
-        clearInterval(timer);
-      }
-      timer = null;
-    };
-
-    return stopFallback;
-  };
-
-  const membershipsRef = collection(db, 'teams', teamId, 'memberships');
-
-  const handleSnapshot = (snapshot) => {
-    stopExistingFallback();
-    const members = snapshot.docs.map((docSnap) => ({ uid: docSnap.id, ...(docSnap.data() || {}) }));
-    const normalized = buildMembershipEntries(members);
-    onData?.(normalized);
-  };
-
-  const handleError = (error) => {
-    if (isPermissionDeniedError(error)) {
-      if (!hasRetriedAfterEnsure) {
-        hasRetriedAfterEnsure = true;
-        ensureMembership()
-          .catch(() => {})
-          .finally(() => {
-            if (cancelled) {
-              return;
-            }
-            try {
-              if (typeof unsubscribeRealtime === 'function') {
-                unsubscribeRealtime();
-              }
-              unsubscribeRealtime = onSnapshot(membershipsRef, handleSnapshot, handleError);
-            } catch (retryError) {
-              handleError(retryError);
-            }
-          });
         return;
       }
-      console.warn('listenTeamMemberships permission denied, switching to API fallback');
-      stopExistingFallback();
-      startFallback();
-      return;
-    }
-    logPermissionError('teamMemberships', getUid(), error);
-    onError?.(error);
-  };
 
-  const subscribeRealtime = () => {
-    if (cancelled) {
-      return;
-    }
-    try {
-      if (typeof unsubscribeRealtime === 'function') {
-        unsubscribeRealtime();
-      }
-      unsubscribeRealtime = onSnapshot(membershipsRef, handleSnapshot, handleError);
+      cleanupRestart();
+
+      const { weeklyTasksRef, targetUid, teamId, sessionUid, type } = resolved;
+      cleanupSubscription();
+
+      effectiveContext = {
+        ...(effectiveContext || {}),
+        type: type || effectiveContext?.type || 'personal',
+        userId: targetUid,
+        memberUid: targetUid,
+        ownerUid: targetUid,
+        teamId: teamId || null,
+      };
+
+      let fallbackAttempted = false;
+      const handleError = async (error) => {
+        if (isPermissionDeniedError(error) && !fallbackAttempted) {
+          fallbackAttempted = true;
+          try {
+            const fallbackTasks = await fetchWeeklyTasksFallback(effectiveContext);
+            if (!active) {
+              return;
+            }
+            if (fallbackTasks) {
+              onData?.(fallbackTasks);
+              return;
+            }
+          } catch (fallbackError) {
+            console.error('weeklyTasks fallback failed', fallbackError);
+          }
+        }
+        logPermissionError('weeklyTasks', sessionUid, error);
+        onError?.(error);
+      };
+
+      const handleSnapshot = (snapshot) => {
+        const viewerUid = sessionUid || getUid();
+        const tasks = snapshot.docs
+          .map((docSnap) => normalizeWeeklyTaskDocument(docSnap, targetUid, teamId || null, viewerUid))
+          .filter(Boolean);
+        onData?.(tasks);
+      };
+
+      const rawUnsubscribe = onSnapshot(weeklyTasksRef, handleSnapshot, handleError);
+      unsubscribe = registerPlanningListener(rawUnsubscribe);
     } catch (error) {
-      handleError(error);
-      unsubscribeRealtime = () => {};
+      if (!active) {
+        return;
+      }
+      onError?.(error);
     }
   };
 
-  ensureMembership().finally(() => {
-    if (!cancelled) {
-      subscribeRealtime();
-    }
-  });
+  startSubscription();
 
   return () => {
-    cancelled = true;
-    stopExistingFallback();
-    if (typeof unsubscribeRealtime === 'function') {
-      unsubscribeRealtime();
-    }
+    active = false;
+    cleanupSubscription();
+    cleanupRestart();
   };
 };
 
-export const fetchUserProfile = async (uid) => {
-  if (!uid) {
-    return null;
-  }
-
-  try {
-    const snap = await getDoc(doc(db, 'users', uid));
-    if (!snap.exists()) {
-      return { uid, displayName: null, email: null };
-    }
-    const data = snap.data();
-    return {
-      uid,
-      displayName:
-        data?.name ||
-        data?.displayName ||
-        data?.full_name ||
-        data?.fullName ||
-        null,
-      email: data?.email || null,
-    };
-  } catch (error) {
-    console.error('fetchUserProfile error', error);
-    return { uid, displayName: null, email: null };
-  }
-};
-
-const resolveTasksCollection = (context, viewerUid) => {
-  const effectiveViewer = viewerUid ?? null;
-
-  if (context?.type === 'team') {
-    const { teamId, memberUid } = context;
-    if (!teamId || !memberUid) {
-      return null;
-    }
-    return {
-      collection: collection(db, 'teams', teamId, 'members', memberUid, 'tasks'),
-      path: `teams/${teamId}/members/${memberUid}/tasks`,
-      ownerUid: memberUid,
-      teamId,
-    };
-  }
-
-  if (context?.type === 'personal') {
-    const ownerUid = context.userId || effectiveViewer;
-    if (!ownerUid) {
-      return null;
-    }
-    return {
-      collection: collection(db, 'users', ownerUid, 'tasks'),
-      path: `users/${ownerUid}/tasks`,
-      ownerUid,
-      teamId: null,
-    };
-  }
-
-  if (currentTeamId) {
-    const memberUid = context?.memberUid || effectiveViewer;
-    if (!memberUid) {
-      return null;
-    }
-    return {
-      collection: collection(db, 'teams', currentTeamId, 'members', memberUid, 'tasks'),
-      path: `teams/${currentTeamId}/members/${memberUid}/tasks`,
-      ownerUid: memberUid,
-      teamId: currentTeamId,
-    };
-  }
-
-  const ownerUid = effectiveViewer;
-  if (!ownerUid) {
-    return null;
-  }
-  return {
-    collection: collection(db, 'users', ownerUid, 'tasks'),
-    path: `users/${ownerUid}/tasks`,
-    ownerUid,
-    teamId: null,
-  };
-};
-
-// TASKS (existing function remains unchanged)
-export const saveTask = async (taskData = {}) => {
-  const currentUid = getUid();
-  if (!currentUid) {
-    throw new Error('Utilisateur non connecté');
-  }
-
-  const baseData = {
-    ...taskData,
-    start: normalizeDate(taskData.start),
-    end: normalizeDate(taskData.end),
-    user_id: currentUid,
-    owner_uid: currentUid,
-    team_id: currentTeamId || null,
-    // Only set created_at for new tasks
-    ...(taskData.id ? {} : { created_at: serverTimestamp() }),
-  };
-  const id = taskData.id;
-  delete baseData.id;
-  Object.keys(baseData).forEach((k) => baseData[k] === undefined && delete baseData[k]);
-
-  const context = currentTeamId
-    ? { type: 'team', teamId: currentTeamId, memberUid: currentUid }
-    : { type: 'personal', userId: currentUid };
-  const resolved = resolveTasksCollection(context, currentUid);
-
-  if (!resolved?.collection) {
-    throw new Error("Impossible de déterminer l'emplacement de stockage des tâches");
-  }
-
-  try {
-    if (resolved.teamId) {
-      await ensureTeamMemberContainer(resolved.teamId, currentUid);
-    }
-
-    if (id) {
-      const ref = doc(resolved.collection, id);
-      await setDoc(ref, baseData, { merge: true });
-      return { id, ...baseData };
-    }
-
-    const ref = await addDoc(resolved.collection, baseData);
-    return { id: ref.id, ...baseData };
-  } catch (error) {
-    console.error('saveTask error', resolved.path, error);
-    throw error;
-  }
-};
-
-export const watchTasks = (range, callback, context = null) => {
-  const viewerUid = getUid();
-  if (!range?.from || !range?.to || (!viewerUid && !context?.userId && !context?.memberUid)) {
-    if (unsubTasks) {
-      unsubTasks();
-      unsubTasks = null;
-    }
-    console.log('watchTasks skip: bad range/user');
-    return () => {};
-  }
-  if (unsubTasks) {
-    unsubTasks();
-    unsubTasks = null;
-  }
-
-  const fromDate = normalizeDate(range.from);
-  const toDateVal = normalizeDate(range.to);
-  if (
-    !(fromDate instanceof Date) ||
-    isNaN(fromDate.getTime()) ||
-    !(toDateVal instanceof Date) ||
-    isNaN(toDateVal.getTime())
-  ) {
-    console.log('watchTasks skip: bad range/user');
-    return () => {};
-  }
-
-  const resolved = resolveTasksCollection(context, viewerUid);
-  if (!resolved?.collection) {
-    console.log('watchTasks skip: unresolved collection');
-    return () => {};
-  }
-
-  if (resolved.teamId && viewerUid) {
-    ensureTeamMemberContainer(resolved.teamId, viewerUid).catch(() => {});
-  }
-
-  const fromTimestamp = Timestamp.fromDate(fromDate);
-  const toTimestamp = Timestamp.fromDate(toDateVal);
-
-  let logged = false;
-
-  const q = query(
-    resolved.collection,
-    where('weekly', '!=', true), // Exclure les tâches hebdomadaires
-    where('start', '<=', toTimestamp),
-    orderBy('weekly', 'asc'), // Nécessaire pour la contrainte d'inégalité
-    orderBy('start', 'asc')
-  );
-
-  const unsubRoot = onSnapshot(
-    q,
-    (snapshot) => {
-      if (!logged) {
-        console.log('watchTasks OK', resolved.path);
-        logged = true;
-      }
-      const tasks = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        // Ignorer les tâches hebdomadaires même si elles passent le filtre
-        if (data.weekly === true) return;
-
-        const start =
-          data.start instanceof Timestamp ? data.start.toDate() : data.start;
-        const end = data.end instanceof Timestamp ? data.end.toDate() : data.end;
-        if (end >= fromDate) {
-          const readOnly = viewerUid ? data.user_id !== viewerUid : true;
-          tasks.push({ ...data, id: docSnap.id, start, end, readOnly });
-        }
-      });
-      callback(tasks);
-    },
-    (err) => {
-      logPermissionError(resolved.path, viewerUid, err);
-      callback([]);
-    }
-  );
-
-  unsubTasks = unsubRoot;
-  return unsubRoot;
-};
-
-export const deleteTask = async (taskId) => {
-  try {
-    const currentUid = getUid();
-    if (!currentUid) {
-      throw new Error('Utilisateur non connecté');
-    }
-    const context = currentTeamId
-      ? { type: 'team', teamId: currentTeamId, memberUid: currentUid }
-      : { type: 'personal', userId: currentUid };
-    const resolved = resolveTasksCollection(context, currentUid);
-    if (!resolved?.collection) {
-      throw new Error("Impossible de déterminer l'emplacement de stockage des tâches");
-    }
-    const taskRef = doc(resolved.collection, taskId);
-    await deleteDoc(taskRef);
-  } catch (error) {
-    console.error('Erreur deleteTask:', error);
-    throw error;
-  }
-};
-
-// Utilitaires
 export const getWeekRange = (weekStart) => {
   const start = new Date(weekStart);
   start.setHours(0, 0, 0, 0);
