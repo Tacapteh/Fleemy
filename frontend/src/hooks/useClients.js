@@ -1,6 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
+import { signInWithPopup, signOut } from 'firebase/auth';
 import { apiFetch } from '../lib/api';
-import { useFirebaseUser } from '../firebase';
+import { auth, googleProvider, useFirebaseUser } from '../firebase';
+
+let reauthPromise = null;
+const triggerReauthentication = () => {
+  if (!reauthPromise) {
+    reauthPromise = (async () => {
+      try {
+        await signOut(auth);
+      } catch (signOutError) {
+        console.error('useClients signOut error:', signOutError);
+      }
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (reauthError) {
+        console.error('useClients reauthentication error:', reauthError);
+        throw reauthError;
+      }
+    })().finally(() => {
+      reauthPromise = null;
+    });
+  }
+  return reauthPromise;
+};
 
 /**
  * Hook pour gérer les clients avec pagination et recherche
@@ -60,8 +83,19 @@ export default function useClients(userOrOptions, maybeOptions = {}) {
       setHasMore(result.has_more || false);
     } catch (e) {
       console.error('useClients error:', e);
-      setError(e.message || 'Erreur de chargement des clients');
-      setClients([]);
+      const status = e?.response?.status;
+      if (status === 401 || status === 403) {
+        setError('Session expirée, reconnectez-vous');
+        setClients([]);
+        try {
+          await triggerReauthentication();
+        } catch (reauthError) {
+          console.error('Reauthentication flow failed:', reauthError);
+        }
+      } else {
+        setError(e.message || 'Erreur de chargement des clients');
+        setClients([]);
+      }
     } finally {
       setLoading(false);
     }

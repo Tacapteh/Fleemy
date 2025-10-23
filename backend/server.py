@@ -66,35 +66,33 @@ app = FastAPI()
 # Configurer CORS (après app et après dotenv)
 from fastapi.middleware.cors import CORSMiddleware
 
-# ✅ FIXED pour production: CORS origins explicit + wildcard preview support
-ALLOWED_ORIGINS = {
-    "http://localhost:5173",
-    "https://fleemy.web.app",
-    "https://fleemy-21118.web.app",
-    "https://fleemy.firebaseapp.com",
-    "https://fleemy-21118.firebaseapp.com",
-    "https://fleemy.vercel.app",
-}
-ALLOWED_ORIGIN_REGEX = (
-    r"https://(?:[a-z0-9-]+\.)?fleemy\.vercel\.app$"
-    r"|https://fleemy(?:-[a-z0-9]+)?\.web\.app$"
-    r"|https://fleemy(?:-[a-z0-9]+)?\.firebaseapp\.com$"
-)
-ALLOWED_ORIGIN_PATTERN = re.compile(ALLOWED_ORIGIN_REGEX)
 
-logger.info(
-    "CORS activé pour : %s et regex %s",
-    sorted(ALLOWED_ORIGINS),
-    ALLOWED_ORIGIN_REGEX,
-)
+def _parse_allowed_origins() -> List[str]:
+    raw = os.getenv("CORS_ORIGINS", "")
+    if raw:
+        parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        if parsed:
+            return parsed
+    return ["https://fleemy.vercel.app"]
+
+
+ALLOWED_ORIGINS = _parse_allowed_origins()
+ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With"]
+EXPOSE_HEADERS = ["Location"]
+MAX_AGE = 86400
+ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}
+
+logger.info("CORS activé pour : %s", ALLOWED_ORIGINS)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(ALLOWED_ORIGINS),
-    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS,
+    expose_headers=EXPOSE_HEADERS,
+    max_age=MAX_AGE,
 )
 
 
@@ -157,38 +155,19 @@ from fastapi.exceptions import RequestValidationError
 def _apply_cors_headers(request: Request, response: Response) -> Response:
     """Apply CORS headers consistently on any response when origin allowed."""
     origin = request.headers.get("origin")
-    if origin:
-        if origin in ALLOWED_ORIGINS or ALLOWED_ORIGIN_PATTERN.match(origin):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-            # For preflight responses make sure browsers receive the same
-            # negotiation headers that CORSMiddleware would add. Without these
-            # headers the browser treats the preflight as a failure even if the
-            # origin itself is allowed, which is what happened on production
-            # when FastAPI raised an error before CORSMiddleware handled the
-            # request.
-            if request.method == "OPTIONS":
-                requested_method = request.headers.get("Access-Control-Request-Method")
-                requested_headers = request.headers.get("Access-Control-Request-Headers")
+    if origin and origin in ALLOWED_ORIGIN_SET:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = ", ".join(ALLOWED_METHODS)
+        response.headers["Access-Control-Allow-Headers"] = ", ".join(ALLOWED_HEADERS)
+        response.headers["Access-Control-Expose-Headers"] = ", ".join(EXPOSE_HEADERS)
+        response.headers["Access-Control-Max-Age"] = str(MAX_AGE)
 
-                if requested_method:
-                    response.headers["Access-Control-Allow-Methods"] = requested_method
-                else:
-                    response.headers.setdefault("Access-Control-Allow-Methods", "*")
-
-                if requested_headers:
-                    response.headers["Access-Control-Allow-Headers"] = requested_headers
-                else:
-                    response.headers.setdefault("Access-Control-Allow-Headers", "*")
-
-                response.headers.setdefault("Access-Control-Max-Age", "86400")
-            # Keep compatibility with caches/proxies when varying by origin
-            existing_vary = response.headers.get("Vary")
-            if existing_vary:
-                if "origin" not in existing_vary.lower():
-                    response.headers["Vary"] = f"{existing_vary}, Origin"
-            else:
-                response.headers["Vary"] = "Origin"
+        existing_vary = response.headers.get("Vary")
+        if existing_vary:
+            if "origin" not in existing_vary.lower():
+                response.headers["Vary"] = f"{existing_vary}, Origin"
+        else:
+            response.headers["Vary"] = "Origin"
     return response
 
 
@@ -203,22 +182,11 @@ def _build_cors_error_response(
 @app.options("/{full_path:path}")
 async def handle_preflight(full_path: str, request: Request) -> Response:
     """Handle browser CORS preflight checks with the same policy as CORSMiddleware."""
-    response = Response(status_code=200)
-
-    requested_method = request.headers.get("Access-Control-Request-Method")
-    requested_headers = request.headers.get("Access-Control-Request-Headers")
-
-    if requested_method:
-        response.headers["Access-Control-Allow-Methods"] = requested_method
-    else:
-        response.headers.setdefault("Access-Control-Allow-Methods", "*")
-
-    if requested_headers:
-        response.headers["Access-Control-Allow-Headers"] = requested_headers
-    else:
-        response.headers.setdefault("Access-Control-Allow-Headers", "*")
-
-    response.headers.setdefault("Access-Control-Max-Age", "86400")
+    response = Response(status_code=204)
+    response.headers["Access-Control-Allow-Methods"] = ", ".join(ALLOWED_METHODS)
+    response.headers["Access-Control-Allow-Headers"] = ", ".join(ALLOWED_HEADERS)
+    response.headers["Access-Control-Expose-Headers"] = ", ".join(EXPOSE_HEADERS)
+    response.headers["Access-Control-Max-Age"] = str(MAX_AGE)
     return _apply_cors_headers(request, response)
 
 

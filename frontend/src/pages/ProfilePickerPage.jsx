@@ -21,6 +21,18 @@ const ProfilePickerPage = () => {
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [error, setError] = useState('');
   const [inviteDialogTeam, setInviteDialogTeam] = useState(null);
+  const [contextError, setContextError] = useState('');
+
+  useEffect(() => {
+    const selector = 'meta[http-equiv="Cross-Origin-Opener-Policy"]';
+    let coopMeta = document.head.querySelector(selector);
+    if (!coopMeta) {
+      coopMeta = document.createElement('meta');
+      coopMeta.setAttribute('http-equiv', 'Cross-Origin-Opener-Policy');
+      document.head.prepend(coopMeta);
+    }
+    coopMeta.setAttribute('content', 'same-origin-allow-popups');
+  }, []);
 
   const loadTeams = useCallback(
     async ({ skipSpinner = false } = {}) => {
@@ -81,12 +93,15 @@ const ProfilePickerPage = () => {
       const user = auth.currentUser;
       if (!user) return;
 
+      setContextError('');
+
       await apiFetch('/auth/context', {
         method: 'PUT',
         body: JSON.stringify(contextData),
       });
     } catch (err) {
       console.error('Error updating context:', err);
+      setContextError('Impossible de mettre à jour le contexte (réseau/CORS). Réessayez.');
     }
   };
 
@@ -220,6 +235,12 @@ const ProfilePickerPage = () => {
       {error && (
         <div className="mb-6 p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200 max-w-md">
           {error}
+        </div>
+      )}
+
+      {contextError && (
+        <div className="mb-6 p-4 bg-amber-500/20 border border-amber-400 rounded-lg text-amber-100 max-w-md">
+          {contextError}
         </div>
       )}
 

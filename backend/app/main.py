@@ -1,33 +1,62 @@
 import os
-from fastapi import FastAPI, HTTPException
+from typing import List
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 
-ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "https://fleemy.web.app",
-    "https://fleemy-21118.web.app",
-    "https://fleemy.firebaseapp.com",
-    "https://fleemy-21118.firebaseapp.com",
-    "https://fleemy.vercel.app",
-]
-ALLOWED_ORIGIN_REGEX = (
-    r"https://(?:[a-z0-9-]+\.)?fleemy\.vercel\.app$"
-    r"|https://fleemy(?:-[a-z0-9]+)?\.web\.app$"
-    r"|https://fleemy(?:-[a-z0-9]+)?\.firebaseapp\.com$"
-)
+
+def _parse_allowed_origins() -> List[str]:
+    raw = os.getenv("CORS_ORIGINS", "")
+    if raw:
+        parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
+        if parsed:
+            return parsed
+    return ["https://fleemy.vercel.app"]
+
+
+ALLOWED_ORIGINS = _parse_allowed_origins()
+ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With"]
+EXPOSE_HEADERS = ["Location"]
+MAX_AGE = 86400
+ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=ALLOWED_METHODS,
+    allow_headers=ALLOWED_HEADERS,
+    expose_headers=EXPOSE_HEADERS,
+    max_age=MAX_AGE,
 )
+
+
+@app.middleware("http")
+async def ensure_vary_origin(request, call_next):
+    response = await call_next(request)
+    origin = request.headers.get("origin")
+    if origin and origin in ALLOWED_ORIGIN_SET:
+        vary = response.headers.get("Vary")
+        if vary:
+            if "origin" not in vary.lower():
+                response.headers["Vary"] = f"{vary}, Origin"
+        else:
+            response.headers["Vary"] = "Origin"
+    return response
+
+
+@app.options("/{rest_of_path:path}")
+async def handle_options(rest_of_path: str):
+    response = Response(status_code=204)
+    response.headers["Access-Control-Allow-Methods"] = ", ".join(ALLOWED_METHODS)
+    response.headers["Access-Control-Allow-Headers"] = ", ".join(ALLOWED_HEADERS)
+    response.headers["Access-Control-Expose-Headers"] = ", ".join(EXPOSE_HEADERS)
+    response.headers["Access-Control-Max-Age"] = str(MAX_AGE)
+    return response
 
 class TranslateRequest(BaseModel):
     html: str

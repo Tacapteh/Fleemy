@@ -1,6 +1,16 @@
 import { auth } from "../firebase";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const RETRY_DELAYS = [0, 250, 500, 1000];
+
+const wait = (delay: number) =>
+  new Promise((resolve) => {
+    if (delay <= 0) {
+      resolve(null);
+      return;
+    }
+    setTimeout(resolve, delay);
+  });
 
 function buildApiUrl(path: string) {
   const baseUrl = API_URL.replace(/\/$/, "");
@@ -18,6 +28,34 @@ function buildApiUrl(path: string) {
   return `${rootUrl}${finalPath}`;
 }
 
+const shouldAttachJsonContentType = (body: BodyInit | null | undefined) => {
+  if (body == null) {
+    return false;
+  }
+
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    return false;
+  }
+  if (typeof Blob !== "undefined" && body instanceof Blob) {
+    return false;
+  }
+  if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams) {
+    return false;
+  }
+  if (typeof ArrayBuffer !== "undefined" && body instanceof ArrayBuffer) {
+    return false;
+  }
+  if (
+    typeof ArrayBuffer !== "undefined" &&
+    typeof DataView !== "undefined" &&
+    (body instanceof DataView || ArrayBuffer.isView(body))
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 type ApiError = Error & {
   response?: {
     status: number;
@@ -26,76 +64,122 @@ type ApiError = Error & {
   };
 };
 
+const ensureAuthHeaders = async (
+  headers: Headers,
+  forceRefresh: boolean,
+): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) {
+    return;
+  }
+
+  try {
+    const token = await user.getIdToken(forceRefresh);
+    headers.set("Authorization", `Bearer ${token}`);
+  } catch (tokenError) {
+    if (!forceRefresh && auth.currentUser) {
+      const refreshedToken = await auth.currentUser.getIdToken(true);
+      headers.set("Authorization", `Bearer ${refreshedToken}`);
+      return;
+    }
+    throw tokenError;
+  }
+};
+
 export async function apiFetch(
   path: string,
   options: RequestInit = {},
 ): Promise<any> {
   const method = (options.method || "GET").toUpperCase();
-  const baseHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as any),
-  };
   const url = buildApiUrl(path);
+  const headersInit = options.headers as HeadersInit | undefined;
+  const baseOptions: RequestInit = {
+    ...options,
+    method,
+  };
 
-  const performFetch = async (forceRefresh = false): Promise<Response> => {
-    const headers = { ...baseHeaders };
+  let lastNetworkError: Error | null = null;
 
-    if (auth.currentUser) {
-      try {
-        const token = await auth.currentUser.getIdToken(forceRefresh);
-        headers["Authorization"] = `Bearer ${token}`;
-      } catch (tokenError) {
-        if (!forceRefresh && auth.currentUser) {
-          const refreshedToken = await auth.currentUser.getIdToken(true);
-          headers["Authorization"] = `Bearer ${refreshedToken}`;
-        } else {
-          throw tokenError;
-        }
-      }
+  const attemptFetch = async (forceRefreshToken: boolean) => {
+    const headers = new Headers(headersInit || undefined);
+    headers.set("X-Requested-With", "XMLHttpRequest");
+
+    if (shouldAttachJsonContentType(baseOptions.body) && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
     }
 
+    await ensureAuthHeaders(headers, forceRefreshToken);
+
     return fetch(url, {
-      ...options,
-      method,
+      ...baseOptions,
       headers,
+      mode: "cors",
     });
   };
 
-  let res = await performFetch();
-
-  if (res.status === 401 && auth.currentUser) {
-    res = await performFetch(true);
-  }
-
-  const contentType = res.headers.get("content-type") || "";
-  const isJson = contentType.includes("application/json");
-  let data: unknown = null;
-
-  if (isJson) {
-    try {
-      data = await res.json();
-    } catch (error) {
-      data = null;
+  for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt += 1) {
+    const delay = RETRY_DELAYS[attempt];
+    if (delay > 0) {
+      await wait(delay);
     }
-  } else {
-    data = await res.text();
+
+    try {
+      let response = await attemptFetch(false);
+
+      if (response.status === 401 && auth.currentUser) {
+        response = await attemptFetch(true);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+      let data: unknown = null;
+
+      if (isJson) {
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          data = null;
+        }
+      } else {
+        data = await response.text();
+      }
+
+      if (!response.ok) {
+        console.error("apiFetch error", { method, url, status: response.status }, data);
+        const message =
+          (typeof data === "object" && data && (data as any).detail) ||
+          (typeof data === "string" && data) ||
+          response.statusText ||
+          "Request failed";
+        const error = new Error(message) as ApiError;
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+          data,
+        };
+        throw error;
+      }
+
+      return data;
+    } catch (error: any) {
+      if (error instanceof TypeError || error?.name === "TypeError") {
+        lastNetworkError = error as Error;
+        console.error("apiFetch network error", {
+          method,
+          url,
+          attempt: attempt + 1,
+        }, error);
+        continue;
+      }
+      throw error;
+    }
   }
 
-  if (!res.ok) {
-    const message =
-      (typeof data === "object" && data && (data as any).detail) ||
-      res.statusText ||
-      "Request failed";
-    const error = new Error(message) as ApiError;
-    error.response = {
-      status: res.status,
-      statusText: res.statusText,
-      data,
-    };
-    throw error;
+  const unreachableError = new Error("API unreachable (CORS or network)") as ApiError;
+  if (lastNetworkError) {
+    (unreachableError as any).cause = lastNetworkError;
   }
-
-  return data;
+  throw unreachableError;
 }
 
 export async function translateHtml(html: string, target: string) {
