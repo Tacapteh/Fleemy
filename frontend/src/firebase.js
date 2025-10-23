@@ -661,6 +661,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     }
 
     const constraints = [
+      where('owner_uid', '==', ownerUid),
       where('start', '>=', Timestamp.fromDate(fromDate)),
       where('start', '<=', Timestamp.fromDate(toDate)),
       orderBy('start', 'asc'),

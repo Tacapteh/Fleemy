@@ -41,6 +41,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "planningEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "owner_uid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "start",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
