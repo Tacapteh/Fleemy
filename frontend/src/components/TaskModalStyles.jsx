@@ -5,21 +5,24 @@ const TaskModalStyles = () => (
     .task-form-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(6px);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 24px;
       z-index: 1000;
     }
 
     .task-form-modal {
-      background: #ffffff;
-      border-radius: 12px;
-      width: min(520px, 100%);
-      max-height: 90vh;
-      overflow-y: auto;
-      box-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 35%);
+      border-radius: 16px;
+      width: min(640px, 100%);
+      max-height: 88vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 40px 80px rgba(15, 23, 42, 0.18);
       border: 1px solid rgba(148, 163, 184, 0.35);
       animation: task-form-pop 0.25s ease-out;
     }
@@ -28,12 +31,12 @@ const TaskModalStyles = () => (
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 20px 24px;
+      padding: 24px 28px;
       border-bottom: 1px solid #e2e8f0;
       position: sticky;
       top: 0;
-      background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(4px);
+      background: rgba(248, 250, 252, 0.95);
+      backdrop-filter: blur(6px);
       z-index: 1;
     }
 
@@ -62,10 +65,13 @@ const TaskModalStyles = () => (
     }
 
     .task-form {
-      padding: 24px;
+      flex: 1;
+      padding: 28px;
       display: flex;
       flex-direction: column;
       gap: 20px;
+      overflow-y: auto;
+      background: #ffffff;
     }
 
     .task-form-info {
@@ -138,11 +144,16 @@ const TaskModalStyles = () => (
     .task-form-icon {
       background: #f3f4f6;
       border: 2px solid transparent;
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 10px;
       cursor: pointer;
       font-size: 18px;
       transition: all 0.15s ease-in-out;
+      min-width: 44px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .task-form-icon:hover {
@@ -160,7 +171,7 @@ const TaskModalStyles = () => (
       border-radius: 50%;
       border: 3px solid transparent;
       cursor: pointer;
-      transition: transform 0.15s ease-in-out, border-color 0.15s ease-in-out;
+      transition: transform 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
     }
 
     .task-form-color:hover {
@@ -169,6 +180,24 @@ const TaskModalStyles = () => (
 
     .task-form-color.selected {
       border-color: #1f2937;
+      box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.15);
+    }
+
+    .task-form-icon:disabled,
+    .task-form-color:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .task-form-icon.selected:disabled,
+    .task-form-color.selected:disabled {
+      opacity: 0.65;
+    }
+
+    .task-form-helper {
+      margin-top: 6px;
+      font-size: 0.85rem;
+      color: #64748b;
     }
 
     .time-ranges-list {
