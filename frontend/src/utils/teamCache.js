@@ -106,6 +106,22 @@ const cacheTeamsFromResponse = (data) => {
 };
 
 const fetchAndCacheTeams = async (fetcher) => {
+  let primaryError = null;
+  let primaryResult = null;
+
+  if (typeof fetcher === 'function') {
+    try {
+      const data = await fetcher();
+      const result = cacheTeamsFromResponse(data);
+      primaryResult = { ...result, viaApi: true };
+      if (result.success) {
+        return primaryResult;
+      }
+    } catch (error) {
+      primaryError = error;
+    }
+  }
+
   try {
     const fallbackTeams = await fetchUserTeamsFromFirestore();
     const fallbackPayload = {
@@ -116,18 +132,18 @@ const fetchAndCacheTeams = async (fetcher) => {
     const result = cacheTeamsFromResponse(fallbackPayload);
     return { ...result, viaFirestore: true };
   } catch (firestoreError) {
-    if (typeof fetcher !== 'function') {
-      throw firestoreError;
+    clearTeamsCache();
+
+    if (primaryResult) {
+      return primaryResult;
     }
 
-    try {
-      const data = await fetcher();
-      return cacheTeamsFromResponse(data);
-    } catch (primaryError) {
-      clearTeamsCache();
+    if (primaryError) {
       primaryError.fallbackError = firestoreError;
       throw primaryError;
     }
+
+    throw firestoreError;
   }
 };
 
