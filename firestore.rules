@@ -4,6 +4,21 @@ service cloud.firestore {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
+      match /planningEvents/{eventId} {
+        allow read: if
+          matchesPlanningOwner(uid) &&
+          matchesPlanningTeam(null) &&
+          canReadPlanningFor(uid, null);
+        allow create, update: if
+          matchesPlanningOwner(uid) &&
+          matchesPlanningTeam(null) &&
+          canWritePlanningFor(uid);
+        allow delete: if
+          matchesPlanningOwner(uid) &&
+          matchesPlanningTeam(null) &&
+          canWritePlanningFor(uid);
+      }
+
       match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
@@ -30,6 +45,65 @@ service cloud.firestore {
           )
         )
       );
+    }
+
+    function normalizeIdentifier(value) {
+      return value is string && value.size() > 0 ? value : null;
+    }
+
+    function planningOwnerFromData(defaultUid) {
+      let owner = null;
+      if (request.resource != null) {
+        owner = normalizeIdentifier(request.resource.data.owner_uid);
+        if (owner == null) {
+          owner = normalizeIdentifier(request.resource.data.user_id);
+        }
+      }
+      if (owner == null && resource != null) {
+        owner = normalizeIdentifier(resource.data.owner_uid);
+        if (owner == null) {
+          owner = normalizeIdentifier(resource.data.user_id);
+        }
+      }
+      return owner != null ? owner : defaultUid;
+    }
+
+    function planningTeamFromData(defaultTeamId) {
+      let teamId = null;
+      if (request.resource != null) {
+        teamId = normalizeIdentifier(request.resource.data.team_id);
+      }
+      if (teamId == null && resource != null) {
+        teamId = normalizeIdentifier(resource.data.team_id);
+      }
+      return teamId != null ? teamId : defaultTeamId;
+    }
+
+    function matchesPlanningOwner(expectedOwner) {
+      return planningOwnerFromData(expectedOwner) == expectedOwner;
+    }
+
+    function matchesPlanningTeam(expectedTeamId) {
+      let teamId = planningTeamFromData(expectedTeamId);
+      if (expectedTeamId == null) {
+        return teamId == null;
+      }
+      return teamId == expectedTeamId;
+    }
+
+    function canWritePlanningFor(ownerUid) {
+      return isAuthenticated() && request.auth.uid == ownerUid;
+    }
+
+    function canReadPlanningFor(ownerUid, expectedTeamId) {
+      if (!isAuthenticated()) {
+        return false;
+      }
+      if (request.auth.uid == ownerUid) {
+        return true;
+      }
+      let teamId = planningTeamFromData(expectedTeamId);
+      return teamId is string && teamId.size() > 0 && isTeamMember(teamId);
     }
 
     match /clients/{clientId} {
@@ -63,11 +137,26 @@ service cloud.firestore {
       match /members/{memberUid} {
         allow read: if isTeamMember(teamId) || (isAuthenticated() && request.auth.uid == memberUid);
         allow write: if isAuthenticated() && request.auth.uid == memberUid;
-      }
 
-      match /members/{memberUid}/{document=**} {
-        allow read: if isTeamMember(teamId) || (isAuthenticated() && request.auth.uid == memberUid);
-        allow write: if isAuthenticated() && request.auth.uid == memberUid;
+        match /planningEvents/{eventId} {
+          allow read: if
+            matchesPlanningOwner(memberUid) &&
+            matchesPlanningTeam(teamId) &&
+            canReadPlanningFor(memberUid, teamId);
+          allow create, update: if
+            matchesPlanningOwner(memberUid) &&
+            matchesPlanningTeam(teamId) &&
+            canWritePlanningFor(memberUid);
+          allow delete: if
+            matchesPlanningOwner(memberUid) &&
+            matchesPlanningTeam(teamId) &&
+            canWritePlanningFor(memberUid);
+        }
+
+        match /{document=**} {
+          allow read: if isTeamMember(teamId) || (isAuthenticated() && request.auth.uid == memberUid);
+          allow write: if isAuthenticated() && request.auth.uid == memberUid;
+        }
       }
     }
   }
