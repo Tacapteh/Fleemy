@@ -2,14 +2,164 @@ import React, { useState, useEffect, useMemo } from 'react';
 import '../styles/MonthCalendar.css';
 import {
   watchPlanningEventsInRange,
-  watchTasks,
+  watchWeeklyTasksForContext,
   getMonthRange,
   useFirebaseUser,
 } from '../firebase';
+
+const DAY_NAME_TO_INDEX = {
+  monday: 0,
+  mon: 0,
+  lundi: 0,
+  tuesday: 1,
+  tue: 1,
+  mardi: 1,
+  wednesday: 2,
+  wed: 2,
+  mercredi: 2,
+  thursday: 3,
+  thu: 3,
+  th: 3,
+  jeudi: 3,
+  friday: 4,
+  fri: 4,
+  vendredi: 4,
+  saturday: 5,
+  sat: 5,
+  samedi: 5,
+  sunday: 6,
+  sun: 6,
+  dimanche: 6,
+};
+
+const toDayIndex = (value) => {
+  if (typeof value === 'number' && value >= 0 && value <= 6) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim().toLowerCase();
+
+    if (/^\d+$/.test(trimmed)) {
+      const asNumber = parseInt(trimmed, 10);
+      if (!Number.isNaN(asNumber)) {
+        if (asNumber >= 0 && asNumber <= 6) return asNumber;
+        if (asNumber >= 1 && asNumber <= 7) return (asNumber + 6) % 7;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(DAY_NAME_TO_INDEX, trimmed)) {
+      return DAY_NAME_TO_INDEX[trimmed];
+    }
+
+    const asDate = new Date(value);
+    if (!Number.isNaN(asDate.getTime())) {
+      return (asDate.getDay() + 6) % 7;
+    }
+  }
+
+  return null;
+};
+
+const parseTime = (timeStr) => {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return { hours, minutes };
+};
+
+const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
+  if (!Array.isArray(weeklyTasks)) {
+    return [];
+  }
+  if (!range?.from || !range?.to) {
+    return [];
+  }
+
+  const startDate = new Date(range.from);
+  const endDate = new Date(range.to);
+
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return [];
+  }
+
+  startDate.setHours(0, 0, 0, 0);
+  endDate.setHours(23, 59, 59, 999);
+
+  if (startDate > endDate) {
+    return [];
+  }
+
+  const occurrences = [];
+
+  weeklyTasks.forEach((task) => {
+    if (!task || !Array.isArray(task.time_ranges)) {
+      return;
+    }
+
+    task.time_ranges.forEach((slot, index) => {
+      const dayValue = slot?.day ?? slot?.dayIndex ?? slot?.weekday;
+      const dayIndex = toDayIndex(dayValue);
+      const startTime = parseTime(slot?.start);
+      const endTime = parseTime(slot?.end);
+
+      if (dayIndex === null || !startTime || !endTime) {
+        return;
+      }
+
+      const firstOccurrence = new Date(startDate);
+      while ((firstOccurrence.getDay() + 6) % 7 !== dayIndex && firstOccurrence <= endDate) {
+        firstOccurrence.setDate(firstOccurrence.getDate() + 1);
+      }
+
+      if (firstOccurrence > endDate) {
+        return;
+      }
+
+      for (
+        let current = new Date(firstOccurrence);
+        current <= endDate;
+        current.setDate(current.getDate() + 7)
+      ) {
+        const taskStart = new Date(current);
+        taskStart.setHours(startTime.hours, startTime.minutes, 0, 0);
+
+        const taskEnd = new Date(current);
+        taskEnd.setHours(endTime.hours, endTime.minutes, 0, 0);
+
+        if (taskEnd <= taskStart) {
+          continue;
+        }
+
+        occurrences.push({
+          id: `${task.id || 'task'}:${index}:${taskStart.toISOString()}`,
+          taskId: task.id,
+          start: taskStart,
+          end: taskEnd,
+          title: task.title || task.label || 'Tâche',
+          label: task.label || task.title || 'Tâche',
+          icon: task.icon || '📋',
+          color: task.color || '#10b981',
+          type: task.type || 'task',
+          status: task.status || 'task',
+          readOnly: Boolean(task.readOnly),
+          weekly: true,
+          originalTask: task,
+        });
+      }
+    });
+  });
+
+  occurrences.sort((a, b) => a.start - b.start);
+
+  return occurrences;
+};
 function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, context }) {
   const user = useFirebaseUser();
   const [events, setEvents] = useState([]);
-  const [tasks, setTasks] = useState([]);
   const [eventsByDay, setEventsByDay] = useState({});
   const [tasksByDay, setTasksByDay] = useState({});
 
@@ -89,43 +239,62 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
 
   // Watch tasks - seulement si user connecté
   useEffect(() => {
-    if (!user) {
-      setTasks([]);
+    if (!user || !context) {
       setTasksByDay({});
-      return;
+      return () => {};
     }
 
     if (!monthRange?.from || !monthRange?.to) {
-      setTasks([]);
       setTasksByDay({});
-      return;
+      return () => {};
     }
 
-    if (context && context.type === 'team' && !context.memberUid) {
-      setTasks([]);
+    if (context.type === 'team' && !context.memberUid) {
       setTasksByDay({});
-      return;
+      return () => {};
     }
 
-    const unsubscribe = watchTasks(monthRange, (newTasks) => {
-      setTasks(newTasks);
+    let active = true;
 
-      // Organiser les tâches par jour
-      const byDay = {};
-      newTasks.forEach(task => {
-        const taskDate = new Date(task.start);
-        const dayKey = `${taskDate.getFullYear()}-${taskDate.getMonth()}-${taskDate.getDate()}`;
-
-        if (!byDay[dayKey]) {
-          byDay[dayKey] = [];
+    const unsubscribe = watchWeeklyTasksForContext(
+      context,
+      (weeklyTasksList) => {
+        if (!active) {
+          return;
         }
-        byDay[dayKey].push(task);
-      });
 
-      setTasksByDay(byDay);
-    }, context);
+        const occurrences = expandWeeklyTasksToMonthRange(weeklyTasksList, monthRange);
+        const byDay = {};
+        occurrences.forEach((taskItem) => {
+          const taskDate = new Date(taskItem.start);
+          if (Number.isNaN(taskDate.getTime())) {
+            return;
+          }
+          const dayKey = `${taskDate.getFullYear()}-${taskDate.getMonth()}-${taskDate.getDate()}`;
 
-    return unsubscribe;
+          if (!byDay[dayKey]) {
+            byDay[dayKey] = [];
+          }
+          byDay[dayKey].push(taskItem);
+        });
+
+        setTasksByDay(byDay);
+      },
+      (error) => {
+        if (!active) {
+          return;
+        }
+        console.error('watchWeeklyTasksForContext month view error', error);
+        setTasksByDay({});
+      }
+    );
+
+    return () => {
+      active = false;
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [user, monthRange, contextKey, context]);
 
   const handleSelect = (value) => {

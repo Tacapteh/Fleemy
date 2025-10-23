@@ -552,6 +552,100 @@ export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
 };
 
+export const listenTeamMemberships = (teamId, onData, onError) => {
+  if (!teamId) {
+    onData?.([]);
+    return () => {};
+  }
+
+  let unsubscribe = null;
+  let active = true;
+  let fallbackAttempted = false;
+
+  const cleanup = () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  };
+
+  const fetchFallbackMembers = async () => {
+    try {
+      const apiFetch = await getApiFetch();
+      const response = await apiFetch(`/teams/${teamId}/memberships`);
+      if (!active) {
+        return null;
+      }
+      const members = Array.isArray(response?.members) ? response.members : [];
+      onData?.(members);
+      return members;
+    } catch (error) {
+      console.error('listenTeamMemberships fallback error', error);
+      return null;
+    }
+  };
+
+  const handleError = async (error) => {
+    if (!active) {
+      return;
+    }
+
+    if (isPermissionDeniedError(error) && !fallbackAttempted) {
+      fallbackAttempted = true;
+      const fallbackMembers = await fetchFallbackMembers();
+      if (fallbackMembers) {
+        return;
+      }
+    }
+
+    logPermissionError(`teams/${teamId}/memberships`, getUid(), error, { level: 'warn', toast: false });
+    onError?.(error);
+  };
+
+  const handleSnapshot = (snapshot) => {
+    if (!active) {
+      return;
+    }
+    const members = snapshot.docs.map((docSnap) => {
+      const data = docSnap.data() || {};
+      return {
+        uid: docSnap.id,
+        displayName: data.displayName || data.name || null,
+        email: data.email || null,
+        ...data,
+      };
+    });
+    onData?.(members);
+  };
+
+  const start = async () => {
+    try {
+      await waitForAuth();
+      const currentUser = auth.currentUser;
+      const currentUid = currentUser?.uid || null;
+      if (currentUid) {
+        await ensureTeamMemberContainer(teamId, currentUid, { suppressErrors: true });
+      }
+    } catch (error) {
+      console.warn('listenTeamMemberships ensure container error', error);
+    }
+
+    try {
+      const membersRef = collection(db, 'teams', teamId, 'memberships');
+      unsubscribe = onSnapshot(membersRef, handleSnapshot, handleError);
+    } catch (error) {
+      await handleError(error);
+    }
+  };
+
+  start();
+
+  return () => {
+    active = false;
+    cleanup();
+  };
+};
+
 // Utilitaire pour normaliser les dates
 const normalizeDate = (date) => {
   if (!date) return null;
@@ -838,6 +932,113 @@ const normalizeWeeklyTaskDocument = (docSnap, ownerUid, teamId, viewerUid) => {
   return normalizeWeeklyTaskData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
 };
 
+const normalizeWeeklyTaskTimeString = (value) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parts = value.split(":");
+  if (parts.length < 2) {
+    return null;
+  }
+  const hours = Number.parseInt(parts[0], 10);
+  const minutes = Number.parseInt(parts[1], 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return null;
+  }
+  const clampedHours = Math.max(0, Math.min(hours, 23));
+  const clampedMinutes = Math.max(0, Math.min(minutes, 59));
+  return `${String(clampedHours).padStart(2, "0")}:${String(clampedMinutes).padStart(2, "0")}`;
+};
+
+const sanitizeWeeklyTaskTimeRanges = (ranges) => {
+  if (!Array.isArray(ranges)) {
+    return [];
+  }
+
+  return ranges
+    .map((range) => {
+      if (!range) {
+        return null;
+      }
+      const rawDay = range.day ?? range.dayIndex ?? range.weekday;
+      const day =
+        typeof rawDay === "number"
+          ? rawDay
+          : Number.isFinite(Number.parseInt(rawDay, 10))
+          ? Number.parseInt(rawDay, 10)
+          : null;
+      if (day == null || Number.isNaN(day) || day < 0 || day > 6) {
+        return null;
+      }
+
+      const start = normalizeWeeklyTaskTimeString(range.start);
+      const end = normalizeWeeklyTaskTimeString(range.end);
+
+      if (!start || !end) {
+        return null;
+      }
+
+      const [startH, startM] = start.split(":").map((value) => Number.parseInt(value, 10));
+      const [endH, endM] = end.split(":").map((value) => Number.parseInt(value, 10));
+      const startMinutes = startH * 60 + startM;
+      const endMinutes = endH * 60 + endM;
+      if (endMinutes <= startMinutes) {
+        return null;
+      }
+
+      return { day, start, end };
+    })
+    .filter(Boolean);
+};
+
+const normalizeWeeklyTaskPrice = (value) => {
+  if (value == null || value === "") {
+    return null;
+  }
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => {
+  const rawLabel = typeof taskData?.label === "string" ? taskData.label.trim() : "";
+  const rawTitle = typeof taskData?.title === "string" ? taskData.title.trim() : "";
+
+  const label = rawLabel || rawTitle || "Tâche sans titre";
+  const title = rawTitle || rawLabel || "Tâche sans titre";
+
+  const payload = {
+    label,
+    title,
+    price: normalizeWeeklyTaskPrice(taskData?.price),
+    color: taskData?.color || null,
+    icon: taskData?.icon || null,
+    time_ranges: sanitizedRanges,
+    weekly: true,
+    owner_uid: ownerUid,
+    user_id: ownerUid,
+    team_id: teamId || null,
+    updated_at: serverTimestamp(),
+  };
+
+  if (payload.icon == null) {
+    delete payload.icon;
+  }
+  if (payload.color == null || payload.color === "") {
+    delete payload.color;
+  }
+
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) {
+      delete payload[key];
+    }
+  });
+
+  return payload;
+};
+
 const toIsoDateString = (value) => {
   const date = toDateSafe(value);
   if (!date) {
@@ -923,6 +1124,16 @@ const fetchWeeklyTasksFallback = async (context) => {
   } catch (error) {
     console.error('fetchWeeklyTasksFallback error', error);
     throw error;
+  }
+};
+
+export const fetchWeeklyTasksOnce = async (context) => {
+  try {
+    const tasks = await fetchWeeklyTasksFallback(context);
+    return Array.isArray(tasks) ? tasks : [];
+  } catch (error) {
+    console.warn('fetchWeeklyTasksOnce error', error);
+    return [];
   }
 };
 
@@ -1224,6 +1435,89 @@ export const deleteEventNew = async (context, eventId) => {
 
   const eventsCollection = collection(db, 'users', sessionUid, 'planningEvents');
   await deleteDoc(doc(eventsCollection, eventId));
+};
+
+
+export const saveWeeklyTask = async (context, taskData = {}) => {
+  if (!taskData || typeof taskData !== 'object') {
+    throw new Error('Données de tâche hebdomadaire invalides');
+  }
+
+  const resolved = await ensurePlanningContext(context);
+  if (!resolved || resolved.status === 'deferred') {
+    throw new Error('Utilisateur non connecté');
+  }
+
+  const { weeklyTasksRef, sessionUid, readOnly, teamId } = resolved;
+  if (!sessionUid) {
+    throw new Error('Utilisateur non connecté');
+  }
+  if (readOnly) {
+    throw new Error('Contexte planning accessible uniquement en lecture');
+  }
+
+  const sanitizedRanges = sanitizeWeeklyTaskTimeRanges(taskData.time_ranges);
+  if (!sanitizedRanges.length) {
+    throw new Error('Au moins un créneau horaire valide est requis');
+  }
+
+  const payload = buildWeeklyTaskPayload(taskData, sessionUid, teamId || null, sanitizedRanges);
+
+  try {
+    if (taskData.id) {
+      const docRef = doc(weeklyTasksRef, taskData.id);
+      await setDoc(docRef, payload, { merge: true });
+      return normalizeWeeklyTaskData(
+        taskData.id,
+        { ...taskData, ...payload, time_ranges: sanitizedRanges },
+        sessionUid,
+        teamId || null,
+        sessionUid,
+      );
+    }
+
+    const docRef = await addDoc(weeklyTasksRef, {
+      ...payload,
+      created_at: serverTimestamp(),
+    });
+
+    return normalizeWeeklyTaskData(
+      docRef.id,
+      { ...taskData, ...payload, time_ranges: sanitizedRanges },
+      sessionUid,
+      teamId || null,
+      sessionUid,
+    );
+  } catch (error) {
+    logPermissionError('weeklyTasks', sessionUid, error);
+    throw error;
+  }
+};
+
+export const deleteWeeklyTask = async (context, taskId) => {
+  if (!taskId) {
+    throw new Error('Identifiant de la tâche requis');
+  }
+
+  const resolved = await ensurePlanningContext(context);
+  if (!resolved || resolved.status === 'deferred') {
+    throw new Error('Utilisateur non connecté');
+  }
+
+  const { weeklyTasksRef, sessionUid, readOnly } = resolved;
+  if (!sessionUid) {
+    throw new Error('Utilisateur non connecté');
+  }
+  if (readOnly) {
+    throw new Error('Contexte planning accessible uniquement en lecture');
+  }
+
+  try {
+    await deleteDoc(doc(weeklyTasksRef, taskId));
+  } catch (error) {
+    logPermissionError('weeklyTasks', sessionUid, error);
+    throw error;
+  }
 };
 
 
