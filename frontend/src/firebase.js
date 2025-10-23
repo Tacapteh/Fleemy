@@ -750,15 +750,16 @@ const ensurePlanningContext = async (context) => {
     }
   }
 
-  const readOnly = Boolean(ownerUid && ownerUid !== sessionUid);
-  let planningCollectionPath = `users/${targetUid}/planningEvents`;
-  let baseRef = collection(db, 'users', targetUid, 'planningEvents');
-  let weeklyTasksRef = collection(db, 'users', targetUid, 'weeklyTasks');
+  const viewingOwnData = targetUid === sessionUid;
+  const readOnly = !viewingOwnData;
+  let planningCollectionPath = null;
+  let baseRef = null;
+  let weeklyTasksRef = null;
 
-  if (contextType === 'team' && teamId && memberUid) {
-    planningCollectionPath = `teams/${teamId}/members/${memberUid}/planningEvents`;
-    baseRef = collection(db, 'teams', teamId, 'members', memberUid, 'planningEvents');
-    weeklyTasksRef = collection(db, 'teams', teamId, 'members', memberUid, 'weeklyTasks');
+  if (viewingOwnData) {
+    planningCollectionPath = `users/${sessionUid}/planningEvents`;
+    baseRef = collection(db, 'users', sessionUid, 'planningEvents');
+    weeklyTasksRef = collection(db, 'users', sessionUid, 'weeklyTasks');
   }
 
   return {
@@ -1215,11 +1216,8 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     if (resolved.planningCollectionPath) {
       return resolved.planningCollectionPath;
     }
-    if (resolved.type === 'team' && resolved.teamId && resolved.memberUid) {
-      return `teams/${resolved.teamId}/members/${resolved.memberUid}/planningEvents`;
-    }
-    const uid = resolved.targetUid || resolved.ownerUid;
-    return uid ? `users/${uid}/planningEvents` : null;
+    const viewerUid = resolved.sessionUid || getUid();
+    return viewerUid ? `users/${viewerUid}/planningEvents` : null;
   };
 
   const startSubscription = async () => {
@@ -1245,14 +1243,9 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       cleanupRestart();
 
       const { baseRef, targetUid, sessionUid, readOnly, teamId, type, memberUid: resolvedMemberUid } = resolved;
-      const path = pathForResolvedContext(resolved) || `users/${targetUid}/planningEvents`;
-      const viewerUid = sessionUid || getUid();
+      const path = pathForResolvedContext(resolved);
 
-      const pathIsUserPlanningCollection = typeof path === 'string' && path.startsWith('users/');
-      const shouldUseFallbackOnly =
-        pathIsUserPlanningCollection &&
-        targetUid &&
-        (!viewerUid || targetUid !== viewerUid);
+      const shouldUseFallbackOnly = !baseRef;
 
       cleanupSubscription();
 
@@ -1279,6 +1272,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         targetUid,
         path,
         readOnly,
+        realtime: !shouldUseFallbackOnly,
       });
 
       if (shouldUseFallbackOnly) {
@@ -1306,17 +1300,18 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         onData?.(events);
       };
 
-        const handleError = async (error) => {
-          const isPermissionIssue = isPermissionDeniedError(error);
-          logPermissionError(path, sessionUid || getUid(), error, { toast: false, level: 'warn' });
-          const logFn = isPermissionIssue ? console.warn : console.error;
-          logFn('onSnapshot planningEvents', { path, targetUid }, error);
-          if (isPermissionIssue) {
-            try {
-              const fallbackEvents = await fetchPlanningEventsFallback(
-                effectiveContext,
-                fromDate,
-                toDate,
+      const handleError = async (error) => {
+        const isPermissionIssue = isPermissionDeniedError(error);
+        const logPath = path || 'planningEvents';
+        logPermissionError(logPath, sessionUid || getUid(), error, { toast: false, level: 'warn' });
+        const logFn = isPermissionIssue ? console.warn : console.error;
+        logFn('onSnapshot planningEvents', { path: logPath, targetUid }, error);
+        if (isPermissionIssue) {
+          try {
+            const fallbackEvents = await fetchPlanningEventsFallback(
+              effectiveContext,
+              fromDate,
+              toDate,
             );
             if (!active) {
               return;
@@ -1636,11 +1631,7 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
         teamId: teamId || null,
       };
 
-      const viewerUid = sessionUid || getUid();
-      const shouldUseFallbackOnly =
-        !teamId &&
-        targetUid &&
-        (!viewerUid || targetUid !== viewerUid);
+      const shouldUseFallbackOnly = !weeklyTasksRef;
 
       if (shouldUseFallbackOnly) {
         try {
