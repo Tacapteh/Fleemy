@@ -82,7 +82,13 @@ const timeStringToMinutes = (time) => {
   }
   const hours = Number.parseInt(parts[0], 10);
   const minutes = Number.parseInt(parts[1], 10);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  if (hours === 24) {
+    return minutes === 0 ? 24 * 60 : null;
+  }
+  if (hours < 0 || hours > 23) {
     return null;
   }
   return hours * 60 + minutes;

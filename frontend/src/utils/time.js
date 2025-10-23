@@ -19,8 +19,12 @@ export const timeToMinutes = (timeStr) => {
   const hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
   
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return 0;
-  
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes < 0 || minutes > 59) return 0;
+  if (hours === 24) {
+    return minutes === 0 ? 24 * 60 : 0;
+  }
+  if (hours < 0 || hours > 23) return 0;
+
   return hours * 60 + minutes;
 };
 
