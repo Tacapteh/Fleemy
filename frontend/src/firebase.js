@@ -787,10 +787,18 @@ const ensurePlanningContext = async (context) => {
   let baseRef = null;
   let weeklyTasksRef = null;
 
-  if (viewingOwnData) {
+  if (contextType === 'team' && teamId && targetUid) {
+    planningCollectionPath = `teams/${teamId}/members/${targetUid}/planningEvents`;
+    if (viewingOwnData) {
+      baseRef = collection(db, 'teams', teamId, 'members', targetUid, 'planningEvents');
+      weeklyTasksRef = collection(db, 'teams', teamId, 'members', targetUid, 'weeklyTasks');
+    }
+  } else if (viewingOwnData) {
     planningCollectionPath = `users/${sessionUid}/planningEvents`;
     baseRef = collection(db, 'users', sessionUid, 'planningEvents');
     weeklyTasksRef = collection(db, 'users', sessionUid, 'weeklyTasks');
+  } else if (sessionUid) {
+    planningCollectionPath = `users/${sessionUid}/planningEvents`;
   }
 
   return {
