@@ -195,6 +195,34 @@ const isPermissionDeniedError = (error) => {
   );
 };
 
+const toPermissionDeniedError = (error) => {
+  if (!error) {
+    return null;
+  }
+  if (isPermissionDeniedError(error)) {
+    return error;
+  }
+  const status = error?.response?.status ?? error?.status ?? null;
+  const message = String(error?.message || "");
+  if (status === 403 || message.toLowerCase().includes("forbidden")) {
+    const normalized = new Error(
+      message || "Missing or insufficient permissions",
+    );
+    normalized.code = "permission-denied";
+    normalized.status = status ?? 403;
+    normalized.originalError = error;
+    return normalized;
+  }
+  if (message.toLowerCase().includes("not authorized")) {
+    const normalized = new Error(message);
+    normalized.code = "permission-denied";
+    normalized.status = status ?? 403;
+    normalized.originalError = error;
+    return normalized;
+  }
+  return null;
+};
+
 const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
   if (value == null) {
     return fallback;
@@ -538,7 +566,8 @@ const ensurePlanningContext = (context, options = {}) => {
   throw new Error('Unsupported planning context');
 };
 
-const ensureTeamMemberContainer = async (teamId, memberUid) => {
+const ensureTeamMemberContainer = async (teamId, memberUid, options = {}) => {
+  const { suppressErrors = true } = options;
   if (!teamId || !memberUid) {
     return;
   }
@@ -553,6 +582,14 @@ const ensureTeamMemberContainer = async (teamId, memberUid) => {
       body: JSON.stringify({ include_joined_at: false }),
     });
   } catch (error) {
+    const permissionError = toPermissionDeniedError(error);
+    if (!suppressErrors) {
+      throw permissionError || error;
+    }
+    if (permissionError) {
+      console.warn("ensureTeamMemberContainer permission error", error);
+      return;
+    }
     console.warn("ensureTeamMemberContainer error", error);
   }
 };
@@ -974,15 +1011,33 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       let unsubscribe = () => {};
       let active = true;
 
-      ensureTeamMemberContainer(teamId, viewerUid)
-        .catch((membershipError) => {
-          console.warn('watchPlanningEvents ensure membership error', membershipError);
+      const startIfActive = () => {
+        if (!active) {
+          return;
+        }
+        unsubscribe = startSubscription();
+      };
+
+      ensureTeamMemberContainer(teamId, viewerUid, { suppressErrors: false })
+        .then(() => {
+          startIfActive();
         })
-        .finally(() => {
+        .catch((membershipError) => {
           if (!active) {
             return;
           }
-          unsubscribe = startSubscription();
+          const permissionError = toPermissionDeniedError(membershipError);
+          if (permissionError) {
+            onData?.([]);
+            logPermissionError('planningEvents', viewerUid, permissionError, {
+              toast: false,
+              level: 'warn',
+            });
+            onError?.(permissionError);
+            return;
+          }
+          console.warn('watchPlanningEvents ensure membership error', membershipError);
+          startIfActive();
         });
 
       return () => {
@@ -1227,15 +1282,33 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
       let unsubscribe = () => {};
       let active = true;
 
-      ensureTeamMemberContainer(teamId, viewerUid)
-        .catch((membershipError) => {
-          console.warn('watchWeeklyTasks ensure membership error', membershipError);
+      const startIfActive = () => {
+        if (!active) {
+          return;
+        }
+        unsubscribe = startSubscription();
+      };
+
+      ensureTeamMemberContainer(teamId, viewerUid, { suppressErrors: false })
+        .then(() => {
+          startIfActive();
         })
-        .finally(() => {
+        .catch((membershipError) => {
           if (!active) {
             return;
           }
-          unsubscribe = startSubscription();
+          const permissionError = toPermissionDeniedError(membershipError);
+          if (permissionError) {
+            onData?.([]);
+            logPermissionError('weeklyTasks', viewerUid, permissionError, {
+              toast: false,
+              level: 'warn',
+            });
+            onError?.(permissionError);
+            return;
+          }
+          console.warn('watchWeeklyTasks ensure membership error', membershipError);
+          startIfActive();
         });
 
       return () => {
