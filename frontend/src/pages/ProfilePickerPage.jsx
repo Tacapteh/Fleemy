@@ -341,10 +341,24 @@ const ProfilePickerPage = () => {
           };
 
           const deleteTeam = (event) => {
+            if (deletingTeamId === team.team_id) {
+              event?.preventDefault();
+              event?.stopPropagation();
+              return;
+            }
+
             event?.preventDefault();
             event?.stopPropagation();
             handleDeleteTeam(team);
           };
+
+          const actionButtonBase =
+            'p-2 rounded-full bg-white/20 text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
+          const deleteButtonClass = `${actionButtonBase} ${
+            deletingTeamId === team.team_id
+              ? 'opacity-60 cursor-not-allowed'
+              : 'hover:bg-white/30'
+          }`;
 
           return (
             <button
@@ -357,34 +371,42 @@ const ProfilePickerPage = () => {
               <span className="absolute top-3 left-3 z-10 inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm">
                 Équipe
               </span>
-              {isOwner && team.invite_code && (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={openInviteDialog}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      openInviteDialog(e);
-                    }
-                  }}
-                  className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/20 text-white/90 hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-                  aria-label="Afficher le code d'invitation"
-                  data-testid={`team-${team.team_id}-invite-btn`}
-                >
-                  <Share2 size={18} />
-                </span>
-              )}
               {isOwner && (
-                <button
-                  type="button"
-                  onClick={deleteTeam}
-                  disabled={deletingTeamId === team.team_id}
-                  className="absolute bottom-3 right-3 z-10 p-2 rounded-full bg-white/20 text-white/90 hover:bg-white/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-60 disabled:cursor-not-allowed"
-                  aria-label={`Supprimer l'équipe ${team.name}`}
-                  data-testid={`team-${team.team_id}-delete-btn`}
-                >
-                  <Trash2 size={18} />
-                </button>
+                <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+                  {team.invite_code && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={openInviteDialog}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          openInviteDialog(e);
+                        }
+                      }}
+                      className={`${actionButtonBase} hover:bg-white/30`}
+                      aria-label="Afficher le code d'invitation"
+                      data-testid={`team-${team.team_id}-invite-btn`}
+                    >
+                      <Share2 size={18} />
+                    </span>
+                  )}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={deleteTeam}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        deleteTeam(e);
+                      }
+                    }}
+                    className={deleteButtonClass}
+                    aria-label={`Supprimer l'équipe ${team.name}`}
+                    aria-disabled={deletingTeamId === team.team_id}
+                    data-testid={`team-${team.team_id}-delete-btn`}
+                  >
+                    <Trash2 size={18} />
+                  </span>
+                </div>
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
                 <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
