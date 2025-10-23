@@ -1,3 +1,5 @@
+import { fetchUserTeamsFromFirestore } from '../firebase';
+
 const TEAMS_CACHE_KEY = 'fleemy_profile_picker_teams_cache';
 const TEAMS_CACHE_TTL_MS = 60_000; // 1 minute cache to speed up perceived loading
 
@@ -104,8 +106,26 @@ const cacheTeamsFromResponse = (data) => {
 };
 
 const fetchAndCacheTeams = async (fetcher) => {
-  const data = await fetcher();
-  return cacheTeamsFromResponse(data);
+  try {
+    const data = await fetcher();
+    return cacheTeamsFromResponse(data);
+  } catch (primaryError) {
+    clearTeamsCache();
+
+    try {
+      const fallbackTeams = await fetchUserTeamsFromFirestore();
+      const fallbackPayload = {
+        success: true,
+        source: 'firestore',
+        teams: fallbackTeams,
+      };
+      const result = cacheTeamsFromResponse(fallbackPayload);
+      return { ...result, viaFallback: true };
+    } catch (fallbackError) {
+      primaryError.fallbackError = fallbackError;
+      throw primaryError;
+    }
+  }
 };
 
 export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) => {
