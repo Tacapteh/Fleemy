@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { saveTask, useFirebaseUser } from '../firebase';
 import { TASK_ICON_KEYS, getTaskIcon } from '../constants/icons';
 import { TASK_COLOR_KEYS, getTaskColor, DEFAULT_TASK_COLOR } from '../constants/colors';
+import TaskModalStyles from './TaskModalStyles';
 
 const roundToHour = (date = new Date()) => {
   const d = new Date(date);
@@ -181,7 +182,10 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                       key={colorKey}
                       type="button"
                       className={`task-form-color ${task.color === colorKey ? 'selected' : ''}`}
-                      style={{ backgroundColor: colorStyles.backgroundColor }}
+                      style={{
+                        backgroundColor: colorStyles.backgroundColor,
+                        borderColor: colorStyles.borderColor
+                      }}
                       onClick={() => setTask({ ...task, color: colorKey })}
                       title={colorKey}
                     />
@@ -242,181 +246,7 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
           </div>
         </form>
       </div>
-
-      <style jsx>{`
-        .task-form-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-
-        .task-form-modal {
-          background: white;
-          border-radius: 8px;
-          width: 90%;
-          max-width: 500px;
-          max-height: 90vh;
-          overflow-y: auto;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-        }
-
-        .task-form-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 20px;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .task-form-header h3 {
-          margin: 0;
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-
-        .task-form-close {
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          color: #6b7280;
-        }
-
-        .task-form {
-          padding: 20px;
-        }
-
-        .task-form-error {
-          background: #fee2e2;
-          color: #991b1b;
-          padding: 12px;
-          border-radius: 6px;
-          margin-bottom: 16px;
-          border: 1px solid #fecaca;
-        }
-
-        .task-form-field {
-          margin-bottom: 16px;
-        }
-
-        .task-form-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-
-        .task-form-field label {
-          display: block;
-          margin-bottom: 6px;
-          font-weight: 500;
-          color: #374151;
-        }
-
-        .task-form-field input,
-        .task-form-field textarea {
-          width: 100%;
-          padding: 8px 12px;
-          border: 1px solid #d1d5db;
-          border-radius: 6px;
-          font-size: 14px;
-        }
-
-        .task-form-field input:focus,
-        .task-form-field textarea:focus {
-          outline: none;
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .task-form-icons {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .task-form-icon {
-          background: #f3f4f6;
-          border: 2px solid transparent;
-          border-radius: 6px;
-          padding: 8px;
-          cursor: pointer;
-          font-size: 16px;
-        }
-
-        .task-form-icon.selected {
-          border-color: #3b82f6;
-          background: #dbeafe;
-        }
-
-        .task-form-colors {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-
-        .task-form-color {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          border: 3px solid transparent;
-          cursor: pointer;
-        }
-
-        .task-form-color.selected {
-          border-color: #374151;
-        }
-
-        .task-form-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 12px;
-          margin-top: 24px;
-          padding-top: 16px;
-          border-top: 1px solid #e5e7eb;
-        }
-
-        .task-form-cancel {
-          background: #f3f4f6;
-          color: #374151;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-        }
-
-        .task-form-delete {
-          background: #ef4444;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-        }
-
-        .task-form-save {
-          background: #3b82f6;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-        }
-
-        .task-form-save:disabled {
-          background: #9ca3af;
-          cursor: not-allowed;
-        }
-      `}</style>
+      <TaskModalStyles />
     </div>
   );
 };

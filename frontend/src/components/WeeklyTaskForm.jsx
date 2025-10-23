@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { saveWeeklyTask } from '../firebase';
 import { TASK_ICON_KEYS } from '../constants/icons';
 import { TASK_COLOR_KEYS, getTaskColor, DEFAULT_TASK_COLOR } from '../constants/colors';
+import TaskModalStyles from './TaskModalStyles';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -284,7 +285,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
               </select>
               <div
                 className="color-preview"
-                style={{ backgroundColor: getTaskColor(task.color) }}
+                style={getTaskColor(task.color)}
               />
             </div>
           </div>
@@ -321,6 +322,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
           </div>
         </form>
       </div>
+      <TaskModalStyles />
     </div>
   );
 };
