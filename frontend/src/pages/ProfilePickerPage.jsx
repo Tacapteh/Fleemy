@@ -44,7 +44,7 @@ const ProfilePickerPage = () => {
         const user = auth.currentUser;
         if (!user) {
           navigate('/');
-          return;
+          return null;
         }
 
         setError('');
@@ -62,10 +62,13 @@ const ProfilePickerPage = () => {
           setError(result.raw?.error || 'Erreur lors du chargement des équipes');
           clearTeamsCache();
         }
+
+        return result;
       } catch (err) {
         console.error('Error loading teams:', err);
         setError('Erreur lors du chargement des équipes');
         clearTeamsCache();
+        return null;
       } finally {
         if (!skipSpinner) {
           setLoading(false);
@@ -165,14 +168,24 @@ const ProfilePickerPage = () => {
 
       await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
 
+      clearTeamsCache();
       // Reload teams
-      await loadTeams();
+      const result = await loadTeams();
+
+      const createdTeam =
+        (Array.isArray(result?.teams)
+          ? result.teams.find((team) => team.team_id === data.team_id)
+          : null) || {
+          team_id: data.team_id,
+          name: data.name,
+          invite_code: data.invite_code,
+          owner_uid: user.uid,
+          members_count: 1,
+        };
 
       setInviteDialogTeam({
-        team_id: data.team_id,
-        name: data.name,
-        invite_code: data.invite_code,
-        owner_uid: user.uid,
+        ...createdTeam,
+        invite_code: createdTeam.invite_code || data.invite_code,
       });
     } catch (err) {
       throw err;
@@ -197,16 +210,19 @@ const ProfilePickerPage = () => {
         includeJoinedAt: !data.already_member,
       });
 
+      clearTeamsCache();
       // Reload teams
-      await loadTeams();
+      const result = await loadTeams();
 
-      // Select the joined team
-      if (!data.already_member) {
-        await handleSelectTeam({
+      const joinedTeam =
+        (Array.isArray(result?.teams)
+          ? result.teams.find((team) => team.team_id === data.team_id)
+          : null) || {
           team_id: data.team_id,
           name: data.name,
-        });
-      }
+        };
+
+      await handleSelectTeam(joinedTeam);
     } catch (err) {
       throw err;
     }
