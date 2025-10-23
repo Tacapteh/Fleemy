@@ -107,22 +107,25 @@ const cacheTeamsFromResponse = (data) => {
 
 const fetchAndCacheTeams = async (fetcher) => {
   try {
-    const data = await fetcher();
-    return cacheTeamsFromResponse(data);
-  } catch (primaryError) {
-    clearTeamsCache();
+    const fallbackTeams = await fetchUserTeamsFromFirestore();
+    const fallbackPayload = {
+      success: true,
+      source: 'firestore',
+      teams: fallbackTeams,
+    };
+    const result = cacheTeamsFromResponse(fallbackPayload);
+    return { ...result, viaFirestore: true };
+  } catch (firestoreError) {
+    if (typeof fetcher !== 'function') {
+      throw firestoreError;
+    }
 
     try {
-      const fallbackTeams = await fetchUserTeamsFromFirestore();
-      const fallbackPayload = {
-        success: true,
-        source: 'firestore',
-        teams: fallbackTeams,
-      };
-      const result = cacheTeamsFromResponse(fallbackPayload);
-      return { ...result, viaFallback: true };
-    } catch (fallbackError) {
-      primaryError.fallbackError = fallbackError;
+      const data = await fetcher();
+      return cacheTeamsFromResponse(data);
+    } catch (primaryError) {
+      clearTeamsCache();
+      primaryError.fallbackError = firestoreError;
       throw primaryError;
     }
   }
