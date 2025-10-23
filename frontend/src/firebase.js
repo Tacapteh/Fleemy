@@ -762,7 +762,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       };
 
       const handleError = (error) => {
-        if (error?.code === 'permission-denied') {
+        if (isPermissionDeniedError(error)) {
           if (!hasRetriedAfterEnsure) {
             hasRetriedAfterEnsure = true;
             ensureViewerMembership()
@@ -779,6 +779,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
             return;
           }
           logPermissionError('planningEvents', getUid(), error);
+          stopExistingFallback();
           startFallback();
           return;
         }
@@ -963,7 +964,7 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
           onData?.(tasks);
         },
         async (error) => {
-          if (error?.code === 'permission-denied' && !fallbackAttempted) {
+          if (isPermissionDeniedError(error) && !fallbackAttempted) {
             fallbackAttempted = true;
             try {
               const fallbackTasks = await fetchWeeklyTasksFallback(context);
@@ -1155,20 +1156,20 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
       return stopFallback;
     }
 
-    let cancelled = false;
+    let fallbackCancelled = false;
     let timer = null;
 
     const fetchMembers = async () => {
       try {
         const apiFetch = await getApiFetch();
         const response = await apiFetch(`/teams/${teamId}/memberships`);
-        if (cancelled) {
+        if (fallbackCancelled) {
           return;
         }
         const members = buildMembershipEntries(response?.members);
         onData?.(members);
       } catch (error) {
-        if (!cancelled) {
+        if (!fallbackCancelled) {
           console.error('fallback fetchTeamMemberships error', error);
           onError?.(error);
         }
@@ -1179,7 +1180,7 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
     timer = setInterval(fetchMembers, 60_000);
 
     stopFallback = () => {
-      cancelled = true;
+      fallbackCancelled = true;
       if (timer) {
         clearInterval(timer);
       }
@@ -1199,7 +1200,7 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
   };
 
   const handleError = (error) => {
-    if (error?.code === 'permission-denied') {
+    if (isPermissionDeniedError(error)) {
       if (!hasRetriedAfterEnsure) {
         hasRetriedAfterEnsure = true;
         ensureMembership()
