@@ -698,21 +698,25 @@ const buildRangeFromIso = (startIso, endIso) => {
 };
 
 export const watchPlanningEventsInRange = (context, range, onData, onError) => {
-  try {
-    const resolved = ensurePlanningContext(context);
+  if (!range?.from || !range?.to) {
+    onData?.([]);
+    return () => {};
+  }
+
+  const fromDate = normalizeDate(range.from);
+  const toDate = normalizeDate(range.to);
+  if (
+    !(fromDate instanceof Date) ||
+    Number.isNaN(fromDate.getTime()) ||
+    !(toDate instanceof Date) ||
+    Number.isNaN(toDate.getTime())
+  ) {
+    onData?.([]);
+    return () => {};
+  }
+
+  const startWithResolvedContext = (resolved) => {
     const { eventsRef, ownerUid, teamId } = resolved;
-
-    if (!range?.from || !range?.to) {
-      onData?.([]);
-      return () => {};
-    }
-
-    const fromDate = normalizeDate(range.from);
-    const toDate = normalizeDate(range.to);
-    if (!(fromDate instanceof Date) || Number.isNaN(fromDate.getTime()) || !(toDate instanceof Date) || Number.isNaN(toDate.getTime())) {
-      onData?.([]);
-      return () => {};
-    }
 
     const constraints = [
       where('owner_uid', '==', ownerUid),
@@ -883,6 +887,79 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     }
 
     return startSubscription();
+  };
+
+  const startWithContext = () => {
+    const resolved = ensurePlanningContext(context);
+    return startWithResolvedContext(resolved);
+  };
+
+  const requiresAuthResolution = (!context || context.type === 'personal') && !context?.userId;
+
+  if (requiresAuthResolution && !getUid()) {
+    let active = true;
+    let unsubscribeAuth = null;
+    let unsubscribeWatch = () => {};
+    let started = false;
+
+    const cleanup = () => {
+      if (typeof unsubscribeWatch === 'function') {
+        unsubscribeWatch();
+      }
+      unsubscribeWatch = () => {};
+      if (typeof unsubscribeAuth === 'function') {
+        unsubscribeAuth();
+      }
+      unsubscribeAuth = null;
+    };
+
+    const tryStartWatch = () => {
+      if (!active || started) {
+        return;
+      }
+      try {
+        unsubscribeWatch = startWithContext();
+        started = true;
+      } catch (error) {
+        if (error?.message?.includes('requires authenticated user')) {
+          return;
+        }
+        onError?.(error);
+      }
+    };
+
+    unsubscribeAuth = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (!active) {
+          return;
+        }
+        if (user?.uid) {
+          tryStartWatch();
+          if (typeof unsubscribeAuth === 'function') {
+            unsubscribeAuth();
+            unsubscribeAuth = null;
+          }
+        } else {
+          onData?.([]);
+        }
+      },
+      (error) => {
+        if (!active) {
+          return;
+        }
+        onError?.(error);
+      }
+    );
+
+    return () => {
+      active = false;
+      cleanup();
+    };
+  }
+
+  try {
+    return startWithContext();
   } catch (error) {
     onError?.(error);
     return () => {};
