@@ -1,6 +1,42 @@
 import { auth } from "../firebase";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+
+const resolveSameOriginOverride = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const { origin, hostname } = window.location;
+  if (!origin || !hostname || LOCAL_HOSTNAMES.has(hostname)) {
+    return null;
+  }
+
+  if (hostname.endsWith(".vercel.app")) {
+    return origin;
+  }
+
+  return null;
+};
+
+const resolveBrowserFallback = (): string | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const { origin, hostname } = window.location;
+  if (!origin || !hostname || LOCAL_HOSTNAMES.has(hostname)) {
+    return null;
+  }
+
+  return origin;
+};
+
+const API_URL =
+  resolveSameOriginOverride() ||
+  (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim().length > 0
+    ? process.env.REACT_APP_API_URL.trim()
+    : resolveBrowserFallback() || "http://localhost:8000");
 const RETRY_DELAYS = [0, 250, 500, 1000];
 
 const wait = (delay: number) =>
