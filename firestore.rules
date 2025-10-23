@@ -14,9 +14,21 @@ service cloud.firestore {
     }
 
     function isTeamMember(teamId) {
-      return isAuthenticated() && (
+      if (!isAuthenticated()) {
+        return false;
+      }
+
+      let teamDoc = get(/databases/$(database)/documents/teams/$(teamId));
+      return (
         exists(/databases/$(database)/documents/teams/$(teamId)/memberships/$(request.auth.uid)) ||
-        exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
+        exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)) ||
+        (
+          teamDoc.exists() && (
+            (teamDoc.data.members is list &&
+              teamDoc.data.members.hasAny([request.auth.uid])) ||
+            teamDoc.data.owner_uid == request.auth.uid
+          )
+        )
       );
     }
 

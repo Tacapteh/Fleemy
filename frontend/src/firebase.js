@@ -447,6 +447,52 @@ const ensureTeamMemberContainer = async (teamId, memberUid) => {
   }
 };
 
+const normalizeTeamSnapshot = (docSnap) => {
+  const data = docSnap?.data?.() || {};
+  const members = Array.isArray(data.members) ? data.members : [];
+
+  return {
+    team_id: docSnap.id,
+    name: data.name || 'Équipe sans nom',
+    owner_uid: data.owner_uid || null,
+    invite_code: data.invite_code || null,
+    members_count: members.length,
+    members,
+  };
+};
+
+export async function fetchUserTeamsFromFirestore() {
+  const uid = getUid();
+  if (!uid) {
+    throw new Error("Impossible de récupérer les équipes sans utilisateur authentifié");
+  }
+
+  const uniqueTeams = new Map();
+
+  const collect = (snapshot) => {
+    snapshot.forEach((docSnap) => {
+      const normalized = normalizeTeamSnapshot(docSnap);
+      uniqueTeams.set(normalized.team_id, { ...normalized, source: 'firestore' });
+    });
+  };
+
+  try {
+    const teamsCollection = collection(db, 'teams');
+    const memberQuery = query(teamsCollection, where('members', 'array-contains', uid));
+    const memberSnapshot = await getDocs(memberQuery);
+    collect(memberSnapshot);
+
+    const ownerQuery = query(teamsCollection, where('owner_uid', '==', uid));
+    const ownerSnapshot = await getDocs(ownerQuery);
+    collect(ownerSnapshot);
+
+    return Array.from(uniqueTeams.values());
+  } catch (error) {
+    logPermissionError('teams', uid, error);
+    throw error;
+  }
+}
+
 const toDateSafe = (value) => {
   if (!value) return null;
   if (value instanceof Date) {
