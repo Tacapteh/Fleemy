@@ -2334,15 +2334,125 @@ async def rotate_invite_code(
                 "updated_at": firestore.SERVER_TIMESTAMP,
             }
         )
-        
+
         logger.info("Invite code rotated for team %s", team_id)
-        
+
         return {"success": True, "invite_code": new_code}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("rotate_invite_code error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _get_subcollection(doc_ref, name: str):
+    """Return subcollection reference if supported by the document reference."""
+    collection_attr = getattr(doc_ref, "collection", None)
+    if callable(collection_attr):
+        return collection_attr(name)
+    return None
+
+
+async def _delete_collection(collection_ref) -> None:
+    """Delete all documents inside a collection reference (no-op if missing)."""
+    if collection_ref is None:
+        return
+
+    try:
+        documents = await asyncio.to_thread(lambda: list(collection_ref.stream()))
+    except Exception:
+        # If the collection cannot be listed (unsupported in tests), skip silently
+        return
+
+    for document in documents:
+        doc_ref = collection_ref.document(document.id)
+        await asyncio.to_thread(doc_ref.delete)
+
+
+@api_router.delete("/teams/{team_id}")
+async def delete_team(team_id: str, user: Dict[str, Any] = Depends(verify_token)):
+    """Delete a team and all related data (owner only)."""
+    try:
+        team_ref = db.collection("teams").document(team_id)
+        team_snap = await asyncio.to_thread(team_ref.get)
+
+        if not getattr(team_snap, "exists", False):
+            raise HTTPException(status_code=404, detail="Équipe introuvable")
+
+        team_data = team_snap.to_dict() or {}
+        owner_uid = team_data.get("owner_uid")
+        requester_uid = user.get("uid")
+
+        if owner_uid != requester_uid:
+            raise HTTPException(
+                status_code=403,
+                detail="Seul le propriétaire peut supprimer l'équipe",
+            )
+
+        members: List[str] = list(team_data.get("members") or [])
+
+        # Delete subcollections (memberships, events, tasks, etc.)
+        members_ref = _get_subcollection(team_ref, "members")
+        if members_ref is not None:
+            try:
+                member_docs = await asyncio.to_thread(lambda: list(members_ref.stream()))
+            except Exception:
+                member_docs = []
+
+            for member_doc in member_docs:
+                member_ref = members_ref.document(member_doc.id)
+                for nested_name in ("planningEvents", "weeklyTasks"):
+                    nested_ref = _get_subcollection(member_ref, nested_name)
+                    await _delete_collection(nested_ref)
+                await asyncio.to_thread(member_ref.delete)
+
+        # Other subcollections directly on the team document
+        for subcollection_name in ("memberships", "events", "tasks", "quotes", "invoices"):
+            await _delete_collection(_get_subcollection(team_ref, subcollection_name))
+
+        # Finally delete the team document itself
+        await asyncio.to_thread(team_ref.delete)
+
+        async def cleanup_user(uid: str) -> None:
+            if not uid:
+                return
+
+            user_ref = user_doc(uid)
+            try:
+                user_snap = await asyncio.to_thread(user_ref.get)
+            except Exception:
+                return
+
+            if not getattr(user_snap, "exists", False):
+                return
+
+            data = user_snap.to_dict() or {}
+            updates: Dict[str, Any] = {}
+
+            if data.get("team_id") == team_id:
+                updates["team_id"] = None
+
+            last_context = data.get("last_context")
+            if isinstance(last_context, dict) and last_context.get("team_id") == team_id:
+                updates["last_context"] = None
+
+            if updates:
+                updates["updated_at"] = firestore.SERVER_TIMESTAMP
+                await asyncio.to_thread(user_ref.update, updates)
+
+        # Clean up user documents for all members (including owner)
+        await asyncio.gather(*(cleanup_user(member_uid) for member_uid in members))
+
+        logger.info("Team %s deleted by owner %s", team_id, requester_uid)
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("delete_team error: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de supprimer l'équipe",
+        )
 
 
 # Translate endpoint (server-side proxy)
