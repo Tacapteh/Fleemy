@@ -1,10 +1,24 @@
 /*
-Firestore security rules to configure via the Firebase console:
+User preferences are stored in Firestore in a single document per user:
+  Document path: users/{uid}/settings/preferences
+
+Expected fields inside that document:
+  - showWeekends (bool)
+  - showFullDay (bool)
+  - enableMinutes (bool)
+  - darkMode (bool)
+  - requireClientName (bool)
+  - defaultSlotDurationMinutes (number)
+
+Publish the following security rules in the Firebase console (Firestore Database -> Rules -> Publish)
+to allow the authenticated user to read/write their own preferences without permission errors:
 
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
+      // allow the signed-in user to read/write their own documents
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      // allow read/write access to all subcollections owned by the same user
       match /{subcollection=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
@@ -12,16 +26,8 @@ service cloud.firestore {
   }
 }
 
-User preferences are stored in a single document at:
-  users/{uid}/settings/preferences
-
-The document contains the following fields:
-  - showWeekends (bool)
-  - showFullDay (bool)
-  - enableMinutes (bool)
-  - darkMode (bool)
-  - requireClientName (bool)
-  - defaultSlotDurationMinutes (number)
+Without these rules published, Firestore will respond with "Missing or insufficient permissions"
+and the dark mode preference cannot be saved remotely.
 */
 
 import React, {
@@ -189,19 +195,7 @@ export function SettingsProvider({ children }) {
 
   const updateSetting = useCallback(
     async (key, value) => {
-      setSettings((prev) => {
-        if (!prev) {
-          return {
-            ...DEFAULT_PREFS,
-            [key]: value,
-          };
-        }
-
-        return {
-          ...prev,
-          [key]: value,
-        };
-      });
+      setSettings((prev) => ({ ...(prev || DEFAULT_PREFS), [key]: value }));
 
       const uid = currentUser?.uid;
       if (!uid) {
@@ -212,8 +206,8 @@ export function SettingsProvider({ children }) {
 
       try {
         await updateDoc(prefsRef, { [key]: value });
-      } catch (error) {
-        console.warn("SettingsProvider: unable to update preference", error);
+      } catch (err) {
+        console.warn("SettingsProvider: unable to update preference", err);
       }
     },
     [currentUser]
