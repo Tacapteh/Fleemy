@@ -326,206 +326,192 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
   const getColorLabel = (colorKey) => PASTEL_COLORS[colorKey]?.name || colorKey;
 
   return (
-    <div className="task-form-overlay">
-      <div className="task-form-modal">
-        <div className="task-form-header">
-          <h3>{initialTask ? 'Modifier la tâche hebdomadaire' : 'Nouvelle tâche hebdomadaire'}</h3>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="task-form-close"
-            aria-label="Fermer"
-          >
-            ×
-          </button>
+    <div className="modal-overlay weekly-task-overlay">
+      <div className="modal-content weekly-task-modal">
+        <div className="weekly-task-header">
+          <h2>{initialTask ? 'Modifier la tâche hebdomadaire' : 'Nouvelle tâche hebdomadaire'}</h2>
         </div>
 
-        <form onSubmit={handleSubmit} className="task-form">
+        <form onSubmit={handleSubmit} className="weekly-task-form">
           {readOnly && (
-            <div className="task-form-info" role="note">
+            <div className="weekly-task-alert weekly-task-alert-info" role="note">
               Vous consultez ce planning en lecture seule.
             </div>
           )}
 
           {error && (
-            <div className="task-form-error" role="alert">
+            <div className="weekly-task-alert weekly-task-alert-error" role="alert">
               {error}
             </div>
           )}
 
-          <div className="task-form-field">
-            <label htmlFor="task-label">Libellé *</label>
-            <input
-              id="task-label"
-              type="text"
-              value={task.label}
-              onChange={(e) => setTask({ ...task, label: e.target.value })}
-              placeholder="Nom de la tâche"
-              required
-              aria-describedby="task-label-help"
-              disabled={readOnly || isSubmitting}
-            />
-            <small id="task-label-help">Ce nom apparaîtra dans votre planning</small>
-          </div>
-
-          <div className="task-form-field">
-            <label>Créneaux horaires * <small>(heures pleines uniquement)</small></label>
-            <div className="time-ranges-list">
-              {task.time_ranges.map((range, index) => (
-                <div key={index} className="time-range-item">
-                  <div className="time-range-controls">
-                    <select
-                      value={range.day}
-                      onChange={(e) => updateTimeRange(index, 'day', parseInt(e.target.value, 10))}
-                      className="day-select"
-                      aria-label={`Jour ${index + 1}`}
-                      disabled={readOnly || isSubmitting}
-                    >
-                      {DAY_NAMES.map((day, dayIndex) => (
-                        <option key={dayIndex} value={dayIndex}>{day}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={range.start}
-                      onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
-                      className="time-input"
-                      aria-label={`Heure de début ${index + 1}`}
-                      disabled={readOnly || isSubmitting}
-                    >
-                      {START_HOUR_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-
-                    <span className="time-separator">à</span>
-
-                    <select
-                      value={range.end}
-                      onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
-                      className="time-input"
-                      aria-label={`Heure de fin ${index + 1}`}
-                      disabled={readOnly || isSubmitting}
-                    >
-                      {END_HOUR_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => removeTimeRange(index)}
-                    className="remove-range"
-                    disabled={task.time_ranges.length === 1 || readOnly || isSubmitting}
-                    aria-label={`Supprimer le créneau ${index + 1}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={addTimeRange}
-              className="add-range"
-              disabled={readOnly || isSubmitting}
-            >
-              + Ajouter un créneau
-            </button>
-          </div>
-
-          <div className="task-form-grid">
-            <div className="task-form-field">
-              <label htmlFor="task-price">Tarif horaire</label>
+          <fieldset className="weekly-task-fieldset" disabled={readOnly || isSubmitting}>
+            <div className="form-group">
+              <label className="form-label" htmlFor="task-label">Libellé *</label>
               <input
-                id="task-price"
-                type="number"
-                value={task.price}
-                onChange={(e) => setTask({ ...task, price: e.target.value })}
-                placeholder="Optionnel"
-                min="0"
-                step="0.5"
-                disabled={readOnly || isSubmitting}
+                id="task-label"
+                type="text"
+                value={task.label}
+                onChange={(e) => setTask({ ...task, label: e.target.value })}
+                placeholder="Nom de la tâche"
+                required
+                aria-describedby="task-label-help"
+                className="form-input"
               />
+              <span id="task-label-help" className="weekly-task-hint">
+                Ce nom apparaîtra dans votre planning.
+              </span>
             </div>
 
-            <div className="task-form-field">
-              <label>Icône</label>
-              <div className="task-form-icons" role="list">
-                {iconOptions.map((iconKey) => {
-                  const isSelected = task.icon === iconKey;
-                  return (
+            <div className="form-group">
+              <label className="form-label" htmlFor="weekly-task-range-0">
+                Créneaux horaires *
+                <span className="weekly-task-hint-inline"> (heures pleines uniquement)</span>
+              </label>
+              <div className="weekly-task-time-ranges">
+                {task.time_ranges.map((range, index) => (
+                  <div key={index} className="weekly-task-range">
+                    <div className="weekly-task-range-controls">
+                      <select
+                        id={index === 0 ? 'weekly-task-range-0' : undefined}
+                        value={range.day}
+                        onChange={(e) => updateTimeRange(index, 'day', parseInt(e.target.value, 10))}
+                        className="form-input"
+                        aria-label={`Jour ${index + 1}`}
+                      >
+                        {DAY_NAMES.map((day, dayIndex) => (
+                          <option key={dayIndex} value={dayIndex}>{day}</option>
+                        ))}
+                      </select>
+
+                      <select
+                        value={range.start}
+                        onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
+                        className="form-input"
+                        aria-label={`Heure de début ${index + 1}`}
+                      >
+                        {START_HOUR_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+
+                      <span className="weekly-task-separator">à</span>
+
+                      <select
+                        value={range.end}
+                        onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
+                        className="form-input"
+                        aria-label={`Heure de fin ${index + 1}`}
+                      >
+                        {END_HOUR_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <button
-                      key={iconKey}
                       type="button"
-                      className={`task-form-icon ${isSelected ? 'selected' : ''}`}
-                      onClick={() => {
-                        if (!readOnly && !isSubmitting) {
-                          setTask({ ...task, icon: iconKey });
-                        }
-                      }}
-                      disabled={readOnly || isSubmitting}
-                      aria-pressed={isSelected}
-                      aria-label={`Icône ${iconKey}`}
-                      title={iconKey}
+                      onClick={() => removeTimeRange(index)}
+                      className="weekly-task-remove"
+                      disabled={task.time_ranges.length === 1}
+                      aria-label={`Supprimer le créneau ${index + 1}`}
                     >
-                      <span aria-hidden>{getTaskIcon(iconKey)}</span>
+                      ×
                     </button>
-                  );
-                })}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={addTimeRange}
+                className="btn btn-outline weekly-task-add"
+              >
+                + Ajouter un créneau
+              </button>
+            </div>
+
+            <div className="weekly-task-meta-grid">
+              <div className="form-group">
+                <label className="form-label" htmlFor="task-price">Tarif horaire</label>
+                <input
+                  id="task-price"
+                  type="number"
+                  value={task.price}
+                  onChange={(e) => setTask({ ...task, price: e.target.value })}
+                  placeholder="Optionnel"
+                  min="0"
+                  step="0.5"
+                  className="form-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Icône</label>
+                <div className="weekly-task-icon-grid" role="list">
+                  {iconOptions.map((iconKey) => {
+                    const isSelected = task.icon === iconKey;
+                    return (
+                      <button
+                        key={iconKey}
+                        type="button"
+                        className={`weekly-task-icon-button ${isSelected ? 'is-selected' : ''}`}
+                        onClick={() => setTask({ ...task, icon: iconKey })}
+                        aria-pressed={isSelected}
+                        aria-label={`Icône ${iconKey}`}
+                        title={iconKey}
+                      >
+                        <span aria-hidden>{getTaskIcon(iconKey)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Couleur</label>
+                <div className="weekly-task-color-grid" role="list">
+                  {colorOptions.map((colorKey) => {
+                    const colorStyles = getTaskColor(colorKey);
+                    const isSelected = task.color === colorKey;
+                    return (
+                      <button
+                        key={colorKey}
+                        type="button"
+                        className={`weekly-task-color-swatch ${isSelected ? 'is-selected' : ''}`}
+                        style={{
+                          backgroundColor: colorStyles.backgroundColor,
+                          borderColor: colorStyles.borderColor,
+                        }}
+                        onClick={() => setTask({ ...task, color: colorKey })}
+                        aria-pressed={isSelected}
+                        aria-label={`Couleur ${getColorLabel(colorKey)}`}
+                        title={getColorLabel(colorKey)}
+                      >
+                        <span className="sr-only">{getColorLabel(colorKey)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div
+                  className="weekly-task-color-preview"
+                  style={getTaskColor(task.color)}
+                  aria-hidden="true"
+                />
+                <span className="weekly-task-color-label">{getColorLabel(task.color)}</span>
               </div>
             </div>
+          </fieldset>
 
-            <div className="task-form-field">
-              <label>Couleur</label>
-              <div className="task-form-colors" role="list">
-                {colorOptions.map((colorKey) => {
-                  const colorStyles = getTaskColor(colorKey);
-                  const isSelected = task.color === colorKey;
-                  return (
-                    <button
-                      key={colorKey}
-                      type="button"
-                      className={`task-form-color ${isSelected ? 'selected' : ''}`}
-                      style={{
-                        backgroundColor: colorStyles.backgroundColor,
-                        borderColor: colorStyles.borderColor,
-                      }}
-                      onClick={() => {
-                        if (!readOnly && !isSubmitting) {
-                          setTask({ ...task, color: colorKey });
-                        }
-                      }}
-                      disabled={readOnly || isSubmitting}
-                      aria-pressed={isSelected}
-                      aria-label={`Couleur ${getColorLabel(colorKey)}`}
-                      title={getColorLabel(colorKey)}
-                    >
-                      <span className="sr-only">{getColorLabel(colorKey)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div
-                className="color-preview"
-                style={getTaskColor(task.color)}
-                aria-hidden="true"
-              />
-              <p className="task-form-helper">{getColorLabel(task.color)}</p>
-            </div>
-          </div>
-
-          <div className="task-form-actions">
+          <div className="modal-actions weekly-task-actions">
             {onDelete && initialTask && !readOnly && (
               <button
                 type="button"
-                className="task-form-delete"
+                className="btn btn-danger"
                 onClick={() => onDelete(initialTask)}
                 disabled={isSubmitting}
               >
@@ -533,10 +519,10 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
               </button>
             )}
 
-            <div className="task-form-actions-right">
+            <div className="action-group">
               <button
                 type="button"
-                className="task-form-cancel"
+                className="btn btn-outline"
                 onClick={onCancel}
                 disabled={isSubmitting}
               >
@@ -544,7 +530,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
               </button>
               <button
                 type="submit"
-                className="task-form-submit"
+                className="btn btn-primary"
                 disabled={isSubmitting || readOnly}
               >
                 {isSubmitting ? 'Enregistrement...' : 'Enregistrer'}
