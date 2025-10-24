@@ -68,8 +68,9 @@ interface InteractiveLayerProps {
 
 const formatPositionValue = (value: number, unit: PositionUnit, minuteHeight: number): string => {
   if (unit === 'minutes') {
-    const fallback = Number.isFinite(minuteHeight) ? `${minuteHeight}px` : '1px';
-    return `calc(var(--weekly-grid-minute-height, ${fallback}) * ${value})`;
+    const safeMinuteHeight = Number.isFinite(minuteHeight) && minuteHeight > 0 ? minuteHeight : SLOT_HEIGHT / 60;
+    const computedPx = Number.isFinite(value) ? Math.max(0, value) * safeMinuteHeight : 0;
+    return `${Number(computedPx.toFixed(4))}px`;
   }
   return `${value}%`;
 };
