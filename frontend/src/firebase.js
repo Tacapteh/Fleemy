@@ -308,6 +308,9 @@ const toPermissionDeniedError = (error) => {
   return null;
 };
 
+const formatHourMinute = (hours, minutes) =>
+  `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
 const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
   if (value == null) {
     return fallback;
@@ -317,9 +320,7 @@ const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
     if (value.includes("T")) {
       const parsed = new Date(value);
       if (!Number.isNaN(parsed.getTime())) {
-        return `${String(parsed.getHours()).padStart(2, "0")}:${String(
-          parsed.getMinutes(),
-        ).padStart(2, "0")}`;
+        return formatHourMinute(parsed.getUTCHours(), parsed.getUTCMinutes());
       }
     }
     const parts = value.split(":");
@@ -329,24 +330,20 @@ const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
       if (!Number.isNaN(rawHour)) {
         const hour = Math.max(0, Math.min(rawHour, 23));
         const minute = Math.max(0, Math.min(Number.isNaN(rawMinute) ? 0 : rawMinute, 59));
-        return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+        return formatHourMinute(hour, minute);
       }
     }
   }
 
   if (value instanceof Date) {
     if (!Number.isNaN(value.getTime())) {
-      return `${String(value.getHours()).padStart(2, "0")}:${String(
-        value.getMinutes(),
-      ).padStart(2, "0")}`;
+      return formatHourMinute(value.getUTCHours(), value.getUTCMinutes());
     }
   }
 
   const date = toDateSafe(value);
   if (date) {
-    return `${String(date.getHours()).padStart(2, "0")}:${String(
-      date.getMinutes(),
-    ).padStart(2, "0")}`;
+    return formatHourMinute(date.getUTCHours(), date.getUTCMinutes());
   }
 
   return fallback;
