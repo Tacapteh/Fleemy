@@ -97,9 +97,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       <div className="title truncate leading-tight break-words">{title}</div>
 
       {event.attachedTaskBadges.length > 0 && (
-        <div
-          className="absolute bottom-1 right-1 flex flex-wrap items-end justify-end gap-1 text-[0]"
-        >
+        <div className="absolute bottom-1 right-1 flex items-center justify-end gap-1">
           {event.attachedTaskBadges.map((badge) => (
             <TaskIconBadge
               key={badge.taskId}
@@ -107,6 +105,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
               iconId={badge.iconId}
               label={badge.label}
               price={badge.price}
+              colorKey={badge.color}
               onEdit={openTaskModal}
               onDelete={confirmDeleteTask}
               readOnly={isReadOnly}

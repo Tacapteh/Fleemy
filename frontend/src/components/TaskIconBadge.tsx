@@ -3,12 +3,14 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type { LucideIcon } from 'lucide-react';
 import { getIcon } from '../icons/registry';
+import { getTaskColor } from '../constants/colors';
 
 interface TaskIconBadgeProps {
   taskId: string;
   iconId?: string | null;
   label?: string | null;
   price?: number | null;
+  colorKey?: string | null;
   onEdit?: (taskId: string) => void;
   onDelete?: (taskId: string) => void;
   readOnly?: boolean;
@@ -32,6 +34,7 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   onEdit,
   onDelete,
   readOnly = false,
+  colorKey,
 }) => {
   const IconComponent: LucideIcon = getIcon(iconId ?? undefined);
   const safeLabel = (label && label.trim()) || 'Tâche';
@@ -40,6 +43,8 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   const ariaLabel = formattedPrice
     ? `Ouvrir la tâche: ${safeLabel} — ${formattedPrice} €`
     : `Ouvrir la tâche: ${safeLabel}`;
+
+  const colorStyles = getTaskColor(colorKey);
 
   const buttonRef = React.useRef<HTMLButtonElement | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -132,8 +137,8 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   );
 
   const buttonClasses = [
-    'inline-flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded',
-    'bg-transparent text-inherit transition-opacity duration-150',
+    'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border text-[0]',
+    'transition-opacity duration-150',
     isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-80',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
   ]
@@ -174,8 +179,13 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
                 onContextMenu={handleContextMenu}
                 aria-haspopup={canOpenMenu ? 'menu' : undefined}
                 aria-expanded={canOpenMenu ? menuOpen : undefined}
+                style={{
+                  backgroundColor: colorStyles.backgroundColor,
+                  color: colorStyles.color,
+                  borderColor: colorStyles.borderColor,
+                }}
               >
-                <IconComponent className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
+                <IconComponent className="h-[14px] w-[14px]" strokeWidth={2.2} aria-hidden="true" />
               </button>
             </TooltipPrimitive.Trigger>
           </DropdownMenu.Trigger>

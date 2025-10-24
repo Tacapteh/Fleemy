@@ -3,16 +3,15 @@ import '../styles/WeeklyGrid.css';
 import { useFirebaseUser } from '../firebase';
 import { calculateHeight, calculateTopPosition } from '../utils/time';
 import { getTaskColor } from '../constants/colors';
+import { getIcon } from '../icons/registry';
 import {
   selectDisplayModel,
   DisplayEvent,
-  DisplayTaskGroup,
   TaskOccurrence,
   DateRange,
   PlannerEventInput,
 } from '../selectors/planningSelectors';
 import EventCard from './EventCard';
-import TaskBadge from './TaskBadge';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SLOT_HEIGHT = 64;
@@ -35,8 +34,8 @@ interface EventLayout {
   columnCount: number;
 }
 
-interface TaskGroupLayout {
-  group: DisplayTaskGroup;
+interface TaskBlockLayout {
+  task: TaskOccurrence;
   top: number;
   height: number;
   backgroundColor: string;
@@ -54,7 +53,7 @@ interface InteractiveLayerProps {
   hours: string[];
   days: { name: string; date: Date }[];
   eventLayouts: EventLayout[][];
-  taskLayouts: TaskGroupLayout[][];
+  taskLayouts: TaskBlockLayout[][];
   onCellClick?: (date: Date, hour: string) => void;
   onAddEvent?: (date: Date, hour: string) => void;
   onEventClick?: (event: DisplayEvent) => void;
@@ -129,12 +128,57 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
 
       {taskLayouts.map((dayTasks, dayIndex) => (
         <div key={`tasks-${dayIndex}`} className="tasks-container" style={{ gridColumn: dayIndex + 1 }}>
-          {dayTasks.map(({ group, top, height, backgroundColor, borderColor, textColor }) => {
+          {dayTasks.map(({ task, top, height, backgroundColor, borderColor, textColor }) => {
             if (height <= 0) return null;
+
+            const IconComponent = getIcon(task.icon ?? undefined);
+            const isInteractive =
+              !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
+
+            const startTimeLabel = task.startDate.toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            const endTimeLabel = task.endDate.toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            const formattedPrice =
+              typeof task.price === 'number'
+                ? `${task.price.toLocaleString('fr-FR', {
+                    minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
+                    maximumFractionDigits: 2,
+                  })} €`
+                : typeof task.price === 'string'
+                ? task.price.trim()
+                : '';
+
+            const titleParts = [task.label];
+            if (startTimeLabel && endTimeLabel) {
+              titleParts.push(`${startTimeLabel} - ${endTimeLabel}`);
+            }
+            if (formattedPrice) {
+              titleParts.push(formattedPrice);
+            }
+            const tooltipTitle = titleParts.filter(Boolean).join('\n');
+
+            const handleTaskClick = () => {
+              if (!isInteractive || !onTaskClick) return;
+              onTaskClick(task);
+            };
+
+            const handleTaskKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+              if (!isInteractive || !onTaskClick) return;
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onTaskClick(task);
+              }
+            };
+
             return (
               <div
-                key={group.id}
-                className="task-standalone"
+                key={task.occurrenceId}
+                className={`task-standalone ${isInteractive ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500' : ''}`}
                 style={{
                   top: `${top}%`,
                   height: `${height}%`,
@@ -143,20 +187,29 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                   backgroundColor,
                   border: `1px solid ${borderColor}`,
                   color: textColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  pointerEvents: 'auto',
                 }}
-                data-testid={`task-standalone-group-${group.id}`}
+                data-testid={`task-standalone-${task.occurrenceId}`}
+                role={isInteractive ? 'button' : 'group'}
+                tabIndex={isInteractive ? 0 : undefined}
+                onClick={handleTaskClick}
+                onKeyDown={handleTaskKeyDown}
+                aria-label={`Tâche hebdomadaire : ${task.label}`}
+                title={tooltipTitle}
               >
-                <div className="flex flex-wrap gap-1 p-1 h-full items-center justify-start">
-                  {group.tasks.map((task) => (
-                    <TaskBadge
-                      key={task.occurrenceId}
-                      task={task}
-                      mode="icon-only"
-                      isReadOnly={task.readOnly || isReadOnlyMode}
-                      onClick={onTaskClick}
-                      data-testid={`task-badge-${task.occurrenceId}`}
-                    />
-                  ))}
+                <div className="flex w-full items-center gap-2 px-2 py-1 text-xs sm:text-sm">
+                  <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} aria-hidden="true" />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium leading-tight">{task.label}</span>
+                    <div className="flex items-center gap-2 text-[11px] font-normal leading-tight opacity-90">
+                      <span>
+                        {startTimeLabel} - {endTimeLabel}
+                      </span>
+                      {formattedPrice ? <span>{formattedPrice}</span> : null}
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -264,26 +317,38 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   }, [displayEvents]);
 
   const taskLayouts = useMemo(() => {
-    const perDay: TaskGroupLayout[][] = Array.from({ length: 7 }, () => []);
+    const perDay: TaskBlockLayout[][] = Array.from({ length: 7 }, () => []);
 
     displayTaskGroups
       .filter((group) => !group.attachedToEvent)
       .forEach((group) => {
         if (group.dayIndex < 0 || group.dayIndex > 6) return;
-        const top = calculateTopPosition(group.startDate, true);
-        const height = calculateHeight(group.startDate, group.endDate, true);
-        const firstTask = group.tasks[0];
-        const colors = getTaskColor(firstTask?.color || '');
 
-        perDay[group.dayIndex].push({
-          group,
-          top,
-          height,
-          backgroundColor: colors.backgroundColor,
-          borderColor: colors.borderColor,
-          textColor: colors.color,
+        group.tasks.forEach((task) => {
+          if (task.dayIndex < 0 || task.dayIndex > 6) {
+            return;
+          }
+          const top = calculateTopPosition(task.startDate, true);
+          const height = calculateHeight(task.startDate, task.endDate, true);
+          if (height <= 0) {
+            return;
+          }
+          const colors = getTaskColor(task.color || '');
+
+          perDay[task.dayIndex].push({
+            task,
+            top,
+            height,
+            backgroundColor: colors.backgroundColor,
+            borderColor: colors.borderColor,
+            textColor: colors.color,
+          });
         });
       });
+
+    perDay.forEach((dayTasks) => {
+      dayTasks.sort((a, b) => a.top - b.top || a.task.startDate.getTime() - b.task.startDate.getTime());
+    });
 
     return perDay;
   }, [displayTaskGroups]);
