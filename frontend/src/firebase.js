@@ -1634,8 +1634,15 @@ export const deleteEventNew = async (context, eventId) => {
   }
 
   const eventsCollection = collection(db, 'users', sessionUid, 'planningEvents');
-  await deleteDoc(doc(eventsCollection, eventId));
-  return { success: true, source: 'firestore', id: eventId };
+  try {
+    await deleteDoc(doc(eventsCollection, eventId));
+    return { success: true, source: 'firestore', id: eventId };
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      return deleteEventViaApiFallback(resolved, eventId);
+    }
+    throw error;
+  }
 };
 
 
