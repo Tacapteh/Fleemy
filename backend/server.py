@@ -12,7 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -383,6 +383,130 @@ class EventCreateRequest(BaseModel):
     year: Optional[int] = None
     week: Optional[int] = None
     team_id: Optional[str] = None
+
+
+def _normalize_full_hour(value: Any, *, allow_end_of_day: bool = False) -> Optional[str]:
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        hours = int(value)
+        minutes = 0
+    else:
+        match = re.match(r"^\s*(\d{1,2})(?::(\d{1,2}))?\s*$", str(value))
+        if not match:
+            return None
+        hours = int(match.group(1))
+        minutes = int(match.group(2)) if match.group(2) is not None else 0
+
+    if allow_end_of_day and hours == 24:
+        if minutes == 0:
+            return "24:00"
+        return None
+
+    if hours < 0 or hours > 23:
+        return None
+    if minutes < 0 or minutes > 59:
+        return None
+
+    normalized_minutes = 0
+    return f"{hours:02d}:{normalized_minutes:02d}"
+
+
+def _time_to_minutes(value: str) -> int:
+    hours, minutes = value.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+class WeeklyTaskTimeRangeRequest(BaseModel):
+    day: int
+    start: str
+    end: str
+
+    @validator("day")
+    def validate_day(cls, value: int) -> int:
+        if value < 0 or value > 6:
+            raise ValueError("day must be between 0 and 6")
+        return value
+
+    @validator("start", pre=True)
+    def normalize_start(cls, value: Any) -> str:
+        normalized = _normalize_full_hour(value, allow_end_of_day=False)
+        if not normalized:
+            raise ValueError("Invalid start time")
+        return normalized
+
+    @validator("end", pre=True)
+    def normalize_end(cls, value: Any, values: Dict[str, Any]) -> str:
+        normalized = _normalize_full_hour(value, allow_end_of_day=True)
+        if not normalized:
+            raise ValueError("Invalid end time")
+
+        start_value = values.get("start")
+        if start_value:
+            if _time_to_minutes(normalized) <= _time_to_minutes(start_value):
+                raise ValueError("End time must be after start time")
+
+        return normalized
+
+
+class WeeklyTaskUpsertRequest(BaseModel):
+    label: Optional[str] = None
+    title: Optional[str] = None
+    price: Optional[float] = None
+    color: Optional[str] = None
+    icon: Optional[str] = None
+    time_ranges: List[WeeklyTaskTimeRangeRequest]
+    team_id: Optional[str] = None
+    member_uid: Optional[str] = None
+
+    @validator("time_ranges")
+    def validate_time_ranges(cls, value: List[WeeklyTaskTimeRangeRequest]):
+        if not value:
+            raise ValueError("At least one time range is required")
+        return value
+
+
+def _build_weekly_task_payload_from_request(
+    request: WeeklyTaskUpsertRequest,
+    owner_uid: str,
+    team_id: Optional[str],
+    *,
+    existing_created_at: Optional[Any] = None,
+):
+    base_label = (request.label or request.title or "").strip()
+    base_title = (request.title or request.label or "").strip()
+    label = base_label or base_title or "Tâche sans titre"
+    title = base_title or base_label or "Tâche sans titre"
+
+    now = datetime.now(timezone.utc)
+
+    payload: Dict[str, Any] = {
+        "label": label,
+        "title": title,
+        "price": request.price if request.price is not None else None,
+        "color": request.color or None,
+        "icon": request.icon or None,
+        "time_ranges": [
+            {"day": time_range.day, "start": time_range.start, "end": time_range.end}
+            for time_range in request.time_ranges
+        ],
+        "weekly": True,
+        "owner_uid": owner_uid,
+        "user_id": owner_uid,
+        "team_id": team_id if team_id else None,
+        "updated_at": now,
+    }
+
+    created_at = existing_created_at or now
+    payload["created_at"] = created_at
+
+    if payload.get("icon") is None:
+        payload.pop("icon", None)
+    if not payload.get("color"):
+        payload.pop("color", None)
+
+    return payload
 
 
 class TaskCreateRequest(BaseModel):
@@ -1582,6 +1706,93 @@ async def list_weekly_tasks_v2(
     except Exception as e:
         logger.error("planning v2 weekly tasks error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Impossible de récupérer les tâches hebdomadaires")
+
+
+@api_router.post("/planning/v2/weekly-tasks")
+async def create_weekly_task_v2(
+    task_request: WeeklyTaskUpsertRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    try:
+        _events_ref, tasks_ref, target_member = await resolve_planning_context(
+            task_request.team_id,
+            task_request.member_uid,
+            user["uid"],
+        )
+
+        if target_member != user["uid"]:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this member's weekly tasks")
+
+        if tasks_ref is None:
+            raise HTTPException(status_code=400, detail="Invalid planning context for weekly tasks")
+
+        payload = _build_weekly_task_payload_from_request(
+            task_request,
+            target_member,
+            task_request.team_id or None,
+        )
+
+        doc_ref = tasks_ref.document()
+        await asyncio.to_thread(doc_ref.set, payload)
+
+        response_payload = {**payload, "id": doc_ref.id}
+        return {"success": True, "task": response_payload}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("planning v2 weekly task create error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Impossible de sauvegarder la tâche hebdomadaire")
+
+
+@api_router.put("/planning/v2/weekly-tasks/{task_id}")
+async def update_weekly_task_v2(
+    task_id: str,
+    task_request: WeeklyTaskUpsertRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    try:
+        _events_ref, tasks_ref, target_member = await resolve_planning_context(
+            task_request.team_id,
+            task_request.member_uid,
+            user["uid"],
+        )
+
+        if target_member != user["uid"]:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this member's weekly tasks")
+
+        if tasks_ref is None:
+            raise HTTPException(status_code=400, detail="Invalid planning context for weekly tasks")
+
+        doc_ref = tasks_ref.document(task_id)
+        snapshot = await asyncio.to_thread(doc_ref.get)
+        if not snapshot.exists:
+            raise HTTPException(status_code=404, detail="Tâche hebdomadaire introuvable")
+
+        existing = snapshot.to_dict() or {}
+        existing_owner = existing.get("owner_uid") or existing.get("user_id") or target_member
+        if existing_owner != target_member:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this weekly task")
+
+        payload = _build_weekly_task_payload_from_request(
+            task_request,
+            target_member,
+            task_request.team_id or None,
+            existing_created_at=existing.get("created_at"),
+        )
+
+        update_payload = dict(payload)
+        if existing.get("created_at") is not None:
+            update_payload.pop("created_at", None)
+
+        await asyncio.to_thread(doc_ref.update, update_payload)
+
+        response_payload = {**existing, **payload, "id": task_id}
+        return {"success": True, "task": response_payload}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("planning v2 weekly task update error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Impossible de sauvegarder la tâche hebdomadaire")
 
 
 @api_router.get("/todos")
