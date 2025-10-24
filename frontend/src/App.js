@@ -10,7 +10,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, logout } from "./firebase";
 import { contextStore } from "./stores/contextStore";
-import { SettingsProvider } from "./context/SettingsContext";
+import { SettingsProvider, useSettings } from "./context/SettingsContext";
 
 import Login from "./Login";
 import Dashboard from "./pages/Dashboard";
@@ -114,9 +114,12 @@ function AuthGuard({ user, children }) {
   return children;
 }
 
-function App() {
+function AppWithSettings() {
+  const { settings, loading } = useSettings();
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
+
+  const darkModeEnabled = !loading && Boolean(settings?.darkMode);
 
   useEffect(() => {
     let first = true;
@@ -238,7 +241,15 @@ function App() {
     );
   };
 
-  return <SettingsProvider>{renderContent()}</SettingsProvider>;
+  return <div className={darkModeEnabled ? "dark" : ""}>{renderContent()}</div>;
+}
+
+function App() {
+  return (
+    <SettingsProvider>
+      <AppWithSettings />
+    </SettingsProvider>
+  );
 }
 
 export default App;
