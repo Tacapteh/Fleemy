@@ -560,6 +560,20 @@ export default function Planning() {
     setWeeklyTaskModal({ open: false, task: null });
   }, []);
 
+  const handleWeeklyTaskSaved = useCallback(
+    (savedTask) => {
+      closeWeeklyTaskModal();
+
+      const rawLabel = typeof savedTask?.label === 'string' ? savedTask.label.trim() : '';
+      const message = rawLabel
+        ? `Tâche "${rawLabel}" sauvegardée`
+        : 'Tâche hebdomadaire sauvegardée';
+
+      showToast(message);
+    },
+    [closeWeeklyTaskModal]
+  );
+
   const handleSaveEvent = useCallback(
     async (data) => {
       if (!planningContext || readOnly || modal.readOnly) {
@@ -870,6 +884,7 @@ export default function Planning() {
       <WeeklyTaskModal
         isOpen={weeklyTaskModal.open}
         task={weeklyTaskModal.task}
+        onSave={handleWeeklyTaskSaved}
         onClose={closeWeeklyTaskModal}
         onDelete={!readOnly ? (task) => task?.id && handleDeleteWeeklyTask(task.id) : undefined}
         context={planningContext}
