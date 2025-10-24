@@ -129,9 +129,9 @@ export default function Combobox({
         aria-autocomplete="list"
         aria-controls="combobox-listbox"
         data-testid={testId}
-        className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-          error ? 'border-red-500' : 'border-gray-300'
-        } ${disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+        className={`w-full rounded-md border px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors dark:text-slate-100 dark:placeholder:text-slate-500 ${
+          error ? 'border-red-500' : 'border-gray-300 dark:border-slate-700'
+        } ${disabled ? 'cursor-not-allowed bg-gray-100 dark:bg-slate-800 dark:text-slate-400' : 'bg-white dark:bg-slate-800'}`}
       />
       
       {isOpen && filteredOptions.length > 0 && !disabled && (
@@ -139,7 +139,7 @@ export default function Combobox({
           ref={listRef}
           id="combobox-listbox"
           role="listbox"
-          className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto"
+          className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-gray-300 bg-white shadow-lg transition-colors dark:border-slate-700 dark:bg-slate-900"
         >
           {filteredOptions.map((option, index) => (
             <li
@@ -151,20 +151,20 @@ export default function Combobox({
                 handleSelectOption(option);
               }}
               onMouseEnter={() => setHighlightedIndex(index)}
-              className={`px-3 py-2 cursor-pointer ${
-                highlightedIndex === index ? 'bg-blue-100' : ''
+              className={`cursor-pointer px-3 py-2 transition-colors ${
+                highlightedIndex === index ? 'bg-blue-100 dark:bg-blue-500/30' : ''
               } ${
-                option[valueField] === value ? 'bg-blue-50 font-semibold' : ''
-              } hover:bg-blue-100`}
+                option[valueField] === value ? 'bg-blue-50 font-semibold dark:bg-blue-500/20 dark:text-blue-100' : ''
+              } hover:bg-blue-100 dark:hover:bg-blue-500/30`}
             >
               {option[displayField]}
             </li>
           ))}
         </ul>
       )}
-      
+
       {isOpen && filteredOptions.length === 0 && searchTerm && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3 text-gray-500 text-sm">
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-300 bg-white p-3 text-sm text-gray-500 shadow-lg transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
           Aucun résultat trouvé
         </div>
       )}

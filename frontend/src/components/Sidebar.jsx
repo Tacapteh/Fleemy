@@ -12,10 +12,10 @@ const menuItems = [
 ];
 
 const getMenuItemClass = (isActive) =>
-  `w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
+  `w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
     isActive
-      ? 'bg-blue-100 text-blue-700 border border-blue-200'
-      : 'text-gray-600 hover:bg-gray-100'
+      ? 'border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/20 dark:text-blue-100'
+      : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800/80'
   }`;
 
 export default function Sidebar({ user, onLogout }) {
@@ -36,13 +36,13 @@ export default function Sidebar({ user, onLogout }) {
     location.pathname === '/me' || location.pathname.startsWith('/team/');
 
   return (
-    <div className="w-64 bg-white shadow-lg border-r border-gray-200 flex flex-col min-h-screen">
-      <div className="p-6 border-b border-gray-200">
+    <div className="flex min-h-screen w-64 flex-col border-r border-gray-200 bg-white shadow-lg transition-colors dark:border-slate-800 dark:bg-slate-900">
+      <div className="border-b border-gray-200 p-6 transition-colors dark:border-slate-800">
         <div className="flex items-center space-x-3">
           <div className="text-2xl">📊</div>
           <div>
-            <h1 className="text-xl font-bold text-gray-800">Fleemy</h1>
-            <p className="text-xs text-gray-500">Outil tout-en-un</p>
+            <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">Fleemy</h1>
+            <p className="text-xs text-gray-500 dark:text-slate-400">Outil tout-en-un</p>
           </div>
         </div>
       </div>
@@ -76,30 +76,30 @@ export default function Sidebar({ user, onLogout }) {
         </ul>
       </nav>
       {user && (
-        <div className="p-4 border-t border-gray-200">
+        <div className="border-t border-gray-200 p-4 transition-colors dark:border-slate-800">
           <div className="flex items-center space-x-3 mb-3">
             <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-              {user.displayName ? user.displayName.charAt(0).toUpperCase() : 
+              {user.displayName ? user.displayName.charAt(0).toUpperCase() :
                user.email ? user.email.charAt(0).toUpperCase() : 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">
+              <p className="truncate text-sm font-medium text-gray-800 dark:text-slate-100">
                 {user.displayName || user.email || 'Utilisateur'}
               </p>
-              <p className="text-xs text-gray-500 truncate">{user.email || ''}</p>
+              <p className="truncate text-xs text-gray-500 dark:text-slate-400">{user.email || ''}</p>
             </div>
           </div>
           <div className="flex gap-2">
             <Link
               to="/profiles"
-              className="flex-1 text-center text-sm text-blue-600 hover:text-blue-800 px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 transition"
+              className="flex-1 rounded border border-blue-200 px-2 py-1 text-center text-sm text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-800 dark:border-blue-400/40 dark:text-blue-300 dark:hover:bg-blue-500/10 dark:hover:text-blue-200"
             >
               Changer d'équipes
             </Link>
             {onLogout && (
               <button
                 onClick={onLogout}
-                className="flex-1 text-sm text-gray-500 hover:text-gray-700 px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 transition"
+                className="flex-1 rounded border border-gray-200 px-2 py-1 text-sm text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               >
                 Se déconnecter
               </button>

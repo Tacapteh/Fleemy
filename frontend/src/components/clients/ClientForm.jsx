@@ -70,20 +70,29 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" aria-label="Formulaire client">
-      <h2 className="text-xl font-bold mb-4">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4 text-slate-900 dark:text-slate-100"
+      aria-label="Formulaire client"
+    >
+      <h2 className="mb-4 text-xl font-bold text-slate-900 dark:text-slate-100">
         {isEditing ? 'Modifier le client' : 'Nouveau client'}
       </h2>
-      
+
       {/* Display Name - Obligatoire */}
       <div>
-        <label htmlFor="display_name" className="block text-sm font-medium mb-1">
+        <label
+          htmlFor="display_name"
+          className="mb-1 block text-sm font-medium text-slate-900 dark:text-slate-100"
+        >
           Nom d'affichage <span className="text-red-500">*</span>
         </label>
         <input
           id="display_name"
           type="text"
-          className={`w-full border p-2 rounded ${errors.displayName ? 'border-red-500' : 'border-gray-300'}`}
+          className={`w-full rounded border p-2 bg-white text-slate-900 placeholder:text-slate-400 transition-colors dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+            errors.displayName ? 'border-red-500' : 'border-gray-300 dark:border-slate-700'
+          }`}
           placeholder="Ex: Entreprise ACME, Jean Dupont..."
           value={displayName}
           onChange={(e) => {
@@ -104,13 +113,16 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
 
       {/* Contact Name - Optionnel */}
       <div>
-        <label htmlFor="contact_name" className="block text-sm font-medium mb-1">
+        <label
+          htmlFor="contact_name"
+          className="mb-1 block text-sm font-medium text-slate-900 dark:text-slate-100"
+        >
           Nom du contact
         </label>
         <input
           id="contact_name"
           type="text"
-          className="w-full border border-gray-300 p-2 rounded"
+          className="w-full rounded border border-gray-300 bg-white p-2 text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           placeholder="Ex: Jean Dupont"
           value={contactName}
           onChange={(e) => setContactName(e.target.value)}
@@ -120,13 +132,18 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
 
       {/* Email */}
       <div>
-        <label htmlFor="email" className="block text-sm font-medium mb-1">
+        <label
+          htmlFor="email"
+          className="mb-1 block text-sm font-medium text-slate-900 dark:text-slate-100"
+        >
           Email
         </label>
         <input
           id="email"
           type="email"
-          className={`w-full border p-2 rounded ${errors.email ? 'border-red-500' : 'border-gray-300'}`}
+          className={`w-full rounded border p-2 bg-white text-slate-900 placeholder:text-slate-400 transition-colors dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+            errors.email ? 'border-red-500' : 'border-gray-300 dark:border-slate-700'
+          }`}
           placeholder="email@exemple.fr"
           value={email}
           onChange={(e) => {
@@ -146,13 +163,18 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
 
       {/* Phone */}
       <div>
-        <label htmlFor="phone" className="block text-sm font-medium mb-1">
+        <label
+          htmlFor="phone"
+          className="mb-1 block text-sm font-medium text-slate-900 dark:text-slate-100"
+        >
           Téléphone
         </label>
         <input
           id="phone"
           type="tel"
-          className={`w-full border p-2 rounded ${errors.phone ? 'border-red-500' : 'border-gray-300'}`}
+          className={`w-full rounded border p-2 bg-white text-slate-900 placeholder:text-slate-400 transition-colors dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 ${
+            errors.phone ? 'border-red-500' : 'border-gray-300 dark:border-slate-700'
+          }`}
           placeholder="06 12 34 56 78"
           value={phone}
           onChange={(e) => {
@@ -171,28 +193,38 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
       </div>
 
       {/* Address Section */}
-      <fieldset className="border border-gray-200 rounded p-3 space-y-3">
-        <legend className="text-sm font-medium px-2">Adresse</legend>
-        
+      <fieldset className="space-y-3 rounded border border-gray-200 p-3 dark:border-slate-700">
+        <legend className="px-2 text-sm font-medium text-slate-900 dark:text-slate-100">Adresse</legend>
+
         <div>
-          <label htmlFor="address_line1" className="block text-sm mb-1">Adresse ligne 1</label>
+          <label
+            htmlFor="address_line1"
+            className="mb-1 block text-sm text-slate-900 dark:text-slate-100"
+          >
+            Adresse ligne 1
+          </label>
           <input
             id="address_line1"
             type="text"
-            className="w-full border border-gray-300 p-2 rounded text-sm"
+            className="w-full rounded border border-gray-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             placeholder="Numéro et nom de rue"
             value={line1}
             onChange={(e) => setLine1(e.target.value)}
             data-testid="client-address-line1"
           />
         </div>
-        
+
         <div>
-          <label htmlFor="address_line2" className="block text-sm mb-1">Adresse ligne 2</label>
+          <label
+            htmlFor="address_line2"
+            className="mb-1 block text-sm text-slate-900 dark:text-slate-100"
+          >
+            Adresse ligne 2
+          </label>
           <input
             id="address_line2"
             type="text"
-            className="w-full border border-gray-300 p-2 rounded text-sm"
+            className="w-full rounded border border-gray-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             placeholder="Complément d'adresse"
             value={line2}
             onChange={(e) => setLine2(e.target.value)}
@@ -202,11 +234,16 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
         
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label htmlFor="postal_code" className="block text-sm mb-1">Code postal</label>
+            <label
+              htmlFor="postal_code"
+              className="mb-1 block text-sm text-slate-900 dark:text-slate-100"
+            >
+              Code postal
+            </label>
             <input
               id="postal_code"
               type="text"
-              className="w-full border border-gray-300 p-2 rounded text-sm"
+              className="w-full rounded border border-gray-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
               placeholder="75001"
               value={postalCode}
               onChange={(e) => setPostalCode(e.target.value)}
@@ -214,11 +251,16 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
             />
           </div>
           <div>
-            <label htmlFor="city" className="block text-sm mb-1">Ville</label>
+            <label
+              htmlFor="city"
+              className="mb-1 block text-sm text-slate-900 dark:text-slate-100"
+            >
+              Ville
+            </label>
             <input
               id="city"
               type="text"
-              className="w-full border border-gray-300 p-2 rounded text-sm"
+              className="w-full rounded border border-gray-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
               placeholder="Paris"
               value={city}
               onChange={(e) => setCity(e.target.value)}
@@ -226,13 +268,18 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
             />
           </div>
         </div>
-        
+
         <div>
-          <label htmlFor="country" className="block text-sm mb-1">Pays</label>
+          <label
+            htmlFor="country"
+            className="mb-1 block text-sm text-slate-900 dark:text-slate-100"
+          >
+            Pays
+          </label>
           <input
             id="country"
             type="text"
-            className="w-full border border-gray-300 p-2 rounded text-sm"
+            className="w-full rounded border border-gray-300 bg-white p-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
             placeholder="France"
             value={country}
             onChange={(e) => setCountry(e.target.value)}
@@ -243,12 +290,15 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
 
       {/* Notes */}
       <div>
-        <label htmlFor="notes" className="block text-sm font-medium mb-1">
+        <label
+          htmlFor="notes"
+          className="mb-1 block text-sm font-medium text-slate-900 dark:text-slate-100"
+        >
           Notes
         </label>
         <textarea
           id="notes"
-          className="w-full border border-gray-300 p-2 rounded"
+          className="w-full rounded border border-gray-300 bg-white p-2 text-slate-900 placeholder:text-slate-400 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
           placeholder="Notes supplémentaires..."
           rows="3"
           value={notes}
@@ -259,17 +309,17 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
 
       {/* Actions */}
       <div className="flex justify-end gap-2 pt-4">
-        <button 
-          type="button" 
-          onClick={onCancel} 
-          className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 transition-colors"
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded bg-gray-200 px-4 py-2 transition-colors hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600"
           data-testid="client-form-cancel"
         >
           Annuler
         </button>
-        <button 
-          type="submit" 
-          className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+        <button
+          type="submit"
+          className="rounded bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
           data-testid="client-form-submit"
         >
           {isEditing ? 'Enregistrer' : 'Créer'}

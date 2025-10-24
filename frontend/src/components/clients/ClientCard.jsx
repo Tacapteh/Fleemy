@@ -17,7 +17,7 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
   
   return (
     <div
-      className="bg-white border border-gray-200 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow"
+      className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
       aria-readonly={readonly ? 'true' : undefined}
       data-testid="client-card"
     >
@@ -25,17 +25,17 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-2xl">👤</span>
-            <h3 className="font-bold text-lg text-gray-800" data-testid="client-display-name">
+            <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100" data-testid="client-display-name">
               {client.display_name}
             </h3>
           </div>
           {client.contact_name && (
-            <div className="text-sm text-gray-600 ml-8">
+            <div className="ml-8 text-sm text-gray-600 dark:text-slate-300">
               Contact: {client.contact_name}
             </div>
           )}
         </div>
-        
+
         {!readonly && (
           <div className="flex gap-2">
             <button
@@ -59,11 +59,11 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
       </div>
       
       {/* Contact info */}
-      <div className="space-y-1 text-sm text-gray-600 ml-8">
+      <div className="ml-8 space-y-1 text-sm text-gray-600 dark:text-slate-300">
         {client.email && (
           <div className="flex items-center gap-2">
             <span>📧</span>
-            <a href={`mailto:${client.email}`} className="hover:text-blue-600">
+            <a href={`mailto:${client.email}`} className="hover:text-blue-600 dark:hover:text-blue-300">
               {client.email}
             </a>
           </div>
@@ -71,7 +71,7 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
         {client.phone && (
           <div className="flex items-center gap-2">
             <span>📞</span>
-            <a href={`tel:${client.phone}`} className="hover:text-blue-600">
+            <a href={`tel:${client.phone}`} className="hover:text-blue-600 dark:hover:text-blue-300">
               {client.phone}
             </a>
           </div>
@@ -86,17 +86,17 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
       
       {/* Notes preview */}
       {client.notes && (
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-500 line-clamp-2">
+        <div className="mt-3 border-t border-gray-100 pt-3 dark:border-slate-800">
+          <p className="line-clamp-2 text-xs text-gray-500 dark:text-slate-400">
             {client.notes}
           </p>
         </div>
       )}
-      
+
       {/* Archived badge */}
       {client.is_archived && (
         <div className="mt-2">
-          <span className="inline-block px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded">
+          <span className="inline-block rounded bg-gray-200 px-2 py-1 text-xs text-gray-700 dark:bg-slate-800 dark:text-slate-200">
             Archivé
           </span>
         </div>

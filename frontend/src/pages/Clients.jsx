@@ -86,15 +86,15 @@ export default function Clients() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="mx-auto max-w-7xl text-slate-900 dark:text-slate-100">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900" data-testid="clients-page-title">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100" data-testid="clients-page-title">
           Clients
         </h1>
-        <button 
-          onClick={handleAdd} 
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-sm"
+        <button
+          onClick={handleAdd}
+          className="rounded-lg bg-blue-500 px-4 py-2 text-white shadow-sm transition-colors hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
           data-testid="add-client-button"
           aria-label="Ajouter un nouveau client"
         >
@@ -113,7 +113,7 @@ export default function Clients() {
           placeholder="Rechercher un client par nom..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-gray-300 px-4 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           data-testid="search-clients-input"
           aria-label="Rechercher un client"
         />
@@ -121,14 +121,14 @@ export default function Clients() {
 
       {/* Error message */}
       {error && (
-        <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4" role="alert" aria-live="polite">
+        <div className="mb-4 rounded-lg bg-red-100 p-4 text-red-700 dark:bg-red-500/20 dark:text-red-200" role="alert" aria-live="polite">
           {error}
         </div>
       )}
 
       {/* Results count */}
       {!loading && (
-        <div className="mb-4 text-sm text-gray-600" aria-live="polite" aria-atomic="true">
+        <div className="mb-4 text-sm text-gray-600 dark:text-slate-300" aria-live="polite" aria-atomic="true">
           {total} client{total > 1 ? 's' : ''} trouvé{total > 1 ? 's' : ''}
         </div>
       )}
@@ -137,17 +137,17 @@ export default function Clients() {
       {loading ? (
         <div className="text-center py-12">
           <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          <p className="mt-2 text-gray-600">Chargement...</p>
+          <p className="mt-2 text-gray-600 dark:text-slate-300">Chargement...</p>
         </div>
       ) : clients.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <p className="text-gray-600">
+        <div className="rounded-lg bg-gray-50 py-12 text-center dark:bg-slate-800">
+          <p className="text-gray-600 dark:text-slate-300">
             {search ? 'Aucun client trouvé pour cette recherche' : 'Aucun client enregistré'}
           </p>
           {!search && (
             <button
               onClick={handleAdd}
-              className="mt-4 text-blue-500 hover:text-blue-600 font-medium"
+              className="mt-4 font-medium text-blue-500 transition-colors hover:text-blue-600 dark:text-blue-300 dark:hover:text-blue-200"
             >
               Créer votre premier client
             </button>
@@ -168,23 +168,23 @@ export default function Clients() {
           </div>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between py-4 border-t border-gray-200">
+          <div className="flex items-center justify-between border-t border-gray-200 py-4 dark:border-slate-800">
             <button
               onClick={handlePrevPage}
               disabled={page === 1}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-gray-200 px-4 py-2 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
               data-testid="prev-page-button"
               aria-label="Page précédente"
             >
               ← Précédent
             </button>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 dark:text-slate-300">
               Page {page}
             </span>
             <button
               onClick={handleNextPage}
               disabled={!hasMore}
-              className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-lg bg-gray-200 px-4 py-2 transition-colors hover:bg-gray-300 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
               data-testid="next-page-button"
               aria-label="Page suivante"
             >
@@ -196,13 +196,13 @@ export default function Clients() {
 
       {/* Modal Form */}
       {showForm && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="client-form-title"
         >
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl transition-colors dark:bg-slate-900 dark:text-slate-100">
             <ClientForm
               initialData={editing || {}}
               onSubmit={handleSubmit}

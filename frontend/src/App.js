@@ -32,9 +32,15 @@ import {
 // Composant qui gère la mise en page commune (Sidebar + Outlet)
 function Layout({ user, onLogout }) {
   return (
-    <div style={{ display: "flex" }}>
+    <div
+      style={{ display: "flex" }}
+      className="min-h-screen bg-slate-50 text-slate-900 transition-colors dark:bg-slate-950 dark:text-slate-100"
+    >
       <Sidebar user={user} onLogout={onLogout} />
-      <div style={{ flex: 1, padding: "20px" }}>
+      <div
+        style={{ flex: 1, padding: "20px" }}
+        className="flex-1 bg-white transition-colors dark:bg-slate-900"
+      >
         {/* Outlet = là où s’affichent les pages */}
         <Outlet context={{ user }} />
       </div>
@@ -108,7 +114,11 @@ function AuthGuard({ user, children }) {
   }, [user, navigate]);
 
   if (checking) {
-    return <div className="flex items-center justify-center h-screen">Vérification du contexte...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center text-slate-900 dark:text-slate-100">
+        Vérification du contexte...
+      </div>
+    );
   }
 
   return children;
@@ -179,7 +189,11 @@ function AppWithSettings() {
 
   const renderContent = () => {
     if (initializing) {
-      return <div>Chargement du compte...</div>;
+      return (
+        <div className="flex min-h-[50vh] items-center justify-center text-slate-900 dark:text-slate-100">
+          Chargement du compte...
+        </div>
+      );
     }
 
     if (!user) {
