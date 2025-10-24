@@ -53,9 +53,9 @@ export const dateToTime = (date) => {
  * @param {Date|string} startTime - Heure de début
  * @param {boolean} clamp - Limiter à la plage horaire visible
  */
-export const calculateTopPosition = (startTime, clamp = true) => {
+export const calculateTopPosition = (startTime, clamp = true, unit = 'percentage') => {
   let minutes;
-  
+
   if (startTime instanceof Date) {
     minutes = startTime.getHours() * 60 + startTime.getMinutes();
   } else if (typeof startTime === 'string') {
@@ -66,12 +66,17 @@ export const calculateTopPosition = (startTime, clamp = true) => {
   
   const startMinutes = DAY_START_HOUR * 60;
   const endMinutes = DAY_END_HOUR * 60;
-  
+
   if (clamp) {
     minutes = Math.max(startMinutes, Math.min(minutes, endMinutes));
   }
-  
-  return ((minutes - startMinutes) / (endMinutes - startMinutes)) * 100;
+
+  const offset = minutes - startMinutes;
+  if (unit === 'minutes') {
+    return offset;
+  }
+
+  return (offset / (endMinutes - startMinutes)) * 100;
 };
 
 /**
@@ -80,9 +85,9 @@ export const calculateTopPosition = (startTime, clamp = true) => {
  * @param {Date|string} endTime - Heure de fin
  * @param {boolean} clamp - Limiter à la plage horaire visible
  */
-export const calculateHeight = (startTime, endTime, clamp = true) => {
+export const calculateHeight = (startTime, endTime, clamp = true, unit = 'percentage') => {
   let startMinutes, endMinutes;
-  
+
   if (startTime instanceof Date) {
     startMinutes = startTime.getHours() * 60 + startTime.getMinutes();
   } else if (typeof startTime === 'string') {
@@ -101,15 +106,20 @@ export const calculateHeight = (startTime, endTime, clamp = true) => {
   
   const gridStartMinutes = DAY_START_HOUR * 60;
   const gridEndMinutes = DAY_END_HOUR * 60;
-  
+
   if (clamp) {
     startMinutes = Math.max(gridStartMinutes, startMinutes);
     endMinutes = Math.min(gridEndMinutes, endMinutes);
   }
-  
+
   if (endMinutes <= startMinutes) return 0;
-  
-  return ((endMinutes - startMinutes) / (gridEndMinutes - gridStartMinutes)) * 100;
+
+  const duration = endMinutes - startMinutes;
+  if (unit === 'minutes') {
+    return duration;
+  }
+
+  return (duration / (gridEndMinutes - gridStartMinutes)) * 100;
 };
 
 /**
