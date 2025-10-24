@@ -1,3 +1,29 @@
+/*
+Firestore security rules to configure via the Firebase console:
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      match /{subcollection=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
+
+User preferences are stored in a single document at:
+  users/{uid}/settings/preferences
+
+The document contains the following fields:
+  - showWeekends (bool)
+  - showFullDay (bool)
+  - enableMinutes (bool)
+  - darkMode (bool)
+  - requireClientName (bool)
+  - defaultSlotDurationMinutes (number)
+*/
+
 import React, {
   createContext,
   useCallback,
@@ -99,10 +125,22 @@ export function SettingsProvider({ children }) {
       try {
         const existingPrefs = await getDoc(prefsRef);
         if (!existingPrefs.exists()) {
-          await setDoc(prefsRef, DEFAULT_PREFS);
+          try {
+            await setDoc(prefsRef, DEFAULT_PREFS);
+          } catch (error) {
+            if (!cancelled) {
+              console.warn("SettingsProvider: unable to initialize preferences", error);
+              setSettings({ ...DEFAULT_PREFS });
+              setLoading(false);
+            }
+          }
         }
       } catch (error) {
-        console.error("SettingsProvider: unable to initialize preferences", error);
+        if (!cancelled) {
+          console.warn("SettingsProvider: unable to initialize preferences", error);
+          setSettings({ ...DEFAULT_PREFS });
+          setLoading(false);
+        }
       }
 
       if (cancelled) {
@@ -110,25 +148,33 @@ export function SettingsProvider({ children }) {
         return;
       }
 
-      unsubscribeSnapshot = onSnapshot(
-        prefsRef,
-        (snapshot) => {
-          if (!snapshot.exists()) {
+      try {
+        unsubscribeSnapshot = onSnapshot(
+          prefsRef,
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              setSettings({ ...DEFAULT_PREFS });
+              setLoading(false);
+              return;
+            }
+
+            const sanitized = sanitizePreferences(snapshot.data());
+            setSettings(sanitized);
+            setLoading(false);
+          },
+          (error) => {
+            console.warn("SettingsProvider: unable to load preferences", error);
             setSettings({ ...DEFAULT_PREFS });
             setLoading(false);
-            return;
           }
-
-          const sanitized = sanitizePreferences(snapshot.data());
-          setSettings(sanitized);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("SettingsProvider: unable to load preferences", error);
+        );
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("SettingsProvider: unable to load preferences", error);
           setSettings({ ...DEFAULT_PREFS });
           setLoading(false);
         }
-      );
+      }
     };
 
     setupPreferencesListener();
@@ -143,12 +189,22 @@ export function SettingsProvider({ children }) {
 
   const updateSetting = useCallback(
     async (key, value) => {
+      setSettings((prev) => {
+        if (!prev) {
+          return {
+            ...DEFAULT_PREFS,
+            [key]: value,
+          };
+        }
+
+        return {
+          ...prev,
+          [key]: value,
+        };
+      });
+
       const uid = currentUser?.uid;
       if (!uid) {
-        setSettings((prev) => ({
-          ...(prev || DEFAULT_PREFS),
-          [key]: value,
-        }));
         return;
       }
 
@@ -156,20 +212,8 @@ export function SettingsProvider({ children }) {
 
       try {
         await updateDoc(prefsRef, { [key]: value });
-        setSettings((prev) => {
-          if (!prev) {
-            return {
-              ...DEFAULT_PREFS,
-              [key]: value,
-            };
-          }
-          return {
-            ...prev,
-            [key]: value,
-          };
-        });
       } catch (error) {
-        console.error("SettingsProvider: unable to update preference", error);
+        console.warn("SettingsProvider: unable to update preference", error);
       }
     },
     [currentUser]
