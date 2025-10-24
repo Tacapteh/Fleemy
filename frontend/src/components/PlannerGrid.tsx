@@ -444,11 +444,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       </div>
 
       <div className="week-grid-container">
-        <div className="time-gutter">
+        <div className="time-gutter border-r border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
           {timeLabels.map((time, index) => (
             <div
               key={time}
-              className="time-label"
+              className="time-label rounded-md border border-gray-200 bg-white text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               style={{ top: `calc(${index} * var(--weekly-grid-row-h))` }}
             >
               {time}
@@ -457,7 +457,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         </div>
 
         <div
-          className="week-grid-body"
+          className="week-grid-body border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-800"
           style={{
             height: containerHeight,
             '--weekly-grid-slot-height': `${SLOT_HEIGHT}px`,
