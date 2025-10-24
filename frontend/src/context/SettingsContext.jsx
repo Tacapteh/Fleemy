@@ -7,10 +7,10 @@ import React, {
   useState,
 } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
-const DEFAULT_SETTINGS = {
+const DEFAULT_PREFS = {
   showWeekends: true,
   showFullDay: false,
   enableMinutes: false,
@@ -20,22 +20,57 @@ const DEFAULT_SETTINGS = {
 };
 
 const SettingsContext = createContext({
-  settings: null,
+  settings: DEFAULT_PREFS,
+  loading: true,
   updateSetting: () => {},
 });
 
 export function SettingsProvider({ children }) {
-  const [settings, setSettings] = useState(null);
+  const [settings, setSettings] = useState(DEFAULT_PREFS);
+  const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(() => auth.currentUser || null);
+
+  const sanitizePreferences = useCallback((data) => {
+    if (!data || typeof data !== "object") {
+      return { ...DEFAULT_PREFS };
+    }
+
+    return Object.keys(DEFAULT_PREFS).reduce((acc, key) => {
+      const incomingValue = Object.prototype.hasOwnProperty.call(data, key)
+        ? data[key]
+        : undefined;
+
+      if (incomingValue === undefined) {
+        acc[key] = DEFAULT_PREFS[key];
+        return acc;
+      }
+
+      if (key === "defaultSlotDurationMinutes") {
+        const numericValue = Number(incomingValue);
+        acc[key] = Number.isFinite(numericValue)
+          ? numericValue
+          : DEFAULT_PREFS.defaultSlotDurationMinutes;
+        return acc;
+      }
+
+      if (typeof DEFAULT_PREFS[key] === "boolean") {
+        if (typeof incomingValue === "string") {
+          const normalized = incomingValue.trim().toLowerCase();
+          acc[key] = normalized === "true" || normalized === "1";
+        } else {
+          acc[key] = Boolean(incomingValue);
+        }
+        return acc;
+      }
+
+      acc[key] = incomingValue;
+      return acc;
+    }, {});
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
       setCurrentUser(nextUser || null);
-      if (!nextUser) {
-        setSettings({ ...DEFAULT_SETTINGS });
-      } else {
-        setSettings(null);
-      }
     });
 
     return () => {
@@ -49,98 +84,84 @@ export function SettingsProvider({ children }) {
     const uid = currentUser?.uid;
 
     if (!uid) {
-      setSettings((prev) => (prev == null ? { ...DEFAULT_SETTINGS } : prev));
+      setSettings({ ...DEFAULT_PREFS });
+      setLoading(false);
       return undefined;
     }
 
-    setSettings(null);
+    setLoading(true);
 
-    const settingsDocRef = doc(db, "users", uid, "settings", "preferences", "display");
-    let initializingDefaults = false;
+    const prefsRef = doc(db, "users", uid, "settings", "preferences");
+    let unsubscribeSnapshot;
+    let cancelled = false;
 
-    const unsubscribe = onSnapshot(
-      settingsDocRef,
-      async (snapshot) => {
-        if (!snapshot.exists()) {
-          if (!initializingDefaults) {
-            initializingDefaults = true;
-            try {
-              await setDoc(settingsDocRef, DEFAULT_SETTINGS, { merge: false });
-            } catch (error) {
-              console.error("SettingsProvider: unable to initialize preferences", error);
-            }
-          }
-          setSettings({ ...DEFAULT_SETTINGS });
-          return;
+    const setupPreferencesListener = async () => {
+      try {
+        const existingPrefs = await getDoc(prefsRef);
+        if (!existingPrefs.exists()) {
+          await setDoc(prefsRef, DEFAULT_PREFS);
         }
-
-        const data = snapshot.data();
-        if (!data || typeof data !== "object") {
-          setSettings({ ...DEFAULT_SETTINGS });
-          return;
-        }
-
-        const sanitized = Object.keys(DEFAULT_SETTINGS).reduce((acc, key) => {
-          const incomingValue = Object.prototype.hasOwnProperty.call(data, key)
-            ? data[key]
-            : undefined;
-
-          if (incomingValue === undefined) {
-            acc[key] = DEFAULT_SETTINGS[key];
-            return acc;
-          }
-
-          if (key === "defaultSlotDurationMinutes") {
-            const numericValue = Number(incomingValue);
-            acc[key] = Number.isFinite(numericValue)
-              ? numericValue
-              : DEFAULT_SETTINGS.defaultSlotDurationMinutes;
-            return acc;
-          }
-
-          if (typeof DEFAULT_SETTINGS[key] === "boolean") {
-            if (typeof incomingValue === "string") {
-              const normalized = incomingValue.trim().toLowerCase();
-              acc[key] = normalized === "true" || normalized === "1";
-            } else {
-              acc[key] = Boolean(incomingValue);
-            }
-            return acc;
-          }
-
-          acc[key] = incomingValue;
-          return acc;
-        }, {});
-
-        setSettings(sanitized);
-      },
-      (error) => {
-        console.error("SettingsProvider: unable to load preferences", error);
-        setSettings({ ...DEFAULT_SETTINGS });
+      } catch (error) {
+        console.error("SettingsProvider: unable to initialize preferences", error);
       }
-    );
+
+      if (cancelled) {
+        setLoading(false);
+        return;
+      }
+
+      unsubscribeSnapshot = onSnapshot(
+        prefsRef,
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            setSettings({ ...DEFAULT_PREFS });
+            setLoading(false);
+            return;
+          }
+
+          const sanitized = sanitizePreferences(snapshot.data());
+          setSettings(sanitized);
+          setLoading(false);
+        },
+        (error) => {
+          console.error("SettingsProvider: unable to load preferences", error);
+          setSettings({ ...DEFAULT_PREFS });
+          setLoading(false);
+        }
+      );
+    };
+
+    setupPreferencesListener();
 
     return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
+      cancelled = true;
+      if (typeof unsubscribeSnapshot === "function") {
+        unsubscribeSnapshot();
       }
     };
-  }, [currentUser?.uid]);
+  }, [currentUser, sanitizePreferences]);
 
   const updateSetting = useCallback(
     async (key, value) => {
       const uid = currentUser?.uid;
       if (!uid) {
+        setSettings((prev) => ({
+          ...(prev || DEFAULT_PREFS),
+          [key]: value,
+        }));
         return;
       }
 
-      const settingsDocRef = doc(db, "users", uid, "settings", "preferences", "display");
+      const prefsRef = doc(db, "users", uid, "settings", "preferences");
 
       try {
-        await setDoc(settingsDocRef, { [key]: value }, { merge: true });
+        await updateDoc(prefsRef, { [key]: value });
         setSettings((prev) => {
           if (!prev) {
-            return prev;
+            return {
+              ...DEFAULT_PREFS,
+              [key]: value,
+            };
           }
           return {
             ...prev,
@@ -151,15 +172,16 @@ export function SettingsProvider({ children }) {
         console.error("SettingsProvider: unable to update preference", error);
       }
     },
-    [currentUser?.uid]
+    [currentUser]
   );
 
   const value = useMemo(
     () => ({
       settings,
+      loading,
       updateSetting,
     }),
-    [settings, updateSetting]
+    [settings, loading, updateSetting]
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
