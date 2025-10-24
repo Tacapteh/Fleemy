@@ -255,6 +255,8 @@ const normalizeBadgePrice = (value: unknown): number | undefined => {
   return undefined;
 };
 
+type DisplayEventWithSource = DisplayEvent & { __sourceIndex?: number };
+
 const normalizeEvent = (event: PlannerEventInput, rangeStart: Date): DisplayEvent | null => {
   const fallbackDate = event.date ? parseDate(`${event.date}T00:00:00`) : null;
 
@@ -303,6 +305,99 @@ const normalizeEvent = (event: PlannerEventInput, rangeStart: Date): DisplayEven
     endDate: safeEnd,
     attachedTaskBadges: [],
   };
+};
+
+const extractTimestamp = (value: unknown): number => {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isNaN(time) ? Number.NaN : time;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : Number.NaN;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? Number.NaN : parsed;
+  }
+
+  if (typeof value === 'object') {
+    const maybeTimestamp = value as { toDate?: () => Date; seconds?: number; nanoseconds?: number };
+    if (typeof maybeTimestamp.toDate === 'function') {
+      const date = maybeTimestamp.toDate();
+      const time = date?.getTime?.();
+      return Number.isFinite(time) ? time : Number.NaN;
+    }
+    if (typeof maybeTimestamp.seconds === 'number') {
+      const millis = maybeTimestamp.seconds * 1000 + (typeof maybeTimestamp.nanoseconds === 'number' ? maybeTimestamp.nanoseconds / 1_000_000 : 0);
+      return Number.isFinite(millis) ? millis : Number.NaN;
+    }
+  }
+
+  return Number.NaN;
+};
+
+const getEventRecencyScore = (event: DisplayEventWithSource): number => {
+  const candidates = [
+    extractTimestamp((event as unknown as { updated_at?: unknown }).updated_at),
+    extractTimestamp((event as unknown as { updatedAt?: unknown }).updatedAt),
+    extractTimestamp((event as unknown as { created_at?: unknown }).created_at),
+    extractTimestamp((event as unknown as { createdAt?: unknown }).createdAt),
+  ];
+
+  for (const value of candidates) {
+    if (Number.isFinite(value)) {
+      return value as number;
+    }
+  }
+
+  if (typeof event.__sourceIndex === 'number') {
+    return event.__sourceIndex;
+  }
+
+  return -Infinity;
+};
+
+const dedupeEventsByRecency = (events: DisplayEventWithSource[]): DisplayEvent[] => {
+  if (events.length <= 1) {
+    return events.map(({ __sourceIndex: _omit, ...rest }) => rest as DisplayEvent);
+  }
+
+  const prioritized = [...events].sort((a, b) => {
+    const bScore = getEventRecencyScore(b);
+    const aScore = getEventRecencyScore(a);
+    if (bScore !== aScore) {
+      return bScore - aScore;
+    }
+    const aIndex = typeof a.__sourceIndex === 'number' ? a.__sourceIndex : -1;
+    const bIndex = typeof b.__sourceIndex === 'number' ? b.__sourceIndex : -1;
+    return bIndex - aIndex;
+  });
+
+  const selected: DisplayEventWithSource[] = [];
+
+  prioritized.forEach((event) => {
+    const overlapsWithNewer = selected.some(
+      (existing) =>
+        existing.dayIndex === event.dayIndex &&
+        rangesOverlap(existing.startDate, existing.endDate, event.startDate, event.endDate)
+    );
+
+    if (!overlapsWithNewer) {
+      selected.push(event);
+    }
+  });
+
+  const ordered = selected
+    .map(({ __sourceIndex: _omit, ...rest }) => rest as DisplayEvent)
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+  return ordered;
 };
 
 const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccurrence[] => {
@@ -421,20 +516,20 @@ export const computeDisplayBlocks = (
   tasks: unknown[] = []
 ): ComputeDisplayBlocksResult => {
   const rangeStart = clampDateToMidnight(dateRange.from);
-  const normalizedEvents: DisplayEvent[] = [];
+  const normalizedEvents: DisplayEventWithSource[] = [];
 
-  events.forEach((event) => {
+  events.forEach((event, index) => {
     const normalized = normalizeEvent(event, rangeStart);
     if (normalized) {
-      normalizedEvents.push(normalized);
+      normalizedEvents.push({ ...normalized, __sourceIndex: index });
     }
   });
 
-  normalizedEvents.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const dedupedEvents = dedupeEventsByRecency(normalizedEvents);
 
   const occurrences = expandTaskOccurrences(dateRange, tasks);
 
-  const displayEvents = normalizedEvents.map((event) => {
+  const displayEvents = dedupedEvents.map((event) => {
     const badges: AttachedTaskBadge[] = [];
     const seenOccurrences = new Set<string>();
     const seenTaskIds = new Set<string>();
