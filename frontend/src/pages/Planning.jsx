@@ -402,6 +402,8 @@ export default function Planning() {
     }
     setEventsError(null);
 
+    let fallbackAttempted = false;
+
     const prefetchEvents = async () => {
       if (!eventsCacheKey) {
         return;
@@ -413,6 +415,7 @@ export default function Planning() {
         }
         setEvents(fallbackEvents);
         setEventsLoading(false);
+        fallbackAttempted = true;
         setCachedPlanningData(eventsCacheKey, fallbackEvents, EVENTS_CACHE_TTL);
       } catch (prefetchError) {
         if (!cancelled) {
@@ -423,6 +426,40 @@ export default function Planning() {
 
     prefetchEvents();
 
+    const attemptFallback = async () => {
+      if (fallbackAttempted) {
+        return;
+      }
+      fallbackAttempted = true;
+      try {
+        const fallbackEvents = await fetchWeekEventsOnce(planningContext, weekStartISO, weekEndISO);
+        if (cancelled) {
+          return;
+        }
+        if (Array.isArray(fallbackEvents)) {
+          setEvents(fallbackEvents);
+          setEventsLoading(false);
+          setEventsError(null);
+          if (eventsCacheKey) {
+            setCachedPlanningData(eventsCacheKey, fallbackEvents, EVENTS_CACHE_TTL);
+          }
+          return;
+        }
+      } catch (fallbackError) {
+        if (!cancelled) {
+          console.error('watchWeekEvents fallback error', fallbackError);
+        }
+      }
+      if (cancelled) {
+        return;
+      }
+      if (!Array.isArray(cachedEvents)) {
+        setEvents([]);
+      }
+      setEventsLoading(false);
+      setEventsError('Impossible de charger les événements');
+    };
+
     unsubscribe = watchWeekEvents(
       planningContext,
       weekStartISO,
@@ -432,6 +469,7 @@ export default function Planning() {
           return;
         }
         hasRealtimeUpdate = true;
+        fallbackAttempted = true;
         setEvents(loadedEvents);
         setEventsLoading(false);
         if (eventsCacheKey) {
@@ -443,11 +481,7 @@ export default function Planning() {
           return;
         }
         console.error('watchWeekEvents error', error);
-        if (!Array.isArray(cachedEvents)) {
-          setEvents([]);
-        }
-        setEventsLoading(false);
-        setEventsError('Impossible de charger les événements');
+        attemptFallback();
       }
     );
 
