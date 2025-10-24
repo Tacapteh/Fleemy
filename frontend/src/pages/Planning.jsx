@@ -532,9 +532,13 @@ export default function Planning() {
   const openCreateModal = useCallback(
     (date) => {
       if (readOnly || !planningContext) return;
-      const start = date ? new Date(date) : new Date();
-      start.setHours(9, 0, 0, 0);
-      setModal({ open: true, event: null, selectedDate: start, readOnly: false });
+      const baseDate = date ? new Date(date) : new Date();
+
+      if (!date) {
+        baseDate.setHours(9, 0, 0, 0);
+      }
+
+      setModal({ open: true, event: null, selectedDate: baseDate, readOnly: false });
     },
     [readOnly, planningContext]
   );
@@ -794,7 +798,7 @@ export default function Planning() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={!readOnly ? () => openCreateModal(new Date()) : undefined}
+            onClick={!readOnly ? () => openCreateModal() : undefined}
             disabled={readOnly || !planningContext}
             className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly || !planningContext

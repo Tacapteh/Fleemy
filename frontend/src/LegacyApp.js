@@ -582,8 +582,16 @@ const Dashboard = ({ user }) => {
 };
 
 // Planning Constants
-const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi"];
-const dayNamesShort = ["Lun", "Mar", "Mer", "Jeu", "Ven"];
+const dayNames = [
+  "Lundi",
+  "Mardi",
+  "Mercredi",
+  "Jeudi",
+  "Vendredi",
+  "Samedi",
+  "Dimanche",
+];
+const dayNamesShort = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const monthNames = [
   "Janvier",
   "Février",
@@ -747,13 +755,45 @@ const EventModal = ({
         client_name: "",
       });
     } else if (selectedDate) {
-      const dayOfWeek = selectedDate.getDay();
-      const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      const dayIndex = (selectedDate.getDay() + 6) % 7;
+      const formatTime = (date) =>
+        `${String(date.getHours()).padStart(2, "0")}:${String(
+          date.getMinutes(),
+        ).padStart(2, "0")}`;
+      const selectedTime = formatTime(selectedDate);
+      const timeToMinutes = (time) => {
+        const [hoursValue, minutesValue] = time.split(":").map(Number);
+        return hoursValue * 60 + minutesValue;
+      };
+
+      let startIndex = timeSlots.indexOf(selectedTime);
+
+      if (startIndex === -1) {
+        const selectedMinutes = timeToMinutes(selectedTime);
+        startIndex = timeSlots.findIndex(
+          (slot) => timeToMinutes(slot) >= selectedMinutes,
+        );
+      }
+
+      if (startIndex === -1) {
+        startIndex = Math.max(timeSlots.length - 2, 0);
+      }
+
+      if (startIndex === timeSlots.length - 1 && timeSlots.length > 1) {
+        startIndex -= 1;
+      }
+
+      const startSlot = timeSlots[startIndex] || timeSlots[0];
+      const endSlot =
+        startIndex < timeSlots.length - 1
+          ? timeSlots[startIndex + 1]
+          : timeSlots[startIndex];
+
       setFormData({
         description: "",
-        day: adjustedDay < 5 ? adjustedDay : 0,
-        start: "09:00",
-        end: "10:00",
+        day: dayIndex,
+        start: startSlot,
+        end: endSlot,
         type: "pending",
         client_id: "",
         client_name: "",
