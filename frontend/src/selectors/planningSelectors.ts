@@ -135,6 +135,7 @@ export interface AttachedTaskBadge {
   iconId: string;
   label: string;
   price?: number;
+  color?: string;
 }
 
 export interface DisplayEvent extends PlannerEventInput {
@@ -465,6 +466,7 @@ export const computeDisplayBlocks = (
         iconId,
         label,
         price,
+        color: typeof occurrence.color === 'string' ? occurrence.color : undefined,
       });
     });
 
