@@ -1132,6 +1132,79 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
   return payload;
 };
 
+const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges) => {
+  const { ownerUid: resolvedOwnerUid, targetUid, teamId, sessionUid } = resolved;
+  const ownerUid = resolvedOwnerUid || targetUid || sessionUid || getUid();
+  if (!ownerUid) {
+    throw new Error('Utilisateur non connecté');
+  }
+
+  if (!Array.isArray(sanitizedRanges) || sanitizedRanges.length === 0) {
+    throw new Error('Au moins un créneau horaire valide est requis');
+  }
+
+  const apiFetch = await getApiFetch();
+  const normalizedPrice = normalizeWeeklyTaskPrice(taskData?.price);
+
+  const body = {
+    label: typeof taskData?.label === 'string' && taskData.label.trim()
+      ? taskData.label.trim()
+      : undefined,
+    title: typeof taskData?.title === 'string' && taskData.title.trim()
+      ? taskData.title.trim()
+      : undefined,
+    price: normalizedPrice,
+    color: taskData?.color ?? null,
+    icon: taskData?.icon ?? null,
+    time_ranges: sanitizedRanges.map((range) => ({
+      day: range.day,
+      start: range.start,
+      end: range.end,
+    })),
+    member_uid: ownerUid,
+  };
+
+  if (teamId) {
+    body.team_id = teamId;
+  }
+
+  if (body.icon == null) {
+    delete body.icon;
+  }
+  if (body.color == null || body.color === '') {
+    delete body.color;
+  }
+  if (!body.label && !body.title) {
+    body.label = 'Tâche sans titre';
+  }
+
+  const method = taskData?.id ? 'PUT' : 'POST';
+  const path = taskData?.id
+    ? `/planning/v2/weekly-tasks/${taskData.id}`
+    : '/planning/v2/weekly-tasks';
+
+  const response = await apiFetch(path, {
+    method,
+    body: JSON.stringify(body),
+  });
+
+  if (!response || response.success === false) {
+    const message = response?.error || 'Impossible de sauvegarder la tâche hebdomadaire';
+    throw new Error(message);
+  }
+
+  const rawTask = response.task || response;
+  const viewerUid = sessionUid || getUid();
+
+  return normalizeWeeklyTaskData(
+    rawTask.id || taskData?.id || rawTask.uid || `${ownerUid}-${body.label || body.title || 'task'}`,
+    rawTask,
+    ownerUid,
+    teamId || null,
+    viewerUid,
+  );
+};
+
 const toIsoDateString = (value) => {
   const date = toDateSafe(value);
   if (!date) {
@@ -1576,7 +1649,7 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
     throw new Error('Utilisateur non connecté');
   }
 
-  const { weeklyTasksRef, sessionUid, readOnly, teamId } = resolved;
+  const { weeklyTasksRef, sessionUid, readOnly, teamId, ownerUid: resolvedOwnerUid, targetUid } = resolved;
   if (!sessionUid) {
     throw new Error('Utilisateur non connecté');
   }
@@ -1584,21 +1657,34 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
     throw new Error('Contexte planning accessible uniquement en lecture');
   }
 
+  const ownerUid = resolvedOwnerUid || targetUid || sessionUid;
+  if (!ownerUid) {
+    throw new Error('Utilisateur non connecté');
+  }
+
   const sanitizedRanges = sanitizeWeeklyTaskTimeRanges(taskData.time_ranges);
   if (!sanitizedRanges.length) {
     throw new Error('Au moins un créneau horaire valide est requis');
   }
 
-  const payload = buildWeeklyTaskPayload(taskData, sessionUid, teamId || null, sanitizedRanges);
+  const normalizedTaskData = { ...taskData, time_ranges: sanitizedRanges };
+  const payload = buildWeeklyTaskPayload(normalizedTaskData, ownerUid, teamId || null, sanitizedRanges);
+
+  const attemptFallbackSave = async () =>
+    saveWeeklyTaskViaApiFallback(resolved, normalizedTaskData, sanitizedRanges);
+
+  if (!weeklyTasksRef) {
+    return attemptFallbackSave();
+  }
 
   try {
-    if (taskData.id) {
-      const docRef = doc(weeklyTasksRef, taskData.id);
+    if (normalizedTaskData.id) {
+      const docRef = doc(weeklyTasksRef, normalizedTaskData.id);
       await setDoc(docRef, payload, { merge: true });
       return normalizeWeeklyTaskData(
-        taskData.id,
-        { ...taskData, ...payload, time_ranges: sanitizedRanges },
-        sessionUid,
+        normalizedTaskData.id,
+        { ...normalizedTaskData, ...payload, time_ranges: sanitizedRanges },
+        ownerUid,
         teamId || null,
         sessionUid,
       );
@@ -1611,12 +1697,20 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
 
     return normalizeWeeklyTaskData(
       docRef.id,
-      { ...taskData, ...payload, time_ranges: sanitizedRanges },
-      sessionUid,
+      { ...normalizedTaskData, ...payload, time_ranges: sanitizedRanges },
+      ownerUid,
       teamId || null,
       sessionUid,
     );
   } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      try {
+        return await attemptFallbackSave();
+      } catch (fallbackError) {
+        logPermissionError('weeklyTasks', sessionUid, fallbackError);
+        throw fallbackError;
+      }
+    }
     logPermissionError('weeklyTasks', sessionUid, error);
     throw error;
   }
