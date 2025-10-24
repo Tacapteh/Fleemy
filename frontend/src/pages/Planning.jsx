@@ -778,11 +778,11 @@ export default function Planning() {
     : 'Gérez vos événements et vos tâches hebdomadaires';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-slate-900 dark:text-slate-100">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{pageTitle}</h1>
-          <p className="mt-1 text-sm text-gray-600">{subtitle}</p>
+          <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{pageTitle}</h1>
+          <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">{subtitle}</p>
           {eventsError && (
             <p className="mt-2 text-sm text-red-600">{eventsError}</p>
           )}
@@ -796,7 +796,7 @@ export default function Planning() {
 
         {isTeamContext && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <label htmlFor="team-member-select" className="text-sm font-medium text-gray-700">
+            <label htmlFor="team-member-select" className="text-sm font-medium text-gray-700 dark:text-slate-200">
               Voir le planning de :
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -805,7 +805,7 @@ export default function Planning() {
                 value={selectedMemberId || ''}
                 onChange={handleMemberChange}
                 disabled={membersLoading || members.length === 0}
-                className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
+                className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
               >
                 {members.map((member) => (
                   <option key={member.uid} value={member.uid}>
@@ -814,7 +814,7 @@ export default function Planning() {
                 ))}
               </select>
               {readOnly && (
-                <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-200">
                   Lecture seule
                 </span>
               )}
@@ -839,8 +839,8 @@ export default function Planning() {
             disabled={readOnly || !planningContext}
             className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly || !planningContext
-                ? 'cursor-not-allowed bg-gray-200 text-gray-500'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
+                ? 'cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
+                : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500'
             }`}
           >
             + Événement
@@ -851,8 +851,8 @@ export default function Planning() {
             disabled={readOnly || !planningContext}
             className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               readOnly || !planningContext
-                ? 'cursor-not-allowed bg-gray-200 text-gray-500'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                ? 'cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500'
             }`}
           >
             + Tâche hebdo
@@ -860,7 +860,7 @@ export default function Planning() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900">
         {view === 'week' ? (
           <PlannerGrid
             events={events}
@@ -892,23 +892,23 @@ export default function Planning() {
           />
         )}
 
-        <div className="mt-4 flex items-center gap-6 text-sm text-gray-600">
+        <div className="mt-4 flex items-center gap-6 text-sm text-gray-600 dark:text-slate-300">
           <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-green-200" />
+            <span className="inline-block h-3 w-3 rounded-full bg-green-200 dark:bg-green-500" />
             <span>Payé</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-red-200" />
+            <span className="inline-block h-3 w-3 rounded-full bg-red-200 dark:bg-red-500" />
             <span>Impayé</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="inline-block h-3 w-3 rounded-full bg-orange-200" />
+            <span className="inline-block h-3 w-3 rounded-full bg-orange-200 dark:bg-orange-500" />
             <span>En attente</span>
           </div>
         </div>
 
         {showSkeleton && (
-          <div className="mt-4 text-sm text-gray-500">Chargement des données…</div>
+          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">Chargement des données…</div>
         )}
       </div>
 

@@ -51,48 +51,48 @@ export default function WeekNavigationHeader({
   };
 
   return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between bg-gray-100 p-4 rounded-md shadow mb-4">
+    <div className="mb-4 flex flex-col gap-4 rounded-md border border-gray-200 bg-gray-100 p-4 text-slate-900 shadow transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-2">
         <button
           onClick={onToday}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+          className="rounded bg-gray-300 px-3 py-1 transition-colors hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600"
         >
           Aujourd'hui
         </button>
         <button
           onClick={onPrev}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+          className="rounded bg-gray-300 px-3 py-1 transition-colors hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600"
         >
           ◀︎
         </button>
         <button
           onClick={onNext}
-          className="px-3 py-1 bg-gray-300 rounded hover:bg-gray-400"
+          className="rounded bg-gray-300 px-3 py-1 transition-colors hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600"
         >
           ▶︎
         </button>
       </div>
 
       <div className="flex flex-col items-center gap-2 text-center md:flex-1">
-        <h2 className="text-lg font-bold">{currentLabel}</h2>
+        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{currentLabel}</h2>
         {planningMode === 'team' && (
           <div className="flex flex-col items-center gap-1">
-            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700">
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-500/20 dark:text-blue-100">
               Équipe
             </span>
             {teamName && (
-              <span className="text-sm font-medium text-blue-800" data-testid="planning-team-name">
+              <span className="text-sm font-medium text-blue-800 dark:text-blue-100" data-testid="planning-team-name">
                 {teamName}
               </span>
             )}
             {showTeamSelector && (
-              <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600">
-                <label htmlFor="planning-team-select" className="font-medium">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600 dark:text-slate-300">
+                <label htmlFor="planning-team-select" className="font-medium text-slate-900 dark:text-slate-100">
                   Afficher
                 </label>
                 <select
                   id="planning-team-select"
-                  className="px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="rounded-md border border-gray-300 bg-white px-2 py-1 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                   value={selectedTeamValue}
                   onChange={(event) => onTeamChange?.(event.target.value)}
                   disabled={teamsLoading}
@@ -104,7 +104,7 @@ export default function WeekNavigationHeader({
                   ))}
                 </select>
                 {teamsLoading && (
-                  <span className="text-xs text-gray-500" aria-live="polite">
+                  <span className="text-xs text-gray-500 dark:text-slate-400" aria-live="polite">
                     Chargement…
                   </span>
                 )}
@@ -113,13 +113,13 @@ export default function WeekNavigationHeader({
           </div>
         )}
         {showMemberSelector && (
-          <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600">
-            <label htmlFor="planning-member-select" className="font-medium">
+          <div className="flex flex-wrap items-center justify-center gap-2 text-sm text-gray-600 dark:text-slate-300">
+            <label htmlFor="planning-member-select" className="font-medium text-slate-900 dark:text-slate-100">
               Planning de
             </label>
             <select
               id="planning-member-select"
-              className="px-2 py-1 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               value={selectedValue}
               onChange={(event) => onMemberChange?.(event.target.value)}
             >
@@ -130,7 +130,7 @@ export default function WeekNavigationHeader({
               ))}
             </select>
             {isReadOnlyMode && (
-              <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700">
+              <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-slate-800 dark:text-slate-200">
                 Lecture seule
               </span>
             )}
@@ -145,8 +145,8 @@ export default function WeekNavigationHeader({
               onClick={() => handleModeClick('personal')}
               className={`px-3 py-1 rounded ${
                 planningMode === 'personal'
-                  ? 'bg-green-300'
-                  : 'bg-gray-300 hover:bg-gray-400'
+                  ? 'bg-green-300 dark:bg-green-500/70'
+                  : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
               }`}
             >
               Mon planning
@@ -154,7 +154,9 @@ export default function WeekNavigationHeader({
             <button
               onClick={() => handleModeClick('team')}
               className={`px-3 py-1 rounded ${
-                planningMode === 'team' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
+                planningMode === 'team'
+                  ? 'bg-blue-300 dark:bg-blue-500/70'
+                  : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
               }`}
             >
               Planning équipe
@@ -165,7 +167,9 @@ export default function WeekNavigationHeader({
           <button
             onClick={() => handleViewChange('week')}
             className={`px-3 py-1 rounded ${
-              view === 'week' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
+              view === 'week'
+                ? 'bg-blue-300 dark:bg-blue-500/70'
+                : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
             }`}
           >
             Semaine
@@ -173,7 +177,9 @@ export default function WeekNavigationHeader({
           <button
             onClick={() => handleViewChange('month')}
             className={`px-3 py-1 rounded ${
-              view === 'month' ? 'bg-blue-300' : 'bg-gray-300 hover:bg-gray-400'
+              view === 'month'
+                ? 'bg-blue-300 dark:bg-blue-500/70'
+                : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
             }`}
           >
             Mois
