@@ -372,7 +372,7 @@ const ProfilePickerPage = () => {
                 Équipe
               </span>
               {isOwner && (
-                <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+                <>
                   {team.invite_code && (
                     <span
                       role="button"
@@ -383,7 +383,7 @@ const ProfilePickerPage = () => {
                           openInviteDialog(e);
                         }
                       }}
-                      className={`${actionButtonBase} hover:bg-white/30`}
+                      className={`absolute top-3 right-3 z-10 ${actionButtonBase} hover:bg-white/30`}
                       aria-label="Afficher le code d'invitation"
                       data-testid={`team-${team.team_id}-invite-btn`}
                     >
@@ -399,14 +399,14 @@ const ProfilePickerPage = () => {
                         deleteTeam(e);
                       }
                     }}
-                    className={deleteButtonClass}
+                    className={`absolute bottom-3 right-3 z-10 ${deleteButtonClass}`}
                     aria-label={`Supprimer l'équipe ${team.name}`}
                     aria-disabled={deletingTeamId === team.team_id}
                     data-testid={`team-${team.team_id}-delete-btn`}
                   >
                     <Trash2 size={18} />
                   </span>
-                </div>
+                </>
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
                 <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
