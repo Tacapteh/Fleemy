@@ -241,7 +241,17 @@ function AppWithSettings() {
     );
   };
 
-  return <div className={darkModeEnabled ? "dark" : ""}>{renderContent()}</div>;
+  return (
+    <div
+      className={`min-h-screen ${
+        darkModeEnabled
+          ? "dark bg-slate-900 text-slate-100"
+          : "bg-white text-slate-900"
+      }`}
+    >
+      {renderContent()}
+    </div>
+  );
 }
 
 function App() {
