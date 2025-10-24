@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { saveTask, useFirebaseUser } from '../firebase';
-import { TASK_ICON_KEYS, getTaskIcon } from '../constants/icons';
+import {
+  TASK_ICON_CATEGORIES,
+  getTaskIcon,
+  resolveTaskIconCategory,
+  resolveTaskIconKey,
+} from '../constants/icons';
 import { TASK_COLOR_KEYS, getTaskColor, DEFAULT_TASK_COLOR } from '../constants/colors';
 import TaskModalStyles from './TaskModalStyles';
 
@@ -15,18 +20,24 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
   const initEnd = initialTask?.end
     ? new Date(initialTask.end)
     : new Date(initStart.getTime() + 60 * 60 * 1000);
+  const initialIconValue = initialTask?.icon || 'briefcase';
+  const defaultIconKey = resolveTaskIconKey(initialIconValue);
+  const defaultIconCategory =
+    resolveTaskIconCategory(initialIconValue) || TASK_ICON_CATEGORIES[0]?.key || 'work_general';
+
   const [task, setTask] = useState({
     title: initialTask?.title || initialTask?.label || '',
     start: initStart,
     end: initEnd,
     color: initialTask?.color || DEFAULT_TASK_COLOR,
-    icon: initialTask?.icon || 'briefcase',
+    icon: defaultIconKey,
     price: initialTask?.price || '',
     description: initialTask?.description || ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [selectedIconCategory, setSelectedIconCategory] = useState(defaultIconCategory);
   const user = useFirebaseUser();
 
   const formatDateTimeLocal = (date) => {
@@ -88,7 +99,39 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
     }
   };
 
-  const iconOptions = TASK_ICON_KEYS.slice(0, 20); // Afficher les 20 premiers
+  const activeCategory =
+    TASK_ICON_CATEGORIES.find((category) => category.key === selectedIconCategory) ||
+    TASK_ICON_CATEGORIES[0];
+
+  let iconOptions = activeCategory ? Object.keys(activeCategory.icons) : [];
+  const resolvedCurrentIconKey = resolveTaskIconKey(task.icon);
+  if (resolvedCurrentIconKey && !iconOptions.includes(resolvedCurrentIconKey)) {
+    iconOptions = [...iconOptions, resolvedCurrentIconKey];
+  }
+
+  const handleIconCategoryChange = (event) => {
+    const { value } = event.target;
+    setSelectedIconCategory(value);
+
+    const category = TASK_ICON_CATEGORIES.find((item) => item.key === value);
+    if (!category) {
+      return;
+    }
+
+    const categoryIconKeys = Object.keys(category.icons);
+    if (!categoryIconKeys.length) {
+      return;
+    }
+
+    setTask((currentTask) => {
+      const currentIconKey = resolveTaskIconKey(currentTask.icon);
+      if (categoryIconKeys.includes(currentIconKey)) {
+        return currentTask;
+      }
+      return { ...currentTask, icon: categoryIconKeys[0] };
+    });
+  };
+
   const colorOptions = TASK_COLOR_KEYS;
 
   if (!user) {
@@ -157,18 +200,44 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
           <div className="task-form-row">
             <div className="task-form-field">
               <label>Icône</label>
+              <div className="task-form-icon-category">
+                <label className="sr-only" htmlFor="task-icon-category">Catégorie d'icônes</label>
+                <select
+                  id="task-icon-category"
+                  value={selectedIconCategory}
+                  onChange={handleIconCategoryChange}
+                >
+                  {TASK_ICON_CATEGORIES.map((category) => (
+                    <option key={category.key} value={category.key}>
+                      {category.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="task-form-icons">
-                {iconOptions.map((iconKey) => (
-                  <button
-                    key={iconKey}
-                    type="button"
-                    className={`task-form-icon ${task.icon === iconKey ? 'selected' : ''}`}
-                    onClick={() => setTask({ ...task, icon: iconKey })}
-                    title={iconKey}
-                  >
-                    {getTaskIcon(iconKey)}
-                  </button>
-                ))}
+                {iconOptions.map((iconKey) => {
+                  const normalizedKey = resolveTaskIconKey(iconKey);
+                  const isSelected = resolveTaskIconKey(task.icon) === normalizedKey;
+
+                  return (
+                    <button
+                      key={iconKey}
+                      type="button"
+                      className={`task-form-icon ${isSelected ? 'selected' : ''}`}
+                      onClick={() => {
+                        const nextIconKey = resolveTaskIconKey(iconKey);
+                        setTask((current) => ({ ...current, icon: nextIconKey }));
+                        const categoryKey = resolveTaskIconCategory(nextIconKey);
+                        if (categoryKey) {
+                          setSelectedIconCategory(categoryKey);
+                        }
+                      }}
+                      title={normalizedKey}
+                    >
+                      {getTaskIcon(iconKey)}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
