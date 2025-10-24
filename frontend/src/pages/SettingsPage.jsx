@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useSettings } from "../context/SettingsContext";
 
-function Switch({ checked, onToggle, labelledBy }) {
+function Switch({ checked, onToggle, ...props }) {
   const handleToggle = useCallback(() => {
     if (typeof onToggle === "function") {
-      onToggle(!checked);
+      onToggle();
     }
-  }, [checked, onToggle]);
+  }, [onToggle]);
 
   const handleKeyDown = useCallback(
     (event) => {
@@ -23,13 +23,13 @@ function Switch({ checked, onToggle, labelledBy }) {
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-labelledby={labelledBy}
       tabIndex={0}
       onClick={handleToggle}
       onKeyDown={handleKeyDown}
       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
         checked ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-600"
       }`}
+      {...props}
     >
       <span
         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -71,25 +71,24 @@ const toggleSettings = [
 const NUMBER_SETTING_KEY = "defaultSlotDurationMinutes";
 
 export default function SettingsPage() {
-  const { settings, updateSetting } = useSettings();
+  const { settings, loading, updateSetting } = useSettings();
   const [durationInput, setDurationInput] = useState("60");
 
-  const safeSettings = useMemo(() => settings || null, [settings]);
-
   useEffect(() => {
-    if (safeSettings && typeof safeSettings[NUMBER_SETTING_KEY] === "number") {
-      setDurationInput(String(safeSettings[NUMBER_SETTING_KEY]));
+    if (settings && typeof settings[NUMBER_SETTING_KEY] === "number") {
+      setDurationInput(String(settings[NUMBER_SETTING_KEY]));
     }
-  }, [safeSettings]);
+  }, [settings]);
 
   const handleToggle = useCallback(
-    (key, value) => {
-      if (!safeSettings) {
+    (key) => {
+      if (!settings) {
         return;
       }
-      updateSetting?.(key, value);
+      const nextValue = !(settings[key] === true);
+      updateSetting?.(key, nextValue);
     },
-    [safeSettings, updateSetting]
+    [settings, updateSetting]
   );
 
   const handleDurationChange = useCallback((event) => {
@@ -97,27 +96,33 @@ export default function SettingsPage() {
   }, []);
 
   const commitDurationValue = useCallback(() => {
+    if (!settings) {
+      return;
+    }
+
     const parsed = parseInt(durationInput, 10);
     if (Number.isNaN(parsed)) {
-      if (safeSettings && typeof safeSettings[NUMBER_SETTING_KEY] === "number") {
-        setDurationInput(String(safeSettings[NUMBER_SETTING_KEY]));
-      }
+      setDurationInput(
+        String(
+          typeof settings[NUMBER_SETTING_KEY] === "number"
+            ? settings[NUMBER_SETTING_KEY]
+            : 60
+        )
+      );
       return;
     }
 
     const clamped = Math.min(480, Math.max(5, parsed));
     setDurationInput(String(clamped));
 
-    if (safeSettings && safeSettings[NUMBER_SETTING_KEY] === clamped) {
-      return;
+    if (settings[NUMBER_SETTING_KEY] !== clamped) {
+      updateSetting?.(NUMBER_SETTING_KEY, clamped);
     }
+  }, [durationInput, settings, updateSetting]);
 
-    updateSetting?.(NUMBER_SETTING_KEY, clamped);
-  }, [durationInput, safeSettings, updateSetting]);
-
-  if (safeSettings === null) {
+  if (loading || !settings) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+      <div className="flex min-h-screen w-full items-center justify-center text-sm text-slate-700 dark:text-slate-200">
         Chargement…
       </div>
     );
@@ -136,14 +141,13 @@ export default function SettingsPage() {
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         {toggleSettings.map((item) => {
-          const currentValue = Boolean(safeSettings[item.key]);
           const labelId = `setting-${item.key}-label`;
           const descriptionId = `setting-${item.key}-description`;
 
           return (
             <div
               key={item.key}
-              className="flex items-center justify-between py-3 px-4 border-b border-slate-200 last:border-b-0 dark:border-slate-700"
+              className="flex items-center justify-between py-3 border-b border-slate-200 last:border-b-0 dark:border-slate-700 px-4"
             >
               <div className="flex-1 pr-4">
                 <p id={labelId} className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -154,15 +158,15 @@ export default function SettingsPage() {
                 </p>
               </div>
               <Switch
-                checked={currentValue}
-                onToggle={(nextValue) => handleToggle(item.key, nextValue)}
-                labelledBy={labelId}
+                checked={settings[item.key] === true}
+                onToggle={() => handleToggle(item.key)}
+                aria-labelledby={labelId}
               />
             </div>
           );
         })}
 
-        <div className="flex items-center justify-between py-3 px-4 border-b border-slate-200 last:border-b-0 dark:border-slate-700">
+        <div className="flex items-center justify-between py-3 border-b border-slate-200 last:border-b-0 dark:border-slate-700 px-4">
           <div className="flex-1 pr-4">
             <p
               id={`setting-${NUMBER_SETTING_KEY}-label`}
@@ -193,7 +197,7 @@ export default function SettingsPage() {
             }}
             aria-labelledby={`setting-${NUMBER_SETTING_KEY}-label`}
             aria-describedby={`setting-${NUMBER_SETTING_KEY}-description`}
-            className="w-24 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
       </div>
