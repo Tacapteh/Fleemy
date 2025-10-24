@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { saveWeeklyTask } from '../firebase';
-import { TASK_ICON_KEYS, getTaskIcon } from '../constants/icons';
+import {
+  TASK_ICON_CATEGORIES,
+  getTaskIcon,
+  resolveTaskIconCategory,
+  resolveTaskIconKey,
+} from '../constants/icons';
 import {
   TASK_COLOR_KEYS,
   getTaskColor,
@@ -148,6 +153,11 @@ const ensureTimeRanges = (ranges) => {
 };
 
 const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, context, readOnly = false }) => {
+  const initialIconValue = initialTask?.icon || 'briefcase';
+  const defaultIconKey = resolveTaskIconKey(initialIconValue);
+  const defaultIconCategory =
+    resolveTaskIconCategory(initialIconValue) || TASK_ICON_CATEGORIES[0]?.key || 'work_general';
+
   const [task, setTask] = useState(() => ({
     label: initialTask?.label || '',
     price:
@@ -155,12 +165,13 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
         ? String(initialTask.price)
         : '',
     color: initialTask?.color || DEFAULT_TASK_COLOR,
-    icon: initialTask?.icon || 'briefcase',
+    icon: defaultIconKey,
     time_ranges: ensureTimeRanges(initialTask?.time_ranges),
   }));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [selectedIconCategory, setSelectedIconCategory] = useState(defaultIconCategory);
 
   const addTimeRange = () => {
     setTask((current) => ({
@@ -320,7 +331,39 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
     }
   };
 
-  const iconOptions = TASK_ICON_KEYS.slice(0, 24);
+  const activeIconCategory =
+    TASK_ICON_CATEGORIES.find((category) => category.key === selectedIconCategory) ||
+    TASK_ICON_CATEGORIES[0];
+
+  let iconOptions = activeIconCategory ? Object.keys(activeIconCategory.icons) : [];
+  const resolvedCurrentIconKey = resolveTaskIconKey(task.icon);
+  if (resolvedCurrentIconKey && !iconOptions.includes(resolvedCurrentIconKey)) {
+    iconOptions = [...iconOptions, resolvedCurrentIconKey];
+  }
+
+  const handleIconCategoryChange = (event) => {
+    const { value } = event.target;
+    setSelectedIconCategory(value);
+
+    const category = TASK_ICON_CATEGORIES.find((item) => item.key === value);
+    if (!category) {
+      return;
+    }
+
+    const categoryIconKeys = Object.keys(category.icons);
+    if (!categoryIconKeys.length) {
+      return;
+    }
+
+    setTask((currentTask) => {
+      const currentIconKey = resolveTaskIconKey(currentTask.icon);
+      if (categoryIconKeys.includes(currentIconKey)) {
+        return currentTask;
+      }
+      return { ...currentTask, icon: categoryIconKeys[0] };
+    });
+  };
+
   const colorOptions = TASK_COLOR_KEYS;
 
   const getColorLabel = (colorKey) => PASTEL_COLORS[colorKey]?.name || colorKey;
@@ -452,18 +495,41 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
 
               <div className="form-group">
                 <label className="form-label">Icône</label>
+                <div className="weekly-task-icon-category">
+                  <label className="sr-only" htmlFor="weekly-task-icon-category">Catégorie d'icônes</label>
+                  <select
+                    id="weekly-task-icon-category"
+                    value={selectedIconCategory}
+                    onChange={handleIconCategoryChange}
+                    className="form-input"
+                  >
+                    {TASK_ICON_CATEGORIES.map((category) => (
+                      <option key={category.key} value={category.key}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="weekly-task-icon-grid" role="list">
                   {iconOptions.map((iconKey) => {
-                    const isSelected = task.icon === iconKey;
+                    const normalizedKey = resolveTaskIconKey(iconKey);
+                    const isSelected = resolveTaskIconKey(task.icon) === normalizedKey;
                     return (
                       <button
                         key={iconKey}
                         type="button"
                         className={`weekly-task-icon-button ${isSelected ? 'is-selected' : ''}`}
-                        onClick={() => setTask({ ...task, icon: iconKey })}
+                        onClick={() => {
+                          const nextIconKey = resolveTaskIconKey(iconKey);
+                          setTask((current) => ({ ...current, icon: nextIconKey }));
+                          const categoryKey = resolveTaskIconCategory(nextIconKey);
+                          if (categoryKey) {
+                            setSelectedIconCategory(categoryKey);
+                          }
+                        }}
                         aria-pressed={isSelected}
-                        aria-label={`Icône ${iconKey}`}
-                        title={iconKey}
+                        aria-label={`Icône ${normalizedKey}`}
+                        title={normalizedKey}
                       >
                         <span aria-hidden>{getTaskIcon(iconKey)}</span>
                       </button>
