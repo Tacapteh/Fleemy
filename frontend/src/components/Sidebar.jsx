@@ -8,6 +8,7 @@ const menuItems = [
   { id: 'quotes', name: 'Devis', icon: '📋', to: '/quotes' },
   { id: 'invoices', name: 'Factures', icon: '🧾', to: '/invoices' },
   { id: 'clients', name: 'Clients', icon: '👥', to: '/clients' },
+  { id: 'settings', name: 'Paramètres', icon: '⚙️', to: '/settings' },
 ];
 
 const getMenuItemClass = (isActive) =>
@@ -53,6 +54,7 @@ export default function Sidebar({ user, onLogout }) {
                 <Link
                   to={planningPath}
                   className={getMenuItemClass(isPlanningActive)}
+                  aria-label={item.name}
                   aria-current={isPlanningActive ? 'page' : undefined}
                 >
                   <span className="text-lg">{item.icon}</span>
@@ -63,6 +65,7 @@ export default function Sidebar({ user, onLogout }) {
                   to={item.to}
                   end={item.to === '/'}
                   className={({ isActive }) => getMenuItemClass(isActive)}
+                  aria-label={item.name}
                 >
                   <span className="text-lg">{item.icon}</span>
                   <span className="font-medium">{item.name}</span>

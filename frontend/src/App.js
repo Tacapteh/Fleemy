@@ -10,6 +10,7 @@ import {
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, logout } from "./firebase";
 import { contextStore } from "./stores/contextStore";
+import { SettingsProvider } from "./context/SettingsContext";
 
 import Login from "./Login";
 import Dashboard from "./pages/Dashboard";
@@ -17,6 +18,7 @@ import Planning from "./pages/Planning";
 import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
 import Clients from "./pages/Clients";
+import SettingsPage from "./pages/SettingsPage";
 import ProfilePickerPage from "./pages/ProfilePickerPage";
 import Sidebar from "./components/Sidebar";
 import NotFound from "./pages/NotFound";
@@ -172,62 +174,71 @@ function App() {
     clearTeamsCache();
   };
 
-  if (initializing) {
-    return <div>Chargement du compte...</div>;
-  }
+  const renderContent = () => {
+    if (initializing) {
+      return <div>Chargement du compte...</div>;
+    }
 
-  if (!user) {
-    return <Login onLogin={setUser} />;
-  }
+    if (!user) {
+      return <Login onLogin={setUser} />;
+    }
 
-  return (
-    <Router>
-      <Routes>
-        {/* Route de sélection de profil (sans sidebar) */}
-        <Route path="/profiles" element={<ProfilePickerPage />} />
-        
-        {/* Layout englobe les autres pages et passe user via context */}
-        <Route element={<Layout user={user} onLogout={handleLogout} />}>
-          <Route path="/" element={
-            <AuthGuard user={user}>
-              <Navigate to="/dashboard" />
-            </AuthGuard>
-          } />
-          <Route path="/me" element={
-            <AuthGuard user={user}>
-              <Planning />
-            </AuthGuard>
-          } />
-          <Route path="/team/:teamId" element={
-            <AuthGuard user={user}>
-              <Planning />
-            </AuthGuard>
-          } />
-          <Route path="/dashboard" element={
-            <AuthGuard user={user}>
-              <Dashboard />
-            </AuthGuard>
-          } />
-          <Route path="/quotes" element={
-            <AuthGuard user={user}>
-              <Quotes />
-            </AuthGuard>
-          } />
-          <Route path="/invoices" element={
-            <AuthGuard user={user}>
-              <Invoices />
-            </AuthGuard>
-          } />
-          <Route path="/clients" element={
-            <AuthGuard user={user}>
-              <Clients />
-            </AuthGuard>
-          } />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
-    </Router>
-  );
+    return (
+      <Router>
+        <Routes>
+          {/* Route de sélection de profil (sans sidebar) */}
+          <Route path="/profiles" element={<ProfilePickerPage />} />
+
+          {/* Layout englobe les autres pages et passe user via context */}
+          <Route element={<Layout user={user} onLogout={handleLogout} />}>
+            <Route path="/" element={
+              <AuthGuard user={user}>
+                <Navigate to="/dashboard" />
+              </AuthGuard>
+            } />
+            <Route path="/me" element={
+              <AuthGuard user={user}>
+                <Planning />
+              </AuthGuard>
+            } />
+            <Route path="/team/:teamId" element={
+              <AuthGuard user={user}>
+                <Planning />
+              </AuthGuard>
+            } />
+            <Route path="/dashboard" element={
+              <AuthGuard user={user}>
+                <Dashboard />
+              </AuthGuard>
+            } />
+            <Route path="/quotes" element={
+              <AuthGuard user={user}>
+                <Quotes />
+              </AuthGuard>
+            } />
+            <Route path="/invoices" element={
+              <AuthGuard user={user}>
+                <Invoices />
+              </AuthGuard>
+            } />
+            <Route path="/clients" element={
+              <AuthGuard user={user}>
+                <Clients />
+              </AuthGuard>
+            } />
+            <Route path="/settings" element={
+              <AuthGuard user={user}>
+                <SettingsPage />
+              </AuthGuard>
+            } />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </Router>
+    );
+  };
+
+  return <SettingsProvider>{renderContent()}</SettingsProvider>;
 }
 
 export default App;
