@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef } from 'react';
+import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import '../styles/WeeklyGrid.css';
 import { useFirebaseUser } from '../firebase';
 import { calculateHeight, calculateTopPosition } from '../utils/time';
@@ -15,6 +15,9 @@ import EventCard from './EventCard';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SLOT_HEIGHT = 64;
+const MOBILE_BREAKPOINT = 768;
+
+type PositionUnit = 'percentage' | 'minutes';
 
 interface PlannerGridProps {
   events?: PlannerEventInput[];
@@ -59,7 +62,17 @@ interface InteractiveLayerProps {
   onEventClick?: (event: DisplayEvent) => void;
   onTaskClick?: (task: TaskOccurrence) => void;
   isReadOnlyMode?: boolean;
+  positionUnit: PositionUnit;
+  minuteHeight: number;
 }
+
+const formatPositionValue = (value: number, unit: PositionUnit, minuteHeight: number): string => {
+  if (unit === 'minutes') {
+    const fallback = Number.isFinite(minuteHeight) ? `${minuteHeight}px` : '1px';
+    return `calc(var(--weekly-grid-minute-height, ${fallback}) * ${value})`;
+  }
+  return `${value}%`;
+};
 
 const InteractiveLayer = React.memo(function InteractiveLayer({
   hours,
@@ -71,6 +84,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   onEventClick,
   onTaskClick,
   isReadOnlyMode,
+  positionUnit,
+  minuteHeight,
 }: InteractiveLayerProps) {
   return (
     <div className="interactive-layer">
@@ -108,6 +123,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             if (height <= 0) return null;
             const left = (columnIndex * 100) / columnCount;
             const width = 100 / columnCount;
+            const topValue = formatPositionValue(top, positionUnit, minuteHeight);
+            const heightValue = formatPositionValue(height, positionUnit, minuteHeight);
 
             return (
               <EventCard
@@ -115,8 +132,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 event={event}
                 onClick={onEventClick}
                 style={{
-                  top: `${top}%`,
-                  height: `${height}%`,
+                  top: topValue,
+                  height: heightValue,
                   left: `${left}%`,
                   width: `${width}%`,
                 }}
@@ -134,6 +151,9 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             const IconComponent = getIcon(task.icon ?? undefined);
             const isInteractive =
               !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
+
+            const topValue = formatPositionValue(top, positionUnit, minuteHeight);
+            const heightValue = formatPositionValue(height, positionUnit, minuteHeight);
 
             const startTimeLabel = task.startDate.toLocaleTimeString('fr-FR', {
               hour: '2-digit',
@@ -180,8 +200,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                 key={task.occurrenceId}
                 className={`task-standalone ${isInteractive ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500' : ''}`}
                 style={{
-                  top: `${top}%`,
-                  height: `${height}%`,
+                  top: topValue,
+                  height: heightValue,
                   left: '2px',
                   right: '2px',
                   backgroundColor,
@@ -249,12 +269,42 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 }) => {
   const user = useFirebaseUser();
   const normalizedWeekStart = useMemo(() => ensureDate(weekStart), [weekStart]);
+  const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return false;
+    }
+    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return () => {};
+    }
+
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobileLayout(event.matches);
+    };
+
+    setIsMobileLayout(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
+  }, []);
 
   const hours = useMemo(
     () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, '0')}:00`),
     []
   );
   const timeLabels = useMemo(() => [...hours, '18:00'], [hours]);
+  const positionUnit: PositionUnit = isMobileLayout ? 'minutes' : 'percentage';
+  const minuteHeight = SLOT_HEIGHT / 60;
 
   const days = useMemo(() => {
     const base = new Date(normalizedWeekStart);
@@ -299,8 +349,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         }
         columnEndTimes[columnIndex] = endMinutes;
 
-        const top = calculateTopPosition(event.startDate, true);
-        const height = calculateHeight(event.startDate, event.endDate, true);
+        const top = calculateTopPosition(event.startDate, true, positionUnit);
+        const height = calculateHeight(event.startDate, event.endDate, true, positionUnit);
 
         layouts.push({
           event,
@@ -314,7 +364,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       const columnCount = layouts.reduce((max, layout) => Math.max(max, layout.columnIndex + 1), 1);
       return layouts.map((layout) => ({ ...layout, columnCount }));
     });
-  }, [displayEvents]);
+  }, [displayEvents, positionUnit]);
 
   const taskLayouts = useMemo(() => {
     const perDay: TaskBlockLayout[][] = Array.from({ length: 7 }, () => []);
@@ -328,8 +378,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           if (task.dayIndex < 0 || task.dayIndex > 6) {
             return;
           }
-          const top = calculateTopPosition(task.startDate, true);
-          const height = calculateHeight(task.startDate, task.endDate, true);
+          const top = calculateTopPosition(task.startDate, true, positionUnit);
+          const height = calculateHeight(task.startDate, task.endDate, true, positionUnit);
           if (height <= 0) {
             return;
           }
@@ -351,7 +401,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
 
     return perDay;
-  }, [displayTaskGroups]);
+  }, [displayTaskGroups, positionUnit]);
 
   const onCellClick = useCallback(
     (date: Date, timeString: string) => {
@@ -411,6 +461,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
             height: containerHeight,
             '--weekly-grid-slot-height': `${SLOT_HEIGHT}px`,
             '--weekly-grid-row-h': `${SLOT_HEIGHT}px`,
+            '--weekly-grid-minute-height': `${minuteHeight}px`,
           } as React.CSSProperties}
         >
           <GridLayer hours={hours} />
@@ -424,6 +475,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
             onEventClick={onEventClick}
             onTaskClick={onTaskClick}
             isReadOnlyMode={isReadOnlyMode}
+            positionUnit={positionUnit}
+            minuteHeight={minuteHeight}
           />
         </div>
       </div>
