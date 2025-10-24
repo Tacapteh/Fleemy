@@ -697,7 +697,7 @@ export default function Planning() {
 
   const currentLabel = view === 'week' ? formatWeekLabel(currentDate) : formatMonthLabel(currentDate);
 
-  const taskSources = weeklyTasks.length ? weeklyTasks : taskOccurrences;
+  const taskSources = taskOccurrences;
 
   const showSkeleton = eventsLoading || tasksLoading;
 
