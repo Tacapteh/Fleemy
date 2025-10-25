@@ -37,7 +37,7 @@ export default function Todo() {
     setSelectedDate(toDateString(date));
   };
 
-  const formatDisplayDate = (dateStr: string): string => {
+  const formatDisplayDate = (dateStr) => {
     const date = new Date(dateStr + 'T00:00:00');
     return date.toLocaleDateString('fr-FR', {
       weekday: 'long',
