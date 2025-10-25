@@ -294,10 +294,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Widget: Paiements - Consolidé */}
+          {/* Widget: Paiements - Consolidé et Cliquable */}
           <div 
             data-testid="dashboard-payments-widget"
-            className="group relative overflow-hidden rounded-2xl border border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-green-900/30 dark:from-green-950/40 dark:to-emerald-950/20"
+            onClick={() => navigate('/invoices')}
+            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50/50 p-6 shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg dark:border-green-900/30 dark:from-green-950/40 dark:to-emerald-950/20"
           >
             <div className="flex items-start justify-between">
               <div className="w-full space-y-4">
