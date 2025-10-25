@@ -599,10 +599,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                 </span>
               </div>
             ))}
-            <div className="time-label-terminal absolute bottom-0 left-0 right-0 flex justify-end pr-2">
-              <span className="text-xs text-slate-500 leading-none dark:text-slate-100">
-                {finalHourLabel}
-              </span>
+            <div className="hour-label-final flex justify-end pr-2 pt-1 pb-1 mt-1 bg-white/80 text-xs text-slate-500 leading-none dark:bg-slate-900/80 dark:text-slate-100">
+              <span>{finalHourLabel}</span>
             </div>
           </div>
 
@@ -806,37 +804,31 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                     >
                       <div className="grid grid-cols-[60px_1fr] gap-0">
                         {/* Colonne des heures + Colonne des événements */}
-                        {hours.map((hourLabel, hourIndex) => {
-                          const isLastSlot = hourIndex === hours.length - 1;
+                        {hours.map((hourLabel) => (
+                          <React.Fragment key={hourLabel}>
+                            {/* Heure à gauche */}
+                            <div
+                              className="sticky left-0 bg-[#1a2235] border-b border-white/10 flex items-start justify-end pr-2 py-1"
+                              style={{ height: `${SLOT_HEIGHT}px` }}
+                            >
+                              <span className="text-xs text-gray-400 dark:text-slate-400">{hourLabel}</span>
+                            </div>
 
-                          return (
-                            <React.Fragment key={hourLabel}>
-                              {/* Heure à gauche */}
-                              <div
-                                className="sticky left-0 bg-[#1a2235] border-b border-white/10 flex items-start justify-end pr-2 py-1 relative"
-                                style={{ height: `${SLOT_HEIGHT}px` }}
-                              >
-                                <span className="text-xs text-gray-400 dark:text-slate-400">{hourLabel}</span>
-                                {isLastSlot && (
-                                  <span className="absolute bottom-0 right-0 text-xs text-gray-400 dark:text-slate-400">
-                                    {finalHourLabel}
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Cellule de temps à droite */}
-                              <div className="relative border-b border-white/10" style={{ height: `${SLOT_HEIGHT}px` }}>
-                                {!isReadOnlyMode && (
-                                  <button
-                                    type="button"
-                                    className="absolute inset-0 hover:bg-white/5 transition-colors"
-                                    onClick={() => onCellClick?.(day.date, hourLabel)}
-                                  />
-                                )}
-                              </div>
-                            </React.Fragment>
-                          );
-                        })}
+                            {/* Cellule de temps à droite */}
+                            <div className="relative border-b border-white/10" style={{ height: `${SLOT_HEIGHT}px` }}>
+                              {!isReadOnlyMode && (
+                                <button
+                                  type="button"
+                                  className="absolute inset-0 hover:bg-white/5 transition-colors"
+                                  onClick={() => onCellClick?.(day.date, hourLabel)}
+                                />
+                              )}
+                            </div>
+                          </React.Fragment>
+                        ))}
+                        <div className="hour-label-final sticky left-0 bg-[#1a2235] flex items-start justify-end pr-2 pt-1 pb-1 mt-1 text-xs text-gray-400 dark:text-slate-300">
+                          <span>{finalHourLabel}</span>
+                        </div>
                       </div>
 
                       {/* Conteneur absolu pour les événements */}
