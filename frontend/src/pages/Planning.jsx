@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
@@ -173,7 +173,35 @@ export default function Planning() {
   const isTeamContext = Boolean(routeTeamId);
   const teamId = routeTeamId || null;
 
-  const [view, setView] = useState('week');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawViewParam = (searchParams.get('view') || '').toLowerCase();
+  const viewParam = rawViewParam === 'month' ? 'month' : 'week';
+  const [view, setView] = useState(viewParam);
+
+  useEffect(() => {
+    if (view !== viewParam) {
+      setView(viewParam);
+    }
+  }, [viewParam, view]);
+
+  const handleViewChange = useCallback(
+    (nextView) => {
+      const normalized = nextView === 'month' ? 'month' : 'week';
+      if (normalized === viewParam) {
+        return;
+      }
+
+      const params = new URLSearchParams(searchParams);
+      if (normalized === 'week') {
+        params.delete('view');
+      } else {
+        params.set('view', 'month');
+      }
+
+      setSearchParams(params, { replace: true });
+    },
+    [viewParam, searchParams, setSearchParams],
+  );
   const [currentDate, setCurrentDate] = useState(new Date());
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
@@ -1051,7 +1079,7 @@ export default function Planning() {
           onNext={goToNext}
           onToday={goToToday}
           view={view}
-          onViewChange={setView}
+          onViewChange={handleViewChange}
         />
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -1104,7 +1132,7 @@ export default function Planning() {
             year={currentDate.getFullYear()}
             month={currentDate.getMonth()}
             onDateSelect={(date) => {
-              setView('week');
+              handleViewChange('week');
               setCurrentDate(date);
             }}
             onEventClick={openEventModal}

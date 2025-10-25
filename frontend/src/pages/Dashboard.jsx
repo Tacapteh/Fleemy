@@ -1,5 +1,5 @@
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { contextStore } from '../stores/contextStore';
 import { useSettings } from '../context/SettingsContext';
 import useUserWeekSlots from '../hooks/useUserWeekSlots';
@@ -218,6 +218,7 @@ export default function Dashboard() {
   const context = contextStore.get();
   const isTeamMode = context?.type === 'team';
   const teamId = context?.teamId;
+  const planningPath = isTeamMode && teamId ? `/team/${teamId}` : '/me';
 
   const {
     slots,
@@ -371,6 +372,20 @@ export default function Dashboard() {
 
   const loading = slotsLoading;
 
+  const handleUpcomingWidgetClick = useCallback(() => {
+    navigate({ pathname: planningPath, search: '?view=month' });
+  }, [navigate, planningPath]);
+
+  const handleUpcomingWidgetKeyDown = useCallback(
+    (event) => {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        handleUpcomingWidgetClick();
+      }
+    },
+    [handleUpcomingWidgetClick],
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 p-4 md:p-8 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
@@ -488,9 +503,14 @@ export default function Dashboard() {
           </div>
 
           {/* Widget: Prochains créneaux */}
-          <div 
+          <div
             data-testid="dashboard-upcoming-widget"
-            className="group relative overflow-hidden rounded-2xl border border-purple-200/50 bg-gradient-to-br from-purple-50 to-violet-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-purple-900/30 dark:from-purple-950/40 dark:to-violet-950/20 md:col-span-2"
+            role="button"
+            tabIndex={0}
+            aria-label="Ouvrir la vue mensuelle du planning"
+            onClick={handleUpcomingWidgetClick}
+            onKeyDown={handleUpcomingWidgetKeyDown}
+            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-purple-200/50 bg-gradient-to-br from-purple-50 to-violet-50/50 p-6 shadow-sm transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-purple-900/30 dark:from-purple-950/40 dark:to-violet-950/20 md:col-span-2"
           >
             <div className="space-y-4">
               <div className="flex items-center gap-2">
