@@ -427,12 +427,11 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
               if (!showWeekendsEnabled && di >= 5) {
                 return null;
               }
-              return (
-                value ? (
-                  <div
-                    key={di}
-                    className="calendar-cell"
-                    onClick={() => handleSelect(value)}
+              return value ? (
+                <div
+                  key={di}
+                  className="calendar-cell"
+                  onClick={() => handleSelect(value)}
                 >
                   <div className="calendar-cell-header">
                     <span className="calendar-cell-day">{value}</span>
@@ -442,9 +441,9 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
                     {renderDayItems(getDayItems(value))}
                   </div>
                 </div>
-                ) : (
-                  <div key={di} className="calendar-cell empty" />
-                );
+              ) : (
+                <div key={di} className="calendar-cell empty" />
+              );
             })}
           </div>
         ))}
