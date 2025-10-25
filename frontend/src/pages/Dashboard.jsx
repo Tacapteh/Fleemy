@@ -196,10 +196,11 @@ export default function Dashboard() {
 
         {/* Grille de widgets */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Widget: Cette semaine */}
+          {/* Widget: Cette semaine - Cliquable pour naviguer vers Planning */}
           <div 
             data-testid="dashboard-week-widget"
-            className="group relative overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-br from-blue-50 to-cyan-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-blue-900/30 dark:from-blue-950/40 dark:to-cyan-950/20"
+            onClick={() => navigate(isTeamMode ? `/team/${teamId}` : '/me')}
+            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-br from-blue-50 to-cyan-50/50 p-6 shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg dark:border-blue-900/30 dark:from-blue-950/40 dark:to-cyan-950/20"
           >
             <div className="flex items-start justify-between">
               <div className="space-y-3">
@@ -218,79 +219,49 @@ export default function Dashboard() {
                   </p>
                 </div>
               </div>
-              <TrendingUp className="h-8 w-8 text-blue-400/20 dark:text-blue-600/20" />
+              <TrendingUp className="h-8 w-8 text-blue-400/20 transition-transform group-hover:scale-110 dark:text-blue-600/20" />
             </div>
           </div>
 
-          {/* Widget: Payé */}
+          {/* Widget: Paiements - Consolidé */}
           <div 
-            data-testid="dashboard-paid-widget"
+            data-testid="dashboard-payments-widget"
             className="group relative overflow-hidden rounded-2xl border border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-green-900/30 dark:from-green-950/40 dark:to-emerald-950/20"
           >
             <div className="flex items-start justify-between">
-              <div className="space-y-3">
+              <div className="w-full space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="rounded-lg bg-green-500/10 p-2 dark:bg-green-500/20">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
                   </div>
-                  <h3 className="text-sm font-semibold text-green-900 dark:text-green-200">Payé</h3>
+                  <h3 className="text-sm font-semibold text-green-900 dark:text-green-200">Paiements</h3>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-3xl font-bold text-green-900 dark:text-green-100">
+                
+                {/* Montant principal - Payé */}
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-green-900 dark:text-green-100">
                     {dashboardData.payments.paid.toFixed(0)} €
                   </p>
                   <p className="text-sm text-green-700 dark:text-green-300">Revenus confirmés</p>
                 </div>
-              </div>
-              <DollarSign className="h-8 w-8 text-green-400/20 dark:text-green-600/20" />
-            </div>
-          </div>
 
-          {/* Widget: En attente */}
-          <div 
-            data-testid="dashboard-pending-widget"
-            className="group relative overflow-hidden rounded-2xl border border-amber-200/50 bg-gradient-to-br from-amber-50 to-orange-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-amber-900/30 dark:from-amber-950/40 dark:to-orange-950/20"
-          >
-            <div className="flex items-start justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-amber-500/10 p-2 dark:bg-amber-500/20">
-                    <HelpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                {/* Montants secondaires */}
+                <div className="flex items-center justify-between gap-4 border-t border-green-200/50 pt-3 dark:border-green-800/30">
+                  <div className="flex-1 text-center">
+                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">
+                      {dashboardData.payments.pending.toFixed(0)} €
+                    </p>
+                    <p className="text-xs text-amber-600 dark:text-amber-500">En attente</p>
                   </div>
-                  <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">En attente</h3>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-3xl font-bold text-amber-900 dark:text-amber-100">
-                    {dashboardData.payments.pending.toFixed(0)} €
-                  </p>
-                  <p className="text-sm text-amber-700 dark:text-amber-300">En cours</p>
+                  <div className="h-8 w-px bg-green-200 dark:bg-green-800" />
+                  <div className="flex-1 text-center">
+                    <p className="text-lg font-semibold text-red-700 dark:text-red-400">
+                      {dashboardData.payments.unpaid.toFixed(0)} €
+                    </p>
+                    <p className="text-xs text-red-600 dark:text-red-500">À facturer</p>
+                  </div>
                 </div>
               </div>
-              <Clock className="h-8 w-8 text-amber-400/20 dark:text-amber-600/20" />
-            </div>
-          </div>
-
-          {/* Widget: À facturer */}
-          <div 
-            data-testid="dashboard-unpaid-widget"
-            className="group relative overflow-hidden rounded-2xl border border-red-200/50 bg-gradient-to-br from-red-50 to-pink-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-red-900/30 dark:from-red-950/40 dark:to-pink-950/20"
-          >
-            <div className="flex items-start justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-red-500/10 p-2 dark:bg-red-500/20">
-                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-red-900 dark:text-red-200">À facturer</h3>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-3xl font-bold text-red-900 dark:text-red-100">
-                    {dashboardData.payments.unpaid.toFixed(0)} €
-                  </p>
-                  <p className="text-sm text-red-700 dark:text-red-300">À encaisser</p>
-                </div>
-              </div>
-              <FileText className="h-8 w-8 text-red-400/20 dark:text-red-600/20" />
             </div>
           </div>
 
