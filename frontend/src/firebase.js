@@ -954,6 +954,39 @@ const normalizeEventDocument = (docSnap, ownerUid, teamId, viewerUid) => {
   return normalizeEventData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
 };
 
+const normalizeTaskDateField = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  let candidate = null;
+
+  if (value instanceof Date) {
+    candidate = new Date(value);
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const normalized = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
+    candidate = new Date(normalized);
+  } else if (typeof value === 'number') {
+    candidate = new Date(value);
+  } else if (typeof value === 'object' && typeof value.toDate === 'function') {
+    candidate = value.toDate();
+  }
+
+  if (!candidate || Number.isNaN(candidate.getTime())) {
+    return null;
+  }
+
+  candidate.setHours(0, 0, 0, 0);
+  const year = candidate.getFullYear();
+  const month = String(candidate.getMonth() + 1).padStart(2, '0');
+  const day = String(candidate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
   if (!data) {
     return null;
@@ -970,11 +1003,17 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     const rawDay = range?.day ?? range?.dayIndex ?? range?.weekday;
     const normalizedDay = normalizeWeekdayValue(rawDay);
     const normalizedWeekday = normalizeWeekdayValue(range?.weekday ?? normalizedDay);
+    const normalizedDate = normalizeTaskDateField(
+      range?.task_date ?? range?.taskDate ?? range?.task_day_iso ?? range?.taskDayIso ?? null,
+    );
 
     return {
       ...range,
       day: normalizedDay ?? range?.day ?? null,
       weekday: normalizedWeekday ?? normalizedDay ?? null,
+      task_date: normalizedDate ?? null,
+      task_day_iso: normalizedDate ?? null,
+      taskDate: normalizedDate ?? null,
     };
   });
 
@@ -1149,7 +1188,18 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
         return null;
       }
 
-      return { day, start, end, weekday: day };
+      const taskDateIso = normalizeTaskDateField(
+        range.task_date ?? range.taskDate ?? range.task_day_iso ?? range.taskDayIso ?? null,
+      );
+
+      const sanitized = { day, start, end, weekday: day };
+
+      if (taskDateIso) {
+        sanitized.task_date = taskDateIso;
+        sanitized.task_day_iso = taskDateIso;
+      }
+
+      return sanitized;
     })
     .filter(Boolean);
 };
@@ -1183,12 +1233,23 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
     price: normalizeWeeklyTaskPrice(taskData?.price),
     color: taskData?.color || null,
     icon: taskData?.icon || null,
-    time_ranges: sanitizedRanges.map((range) => ({
-      day: range.day,
-      start: range.start,
-      end: range.end,
-      weekday: normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day,
-    })),
+    time_ranges: sanitizedRanges.map((range) => {
+      const normalizedWeekday = normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
+      const payloadRange = {
+        day: range.day,
+        start: range.start,
+        end: range.end,
+        weekday: normalizedWeekday,
+      };
+
+      const normalizedDate = normalizeTaskDateField(range.task_date ?? range.task_day_iso ?? null);
+      if (normalizedDate) {
+        payloadRange.task_date = normalizedDate;
+        payloadRange.task_day_iso = normalizedDate;
+      }
+
+      return payloadRange;
+    }),
     weekly: true,
     owner_uid: ownerUid,
     user_id: ownerUid,
@@ -1252,12 +1313,23 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
     price: normalizedPrice,
     color: taskData?.color ?? null,
     icon: taskData?.icon ?? null,
-    time_ranges: sanitizedRanges.map((range) => ({
-      day: range.day,
-      start: range.start,
-      end: range.end,
-      weekday: normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day,
-    })),
+    time_ranges: sanitizedRanges.map((range) => {
+      const normalizedWeekday = normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
+      const payloadRange = {
+        day: range.day,
+        start: range.start,
+        end: range.end,
+        weekday: normalizedWeekday,
+      };
+
+      const normalizedDate = normalizeTaskDateField(range.task_date ?? range.task_day_iso ?? null);
+      if (normalizedDate) {
+        payloadRange.task_date = normalizedDate;
+        payloadRange.task_day_iso = normalizedDate;
+      }
+
+      return payloadRange;
+    }),
     member_uid: ownerUid,
   };
 

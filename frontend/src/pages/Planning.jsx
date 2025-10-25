@@ -8,6 +8,7 @@ import WeeklyTaskModal from '../components/WeeklyTaskModal';
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
 import { useSettings } from '../context/SettingsContext';
+import { getIcon } from '../icons/registry';
 import {
   useFirebaseUser,
   watchWeekEvents,
@@ -29,6 +30,32 @@ const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'satur
 const DEFAULT_START = '09:00';
 const DEFAULT_END = '10:00';
 const EVENTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+const TaskSummaryRow = ({ iconId, label, price }) => {
+  const IconComponent = getIcon(iconId || undefined);
+
+  return (
+    <div
+      role="listitem"
+      tabIndex={0}
+      className="flex items-center justify-between gap-3 rounded-md bg-white/70 px-3 py-2 text-xs text-slate-700 shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-100 dark:bg-slate-900/50 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
+      aria-label={`${label} — ${price}`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/30 dark:text-sky-200"
+          title={label}
+        >
+          <IconComponent className="h-4 w-4" aria-hidden="true" focusable="false" />
+        </span>
+        <span className="truncate text-sm">{label}</span>
+      </div>
+      <span className="flex-shrink-0 text-sm font-semibold text-slate-900 dark:text-slate-50">
+        {price}
+      </span>
+    </div>
+  );
+};
 
 const matchTeamId = (team, teamId) => {
   if (!team || !teamId) {
@@ -391,6 +418,56 @@ export default function Planning() {
     ],
     [earningsSummary],
   );
+
+  const tasksSummary = useMemo(() => {
+    if (!Array.isArray(taskOccurrences) || taskOccurrences.length === 0) {
+      return { total: 0, items: [] };
+    }
+
+    const items = taskOccurrences
+      .map((occurrence) => {
+        const rawPrice = occurrence?.price;
+        const priceNumber = Number(rawPrice);
+        if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+          return null;
+        }
+
+        const label =
+          typeof occurrence?.label === 'string' && occurrence.label.trim()
+            ? occurrence.label.trim()
+            : 'Tâche';
+
+        const startDate = occurrence?.startDate instanceof Date ? occurrence.startDate : null;
+        const sortValue = startDate ? startDate.getTime() : Number.POSITIVE_INFINITY;
+
+        return {
+          id: occurrence.occurrenceId || `${occurrence.taskId || 'task'}-${priceNumber}`,
+          icon: occurrence.icon || null,
+          label,
+          price: priceNumber,
+          sortValue,
+        };
+      })
+      .filter(Boolean);
+
+    if (!items.length) {
+      return { total: 0, items: [] };
+    }
+
+    items.sort((a, b) => {
+      if (a.sortValue !== b.sortValue) {
+        return a.sortValue - b.sortValue;
+      }
+      return a.label.localeCompare(b.label, 'fr');
+    });
+
+    const total = items.reduce((sum, item) => sum + item.price, 0);
+
+    return {
+      total,
+      items: items.map(({ id, icon, label, price }) => ({ id, icon, label, price })),
+    };
+  }, [taskOccurrences]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -1180,7 +1257,7 @@ export default function Planning() {
               {clientsError}
             </p>
           )}
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {summaryCards.map((card) => (
               <div
                 key={card.key}
@@ -1194,6 +1271,32 @@ export default function Planning() {
                 </p>
               </div>
             ))}
+            <div
+              className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition-colors ${
+                tasksSummary.items.length > 0
+                  ? 'border-sky-200/70 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10'
+                  : 'border-slate-200/70 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
+              }`}
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                Tâches
+              </p>
+              <p className="mt-1 text-lg font-semibold text-sky-700 dark:text-sky-300">
+                {currencyFormatter.format(tasksSummary.total)}
+              </p>
+              {tasksSummary.items.length > 0 && (
+                <div className="mt-3 space-y-2" role="list">
+                  {tasksSummary.items.map((item) => (
+                    <TaskSummaryRow
+                      key={item.id}
+                      iconId={item.icon}
+                      label={item.label}
+                      price={currencyFormatter.format(item.price)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1235,6 +1338,7 @@ export default function Planning() {
         onDelete={!readOnly ? (task) => task?.id && handleDeleteWeeklyTask(task.id) : undefined}
         context={planningContext}
         readOnly={readOnly}
+        weekStartISO={weekStartISO}
       />
     </div>
   );

@@ -80,6 +80,47 @@ const parseTime = (timeStr) => {
   return { hours, minutes };
 };
 
+const parseTaskDate = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    const clone = new Date(value);
+    clone.setHours(0, 0, 0, 0);
+    return clone;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const candidate = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
+    const parsed = new Date(candidate);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  if (typeof value === 'number') {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    return parseTaskDate(value.toDate());
+  }
+
+  return null;
+};
+
 const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
   if (!Array.isArray(weeklyTasks)) {
     return [];
@@ -121,6 +162,43 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
 
       const taskWeekday = toDayIndex(task.weekday ?? task.week_day ?? task.weekDay);
       if (taskWeekday !== null && taskWeekday !== dayIndex) {
+        return;
+      }
+
+      const explicitDate = parseTaskDate(
+        slot?.task_date ?? slot?.taskDate ?? slot?.task_day_iso ?? slot?.taskDayIso ?? null,
+      );
+
+      if (explicitDate) {
+        if (explicitDate < startDate || explicitDate > endDate) {
+          return;
+        }
+
+        const taskStart = new Date(explicitDate);
+        taskStart.setHours(startTime.hours, startTime.minutes, 0, 0);
+
+        const taskEnd = new Date(explicitDate);
+        taskEnd.setHours(endTime.hours, endTime.minutes, 0, 0);
+
+        if (taskEnd <= taskStart) {
+          return;
+        }
+
+        occurrences.push({
+          id: `${task.id || 'task'}:${index}:${taskStart.toISOString()}`,
+          taskId: task.id,
+          start: taskStart,
+          end: taskEnd,
+          title: task.title || task.label || 'Tâche',
+          label: task.label || task.title || 'Tâche',
+          icon: task.icon || '📋',
+          color: task.color || '#10b981',
+          type: task.type || 'task',
+          status: task.status || 'task',
+          readOnly: Boolean(task.readOnly),
+          weekly: true,
+          originalTask: task,
+        });
         return;
       }
 
