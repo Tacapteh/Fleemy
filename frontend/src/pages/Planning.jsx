@@ -419,56 +419,6 @@ export default function Planning() {
     [earningsSummary],
   );
 
-  const tasksSummary = useMemo(() => {
-    if (!Array.isArray(taskOccurrences) || taskOccurrences.length === 0) {
-      return { total: 0, items: [] };
-    }
-
-    const items = taskOccurrences
-      .map((occurrence) => {
-        const rawPrice = occurrence?.price;
-        const priceNumber = Number(rawPrice);
-        if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
-          return null;
-        }
-
-        const label =
-          typeof occurrence?.label === 'string' && occurrence.label.trim()
-            ? occurrence.label.trim()
-            : 'Tâche';
-
-        const startDate = occurrence?.startDate instanceof Date ? occurrence.startDate : null;
-        const sortValue = startDate ? startDate.getTime() : Number.POSITIVE_INFINITY;
-
-        return {
-          id: occurrence.occurrenceId || `${occurrence.taskId || 'task'}-${priceNumber}`,
-          icon: occurrence.icon || null,
-          label,
-          price: priceNumber,
-          sortValue,
-        };
-      })
-      .filter(Boolean);
-
-    if (!items.length) {
-      return { total: 0, items: [] };
-    }
-
-    items.sort((a, b) => {
-      if (a.sortValue !== b.sortValue) {
-        return a.sortValue - b.sortValue;
-      }
-      return a.label.localeCompare(b.label, 'fr');
-    });
-
-    const total = items.reduce((sum, item) => sum + item.price, 0);
-
-    return {
-      total,
-      items: items.map(({ id, icon, label, price }) => ({ id, icon, label, price })),
-    };
-  }, [taskOccurrences]);
-
   useEffect(() => {
     if (!user?.uid) {
       return;
@@ -887,6 +837,56 @@ export default function Planning() {
     loading: tasksLoading,
     error: tasksError,
   } = useTasks(planningContext, weekStartISO);
+
+  const tasksSummary = useMemo(() => {
+    if (!Array.isArray(taskOccurrences) || taskOccurrences.length === 0) {
+      return { total: 0, items: [] };
+    }
+
+    const items = taskOccurrences
+      .map((occurrence) => {
+        const rawPrice = occurrence?.price;
+        const priceNumber = Number(rawPrice);
+        if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+          return null;
+        }
+
+        const label =
+          typeof occurrence?.label === 'string' && occurrence.label.trim()
+            ? occurrence.label.trim()
+            : 'Tâche';
+
+        const startDate = occurrence?.startDate instanceof Date ? occurrence.startDate : null;
+        const sortValue = startDate ? startDate.getTime() : Number.POSITIVE_INFINITY;
+
+        return {
+          id: occurrence.occurrenceId || `${occurrence.taskId || 'task'}-${priceNumber}`,
+          icon: occurrence.icon || null,
+          label,
+          price: priceNumber,
+          sortValue,
+        };
+      })
+      .filter(Boolean);
+
+    if (!items.length) {
+      return { total: 0, items: [] };
+    }
+
+    items.sort((a, b) => {
+      if (a.sortValue !== b.sortValue) {
+        return a.sortValue - b.sortValue;
+      }
+      return a.label.localeCompare(b.label, 'fr');
+    });
+
+    const total = items.reduce((sum, item) => sum + item.price, 0);
+
+    return {
+      total,
+      items: items.map(({ id, icon, label, price }) => ({ id, icon, label, price })),
+    };
+  }, [taskOccurrences]);
 
   const handleDeleteWeeklyTask = useCallback(
     async (taskId) => {
