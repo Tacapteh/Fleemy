@@ -20,6 +20,7 @@ import Invoices from "./pages/Invoices";
 import Clients from "./pages/Clients";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePickerPage from "./pages/ProfilePickerPage";
+import Todo from "./pages/Todo";
 import Sidebar from "./components/Sidebar";
 import NotFound from "./pages/NotFound";
 import { apiFetch } from "./lib/api";
