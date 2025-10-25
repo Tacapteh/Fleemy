@@ -119,6 +119,11 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
         return;
       }
 
+      const taskWeekday = toDayIndex(task.weekday ?? task.week_day ?? task.weekDay);
+      if (taskWeekday !== null && taskWeekday !== dayIndex) {
+        return;
+      }
+
       const firstOccurrence = new Date(startDate);
       while ((firstOccurrence.getDay() + 6) % 7 !== dayIndex && firstOccurrence <= endDate) {
         firstOccurrence.setDate(firstOccurrence.getDate() + 1);

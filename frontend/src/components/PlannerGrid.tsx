@@ -490,6 +490,9 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           if (task.dayIndex < 0 || task.dayIndex > 6) {
             return;
           }
+          if (typeof task.weekday === 'number' && task.weekday !== task.dayIndex) {
+            return;
+          }
           const effectiveStart = allowMinutes ? task.startDate : floorDateToHour(task.startDate);
           const effectiveEnd = allowMinutes ? task.endDate : ceilDateToHour(task.endDate);
           const top = calculateTopPosition(effectiveStart, true, positionUnit, visibleRange);

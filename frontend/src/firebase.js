@@ -960,6 +960,28 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
   }
 
   const resolvedOwner = data.owner_uid || data.user_id || ownerUid;
+  const rawRanges = Array.isArray(data.time_ranges)
+    ? data.time_ranges
+    : Array.isArray(data.time_slots)
+    ? data.time_slots
+    : [];
+
+  const resolvedRanges = rawRanges.map((range) => {
+    const rawDay = range?.day ?? range?.dayIndex ?? range?.weekday;
+    const normalizedDay = normalizeWeekdayValue(rawDay);
+    const normalizedWeekday = normalizeWeekdayValue(range?.weekday ?? normalizedDay);
+
+    return {
+      ...range,
+      day: normalizedDay ?? range?.day ?? null,
+      weekday: normalizedWeekday ?? normalizedDay ?? null,
+    };
+  });
+
+  let resolvedWeekday = normalizeWeekdayValue(data.weekday);
+  if (resolvedWeekday == null && resolvedRanges.length > 0) {
+    resolvedWeekday = normalizeWeekdayValue(resolvedRanges[0]?.weekday ?? resolvedRanges[0]?.day ?? null);
+  }
 
   return {
     id,
@@ -968,11 +990,10 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     price: data.price ?? null,
     color: data.color || data.colorCode || '#dbeafe',
     icon: data.icon || data.emoji || '📋',
-    time_ranges: Array.isArray(data.time_ranges)
-      ? data.time_ranges
-      : Array.isArray(data.time_slots)
-      ? data.time_slots
-      : [],
+    time_ranges: resolvedRanges,
+    weekday: resolvedWeekday,
+    startTime: data.startTime || data.start_time || (resolvedRanges[0]?.start ?? null),
+    endTime: data.endTime || data.end_time || (resolvedRanges[0]?.end ?? null),
     weekly: true,
     user_id: resolvedOwner,
     owner_uid: resolvedOwner,
@@ -1035,6 +1056,58 @@ const normalizeWeeklyTaskTimeString = (
   return `${String(hours).padStart(2, "0")}:${String(normalizedMinutes).padStart(2, "0")}`;
 };
 
+const normalizeWeekdayValue = (value) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const normalized = Math.floor(value);
+    if (normalized >= 0 && normalized <= 6) {
+      return normalized;
+    }
+    if (normalized >= 1 && normalized <= 7) {
+      return (normalized + 6) % 7;
+    }
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) {
+      const parsed = Number.parseInt(trimmed, 10);
+      if (!Number.isNaN(parsed)) {
+        return normalizeWeekdayValue(parsed);
+      }
+
+      const lower = trimmed.toLowerCase();
+      const dayNameMap = {
+        monday: 0,
+        mon: 0,
+        lundi: 0,
+        tuesday: 1,
+        tue: 1,
+        mardi: 1,
+        wednesday: 2,
+        wed: 2,
+        mercredi: 2,
+        thursday: 3,
+        thu: 3,
+        jeudi: 3,
+        friday: 4,
+        fri: 4,
+        vendredi: 4,
+        saturday: 5,
+        sat: 5,
+        samedi: 5,
+        sunday: 6,
+        sun: 6,
+        dimanche: 6,
+      };
+      if (Object.prototype.hasOwnProperty.call(dayNameMap, lower)) {
+        return dayNameMap[lower];
+      }
+    }
+  }
+
+  return null;
+};
+
 const sanitizeWeeklyTaskTimeRanges = (ranges) => {
   if (!Array.isArray(ranges)) {
     return [];
@@ -1076,7 +1149,7 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
         return null;
       }
 
-      return { day, start, end };
+      return { day, start, end, weekday: day };
     })
     .filter(Boolean);
 };
@@ -1099,19 +1172,43 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
   const label = rawLabel || rawTitle || "Tâche sans titre";
   const title = rawTitle || rawLabel || "Tâche sans titre";
 
+  let normalizedWeekday = normalizeWeekdayValue(taskData?.weekday);
+  if (normalizedWeekday == null && Array.isArray(sanitizedRanges) && sanitizedRanges.length > 0) {
+    normalizedWeekday = normalizeWeekdayValue(sanitizedRanges[0]?.day);
+  }
+
   const payload = {
     label,
     title,
     price: normalizeWeeklyTaskPrice(taskData?.price),
     color: taskData?.color || null,
     icon: taskData?.icon || null,
-    time_ranges: sanitizedRanges,
+    time_ranges: sanitizedRanges.map((range) => ({
+      day: range.day,
+      start: range.start,
+      end: range.end,
+      weekday: normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day,
+    })),
     weekly: true,
     owner_uid: ownerUid,
     user_id: ownerUid,
     team_id: teamId || null,
     updated_at: serverTimestamp(),
   };
+
+  const primaryRange = sanitizedRanges[0];
+  if (primaryRange?.start) {
+    payload.startTime = primaryRange.start;
+    payload.start_time = primaryRange.start;
+  }
+  if (primaryRange?.end) {
+    payload.endTime = primaryRange.end;
+    payload.end_time = primaryRange.end;
+  }
+
+  if (normalizedWeekday != null) {
+    payload.weekday = normalizedWeekday;
+  }
 
   if (payload.icon == null) {
     delete payload.icon;
@@ -1143,6 +1240,8 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
   const apiFetch = await getApiFetch();
   const normalizedPrice = normalizeWeeklyTaskPrice(taskData?.price);
 
+  const normalizedWeekday = normalizeWeekdayValue(taskData?.weekday ?? sanitizedRanges[0]?.day ?? null);
+
   const body = {
     label: typeof taskData?.label === 'string' && taskData.label.trim()
       ? taskData.label.trim()
@@ -1157,9 +1256,25 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
       day: range.day,
       start: range.start,
       end: range.end,
+      weekday: normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day,
     })),
     member_uid: ownerUid,
   };
+
+  const primaryRange = sanitizedRanges[0];
+
+  if (primaryRange?.start) {
+    body.start_time = primaryRange.start;
+    body.startTime = primaryRange.start;
+  }
+  if (primaryRange?.end) {
+    body.end_time = primaryRange.end;
+    body.endTime = primaryRange.end;
+  }
+
+  if (normalizedWeekday != null) {
+    body.weekday = normalizedWeekday;
+  }
 
   if (teamId) {
     body.team_id = teamId;
@@ -1670,7 +1785,11 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
     throw new Error('Au moins un créneau horaire valide est requis');
   }
 
-  const normalizedTaskData = { ...taskData, time_ranges: sanitizedRanges };
+  const normalizedTaskData = {
+    ...taskData,
+    time_ranges: sanitizedRanges,
+    weekday: normalizeWeekdayValue(taskData?.weekday ?? sanitizedRanges[0]?.day ?? null),
+  };
   const payload = buildWeeklyTaskPayload(normalizedTaskData, ownerUid, teamId || null, sanitizedRanges);
 
   const attemptFallbackSave = async () =>
