@@ -7,6 +7,26 @@ export const DAY_START_HOUR = 9;  // 09:00
 export const DAY_END_HOUR = 18;   // 18:00 (exclusif)
 export const SLOT_HEIGHT = 64;    // Hauteur d'un slot d'1h en pixels
 
+const resolveRangeMinutes = (range) => {
+  const hasStart = range && typeof range.startHour === 'number' && Number.isFinite(range.startHour);
+  const hasEnd = range && typeof range.endHour === 'number' && Number.isFinite(range.endHour);
+
+  let startHour = hasStart ? Math.trunc(range.startHour) : DAY_START_HOUR;
+  let endHour = hasEnd ? Math.trunc(range.endHour) : DAY_END_HOUR;
+
+  startHour = Math.max(0, Math.min(23, startHour));
+  endHour = Math.max(1, Math.min(24, endHour));
+
+  if (endHour <= startHour) {
+    endHour = Math.min(24, startHour + 1);
+  }
+
+  return {
+    startMinutes: startHour * 60,
+    endMinutes: endHour * 60,
+  };
+};
+
 /**
  * Convertit une heure HH:MM en minutes depuis minuit
  */
@@ -53,7 +73,7 @@ export const dateToTime = (date) => {
  * @param {Date|string} startTime - Heure de début
  * @param {boolean} clamp - Limiter à la plage horaire visible
  */
-export const calculateTopPosition = (startTime, clamp = true, unit = 'percentage') => {
+export const calculateTopPosition = (startTime, clamp = true, unit = 'percentage', range) => {
   let minutes;
 
   if (startTime instanceof Date) {
@@ -63,9 +83,12 @@ export const calculateTopPosition = (startTime, clamp = true, unit = 'percentage
   } else {
     return 0;
   }
-  
-  const startMinutes = DAY_START_HOUR * 60;
-  const endMinutes = DAY_END_HOUR * 60;
+
+  const { startMinutes, endMinutes } = resolveRangeMinutes(range);
+  const totalMinutes = endMinutes - startMinutes;
+  if (totalMinutes <= 0) {
+    return 0;
+  }
 
   if (clamp) {
     minutes = Math.max(startMinutes, Math.min(minutes, endMinutes));
@@ -76,7 +99,7 @@ export const calculateTopPosition = (startTime, clamp = true, unit = 'percentage
     return offset;
   }
 
-  return (offset / (endMinutes - startMinutes)) * 100;
+  return (offset / totalMinutes) * 100;
 };
 
 /**
@@ -85,7 +108,7 @@ export const calculateTopPosition = (startTime, clamp = true, unit = 'percentage
  * @param {Date|string} endTime - Heure de fin
  * @param {boolean} clamp - Limiter à la plage horaire visible
  */
-export const calculateHeight = (startTime, endTime, clamp = true, unit = 'percentage') => {
+export const calculateHeight = (startTime, endTime, clamp = true, unit = 'percentage', range) => {
   let startMinutes, endMinutes;
 
   if (startTime instanceof Date) {
@@ -103,9 +126,12 @@ export const calculateHeight = (startTime, endTime, clamp = true, unit = 'percen
   } else {
     return 0;
   }
-  
-  const gridStartMinutes = DAY_START_HOUR * 60;
-  const gridEndMinutes = DAY_END_HOUR * 60;
+
+  const { startMinutes: gridStartMinutes, endMinutes: gridEndMinutes } = resolveRangeMinutes(range);
+  const totalMinutes = gridEndMinutes - gridStartMinutes;
+  if (totalMinutes <= 0) {
+    return 0;
+  }
 
   if (clamp) {
     startMinutes = Math.max(gridStartMinutes, startMinutes);
@@ -119,7 +145,7 @@ export const calculateHeight = (startTime, endTime, clamp = true, unit = 'percen
     return duration;
   }
 
-  return (duration / (gridEndMinutes - gridStartMinutes)) * 100;
+  return (duration / totalMinutes) * 100;
 };
 
 /**

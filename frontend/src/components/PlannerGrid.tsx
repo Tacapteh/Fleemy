@@ -300,15 +300,18 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     const rawEnd =
       typeof settings.dayEndHour === 'number' ? settings.dayEndHour : DEFAULT_DAY_END_HOUR;
 
-    let normalizedStart = Math.max(0, Math.min(22, Math.trunc(rawStart)));
-    let normalizedEnd = Math.max(1, Math.min(23, Math.trunc(rawEnd)));
+    let normalizedStart = Math.max(0, Math.min(23, Math.trunc(rawStart)));
+    let normalizedEnd = Math.max(1, Math.min(24, Math.trunc(rawEnd)));
 
     if (normalizedEnd <= normalizedStart) {
-      normalizedEnd = Math.min(23, normalizedStart + 1);
+      normalizedEnd = Math.min(24, normalizedStart + 1);
+      normalizedStart = Math.max(0, Math.min(normalizedStart, normalizedEnd - 1));
     }
 
     return { startHour: normalizedStart, endHour: normalizedEnd };
   }, [loading, settings]);
+
+  const visibleRange = useMemo(() => ({ startHour, endHour }), [startHour, endHour]);
 
   const gridColumnCount = showWeekendsEnabled ? 7 : 5;
   const weeklyGridStyle = useMemo(
@@ -346,6 +349,19 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     mediaQuery.addListener(handleChange);
     return () => mediaQuery.removeListener(handleChange);
   }, []);
+
+  const gridViewportHeight = useMemo(
+    () => (isMobileLayout ? 'calc(100vh - 220px)' : 'calc(100vh - 320px)'),
+    [isMobileLayout]
+  );
+
+  const gridScrollStyle = useMemo(
+    () => ({
+      height: gridViewportHeight,
+      maxHeight: gridViewportHeight,
+    }),
+    [gridViewportHeight]
+  );
 
   const hours = useMemo(() => {
     const total = Math.max(0, endHour - startHour);
@@ -413,8 +429,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         }
         columnEndTimes[columnIndex] = endMinutes;
 
-        const top = calculateTopPosition(event.startDate, true, positionUnit);
-        const height = calculateHeight(event.startDate, event.endDate, true, positionUnit);
+        const top = calculateTopPosition(event.startDate, true, positionUnit, visibleRange);
+        const height = calculateHeight(event.startDate, event.endDate, true, positionUnit, visibleRange);
 
         layouts.push({
           event,
@@ -428,7 +444,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       const columnCount = layouts.reduce((max, layout) => Math.max(max, layout.columnIndex + 1), 1);
       return layouts.map((layout) => ({ ...layout, columnCount }));
     });
-  }, [displayEvents, positionUnit]);
+  }, [displayEvents, positionUnit, visibleRange]);
 
   const visibleEventLayouts = useMemo(
     () => (showWeekendsEnabled ? eventLayouts : eventLayouts.filter((_, index) => index < 5)),
@@ -447,8 +463,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           if (task.dayIndex < 0 || task.dayIndex > 6) {
             return;
           }
-          const top = calculateTopPosition(task.startDate, true, positionUnit);
-          const height = calculateHeight(task.startDate, task.endDate, true, positionUnit);
+          const top = calculateTopPosition(task.startDate, true, positionUnit, visibleRange);
+          const height = calculateHeight(task.startDate, task.endDate, true, positionUnit, visibleRange);
           if (height <= 0) {
             return;
           }
@@ -470,7 +486,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
 
     return perDay;
-  }, [displayTaskGroups, positionUnit]);
+  }, [displayTaskGroups, positionUnit, visibleRange]);
 
   const visibleTaskLayouts = useMemo(
     () => (showWeekendsEnabled ? taskLayouts : taskLayouts.filter((_, index) => index < 5)),
@@ -527,7 +543,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         ))}
       </div>
 
-      <div className="week-grid-container overflow-y-auto">
+      <div className="week-grid-container overflow-y-auto" style={gridScrollStyle}>
         <div
           className="time-gutter dark:bg-slate-900 dark:border-slate-700"
           style={{ height: containerHeight }}
