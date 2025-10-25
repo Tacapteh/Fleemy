@@ -545,16 +545,15 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
       <div className="week-grid-container overflow-y-auto items-start py-2" style={gridScrollStyle}>
         <div
-          className="time-gutter dark:bg-slate-900 dark:border-slate-700"
+          className="time-gutter flex flex-col dark:bg-slate-900 dark:border-slate-700"
           style={{ height: containerHeight }}
         >
-          {timeLabels.map((time, index) => (
+          {timeLabels.map((time) => (
             <div
               key={time}
-              className="time-label border border-transparent dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
-              style={{ top: `calc(${index} * var(--weekly-grid-row-h))` }}
+              className="time-label-slot flex h-[var(--weekly-grid-row-h)] items-center justify-end px-2 py-[1px] text-xs text-slate-500 border-b border-transparent last:border-b-0 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
             >
-              {time}
+              <span className="leading-none">{time}</span>
             </div>
           ))}
         </div>
