@@ -1,267 +1,375 @@
 import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { apiFetch } from '../lib/api';
+import { useMemo } from 'react';
 import { contextStore } from '../stores/contextStore';
-import { 
-  Calendar, 
-  DollarSign, 
-  Clock, 
-  Users, 
-  FileText, 
+import { useSettings } from '../context/SettingsContext';
+import useUserWeekSlots from '../hooks/useUserWeekSlots';
+import {
+  Calendar,
+  DollarSign,
+  Clock,
+  Users,
+  FileText,
   Settings,
   TrendingUp,
   CheckCircle2,
   AlertCircle,
-  HelpCircle
+  HelpCircle,
 } from 'lucide-react';
+
+const toDateSafe = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value);
+  }
+
+  if (typeof value === 'number') {
+    const candidate = new Date(value);
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const normalized = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
+    const candidate = new Date(normalized);
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
+  }
+
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    try {
+      const candidate = value.toDate();
+      return candidate instanceof Date && !Number.isNaN(candidate.getTime())
+        ? candidate
+        : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const getSlotStartDate = (slot) => {
+  if (!slot) {
+    return null;
+  }
+  return (
+    toDateSafe(slot.start) ??
+    toDateSafe(slot.startTime) ??
+    toDateSafe(slot.start_time) ??
+    toDateSafe(slot.startDate) ??
+    toDateSafe(slot.start_date) ??
+    null
+  );
+};
+
+const getSlotEndDate = (slot) => {
+  if (!slot) {
+    return null;
+  }
+  return (
+    toDateSafe(slot.end) ??
+    toDateSafe(slot.endTime) ??
+    toDateSafe(slot.end_time) ??
+    toDateSafe(slot.endDate) ??
+    toDateSafe(slot.end_date) ??
+    null
+  );
+};
+
+const resolveStatusCategoryValue = (status) => {
+  if (status === null || status === undefined) {
+    return 'unpaid';
+  }
+  const normalized = status.toString().trim().toLowerCase();
+  if (!normalized) {
+    return 'unpaid';
+  }
+  if (['not_worked', 'cancelled', 'canceled'].includes(normalized)) {
+    return null;
+  }
+  if (
+    [
+      'paid',
+      'payé',
+      'paye',
+      'payee',
+      'réglé',
+      'regle',
+      'reglé',
+      'reglee',
+      'settled',
+    ].includes(normalized)
+  ) {
+    return 'paid';
+  }
+  if (
+    [
+      'pending',
+      'waiting',
+      'awaiting',
+      'en attente',
+      'en_attente',
+      'attente',
+      'quote',
+      'quote_sent',
+      'sent',
+      'devis',
+      'devis envoyé',
+      'devis_envoye',
+      'estimate',
+      'estimation',
+      'waiting_payment',
+    ].includes(normalized)
+  ) {
+    return 'pending';
+  }
+  if (
+    [
+      'unpaid',
+      'non payé',
+      'non_paye',
+      'impayé',
+      'impaye',
+      'overdue',
+    ].includes(normalized)
+  ) {
+    return 'unpaid';
+  }
+  return 'pending';
+};
+
+const getSlotPaymentCategory = (slot) => {
+  if (!slot) {
+    return 'unpaid';
+  }
+  const candidates = [
+    slot.payment_status,
+    slot.paymentStatus,
+    slot.status,
+    slot.type,
+    slot.state,
+  ];
+  const firstNonNull = candidates.find(
+    (candidate) => candidate !== undefined && candidate !== null,
+  );
+  return resolveStatusCategoryValue(firstNonNull);
+};
+
+const getSlotRate = (slot) => {
+  if (!slot) {
+    return null;
+  }
+  const candidates = [
+    slot.hourly_rate,
+    slot.hourlyRate,
+    slot.rate,
+    slot.price_per_hour,
+    slot.pricePerHour,
+    slot.hourly_rate_value,
+  ];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+  }
+  return null;
+};
+
+const resolveSlotLabel = (slot) => {
+  if (!slot) {
+    return 'Créneau planifié';
+  }
+  const candidates = [
+    slot.client_name,
+    slot.clientName,
+    typeof slot.client === 'string' ? slot.client : null,
+    slot.client?.name,
+    slot.client?.label,
+    slot.title,
+    slot.description,
+    slot.task_label,
+    slot.taskLabel,
+    slot.task_name,
+    slot.taskName,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return 'Créneau planifié';
+};
 
 export default function Dashboard() {
   const { user } = useOutletContext();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState({
-    weekHours: 0,
-    weekEarnings: 0,
-    payments: { paid: 0, pending: 0, unpaid: 0 },
-    upcomingEvents: [],
-    teamMembers: []
-  });
+  const { settings } = useSettings();
 
   const context = contextStore.get();
   const isTeamMode = context?.type === 'team';
   const teamId = context?.teamId;
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [teamId]);
+  const {
+    slots,
+    loading: slotsLoading,
+    error: slotsError,
+  } = useUserWeekSlots(user?.uid);
 
-  const loadDashboardData = async () => {
-    setLoading(true);
-    try {
-      // Obtenir la semaine et le mois en cours
-      const now = new Date();
-      const year = now.getFullYear();
-      const week = getISOWeek(now);
-      const month = now.getMonth() + 1;
+  const globalHourlyRate = useMemo(() => {
+    const numeric = Number(settings?.hourlyRateGlobal);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return Math.round(numeric * 100) / 100;
+    }
+    return 0;
+  }, [settings?.hourlyRateGlobal]);
 
-      // Charger les données de la semaine en cours pour les revenus
-      const earningsParams = new URLSearchParams({
-        ...(teamId && { team_id: teamId })
-      });
-      
-      const earningsResponse = await apiFetch(
-        `/planning/earnings/${year}/${week}?${earningsParams.toString()}`
-      );
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('fr-FR', {
+        style: 'currency',
+        currency: 'EUR',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }),
+    [],
+  );
 
-      // Charger les événements de la semaine en cours pour calculer les heures réelles
-      const weekParams = new URLSearchParams({
-        ...(teamId && { team_id: teamId })
-      });
-      
-      const weekEventsResponse = await apiFetch(
-        `/planning/week/${year}/${week}?${weekParams.toString()}`
-      );
+  const { weeklyHours, weeklyEarnings, paymentTotals, upcomingSlots } = useMemo(() => {
+    const totals = { confirmed: 0, pending: 0, toInvoice: 0 };
+    let hoursTotal = 0;
+    let earningsTotal = 0;
+    const future = [];
+    const now = new Date();
 
-      // Charger les événements du mois en cours pour les prochains créneaux
-      const monthParams = new URLSearchParams({
-        ...(teamId && { team_id: teamId })
-      });
-      
-      const monthEventsResponse = await apiFetch(
-        `/planning/month/${year}/${month}?${monthParams.toString()}`
-      );
+    const sourceSlots = Array.isArray(slots) ? slots : [];
 
-      // Calculer les heures réelles de la semaine à partir des événements
-      const weekHours = calculateRealWeekHours(weekEventsResponse);
+    sourceSlots.forEach((slot) => {
+      const start = getSlotStartDate(slot);
+      const end = getSlotEndDate(slot);
+      if (!start || !end) {
+        return;
+      }
+      const durationMs = end.getTime() - start.getTime();
+      if (!Number.isFinite(durationMs) || durationMs <= 0) {
+        return;
+      }
 
-      // Extraire les prochains créneaux du mois en cours (événements futurs)
-      const upcomingEvents = extractUpcomingEvents(monthEventsResponse, now);
+      const durationHours = durationMs / (60 * 60 * 1000);
+      if (!Number.isFinite(durationHours) || durationHours <= 0) {
+        return;
+      }
 
-      // Charger les membres de l'équipe si en mode équipe
-      let teamMembers = [];
-      if (isTeamMode && teamId) {
-        try {
-          const membersResponse = await apiFetch(`/teams/${teamId}/memberships`);
-          teamMembers = membersResponse?.memberships || [];
-        } catch (error) {
-          console.error('Error loading team members:', error);
+      hoursTotal += durationHours;
+
+      const slotRate = getSlotRate(slot);
+      const rateToApply = Number.isFinite(slotRate) && slotRate > 0 ? slotRate : globalHourlyRate;
+
+      let amount = 0;
+      if (Number.isFinite(rateToApply) && rateToApply > 0) {
+        amount = durationHours * rateToApply;
+        if (Number.isFinite(amount) && amount > 0) {
+          earningsTotal += amount;
+        } else {
+          amount = 0;
         }
       }
 
-      setDashboardData({
-        weekHours,
-        weekEarnings: earningsResponse?.earnings?.total || 0,
-        payments: {
-          paid: earningsResponse?.earnings?.paid || 0,
-          pending: earningsResponse?.earnings?.pending || 0,
-          unpaid: earningsResponse?.earnings?.unpaid || 0
-        },
-        upcomingEvents,
-        teamMembers
-      });
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const calculateRealWeekHours = (weekData) => {
-    if (!weekData) return 0;
-    
-    let totalHours = 0;
-    
-    // Calculer les heures depuis les événements
-    const events = weekData.events || [];
-    events.forEach(event => {
-      try {
-        if (event.start_time && event.end_time) {
-          const startHour = parseInt(event.start_time.split(':')[0]);
-          const endHour = parseInt(event.end_time.split(':')[0]);
-          totalHours += (endHour - startHour);
+      const statusCategory = getSlotPaymentCategory(slot);
+      if (Number.isFinite(amount) && amount > 0 && statusCategory) {
+        if (statusCategory === 'paid') {
+          totals.confirmed += amount;
+        } else if (statusCategory === 'pending') {
+          totals.pending += amount;
+        } else if (statusCategory === 'unpaid') {
+          totals.toInvoice += amount;
         }
-      } catch (error) {
-        console.error('Error calculating event hours:', error);
+      }
+
+      if (start.getTime() > now.getTime()) {
+        future.push({ slot, start, end });
       }
     });
 
-    // Calculer les heures depuis les tâches
-    const tasks = weekData.tasks || [];
-    tasks.forEach(task => {
-      try {
-        const timeSlots = task.time_slots || [];
-        timeSlots.forEach(slot => {
-          if (slot.start && slot.end) {
-            const startHour = parseInt(slot.start.split(':')[0]);
-            const endHour = parseInt(slot.end.split(':')[0]);
-            totalHours += (endHour - startHour);
-          }
-        });
-      } catch (error) {
-        console.error('Error calculating task hours:', error);
-      }
+    const upcoming = future
+      .sort((a, b) => a.start.getTime() - b.start.getTime())
+      .slice(0, 3)
+      .map((entry, index) => ({
+        id: entry.slot?.id || `slot-${entry.start.getTime()}-${index}`,
+        start: entry.start,
+        end: entry.end,
+        label: resolveSlotLabel(entry.slot),
+      }));
+
+    return {
+      weeklyHours: hoursTotal,
+      weeklyEarnings: earningsTotal,
+      paymentTotals: totals,
+      upcomingSlots: upcoming,
+    };
+  }, [slots, globalHourlyRate]);
+
+  const weeklyHoursDisplay = useMemo(() => {
+    const rounded = Math.round((Number.isFinite(weeklyHours) ? weeklyHours : 0) * 4) / 4;
+    if (!Number.isFinite(rounded) || rounded <= 0) {
+      return '0';
+    }
+    const decimalPart = Math.abs(rounded % 1);
+    const needsDecimal = decimalPart > 0.001;
+    return rounded.toLocaleString('fr-FR', {
+      minimumFractionDigits: needsDecimal ? 2 : 0,
+      maximumFractionDigits: 2,
     });
+  }, [weeklyHours]);
 
-    return totalHours;
-  };
+  const weeklyEarningsDisplay = useMemo(() => {
+    const value = Number.isFinite(weeklyEarnings) ? weeklyEarnings : 0;
+    return currencyFormatter.format(Math.round(value));
+  }, [weeklyEarnings, currencyFormatter]);
 
-  const extractUpcomingEvents = (monthData, now) => {
-    if (!monthData) return [];
-    
-    const allEvents = [];
-    
-    // Extraire les événements
-    const events = monthData.events || [];
-    events.forEach(event => {
-      try {
-        // Reconstruire la date à partir de year, week, day_of_week
-        if (event.year && event.week && event.day_of_week !== undefined && event.start_time) {
-          const eventDate = getDateFromWeek(event.year, event.week, event.day_of_week, event.start_time);
-          if (eventDate >= now) {
-            allEvents.push({
-              ...event,
-              start: eventDate.toISOString(),
-              type: 'event',
-              title: event.client_name || event.description || 'Sans titre'
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error processing event:', error);
-      }
+  const paymentsDisplay = useMemo(
+    () => ({
+      confirmed: currencyFormatter.format(Math.round(paymentTotals.confirmed || 0)),
+      pending: currencyFormatter.format(Math.round(paymentTotals.pending || 0)),
+      toInvoice: currencyFormatter.format(Math.round(paymentTotals.toInvoice || 0)),
+    }),
+    [paymentTotals, currencyFormatter],
+  );
+
+  const formatUpcomingDetail = (start, end) => {
+    if (!(start instanceof Date) || Number.isNaN(start.getTime())) {
+      return '';
+    }
+    const startLabel = start.toLocaleDateString('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
     });
-
-    // Extraire les tâches avec leurs créneaux
-    const tasks = monthData.tasks || [];
-    tasks.forEach(task => {
-      try {
-        const timeRanges = task.time_ranges || [];
-        timeRanges.forEach(range => {
-          if (range.day !== undefined && range.start) {
-            // Les tâches utilisent aussi year/week/day
-            const taskDate = getDateFromWeek(
-              task.year || new Date().getFullYear(), 
-              task.week || getISOWeek(now), 
-              range.day, 
-              range.start
-            );
-            if (taskDate >= now) {
-              allEvents.push({
-                ...task,
-                start: taskDate.toISOString(),
-                type: 'task',
-                title: task.label || task.title || 'Tâche sans titre'
-              });
-            }
-          }
-        });
-      } catch (error) {
-        console.error('Error processing task:', error);
-      }
+    const startTime = start.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
     });
-
-    // Trier par date et prendre les 3 premiers
-    return allEvents
-      .sort((a, b) => new Date(a.start) - new Date(b.start))
-      .slice(0, 3);
+    const endTime = end instanceof Date && !Number.isNaN(end.getTime())
+      ? end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      : null;
+    return endTime ? `${startLabel} · ${startTime} - ${endTime}` : `${startLabel} · ${startTime}`;
   };
 
-  // Fonction utilitaire pour convertir year/week/day_of_week en Date
-  const getDateFromWeek = (year, week, dayOfWeek, time) => {
-    // dayOfWeek: 0 = lundi, 6 = dimanche
-    const simple = new Date(year, 0, 1 + (week - 1) * 7);
-    const dow = simple.getDay();
-    const ISOweekStart = simple;
-    if (dow <= 4) {
-      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
-    } else {
-      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
-    }
-    
-    const result = new Date(ISOweekStart);
-    result.setDate(ISOweekStart.getDate() + dayOfWeek);
-    
-    // Ajouter l'heure
-    if (time) {
-      const [hours, minutes] = time.split(':').map(Number);
-      result.setHours(hours, minutes || 0, 0, 0);
-    }
-    
-    return result;
-  };
+  const upcomingWithDetails = upcomingSlots.map((slot) => ({
+    ...slot,
+    detail: formatUpcomingDetail(slot.start, slot.end),
+  }));
 
-  const getISOWeek = (date) => {
-    const target = new Date(date.valueOf());
-    const dayNr = (date.getDay() + 6) % 7;
-    target.setDate(target.getDate() - dayNr + 3);
-    const firstThursday = target.valueOf();
-    target.setMonth(0, 1);
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
-    }
-    return 1 + Math.ceil((firstThursday - target) / 604800000);
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return `Aujourd'hui à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return `Demain à ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      return date.toLocaleDateString('fr-FR', { 
-        weekday: 'short', 
-        day: 'numeric', 
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    }
-  };
+  const loading = slotsLoading;
 
   if (loading) {
     return (
@@ -293,7 +401,7 @@ export default function Dashboard() {
       <div className="mx-auto max-w-7xl space-y-8">
         {/* En-tête de bienvenue */}
         <div className="space-y-2">
-          <h1 
+          <h1
             data-testid="dashboard-welcome-title"
             className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 md:text-4xl"
           >
@@ -302,6 +410,9 @@ export default function Dashboard() {
           <p className="text-base text-slate-600 dark:text-slate-400">
             Voici un aperçu de votre activité {isTeamMode ? 'd\'équipe' : 'personnelle'}
           </p>
+          {slotsError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{slotsError}</p>
+          )}
         </div>
 
         {/* Grille de widgets */}
@@ -322,10 +433,10 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
-                    {dashboardData.weekHours}h
+                    {weeklyHoursDisplay}h
                   </p>
                   <p className="text-sm text-blue-700 dark:text-blue-300">
-                    {dashboardData.weekEarnings.toFixed(0)} € estimés
+                    {weeklyEarningsDisplay} estimés
                   </p>
                 </div>
               </div>
@@ -351,7 +462,7 @@ export default function Dashboard() {
                 {/* Montant principal - Payé */}
                 <div className="text-center">
                   <p className="text-4xl font-bold text-green-900 dark:text-green-100">
-                    {dashboardData.payments.paid.toFixed(0)} €
+                    {paymentsDisplay.confirmed}
                   </p>
                   <p className="text-sm text-green-700 dark:text-green-300">Revenus confirmés</p>
                 </div>
@@ -360,14 +471,14 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between gap-4 border-t border-green-200/50 pt-3 dark:border-green-800/30">
                   <div className="flex-1 text-center">
                     <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">
-                      {dashboardData.payments.pending.toFixed(0)} €
+                      {paymentsDisplay.pending}
                     </p>
                     <p className="text-xs text-amber-600 dark:text-amber-500">En attente</p>
                   </div>
                   <div className="h-8 w-px bg-green-200 dark:bg-green-800" />
                   <div className="flex-1 text-center">
                     <p className="text-lg font-semibold text-red-700 dark:text-red-400">
-                      {dashboardData.payments.unpaid.toFixed(0)} €
+                      {paymentsDisplay.toInvoice}
                     </p>
                     <p className="text-xs text-red-600 dark:text-red-500">À facturer</p>
                   </div>
@@ -391,31 +502,27 @@ export default function Dashboard() {
                 </h3>
               </div>
               <div className="space-y-3">
-                {dashboardData.upcomingEvents.length === 0 ? (
+                {upcomingWithDetails.length === 0 ? (
                   <p className="py-4 text-center text-sm text-purple-600 dark:text-purple-400">
                     Rien de prévu bientôt ✌
                   </p>
                 ) : (
-                  dashboardData.upcomingEvents.map((event, idx) => (
+                  upcomingWithDetails.map((slot, idx) => (
                     <div
-                      key={idx}
+                      key={slot.id || idx}
                       data-testid={`upcoming-event-${idx}`}
                       className="flex items-center justify-between rounded-lg border border-purple-200/50 bg-white/50 p-3 transition-colors hover:bg-white/80 dark:border-purple-800/30 dark:bg-purple-950/20 dark:hover:bg-purple-950/30"
                     >
                       <div className="flex-1">
                         <p className="font-medium text-purple-900 dark:text-purple-100">
-                          {event.title || event.description || event.label || 'Sans titre'}
+                          {slot.label}
                         </p>
                         <p className="text-xs text-purple-600 dark:text-purple-400">
-                          {formatDate(event.start)}
+                          {slot.detail}
                         </p>
                       </div>
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        event.type === 'task' 
-                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                      }`}>
-                        {event.type === 'task' ? 'Tâche' : 'Événement'}
+                      <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                        Créneau
                       </span>
                     </div>
                   ))

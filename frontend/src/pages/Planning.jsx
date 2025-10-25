@@ -7,12 +7,11 @@ import EventModal from '../components/EventModal';
 import WeeklyTaskModal from '../components/WeeklyTaskModal';
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
+import useUserWeekSlots from '../hooks/useUserWeekSlots';
 import { useSettings } from '../context/SettingsContext';
 import { getIcon } from '../icons/registry';
 import {
   useFirebaseUser,
-  watchWeekEvents,
-  fetchWeekEventsOnce,
   saveEventNew,
   deleteEventNew,
   deleteWeeklyTask,
@@ -23,14 +22,11 @@ import { apiFetch } from '../lib/api';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
-import { getCachedPlanningData, setCachedPlanningData } from '../utils/planningCache';
 import { readTeamsCache } from '../utils/teamCache';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DEFAULT_START = '09:00';
 const DEFAULT_END = '10:00';
-const EVENTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
-
 const TaskSummaryRow = ({ iconId, label, price }) => {
   const IconComponent = getIcon(iconId || undefined);
 
@@ -179,10 +175,6 @@ export default function Planning() {
 
   const [view, setView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [eventsError, setEventsError] = useState(null);
-
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState(null);
@@ -678,21 +670,6 @@ export default function Planning() {
     return { type: 'personal', userId: user.uid };
   }, [isTeamContext, teamId, selectedMemberId, teamMembershipReady, user?.uid]);
 
-  const planningContextKey = useMemo(() => {
-    if (!planningContext) return 'none';
-    if (planningContext.type === 'team') {
-      return `team:${planningContext.teamId}:${planningContext.memberUid}`;
-    }
-    return `personal:${planningContext.userId}`;
-  }, [planningContext]);
-
-  const eventsCacheKey = useMemo(() => {
-    if (!planningContext || planningContextKey === 'none' || !weekStartISO || !weekEndISO) {
-      return null;
-    }
-    return `events:${planningContextKey}:${weekStartISO}:${weekEndISO}`;
-  }, [planningContext, planningContextKey, weekStartISO, weekEndISO]);
-
   const readOnly = useMemo(() => {
     if (!isTeamContext) {
       return false;
@@ -703,133 +680,18 @@ export default function Planning() {
     return selectedMemberId !== user.uid;
   }, [isTeamContext, selectedMemberId, user?.uid]);
 
-  useEffect(() => {
-    if (isTeamContext && !teamMembershipReady) {
-      setEvents([]);
-      setEventsLoading(true);
-      setEventsError(null);
-      return () => {};
-    }
+  const shouldDelayEvents = isTeamContext && !teamMembershipReady;
 
-    if (!planningContext || !weekStartISO || !weekEndISO) {
-      setEvents([]);
-      setEventsLoading(false);
-      setEventsError(null);
-      return () => {};
-    }
-
-    let unsubscribe = () => {};
-    let cancelled = false;
-    let hasRealtimeUpdate = false;
-
-    const cachedEvents = eventsCacheKey ? getCachedPlanningData(eventsCacheKey) : null;
-    if (Array.isArray(cachedEvents)) {
-      setEvents(cachedEvents);
-      setEventsLoading(false);
-    } else {
-      setEvents([]);
-      setEventsLoading(true);
-    }
-    setEventsError(null);
-
-    let fallbackAttempted = false;
-
-    const prefetchEvents = async () => {
-      if (!eventsCacheKey) {
-        return;
-      }
-      try {
-        const fallbackEvents = await fetchWeekEventsOnce(planningContext, weekStartISO, weekEndISO);
-        if (cancelled || hasRealtimeUpdate || !Array.isArray(fallbackEvents)) {
-          return;
-        }
-        setEvents(fallbackEvents);
-        setEventsLoading(false);
-        fallbackAttempted = true;
-        setCachedPlanningData(eventsCacheKey, fallbackEvents, EVENTS_CACHE_TTL);
-      } catch (prefetchError) {
-        if (!cancelled) {
-          console.warn('prefetchWeekEvents error', prefetchError);
-        }
-      }
-    };
-
-    prefetchEvents();
-
-    const attemptFallback = async () => {
-      if (fallbackAttempted) {
-        return;
-      }
-      fallbackAttempted = true;
-      try {
-        const fallbackEvents = await fetchWeekEventsOnce(planningContext, weekStartISO, weekEndISO);
-        if (cancelled) {
-          return;
-        }
-        if (Array.isArray(fallbackEvents)) {
-          setEvents(fallbackEvents);
-          setEventsLoading(false);
-          setEventsError(null);
-          if (eventsCacheKey) {
-            setCachedPlanningData(eventsCacheKey, fallbackEvents, EVENTS_CACHE_TTL);
-          }
-          return;
-        }
-      } catch (fallbackError) {
-        if (!cancelled) {
-          console.error('watchWeekEvents fallback error', fallbackError);
-        }
-      }
-      if (cancelled) {
-        return;
-      }
-      if (!Array.isArray(cachedEvents)) {
-        setEvents([]);
-      }
-      setEventsLoading(false);
-      setEventsError('Impossible de charger les événements');
-    };
-
-    unsubscribe = watchWeekEvents(
-      planningContext,
-      weekStartISO,
-      weekEndISO,
-      (loadedEvents) => {
-        if (cancelled) {
-          return;
-        }
-        hasRealtimeUpdate = true;
-        fallbackAttempted = true;
-        setEvents(loadedEvents);
-        setEventsLoading(false);
-        if (eventsCacheKey) {
-          setCachedPlanningData(eventsCacheKey, loadedEvents, EVENTS_CACHE_TTL);
-        }
-      },
-      (error) => {
-        if (cancelled) {
-          return;
-        }
-        console.error('watchWeekEvents error', error);
-        attemptFallback();
-      }
-    );
-
-    return () => {
-      cancelled = true;
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
-  }, [
-    planningContextKey,
-    weekStartISO,
-    weekEndISO,
-    planningContext,
-    isTeamContext,
-    teamMembershipReady,
-    eventsCacheKey,
-  ]);
+  const {
+    slots: events,
+    loading: eventsLoading,
+    error: eventsError,
+  } = useUserWeekSlots(user?.uid, {
+    context: planningContext,
+    weekStart,
+    weekEnd,
+    enabled: !shouldDelayEvents,
+  });
 
   const {
     tasks: weeklyTasks,
