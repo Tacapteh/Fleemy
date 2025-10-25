@@ -369,13 +369,14 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     return Array.from({ length: total }, (_, i) => formatHourLabel(startHour + i));
   }, [startHour, endHour]);
 
-  const timeLabels = useMemo(() => {
+  const hourSlotLabels = useMemo(() => {
     if (hours.length === 0) {
       return [formatHourLabel(startHour)];
     }
 
-    return [...hours, formatHourLabel(endHour)];
-  }, [hours, startHour, endHour]);
+    return hours;
+  }, [hours, startHour]);
+  const finalHourLabel = useMemo(() => formatHourLabel(endHour), [endHour]);
   const positionUnit: PositionUnit = isMobileLayout ? 'minutes' : 'percentage';
   const minuteHeight = SLOT_HEIGHT / 60;
   const rowCount = Math.max(hours.length, 1);
@@ -585,17 +586,24 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
         <div className="week-grid-container overflow-y-auto items-start py-2" style={gridScrollStyle}>
           <div
-            className="time-gutter flex flex-col dark:bg-slate-900 dark:border-slate-700"
+            className="time-gutter relative flex flex-col dark:bg-slate-900 dark:border-slate-700"
             style={{ height: containerHeight }}
           >
-            {timeLabels.map((time) => (
+            {hourSlotLabels.map((time) => (
               <div
                 key={time}
-                className="time-label-slot flex h-[var(--weekly-grid-row-h)] items-center justify-end px-2 py-[1px] text-xs text-slate-500 border-b border-transparent last:border-b-0 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+                className="time-label-slot relative h-[var(--weekly-grid-row-h)] border-b border-transparent pr-2 dark:bg-slate-900 dark:border-slate-700"
               >
-                <span className="leading-none">{time}</span>
+                <span className="absolute top-0 right-0 text-xs text-slate-500 leading-none dark:text-slate-100">
+                  {time}
+                </span>
               </div>
             ))}
+            <div className="time-label-terminal absolute bottom-0 left-0 right-0 flex justify-end pr-2">
+              <span className="text-xs text-slate-500 leading-none dark:text-slate-100">
+                {finalHourLabel}
+              </span>
+            </div>
           </div>
 
           <div
