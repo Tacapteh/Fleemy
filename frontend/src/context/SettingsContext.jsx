@@ -49,6 +49,8 @@ const DEFAULT_PREFS = {
   darkMode: false,
   requireClientName: true,
   defaultSlotDurationMinutes: 60,
+  dayStartHour: 7,
+  dayEndHour: 20,
 };
 
 const SettingsContext = createContext({
@@ -67,7 +69,7 @@ export function SettingsProvider({ children }) {
       return { ...DEFAULT_PREFS };
     }
 
-    return Object.keys(DEFAULT_PREFS).reduce((acc, key) => {
+    const sanitized = Object.keys(DEFAULT_PREFS).reduce((acc, key) => {
       const incomingValue = Object.prototype.hasOwnProperty.call(data, key)
         ? data[key]
         : undefined;
@@ -85,6 +87,19 @@ export function SettingsProvider({ children }) {
         return acc;
       }
 
+      if (key === "dayStartHour" || key === "dayEndHour") {
+        const numericValue = Number(incomingValue);
+        if (!Number.isFinite(numericValue)) {
+          acc[key] = DEFAULT_PREFS[key];
+          return acc;
+        }
+
+        const truncated = Math.trunc(numericValue);
+        const clamped = Math.max(0, Math.min(23, truncated));
+        acc[key] = clamped;
+        return acc;
+      }
+
       if (typeof DEFAULT_PREFS[key] === "boolean") {
         if (typeof incomingValue === "string") {
           const normalized = incomingValue.trim().toLowerCase();
@@ -98,6 +113,25 @@ export function SettingsProvider({ children }) {
       acc[key] = incomingValue;
       return acc;
     }, {});
+
+    const resolvedStart = Number.isFinite(sanitized.dayStartHour)
+      ? sanitized.dayStartHour
+      : DEFAULT_PREFS.dayStartHour;
+    const resolvedEnd = Number.isFinite(sanitized.dayEndHour)
+      ? sanitized.dayEndHour
+      : DEFAULT_PREFS.dayEndHour;
+
+    let normalizedStart = Math.max(0, Math.min(22, Math.trunc(resolvedStart)));
+    let normalizedEnd = Math.max(1, Math.min(23, Math.trunc(resolvedEnd)));
+
+    if (normalizedEnd <= normalizedStart) {
+      normalizedEnd = Math.min(23, normalizedStart + 1);
+    }
+
+    sanitized.dayStartHour = normalizedStart;
+    sanitized.dayEndHour = normalizedEnd;
+
+    return sanitized;
   }, []);
 
   useEffect(() => {
