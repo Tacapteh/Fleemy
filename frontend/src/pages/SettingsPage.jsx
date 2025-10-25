@@ -73,12 +73,36 @@ const NUMBER_SETTING_KEY = "defaultSlotDurationMinutes";
 export default function SettingsPage() {
   const { settings, loading, updateSetting } = useSettings();
   const [durationInput, setDurationInput] = useState("60");
+  const [startHourInput, setStartHourInput] = useState("");
+  const [endHourInput, setEndHourInput] = useState("");
 
   useEffect(() => {
     if (settings && typeof settings[NUMBER_SETTING_KEY] === "number") {
       setDurationInput(String(settings[NUMBER_SETTING_KEY]));
     }
   }, [settings]);
+
+  useEffect(() => {
+    if (!settings) {
+      return;
+    }
+
+    const fallbackStart =
+      typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
+    const fallbackEnd =
+      typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
+
+    const activeElementId =
+      typeof document !== "undefined" ? document.activeElement?.id : null;
+
+    if (activeElementId !== "setting-dayStartHour-input") {
+      setStartHourInput(String(fallbackStart));
+    }
+
+    if (activeElementId !== "setting-dayEndHour-input") {
+      setEndHourInput(String(fallbackEnd));
+    }
+  }, [settings?.dayEndHour, settings?.dayStartHour]);
 
   const handleToggle = useCallback(
     (key) => {
@@ -120,91 +144,101 @@ export default function SettingsPage() {
     }
   }, [durationInput, settings, updateSetting]);
 
-  const handleDayStartChange = useCallback(
-    (event) => {
-      if (!settings || settings.showFullDay === true) {
-        return;
-      }
+  const handleCommitStart = useCallback(() => {
+    if (!settings) {
+      return;
+    }
 
-      const rawValue = event.target.value;
-      const parsed = parseInt(rawValue, 10);
-
-      if (Number.isNaN(parsed)) {
-        return;
-      }
-
-      let newStart = parsed;
-      if (newStart < 0) {
-        newStart = 0;
-      } else if (newStart > 23) {
-        newStart = 23;
-      }
-
-      const storedStart =
-        typeof settings.dayStartHour === "number" ? settings.dayStartHour : null;
-      const currentEnd =
-        typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
-      let nextEnd = currentEnd;
-
-      if (newStart >= currentEnd) {
-        nextEnd = newStart + 1;
-        if (nextEnd > 24) {
-          nextEnd = 24;
-        }
-        if (nextEnd !== settings.dayEndHour) {
-          updateSetting?.("dayEndHour", nextEnd);
-        }
-      }
-
-      if (newStart !== storedStart) {
-        updateSetting?.("dayStartHour", newStart);
-      }
-    },
-    [settings, updateSetting]
-  );
-
-  const handleDayEndChange = useCallback(
-    (event) => {
-      if (!settings || settings.showFullDay === true) {
-        return;
-      }
-
-      const rawValue = event.target.value;
-      const parsed = parseInt(rawValue, 10);
-
-      if (Number.isNaN(parsed)) {
-        return;
-      }
-
-      let newEnd = parsed;
-      if (newEnd < 1) {
-        newEnd = 1;
-      } else if (newEnd > 24) {
-        newEnd = 24;
-      }
-
-      const storedEnd =
-        typeof settings.dayEndHour === "number" ? settings.dayEndHour : null;
-      const currentStart =
+    if (settings.showFullDay === true) {
+      const fallbackStart =
         typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
-      let nextStart = currentStart;
+      setStartHourInput(String(fallbackStart));
+      return;
+    }
 
-      if (newEnd <= currentStart) {
-        nextStart = newEnd - 1;
-        if (nextStart < 0) {
-          nextStart = 0;
-        }
-        if (nextStart !== settings.dayStartHour) {
-          updateSetting?.("dayStartHour", nextStart);
-        }
-      }
+    const parsed = parseInt(startHourInput, 10);
+    if (Number.isNaN(parsed)) {
+      const fallbackStart =
+        typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
+      setStartHourInput(String(fallbackStart));
+      return;
+    }
 
-      if (newEnd !== storedEnd) {
-        updateSetting?.("dayEndHour", newEnd);
+    let clampedStart = parsed;
+    if (clampedStart < 0) {
+      clampedStart = 0;
+    } else if (clampedStart > 23) {
+      clampedStart = 23;
+    }
+
+    const currentEnd =
+      typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
+
+    if (clampedStart >= currentEnd) {
+      let nextEnd = clampedStart + 1;
+      if (nextEnd > 24) {
+        nextEnd = 24;
       }
-    },
-    [settings, updateSetting]
-  );
+      if (nextEnd !== settings.dayEndHour) {
+        updateSetting?.("dayEndHour", nextEnd);
+      }
+      setEndHourInput(String(nextEnd));
+    }
+
+    if (clampedStart !== settings.dayStartHour) {
+      updateSetting?.("dayStartHour", clampedStart);
+    }
+
+    setStartHourInput(String(clampedStart));
+  }, [settings, startHourInput, updateSetting]);
+
+  const handleCommitEnd = useCallback(() => {
+    if (!settings) {
+      return;
+    }
+
+    if (settings.showFullDay === true) {
+      const fallbackEnd =
+        typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
+      setEndHourInput(String(fallbackEnd));
+      return;
+    }
+
+    const parsed = parseInt(endHourInput, 10);
+    if (Number.isNaN(parsed)) {
+      const fallbackEnd =
+        typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
+      setEndHourInput(String(fallbackEnd));
+      return;
+    }
+
+    let clampedEnd = parsed;
+    if (clampedEnd < 1) {
+      clampedEnd = 1;
+    } else if (clampedEnd > 24) {
+      clampedEnd = 24;
+    }
+
+    const currentStart =
+      typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
+
+    if (clampedEnd <= currentStart) {
+      let nextStart = clampedEnd - 1;
+      if (nextStart < 0) {
+        nextStart = 0;
+      }
+      if (nextStart !== settings.dayStartHour) {
+        updateSetting?.("dayStartHour", nextStart);
+      }
+      setStartHourInput(String(nextStart));
+    }
+
+    if (clampedEnd !== settings.dayEndHour) {
+      updateSetting?.("dayEndHour", clampedEnd);
+    }
+
+    setEndHourInput(String(clampedEnd));
+  }, [endHourInput, settings, updateSetting]);
 
   const fullDay = settings?.showFullDay === true;
 
@@ -285,8 +319,15 @@ export default function SettingsPage() {
                   type="number"
                   min={0}
                   max={23}
-                  value={settings.dayStartHour ?? 7}
-                  onChange={handleDayStartChange}
+                  value={startHourInput}
+                  onChange={(event) => setStartHourInput(event.target.value)}
+                  onBlur={handleCommitStart}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleCommitStart();
+                    }
+                  }}
                   disabled={fullDay}
                   className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 />
@@ -299,8 +340,15 @@ export default function SettingsPage() {
                   type="number"
                   min={1}
                   max={24}
-                  value={settings.dayEndHour ?? 20}
-                  onChange={handleDayEndChange}
+                  value={endHourInput}
+                  onChange={(event) => setEndHourInput(event.target.value)}
+                  onBlur={handleCommitEnd}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      handleCommitEnd();
+                    }
+                  }}
                   disabled={fullDay}
                   className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 />
