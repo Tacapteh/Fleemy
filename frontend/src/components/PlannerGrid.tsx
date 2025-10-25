@@ -279,6 +279,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 }) => {
   const user = useFirebaseUser();
   const { settings, loading } = useSettings();
+  const [viewFilter, setViewFilter] = useState<'today' | 'week'>('week');
   const showWeekendsEnabled = useMemo(() => {
     if (loading || !settings) {
       return true;
