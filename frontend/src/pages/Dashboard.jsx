@@ -38,12 +38,13 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Obtenir la semaine en cours
+      // Obtenir la semaine et le mois en cours
       const now = new Date();
       const year = now.getFullYear();
       const week = getISOWeek(now);
+      const month = now.getMonth() + 1;
 
-      // Charger les données de la semaine en cours
+      // Charger les données de la semaine en cours pour les revenus
       const earningsParams = new URLSearchParams({
         ...(teamId && { team_id: teamId })
       });
@@ -52,37 +53,29 @@ export default function Dashboard() {
         `/planning/earnings/${year}/${week}?${earningsParams.toString()}`
       );
 
-      // Charger les événements à venir (3 prochains jours)
-      const upcomingParams = new URLSearchParams({
-        from_iso: now.toISOString(),
-        to_iso: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        ...(teamId && { team_id: teamId })
-      });
-
-      const eventsResponse = await apiFetch(
-        `/planning/v2/events?${upcomingParams.toString()}`
-      );
-
-      // Charger les tâches hebdomadaires
-      const tasksParams = new URLSearchParams({
+      // Charger les événements de la semaine en cours pour calculer les heures réelles
+      const weekParams = new URLSearchParams({
         ...(teamId && { team_id: teamId })
       });
       
-      const tasksResponse = await apiFetch(
-        `/planning/v2/weekly-tasks?${tasksParams.toString()}`
+      const weekEventsResponse = await apiFetch(
+        `/planning/week/${year}/${week}?${weekParams.toString()}`
       );
 
-      // Combiner et trier les événements à venir
-      const allEvents = [
-        ...(eventsResponse?.events || []).map(e => ({ ...e, type: 'event' })),
-        ...(tasksResponse?.tasks || []).map(t => ({ ...t, type: 'task' }))
-      ]
-        .filter(e => e.start && new Date(e.start) >= now)
-        .sort((a, b) => new Date(a.start) - new Date(b.start))
-        .slice(0, 3);
+      // Charger les événements du mois en cours pour les prochains créneaux
+      const monthParams = new URLSearchParams({
+        ...(teamId && { team_id: teamId })
+      });
+      
+      const monthEventsResponse = await apiFetch(
+        `/planning/month/${year}/${month}?${monthParams.toString()}`
+      );
 
-      // Calculer les heures de la semaine
-      const weekHours = calculateWeekHours(earningsResponse);
+      // Calculer les heures réelles de la semaine à partir des événements
+      const weekHours = calculateRealWeekHours(weekEventsResponse);
+
+      // Extraire les prochains créneaux du mois en cours (événements futurs)
+      const upcomingEvents = extractUpcomingEvents(monthEventsResponse, now);
 
       // Charger les membres de l'équipe si en mode équipe
       let teamMembers = [];
@@ -103,7 +96,7 @@ export default function Dashboard() {
           pending: earningsResponse?.earnings?.pending || 0,
           unpaid: earningsResponse?.earnings?.unpaid || 0
         },
-        upcomingEvents: allEvents,
+        upcomingEvents,
         teamMembers
       });
     } catch (error) {
@@ -113,11 +106,89 @@ export default function Dashboard() {
     }
   };
 
-  const calculateWeekHours = (earningsData) => {
-    if (!earningsData?.earnings) return 0;
-    // Estimation basée sur un taux horaire moyen de 50€
-    const totalEarnings = earningsData.earnings.total || 0;
-    return Math.round(totalEarnings / 50);
+  const calculateRealWeekHours = (weekData) => {
+    if (!weekData) return 0;
+    
+    let totalHours = 0;
+    
+    // Calculer les heures depuis les événements
+    const events = weekData.events || [];
+    events.forEach(event => {
+      try {
+        if (event.start_time && event.end_time) {
+          const startHour = parseInt(event.start_time.split(':')[0]);
+          const endHour = parseInt(event.end_time.split(':')[0]);
+          totalHours += (endHour - startHour);
+        }
+      } catch (error) {
+        console.error('Error calculating event hours:', error);
+      }
+    });
+
+    // Calculer les heures depuis les tâches
+    const tasks = weekData.tasks || [];
+    tasks.forEach(task => {
+      try {
+        const timeSlots = task.time_slots || [];
+        timeSlots.forEach(slot => {
+          if (slot.start && slot.end) {
+            const startHour = parseInt(slot.start.split(':')[0]);
+            const endHour = parseInt(slot.end.split(':')[0]);
+            totalHours += (endHour - startHour);
+          }
+        });
+      } catch (error) {
+        console.error('Error calculating task hours:', error);
+      }
+    });
+
+    return totalHours;
+  };
+
+  const extractUpcomingEvents = (monthData, now) => {
+    if (!monthData) return [];
+    
+    const allEvents = [];
+    
+    // Extraire les événements
+    const events = monthData.events || [];
+    events.forEach(event => {
+      if (event.date && event.start_time) {
+        const eventDate = new Date(`${event.date}T${event.start_time}`);
+        if (eventDate >= now) {
+          allEvents.push({
+            ...event,
+            start: eventDate.toISOString(),
+            type: 'event',
+            title: event.client_name || event.description || 'Sans titre'
+          });
+        }
+      }
+    });
+
+    // Extraire les tâches avec leurs créneaux
+    const tasks = monthData.tasks || [];
+    tasks.forEach(task => {
+      const timeSlots = task.time_slots || [];
+      timeSlots.forEach(slot => {
+        if (slot.date && slot.start) {
+          const taskDate = new Date(`${slot.date}T${slot.start}`);
+          if (taskDate >= now) {
+            allEvents.push({
+              ...task,
+              start: taskDate.toISOString(),
+              type: 'task',
+              title: task.label || task.title || 'Tâche sans titre'
+            });
+          }
+        }
+      });
+    });
+
+    // Trier par date et prendre les 3 premiers
+    return allEvents
+      .sort((a, b) => new Date(a.start) - new Date(b.start))
+      .slice(0, 3);
   };
 
   const getISOWeek = (date) => {
