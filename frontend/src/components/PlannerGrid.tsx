@@ -804,13 +804,21 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                       <div className="grid grid-cols-[60px_1fr] gap-0">
                         {/* Colonne des heures + Colonne des événements */}
                         {hours.map((hourLabel, hourIndex) => {
-                          const hourNumber = startHour + hourIndex;
-                          
+                          const isLastSlot = hourIndex === hours.length - 1;
+
                           return (
                             <React.Fragment key={hourLabel}>
                               {/* Heure à gauche */}
-                              <div className="sticky left-0 bg-[#1a2235] border-b border-white/10 flex items-start justify-end pr-2 py-1" style={{ height: `${SLOT_HEIGHT}px` }}>
+                              <div
+                                className="sticky left-0 bg-[#1a2235] border-b border-white/10 flex items-start justify-end pr-2 py-1 relative"
+                                style={{ height: `${SLOT_HEIGHT}px` }}
+                              >
                                 <span className="text-xs text-gray-400 dark:text-slate-400">{hourLabel}</span>
+                                {isLastSlot && (
+                                  <span className="absolute bottom-0 right-0 text-xs text-gray-400 dark:text-slate-400">
+                                    {finalHourLabel}
+                                  </span>
+                                )}
                               </div>
 
                               {/* Cellule de temps à droite */}
