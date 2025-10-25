@@ -38,12 +38,13 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Obtenir la semaine en cours
+      // Obtenir la semaine et le mois en cours
       const now = new Date();
       const year = now.getFullYear();
       const week = getISOWeek(now);
+      const month = now.getMonth() + 1;
 
-      // Charger les données de la semaine en cours
+      // Charger les données de la semaine en cours pour les revenus
       const earningsParams = new URLSearchParams({
         ...(teamId && { team_id: teamId })
       });
@@ -52,37 +53,29 @@ export default function Dashboard() {
         `/planning/earnings/${year}/${week}?${earningsParams.toString()}`
       );
 
-      // Charger les événements à venir (3 prochains jours)
-      const upcomingParams = new URLSearchParams({
-        from_iso: now.toISOString(),
-        to_iso: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        ...(teamId && { team_id: teamId })
-      });
-
-      const eventsResponse = await apiFetch(
-        `/planning/v2/events?${upcomingParams.toString()}`
-      );
-
-      // Charger les tâches hebdomadaires
-      const tasksParams = new URLSearchParams({
+      // Charger les événements de la semaine en cours pour calculer les heures réelles
+      const weekParams = new URLSearchParams({
         ...(teamId && { team_id: teamId })
       });
       
-      const tasksResponse = await apiFetch(
-        `/planning/v2/weekly-tasks?${tasksParams.toString()}`
+      const weekEventsResponse = await apiFetch(
+        `/planning/week/${year}/${week}?${weekParams.toString()}`
       );
 
-      // Combiner et trier les événements à venir
-      const allEvents = [
-        ...(eventsResponse?.events || []).map(e => ({ ...e, type: 'event' })),
-        ...(tasksResponse?.tasks || []).map(t => ({ ...t, type: 'task' }))
-      ]
-        .filter(e => e.start && new Date(e.start) >= now)
-        .sort((a, b) => new Date(a.start) - new Date(b.start))
-        .slice(0, 3);
+      // Charger les événements du mois en cours pour les prochains créneaux
+      const monthParams = new URLSearchParams({
+        ...(teamId && { team_id: teamId })
+      });
+      
+      const monthEventsResponse = await apiFetch(
+        `/planning/month/${year}/${month}?${monthParams.toString()}`
+      );
 
-      // Calculer les heures de la semaine
-      const weekHours = calculateWeekHours(earningsResponse);
+      // Calculer les heures réelles de la semaine à partir des événements
+      const weekHours = calculateRealWeekHours(weekEventsResponse);
+
+      // Extraire les prochains créneaux du mois en cours (événements futurs)
+      const upcomingEvents = extractUpcomingEvents(monthEventsResponse, now);
 
       // Charger les membres de l'équipe si en mode équipe
       let teamMembers = [];
@@ -103,7 +96,7 @@ export default function Dashboard() {
           pending: earningsResponse?.earnings?.pending || 0,
           unpaid: earningsResponse?.earnings?.unpaid || 0
         },
-        upcomingEvents: allEvents,
+        upcomingEvents,
         teamMembers
       });
     } catch (error) {
@@ -113,11 +106,128 @@ export default function Dashboard() {
     }
   };
 
-  const calculateWeekHours = (earningsData) => {
-    if (!earningsData?.earnings) return 0;
-    // Estimation basée sur un taux horaire moyen de 50€
-    const totalEarnings = earningsData.earnings.total || 0;
-    return Math.round(totalEarnings / 50);
+  const calculateRealWeekHours = (weekData) => {
+    if (!weekData) return 0;
+    
+    let totalHours = 0;
+    
+    // Calculer les heures depuis les événements
+    const events = weekData.events || [];
+    events.forEach(event => {
+      try {
+        if (event.start_time && event.end_time) {
+          const startHour = parseInt(event.start_time.split(':')[0]);
+          const endHour = parseInt(event.end_time.split(':')[0]);
+          totalHours += (endHour - startHour);
+        }
+      } catch (error) {
+        console.error('Error calculating event hours:', error);
+      }
+    });
+
+    // Calculer les heures depuis les tâches
+    const tasks = weekData.tasks || [];
+    tasks.forEach(task => {
+      try {
+        const timeSlots = task.time_slots || [];
+        timeSlots.forEach(slot => {
+          if (slot.start && slot.end) {
+            const startHour = parseInt(slot.start.split(':')[0]);
+            const endHour = parseInt(slot.end.split(':')[0]);
+            totalHours += (endHour - startHour);
+          }
+        });
+      } catch (error) {
+        console.error('Error calculating task hours:', error);
+      }
+    });
+
+    return totalHours;
+  };
+
+  const extractUpcomingEvents = (monthData, now) => {
+    if (!monthData) return [];
+    
+    const allEvents = [];
+    
+    // Extraire les événements
+    const events = monthData.events || [];
+    events.forEach(event => {
+      try {
+        // Reconstruire la date à partir de year, week, day_of_week
+        if (event.year && event.week && event.day_of_week !== undefined && event.start_time) {
+          const eventDate = getDateFromWeek(event.year, event.week, event.day_of_week, event.start_time);
+          if (eventDate >= now) {
+            allEvents.push({
+              ...event,
+              start: eventDate.toISOString(),
+              type: 'event',
+              title: event.client_name || event.description || 'Sans titre'
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error processing event:', error);
+      }
+    });
+
+    // Extraire les tâches avec leurs créneaux
+    const tasks = monthData.tasks || [];
+    tasks.forEach(task => {
+      try {
+        const timeRanges = task.time_ranges || [];
+        timeRanges.forEach(range => {
+          if (range.day !== undefined && range.start) {
+            // Les tâches utilisent aussi year/week/day
+            const taskDate = getDateFromWeek(
+              task.year || new Date().getFullYear(), 
+              task.week || getISOWeek(now), 
+              range.day, 
+              range.start
+            );
+            if (taskDate >= now) {
+              allEvents.push({
+                ...task,
+                start: taskDate.toISOString(),
+                type: 'task',
+                title: task.label || task.title || 'Tâche sans titre'
+              });
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error processing task:', error);
+      }
+    });
+
+    // Trier par date et prendre les 3 premiers
+    return allEvents
+      .sort((a, b) => new Date(a.start) - new Date(b.start))
+      .slice(0, 3);
+  };
+
+  // Fonction utilitaire pour convertir year/week/day_of_week en Date
+  const getDateFromWeek = (year, week, dayOfWeek, time) => {
+    // dayOfWeek: 0 = lundi, 6 = dimanche
+    const simple = new Date(year, 0, 1 + (week - 1) * 7);
+    const dow = simple.getDay();
+    const ISOweekStart = simple;
+    if (dow <= 4) {
+      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    } else {
+      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+    }
+    
+    const result = new Date(ISOweekStart);
+    result.setDate(ISOweekStart.getDate() + dayOfWeek);
+    
+    // Ajouter l'heure
+    if (time) {
+      const [hours, minutes] = time.split(':').map(Number);
+      result.setHours(hours, minutes || 0, 0, 0);
+    }
+    
+    return result;
   };
 
   const getISOWeek = (date) => {
@@ -223,10 +333,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Widget: Paiements - Consolidé */}
+          {/* Widget: Paiements - Consolidé et Cliquable */}
           <div 
             data-testid="dashboard-payments-widget"
-            className="group relative overflow-hidden rounded-2xl border border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50/50 p-6 shadow-sm transition-all hover:shadow-md dark:border-green-900/30 dark:from-green-950/40 dark:to-emerald-950/20"
+            onClick={() => navigate('/invoices')}
+            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50/50 p-6 shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg dark:border-green-900/30 dark:from-green-950/40 dark:to-emerald-950/20"
           >
             <div className="flex items-start justify-between">
               <div className="w-full space-y-4">
