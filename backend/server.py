@@ -1457,22 +1457,24 @@ async def get_earnings(
             hours = end_hour - start_hour
             amount = hours * event.get("hourly_rate", db_user.get("hourly_rate", 50.0))
 
-            if event["status"] == "paid":
+            status = event.get("status", "pending")
+            if status == "paid":
                 earnings["paid"] += amount
-            elif event["status"] == "unpaid":
+            elif status == "unpaid":
                 earnings["unpaid"] += amount
-            elif event["status"] == "pending":
+            elif status == "pending":
                 earnings["pending"] += amount
-            elif event["status"] == "not_worked":
+            elif status == "not_worked":
                 earnings["not_worked"] += amount
         except:
             # Fallback calculation
             amount = event.get("hourly_rate", db_user.get("hourly_rate", 50.0))
-            if event["status"] == "paid":
+            status = event.get("status", "pending")
+            if status == "paid":
                 earnings["paid"] += amount
-            elif event["status"] == "unpaid":
+            elif status == "unpaid":
                 earnings["unpaid"] += amount
-            elif event["status"] == "pending":
+            elif status == "pending":
                 earnings["pending"] += amount
 
     # Add earnings from tasks - tasks are always considered as "paid"
