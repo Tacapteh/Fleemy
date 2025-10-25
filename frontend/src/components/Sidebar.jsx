@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { contextStore } from '../stores/contextStore';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
@@ -11,8 +12,8 @@ const menuItems = [
   { id: 'settings', name: 'Paramètres', icon: '⚙️', to: '/settings' },
 ];
 
-const getMenuItemClass = (isActive) =>
-  `w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+const getMenuItemClass = (isActive, isCollapsed) =>
+  `w-full flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'} px-4 py-3 rounded-lg transition-colors ${
     isActive
       ? 'border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-400/40 dark:bg-blue-500/20 dark:text-blue-100'
       : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800/80'
@@ -20,6 +21,7 @@ const getMenuItemClass = (isActive) =>
 
 export default function Sidebar({ user, onLogout }) {
   const location = useLocation();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const planningPath = React.useMemo(() => {
     const context = contextStore.get();
