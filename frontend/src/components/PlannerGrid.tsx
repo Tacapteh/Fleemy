@@ -534,50 +534,231 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     return <div>Chargement...</div>;
   }
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const mobileDaysToShow = viewFilter === 'today'
+    ? days.filter(day => {
+        const dayDate = new Date(day.date);
+        dayDate.setHours(0, 0, 0, 0);
+        return dayDate.getTime() === today.getTime();
+      })
+    : days;
+
   return (
-    <div ref={wrapperRef} className="week-shell" style={weeklyGridStyle}>
-      <div className="week-day-headers">
-        {days.map((day) => (
-          <div key={day.name} className="day-header-label dark:text-slate-100">
-            {day.name} {day.date.getDate()}
-          </div>
-        ))}
+    <div ref={wrapperRef}>
+      {/* Toggle Mobile - Visible uniquement sur mobile */}
+      <div className="flex md:hidden gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => setViewFilter('today')}
+          className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${
+            viewFilter === 'today'
+              ? 'bg-blue-600 text-white'
+              : 'border border-gray-600 dark:border-slate-600 text-gray-900 dark:text-slate-100'
+          }`}
+        >
+          Aujourd'hui
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewFilter('week')}
+          className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${
+            viewFilter === 'week'
+              ? 'bg-blue-600 text-white'
+              : 'border border-gray-600 dark:border-slate-600 text-gray-900 dark:text-slate-100'
+          }`}
+        >
+          Semaine
+        </button>
       </div>
 
-      <div className="week-grid-container overflow-y-auto items-start py-2" style={gridScrollStyle}>
-        <div
-          className="time-gutter flex flex-col dark:bg-slate-900 dark:border-slate-700"
-          style={{ height: containerHeight }}
-        >
-          {timeLabels.map((time) => (
-            <div
-              key={time}
-              className="time-label-slot flex h-[var(--weekly-grid-row-h)] items-center justify-end px-2 py-[1px] text-xs text-slate-500 border-b border-transparent last:border-b-0 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
-            >
-              <span className="leading-none">{time}</span>
+      {/* Vue DESKTOP - Grille actuelle inchangée */}
+      <div className="hidden md:block week-shell" style={weeklyGridStyle}>
+        <div className="week-day-headers">
+          {days.map((day) => (
+            <div key={day.name} className="day-header-label dark:text-slate-100">
+              {day.name} {day.date.getDate()}
             </div>
           ))}
         </div>
 
-        <div
-          className="week-grid-body dark:bg-slate-800 dark:border-slate-700"
-          style={gridBodyStyle}
-        >
-          <GridLayer hours={hours} />
-          <InteractiveLayer
-            hours={hours}
-            days={days}
-            eventLayouts={visibleEventLayouts}
-            taskLayouts={visibleTaskLayouts}
-            onCellClick={onCellClick}
-            onAddEvent={onAddEvent}
-            onEventClick={onEventClick}
-            onTaskClick={onTaskClick}
-            isReadOnlyMode={isReadOnlyMode}
-            positionUnit={positionUnit}
-            minuteHeight={minuteHeight}
-          />
+        <div className="week-grid-container overflow-y-auto items-start py-2" style={gridScrollStyle}>
+          <div
+            className="time-gutter flex flex-col dark:bg-slate-900 dark:border-slate-700"
+            style={{ height: containerHeight }}
+          >
+            {timeLabels.map((time) => (
+              <div
+                key={time}
+                className="time-label-slot flex h-[var(--weekly-grid-row-h)] items-center justify-end px-2 py-[1px] text-xs text-slate-500 border-b border-transparent last:border-b-0 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
+              >
+                <span className="leading-none">{time}</span>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="week-grid-body dark:bg-slate-800 dark:border-slate-700"
+            style={gridBodyStyle}
+          >
+            <GridLayer hours={hours} />
+            <InteractiveLayer
+              hours={hours}
+              days={days}
+              eventLayouts={visibleEventLayouts}
+              taskLayouts={visibleTaskLayouts}
+              onCellClick={onCellClick}
+              onAddEvent={onAddEvent}
+              onEventClick={onEventClick}
+              onTaskClick={onTaskClick}
+              isReadOnlyMode={isReadOnlyMode}
+              positionUnit={positionUnit}
+              minuteHeight={minuteHeight}
+            />
+          </div>
         </div>
+      </div>
+
+      {/* Vue MOBILE - Empilée par jour */}
+      <div className="md:hidden flex flex-col w-full">
+        {mobileDaysToShow.map((day, dayIndex) => {
+          const originalDayIndex = days.findIndex(d => d.date.getTime() === day.date.getTime());
+          const dayEvents = originalDayIndex >= 0 ? visibleEventLayouts[originalDayIndex] || [] : [];
+          const dayTasks = originalDayIndex >= 0 ? visibleTaskLayouts[originalDayIndex] || [] : [];
+
+          return (
+            <div key={`mobile-day-${dayIndex}`} className="border border-white/10 rounded-lg bg-[#1a2235] p-2 mb-4 w-full">
+              {/* En-tête du jour */}
+              <div className="text-base font-semibold text-white flex items-center justify-between mb-2">
+                <span>{day.name} {day.date.getDate()}</span>
+                {!isReadOnlyMode && (
+                  <button
+                    type="button"
+                    onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
+                    className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
+                  >
+                    + Événement
+                  </button>
+                )}
+              </div>
+
+              {/* Liste des événements du jour */}
+              {dayEvents.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {dayEvents.map(({ event }) => {
+                    const startTime = event.startDate.toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                    const endTime = event.endDate.toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+
+                    let bgColorClass = 'bg-gray-200 dark:bg-gray-700';
+                    let borderColorClass = 'border-gray-300 dark:border-gray-600';
+                    if (event.status === 'paid') {
+                      bgColorClass = 'bg-green-200 dark:bg-green-500/30';
+                      borderColorClass = 'border-green-300 dark:border-green-500';
+                    } else if (event.status === 'unpaid') {
+                      bgColorClass = 'bg-red-200 dark:bg-red-500/30';
+                      borderColorClass = 'border-red-300 dark:border-red-500';
+                    } else if (event.status === 'pending') {
+                      bgColorClass = 'bg-orange-200 dark:bg-orange-500/30';
+                      borderColorClass = 'border-orange-300 dark:border-orange-500';
+                    }
+
+                    return (
+                      <div
+                        key={event.id}
+                        onClick={() => onEventClick?.(event)}
+                        className={`${bgColorClass} ${borderColorClass} border rounded p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {startTime} - {endTime}
+                        </div>
+                        <div className="text-gray-800 dark:text-slate-200">
+                          {event.client || event.description || 'Sans titre'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Liste des tâches hebdo du jour */}
+              {dayTasks.length > 0 && (
+                <div className="space-y-2">
+                  {dayTasks.map(({ task, backgroundColor, borderColor, textColor }) => {
+                    const startTime = task.startDate.toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                    const endTime = task.endDate.toLocaleTimeString('fr-FR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    });
+                    const IconComponent = getIcon(task.icon ?? undefined);
+
+                    const formattedPrice =
+                      typeof task.price === 'number'
+                        ? `${task.price.toLocaleString('fr-FR', {
+                            minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
+                            maximumFractionDigits: 2,
+                          })} €`
+                        : typeof task.price === 'string'
+                        ? task.price.trim()
+                        : '';
+
+                    const isInteractive =
+                      !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
+
+                    return (
+                      <div
+                        key={task.occurrenceId}
+                        onClick={() => isInteractive && onTaskClick?.(task)}
+                        className={`rounded p-2 text-xs min-h-[44px] flex items-center gap-2 ${
+                          isInteractive ? 'cursor-pointer' : ''
+                        }`}
+                        style={{
+                          backgroundColor,
+                          border: `1px solid ${borderColor}`,
+                          color: textColor,
+                        }}
+                      >
+                        <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <span className="font-medium truncate">{task.label}</span>
+                          <div className="flex items-center gap-2 text-[11px] opacity-90">
+                            <span>
+                              {startTime} - {endTime}
+                            </span>
+                            {formattedPrice && <span>{formattedPrice}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Message si pas d'événements ni de tâches */}
+              {dayEvents.length === 0 && dayTasks.length === 0 && (
+                <div className="text-sm text-gray-500 dark:text-slate-400 text-center py-4">
+                  Aucun événement ou tâche
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Message si aucune journée à afficher */}
+        {mobileDaysToShow.length === 0 && (
+          <div className="text-center text-gray-500 dark:text-slate-400 py-8">
+            Aucune journée à afficher
+          </div>
+        )}
       </div>
     </div>
   );
