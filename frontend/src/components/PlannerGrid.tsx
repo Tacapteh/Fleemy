@@ -16,6 +16,8 @@ import EventCard from './EventCard';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SLOT_HEIGHT = 64;
+const DEFAULT_DAY_START_HOUR = 7;
+const DEFAULT_DAY_END_HOUR = 20;
 const MOBILE_BREAKPOINT = 768;
 
 type PositionUnit = 'percentage' | 'minutes';
@@ -46,6 +48,8 @@ interface TaskBlockLayout {
   borderColor: string;
   textColor: string;
 }
+
+const formatHourLabel = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;
 
 const GridLayer = React.memo(({ hours }: { hours: string[] }) => (
   <div className="grid-layer">
@@ -101,7 +105,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             <button
               type="button"
               className="add-event-btn"
-              onClick={() => onAddEvent?.(day.date, '09:00')}
+              onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
               title="Ajouter un événement"
               data-testid={`add-event-day-${dayIndex}`}
             >
@@ -281,6 +285,31 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     }
     return settings.showWeekends === true;
   }, [loading, settings]);
+
+  const { startHour, endHour } = useMemo(() => {
+    if (loading || !settings) {
+      return { startHour: DEFAULT_DAY_START_HOUR, endHour: DEFAULT_DAY_END_HOUR };
+    }
+
+    if (settings.showFullDay === true) {
+      return { startHour: 0, endHour: 24 };
+    }
+
+    const rawStart =
+      typeof settings.dayStartHour === 'number' ? settings.dayStartHour : DEFAULT_DAY_START_HOUR;
+    const rawEnd =
+      typeof settings.dayEndHour === 'number' ? settings.dayEndHour : DEFAULT_DAY_END_HOUR;
+
+    let normalizedStart = Math.max(0, Math.min(22, Math.trunc(rawStart)));
+    let normalizedEnd = Math.max(1, Math.min(23, Math.trunc(rawEnd)));
+
+    if (normalizedEnd <= normalizedStart) {
+      normalizedEnd = Math.min(23, normalizedStart + 1);
+    }
+
+    return { startHour: normalizedStart, endHour: normalizedEnd };
+  }, [loading, settings]);
+
   const gridColumnCount = showWeekendsEnabled ? 7 : 5;
   const weeklyGridStyle = useMemo(
     () => ({
@@ -318,13 +347,21 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     return () => mediaQuery.removeListener(handleChange);
   }, []);
 
-  const hours = useMemo(
-    () => Array.from({ length: 9 }, (_, i) => `${String(9 + i).padStart(2, '0')}:00`),
-    []
-  );
-  const timeLabels = useMemo(() => [...hours, '18:00'], [hours]);
+  const hours = useMemo(() => {
+    const total = Math.max(0, endHour - startHour);
+    return Array.from({ length: total }, (_, i) => formatHourLabel(startHour + i));
+  }, [startHour, endHour]);
+
+  const timeLabels = useMemo(() => {
+    if (hours.length === 0) {
+      return [formatHourLabel(startHour)];
+    }
+
+    return [...hours, formatHourLabel(endHour)];
+  }, [hours, startHour, endHour]);
   const positionUnit: PositionUnit = isMobileLayout ? 'minutes' : 'percentage';
   const minuteHeight = SLOT_HEIGHT / 60;
+  const rowCount = Math.max(hours.length, 1);
 
   const days = useMemo(() => {
     const base = new Date(normalizedWeekStart);
@@ -462,7 +499,18 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     [onSlotSelect, user]
   );
 
-  const containerHeight = useMemo(() => hours.length * SLOT_HEIGHT, [hours]);
+  const containerHeight = useMemo(() => rowCount * SLOT_HEIGHT, [rowCount]);
+  const gridBodyStyle = useMemo(
+    () =>
+      ({
+        height: containerHeight,
+        '--weekly-grid-slot-height': `${SLOT_HEIGHT}px`,
+        '--weekly-grid-row-h': `${SLOT_HEIGHT}px`,
+        '--weekly-grid-minute-height': `${minuteHeight}px`,
+        '--weekly-grid-row-count': String(rowCount),
+      }) as React.CSSProperties,
+    [containerHeight, minuteHeight, rowCount]
+  );
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   if (!user) {
@@ -479,8 +527,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         ))}
       </div>
 
-      <div className="week-grid-container">
-        <div className="time-gutter dark:bg-slate-900 dark:border-slate-700">
+      <div className="week-grid-container overflow-y-auto">
+        <div
+          className="time-gutter dark:bg-slate-900 dark:border-slate-700"
+          style={{ height: containerHeight }}
+        >
           {timeLabels.map((time, index) => (
             <div
               key={time}
@@ -494,12 +545,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
         <div
           className="week-grid-body dark:bg-slate-800 dark:border-slate-700"
-          style={{
-            height: containerHeight,
-            '--weekly-grid-slot-height': `${SLOT_HEIGHT}px`,
-            '--weekly-grid-row-h': `${SLOT_HEIGHT}px`,
-            '--weekly-grid-minute-height': `${minuteHeight}px`,
-          } as React.CSSProperties}
+          style={gridBodyStyle}
         >
           <GridLayer hours={hours} />
           <InteractiveLayer

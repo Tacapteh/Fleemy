@@ -51,13 +51,13 @@
   display: grid;
   grid-template-columns: repeat(var(--weekly-grid-day-count, 7), 1fr);
   grid-template-rows: repeat(
-    9,
+    var(--weekly-grid-row-count, 9),
     var(--weekly-grid-row-h)
-  ); /* Exactement 9 heures (09:00-18:00) */
+  );
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .grid-layer {
@@ -69,7 +69,7 @@
 .days-grid {
   display: grid;
   grid-template-columns: repeat(var(--weekly-grid-day-count, 7), 1fr);
-  grid-template-rows: repeat(9, var(--weekly-grid-row-h)); /* Exactement 9 heures, pas plus */
+  grid-template-rows: repeat(var(--weekly-grid-row-count, 9), var(--weekly-grid-row-h));
   height: 100%;
 }
 
@@ -78,7 +78,7 @@
   grid-row: 1 / -1;
   display: grid;
   grid-template-columns: repeat(var(--weekly-grid-day-count, 7), 1fr);
-  grid-template-rows: repeat(9, var(--weekly-grid-row-h)); /* Exactement 9 heures, pas plus */
+  grid-template-rows: repeat(var(--weekly-grid-row-count, 9), var(--weekly-grid-row-h));
   pointer-events: auto;
   position: relative;
   z-index: 1;
@@ -86,7 +86,7 @@
 
 .day-column {
   display: grid;
-  grid-template-rows: repeat(9, var(--weekly-grid-row-h)); /* 9 heures */
+  grid-template-rows: repeat(var(--weekly-grid-row-count, 9), var(--weekly-grid-row-h));
   grid-row: 1 / -1;
   border-right: 1px solid #e5e7eb;
   position: relative;

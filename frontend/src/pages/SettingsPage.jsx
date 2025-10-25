@@ -120,6 +120,74 @@ export default function SettingsPage() {
     }
   }, [durationInput, settings, updateSetting]);
 
+  const handleHourChange = useCallback(
+    (key, rawValue) => {
+      if (!settings || settings.showFullDay) {
+        return;
+      }
+
+      if (rawValue === "") {
+        return;
+      }
+
+      const numericValue = Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        return;
+      }
+
+      const isStart = key === "dayStartHour";
+      const fallbackStart =
+        typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
+      const fallbackEnd =
+        typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
+
+      let value = Math.trunc(numericValue);
+      value = Math.max(0, Math.min(23, value));
+      if (isStart) {
+        value = Math.min(value, 22);
+      } else {
+        value = Math.max(value, 1);
+      }
+
+      if (isStart) {
+        let nextEnd = fallbackEnd;
+        if (value >= nextEnd) {
+          nextEnd = Math.min(23, value + 1);
+        }
+
+        if (fallbackStart !== value) {
+          updateSetting?.("dayStartHour", value);
+        }
+
+        if (nextEnd !== fallbackEnd) {
+          updateSetting?.("dayEndHour", nextEnd);
+        }
+        return;
+      }
+
+      let nextStart = fallbackStart;
+      if (value <= nextStart) {
+        nextStart = Math.max(0, Math.min(value - 1, 22));
+      }
+
+      if (nextStart !== fallbackStart) {
+        updateSetting?.("dayStartHour", nextStart);
+      }
+
+      if (fallbackEnd !== value) {
+        updateSetting?.("dayEndHour", value);
+      }
+    },
+    [settings, updateSetting]
+  );
+
+  const handleHourInput = useCallback(
+    (key) => (event) => {
+      handleHourChange(key, event.target.value);
+    },
+    [handleHourChange]
+  );
+
   if (loading || !settings) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center text-sm text-slate-700 dark:text-slate-200">
@@ -165,6 +233,61 @@ export default function SettingsPage() {
             </div>
           );
         })}
+
+        <div className="border-b border-slate-200 px-4 py-4 last:border-b-0 dark:border-slate-700">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="sm:pr-4">
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                Heures affichées dans la journée
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Contrôle la plage horaire visible dans la vue Semaine.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-300">
+                Début
+                <input
+                  id="setting-dayStartHour-input"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={
+                    typeof settings.dayStartHour === "number"
+                      ? settings.dayStartHour
+                      : 7
+                  }
+                  onChange={handleHourInput("dayStartHour")}
+                  disabled={settings.showFullDay === true}
+                  className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                />
+              </label>
+
+              <label className="flex flex-col text-xs font-medium text-slate-600 dark:text-slate-300">
+                Fin
+                <input
+                  id="setting-dayEndHour-input"
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={
+                    typeof settings.dayEndHour === "number"
+                      ? settings.dayEndHour
+                      : 20
+                  }
+                  onChange={handleHourInput("dayEndHour")}
+                  disabled={settings.showFullDay === true}
+                  className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                />
+              </label>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+            Si l’option « Plage horaire 0h → 24h » est activée, l’affichage montrera automatiquement toutes les heures, de 00:00 à
+            24:00.
+          </p>
+        </div>
 
         <div className="flex items-center justify-between py-3 border-b border-slate-200 last:border-b-0 dark:border-slate-700 px-4">
           <div className="flex-1 pr-4">
