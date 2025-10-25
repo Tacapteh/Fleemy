@@ -429,13 +429,12 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Client Management Page - List/Search/Pagination"
-    - "Client Form Component - Validation & ARIA"
-    - "useClients Hook - Data Management"
-    - "Client Combobox Component - Reusable"
-    - "Client Integration - EventForm Updates"
+    - "Dashboard Widget Cette Semaine - Clickable Navigation"
+    - "Dashboard Widget Paiements - Consolidated Layout"
+    - "Dashboard Accès Rapides Section - Removal"
+    - "Sidebar Collapsible Toggle - Implementation"
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
 
   - task: "Dashboard Widget Cette Semaine - Clickable Navigation"
