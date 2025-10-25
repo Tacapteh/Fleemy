@@ -1931,6 +1931,247 @@ async def delete_todo(todo_id: str, user: Dict[str, Any] = Depends(verify_token)
     return {"message": "Todo deleted"}
 
 
+# Daily Todos endpoints
+@api_router.get("/daily-todos/{target_user_id}/{date}")
+async def get_daily_todos(
+    target_user_id: str,
+    date: str,
+    team_id: Optional[str] = None,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Get daily todos for a specific user and date."""
+    requester_uid = user["uid"]
+    
+    # Check authorization
+    can_read = False
+    if requester_uid == target_user_id:
+        can_read = True
+    elif team_id:
+        # Check if requester is in the same team
+        try:
+            await ensure_team_membership(team_id, requester_uid)
+            await ensure_team_membership(team_id, target_user_id)
+            can_read = True
+        except HTTPException:
+            can_read = False
+    
+    if not can_read:
+        raise HTTPException(status_code=403, detail="Not authorized to view these todos")
+    
+    # Validate date format
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    
+    doc_id = f"{target_user_id}_{date}"
+    doc_ref = db.collection("dailyTodos").document(doc_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    
+    if not snap.exists:
+        return {
+            "success": True,
+            "data": {
+                "userId": target_user_id,
+                "date": date,
+                "items": [],
+                "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+            },
+            "readOnly": requester_uid != target_user_id,
+        }
+    
+    data = snap.to_dict()
+    return {
+        "success": True,
+        "data": data,
+        "readOnly": requester_uid != target_user_id,
+    }
+
+
+@api_router.put("/daily-todos/{target_user_id}/{date}")
+async def update_daily_todos(
+    target_user_id: str,
+    date: str,
+    body: Dict[str, Any] = Body(...),
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Update or create daily todos for a specific date."""
+    requester_uid = user["uid"]
+    
+    # Only the owner can modify their own todos
+    if requester_uid != target_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify these todos")
+    
+    # Validate date format
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    
+    items = body.get("items", [])
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail="Items must be a list")
+    
+    doc_id = f"{target_user_id}_{date}"
+    doc_ref = db.collection("dailyTodos").document(doc_id)
+    
+    data = {
+        "userId": target_user_id,
+        "date": date,
+        "items": items,
+        "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+    }
+    
+    await asyncio.to_thread(doc_ref.set, data)
+    
+    return {
+        "success": True,
+        "data": data,
+    }
+
+
+@api_router.post("/daily-todos/{target_user_id}/{date}/items")
+async def add_daily_todo_item(
+    target_user_id: str,
+    date: str,
+    item: DailyTodoCreateRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Add a new item to daily todos."""
+    requester_uid = user["uid"]
+    
+    if requester_uid != target_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify these todos")
+    
+    try:
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    
+    doc_id = f"{target_user_id}_{date}"
+    doc_ref = db.collection("dailyTodos").document(doc_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    
+    new_item = {
+        "id": str(uuid.uuid4()),
+        "text": item.text,
+        "done": False,
+        "time": item.time,
+    }
+    
+    if snap.exists:
+        data = snap.to_dict()
+        items = data.get("items", [])
+        items.append(new_item)
+        data["items"] = items
+        data["updatedAt"] = int(datetime.now(timezone.utc).timestamp() * 1000)
+    else:
+        data = {
+            "userId": target_user_id,
+            "date": date,
+            "items": [new_item],
+            "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
+        }
+    
+    await asyncio.to_thread(doc_ref.set, data)
+    
+    return {
+        "success": True,
+        "data": data,
+        "newItem": new_item,
+    }
+
+
+@api_router.patch("/daily-todos/{target_user_id}/{date}/items/{item_id}")
+async def update_daily_todo_item(
+    target_user_id: str,
+    date: str,
+    item_id: str,
+    updates: DailyTodoUpdateRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Update a specific item in daily todos."""
+    requester_uid = user["uid"]
+    
+    if requester_uid != target_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify these todos")
+    
+    doc_id = f"{target_user_id}_{date}"
+    doc_ref = db.collection("dailyTodos").document(doc_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="Daily todos not found")
+    
+    data = snap.to_dict()
+    items = data.get("items", [])
+    
+    item_found = False
+    for item in items:
+        if item.get("id") == item_id:
+            item_found = True
+            if updates.text is not None:
+                item["text"] = updates.text
+            if updates.done is not None:
+                item["done"] = updates.done
+            if updates.time is not None:
+                item["time"] = updates.time
+            break
+    
+    if not item_found:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    data["items"] = items
+    data["updatedAt"] = int(datetime.now(timezone.utc).timestamp() * 1000)
+    
+    await asyncio.to_thread(doc_ref.set, data)
+    
+    return {
+        "success": True,
+        "data": data,
+    }
+
+
+@api_router.delete("/daily-todos/{target_user_id}/{date}/items/{item_id}")
+async def delete_daily_todo_item(
+    target_user_id: str,
+    date: str,
+    item_id: str,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """Delete a specific item from daily todos."""
+    requester_uid = user["uid"]
+    
+    if requester_uid != target_user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify these todos")
+    
+    doc_id = f"{target_user_id}_{date}"
+    doc_ref = db.collection("dailyTodos").document(doc_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+    
+    if not snap.exists:
+        raise HTTPException(status_code=404, detail="Daily todos not found")
+    
+    data = snap.to_dict()
+    items = data.get("items", [])
+    
+    original_length = len(items)
+    items = [item for item in items if item.get("id") != item_id]
+    
+    if len(items) == original_length:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    data["items"] = items
+    data["updatedAt"] = int(datetime.now(timezone.utc).timestamp() * 1000)
+    
+    await asyncio.to_thread(doc_ref.set, data)
+    
+    return {
+        "success": True,
+        "data": data,
+    }
+
+
 # Validation helpers
 def validate_email(email: str) -> bool:
     """Validate email format"""
