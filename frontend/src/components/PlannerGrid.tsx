@@ -592,7 +592,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
             {hourSlotLabels.map((time) => (
               <div
                 key={time}
-                className="time-label-slot relative h-[var(--weekly-grid-row-h)] border-b border-transparent pr-2 dark:bg-slate-900 dark:border-slate-700"
+                className="time-label-slot relative h-[var(--weekly-grid-row-h)] pr-2 bg-white/80 dark:bg-slate-900/80"
               >
                 <span className="absolute top-0 right-0 text-xs text-slate-500 leading-none dark:text-slate-100">
                   {time}
