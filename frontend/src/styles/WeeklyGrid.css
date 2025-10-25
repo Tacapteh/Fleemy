@@ -37,17 +37,12 @@
   border-right: 1px solid #e5e7eb;
   pointer-events: none;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.time-label {
-  position: absolute;
-  right: 0.5rem;
-  font-size: 0.75rem;
-  color: #6b7280;
-  line-height: 1;
-  transform: translateY(-50%);
-  background: #fff;
-  padding: 2px 0;
+.time-label-slot {
+  min-height: var(--weekly-grid-row-h);
 }
 
 .week-grid-body {
