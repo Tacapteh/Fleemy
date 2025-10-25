@@ -301,6 +301,31 @@ class Todo(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class DailyTodoItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    text: str
+    done: bool = False
+    time: Optional[str] = None  # Format "HH:MM"
+
+
+class DailyTodo(BaseModel):
+    userId: str
+    date: str  # Format "YYYY-MM-DD"
+    items: List[DailyTodoItem] = []
+    updatedAt: int = Field(default_factory=lambda: int(datetime.now(timezone.utc).timestamp() * 1000))
+
+
+class DailyTodoCreateRequest(BaseModel):
+    text: str
+    time: Optional[str] = None
+
+
+class DailyTodoUpdateRequest(BaseModel):
+    text: Optional[str] = None
+    done: Optional[bool] = None
+    time: Optional[str] = None
+
+
 class Address(BaseModel):
     line1: str = ""
     line2: Optional[str] = ""
