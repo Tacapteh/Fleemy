@@ -1,8 +1,30 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import '../styles/MonthCalendar.css';
+import { useSettings } from '../context/SettingsContext';
 
 function MonthCalendar({ year, month, events = [], onDateSelect, onEventClick }) {
-  const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  const { settings, loading } = useSettings();
+  const showWeekendsEnabled = useMemo(() => {
+    if (loading || !settings) {
+      return true;
+    }
+    return settings.showWeekends === true;
+  }, [loading, settings]);
+  const daysOfWeek = useMemo(
+    () => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+    []
+  );
+  const visibleDaysOfWeek = useMemo(
+    () => (showWeekendsEnabled ? daysOfWeek : daysOfWeek.slice(0, 5)),
+    [daysOfWeek, showWeekendsEnabled]
+  );
+  const columnCount = showWeekendsEnabled ? 7 : 5;
+  const monthGridStyle = useMemo(
+    () => ({
+      '--month-grid-day-count': String(columnCount),
+    }),
+    [columnCount]
+  );
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const offset = (firstDay + 6) % 7; // Monday = 0
@@ -30,9 +52,9 @@ function MonthCalendar({ year, month, events = [], onDateSelect, onEventClick })
   };
 
     return (
-      <div className="month-calendar">
+      <div className="month-calendar" style={monthGridStyle}>
         <div className="month-day-header">
-          {daysOfWeek.map((day) => (
+          {visibleDaysOfWeek.map((day) => (
             <div key={day} className="calendar-header-cell">
               {day}
             </div>
@@ -41,8 +63,11 @@ function MonthCalendar({ year, month, events = [], onDateSelect, onEventClick })
         <div className="month-grid border rounded-md overflow-hidden">
           {rows.map((week, wi) => (
             <div key={wi} className="calendar-row">
-              {week.map((value, di) => (
-                value ? (
+              {week.map((value, di) => {
+                if (!showWeekendsEnabled && di >= 5) {
+                  return null;
+                }
+                return value ? (
                   <button
                   key={di}
                   type="button"
@@ -78,8 +103,8 @@ function MonthCalendar({ year, month, events = [], onDateSelect, onEventClick })
                   </button>
                 ) : (
                   <div key={di} className="calendar-cell empty" />
-                )
-              ))}
+                );
+              })}
           </div>
         ))}
       </div>
