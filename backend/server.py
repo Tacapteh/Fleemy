@@ -461,11 +461,20 @@ class WeeklyTaskUpsertRequest(BaseModel):
     time_ranges: List[WeeklyTaskTimeRangeRequest]
     team_id: Optional[str] = None
     member_uid: Optional[str] = None
+    weekday: Optional[int] = None
 
     @validator("time_ranges")
     def validate_time_ranges(cls, value: List[WeeklyTaskTimeRangeRequest]):
         if not value:
             raise ValueError("At least one time range is required")
+        return value
+
+    @validator("weekday")
+    def validate_weekday(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return value
+        if value < 0 or value > 6:
+            raise ValueError("weekday must be between 0 and 6")
         return value
 
 
@@ -490,7 +499,12 @@ def _build_weekly_task_payload_from_request(
         "color": request.color or None,
         "icon": request.icon or None,
         "time_ranges": [
-            {"day": time_range.day, "start": time_range.start, "end": time_range.end}
+            {
+                "day": time_range.day,
+                "start": time_range.start,
+                "end": time_range.end,
+                "weekday": time_range.day,
+            }
             for time_range in request.time_ranges
         ],
         "weekly": True,
@@ -499,6 +513,19 @@ def _build_weekly_task_payload_from_request(
         "team_id": team_id if team_id else None,
         "updated_at": now,
     }
+
+    weekday_value = request.weekday if request.weekday is not None else None
+    if weekday_value is None and request.time_ranges:
+        weekday_value = request.time_ranges[0].day
+    if weekday_value is not None:
+        payload["weekday"] = weekday_value
+
+    if request.time_ranges:
+        first_range = request.time_ranges[0]
+        payload["startTime"] = first_range.start
+        payload["endTime"] = first_range.end
+        payload["start_time"] = first_range.start
+        payload["end_time"] = first_range.end
 
     created_at = existing_created_at or now
     payload["created_at"] = created_at

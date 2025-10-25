@@ -212,12 +212,18 @@ export default function useTasks(context, weekStartISO) {
         return;
       }
 
+      const expectedWeekday = toDayIndex(task.weekday ?? task.week_day ?? task.weekDay);
+
       task.time_ranges.forEach((range, index) => {
         const dayIndex = toDayIndex(range.day ?? range.dayIndex ?? range.weekday);
         const start = parseTime(range.start);
         const end = parseTime(range.end);
 
         if (dayIndex === null || !start || !end) {
+          return;
+        }
+
+        if (expectedWeekday !== null && expectedWeekday !== dayIndex) {
           return;
         }
 
@@ -240,6 +246,7 @@ export default function useTasks(context, weekStartISO) {
           taskId: task.id,
           occurrenceId: `${task.id}_${index}`,
           dayIndex,
+          weekday: expectedWeekday !== null ? expectedWeekday : dayIndex,
           startDate,
           endDate,
           label: task.label || 'Tâche',

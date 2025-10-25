@@ -99,6 +99,7 @@ export interface PlannerEventInput {
 
 export interface WeeklyTaskRange {
   day?: number | string | null;
+  weekday?: number | string | null;
   start?: string | null;
   end?: string | null;
 }
@@ -110,6 +111,7 @@ export interface WeeklyTaskDefinition {
   color?: string;
   price?: number | string | null;
   readOnly?: boolean;
+  weekday?: number | string | null;
   time_ranges?: WeeklyTaskRange[] | null;
   timeSlots?: WeeklyTaskRange[] | null;
   [key: string]: unknown;
@@ -119,6 +121,7 @@ export interface TaskOccurrence {
   taskId: string;
   occurrenceId: string;
   dayIndex: number;
+  weekday?: number;
   startDate: Date;
   endDate: Date;
   label: string;
@@ -408,11 +411,19 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
   tasks.forEach((taskRaw) => {
     if (!taskRaw || typeof taskRaw !== 'object') return;
     const task = taskRaw as Partial<WeeklyTaskDefinition> & Partial<TaskOccurrence>;
+    const taskRecord = task as Record<string, unknown>;
+    const taskWeekday = resolveDayIndex(
+      taskRecord?.weekday ?? taskRecord?.week_day ?? taskRecord?.weekDay ?? null,
+      rangeStart,
+    );
 
     if (task.startDate instanceof Date && task.endDate instanceof Date && typeof task.dayIndex === 'number') {
       const startDate = new Date(task.startDate);
       const endDate = new Date(task.endDate);
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()) || endDate <= startDate) {
+        return;
+      }
+      if (taskWeekday !== -1 && taskWeekday !== task.dayIndex) {
         return;
       }
       const occId = task.occurrenceId || `${task.taskId || task.id || 'task'}_${task.dayIndex}_${startDate.getTime()}`;
@@ -421,6 +432,7 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         taskId: task.taskId || task.id || occId,
         occurrenceId: occId,
         dayIndex: task.dayIndex,
+        weekday: taskWeekday !== -1 ? taskWeekday : task.dayIndex,
         startDate,
         endDate,
         label: task.label || 'Tâche',
@@ -460,6 +472,10 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         return;
       }
 
+      if (taskWeekday !== -1 && taskWeekday !== parsedDayIndex) {
+        return;
+      }
+
       const dayDate = new Date(rangeStart.getTime() + parsedDayIndex * MS_IN_DAY);
       const startTime = parseTimeString(range?.start);
       const endTime = parseTimeString(range?.end);
@@ -487,6 +503,7 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         taskId: task.id || occId,
         occurrenceId: occId,
         dayIndex: parsedDayIndex,
+        weekday: taskWeekday !== -1 ? taskWeekday : parsedDayIndex,
         startDate,
         endDate,
         label: task.label || 'Tâche',
