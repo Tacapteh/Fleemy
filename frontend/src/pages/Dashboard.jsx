@@ -153,42 +153,81 @@ export default function Dashboard() {
     // Extraire les événements
     const events = monthData.events || [];
     events.forEach(event => {
-      if (event.date && event.start_time) {
-        const eventDate = new Date(`${event.date}T${event.start_time}`);
-        if (eventDate >= now) {
-          allEvents.push({
-            ...event,
-            start: eventDate.toISOString(),
-            type: 'event',
-            title: event.client_name || event.description || 'Sans titre'
-          });
+      try {
+        // Reconstruire la date à partir de year, week, day_of_week
+        if (event.year && event.week && event.day_of_week !== undefined && event.start_time) {
+          const eventDate = getDateFromWeek(event.year, event.week, event.day_of_week, event.start_time);
+          if (eventDate >= now) {
+            allEvents.push({
+              ...event,
+              start: eventDate.toISOString(),
+              type: 'event',
+              title: event.client_name || event.description || 'Sans titre'
+            });
+          }
         }
+      } catch (error) {
+        console.error('Error processing event:', error);
       }
     });
 
     // Extraire les tâches avec leurs créneaux
     const tasks = monthData.tasks || [];
     tasks.forEach(task => {
-      const timeSlots = task.time_slots || [];
-      timeSlots.forEach(slot => {
-        if (slot.date && slot.start) {
-          const taskDate = new Date(`${slot.date}T${slot.start}`);
-          if (taskDate >= now) {
-            allEvents.push({
-              ...task,
-              start: taskDate.toISOString(),
-              type: 'task',
-              title: task.label || task.title || 'Tâche sans titre'
-            });
+      try {
+        const timeRanges = task.time_ranges || [];
+        timeRanges.forEach(range => {
+          if (range.day !== undefined && range.start) {
+            // Les tâches utilisent aussi year/week/day
+            const taskDate = getDateFromWeek(
+              task.year || new Date().getFullYear(), 
+              task.week || getISOWeek(now), 
+              range.day, 
+              range.start
+            );
+            if (taskDate >= now) {
+              allEvents.push({
+                ...task,
+                start: taskDate.toISOString(),
+                type: 'task',
+                title: task.label || task.title || 'Tâche sans titre'
+              });
+            }
           }
-        }
-      });
+        });
+      } catch (error) {
+        console.error('Error processing task:', error);
+      }
     });
 
     // Trier par date et prendre les 3 premiers
     return allEvents
       .sort((a, b) => new Date(a.start) - new Date(b.start))
       .slice(0, 3);
+  };
+
+  // Fonction utilitaire pour convertir year/week/day_of_week en Date
+  const getDateFromWeek = (year, week, dayOfWeek, time) => {
+    // dayOfWeek: 0 = lundi, 6 = dimanche
+    const simple = new Date(year, 0, 1 + (week - 1) * 7);
+    const dow = simple.getDay();
+    const ISOweekStart = simple;
+    if (dow <= 4) {
+      ISOweekStart.setDate(simple.getDate() - simple.getDay() + 1);
+    } else {
+      ISOweekStart.setDate(simple.getDate() + 8 - simple.getDay());
+    }
+    
+    const result = new Date(ISOweekStart);
+    result.setDate(ISOweekStart.getDate() + dayOfWeek);
+    
+    // Ajouter l'heure
+    if (time) {
+      const [hours, minutes] = time.split(':').map(Number);
+      result.setHours(hours, minutes || 0, 0, 0);
+    }
+    
+    return result;
   };
 
   const getISOWeek = (date) => {
