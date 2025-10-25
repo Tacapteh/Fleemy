@@ -122,38 +122,42 @@ export default function SettingsPage() {
 
   const handleDayStartChange = useCallback(
     (event) => {
-      if (!settings || settings.showFullDay) {
+      if (!settings || settings.showFullDay === true) {
         return;
       }
 
       const rawValue = event.target.value;
-      if (rawValue === "") {
-        return;
-      }
-
       const parsed = parseInt(rawValue, 10);
+
       if (Number.isNaN(parsed)) {
         return;
       }
 
-      const currentStart =
-        typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
+      let newStart = parsed;
+      if (newStart < 0) {
+        newStart = 0;
+      } else if (newStart > 23) {
+        newStart = 23;
+      }
+
+      const storedStart =
+        typeof settings.dayStartHour === "number" ? settings.dayStartHour : null;
       const currentEnd =
         typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
-
-      const nextStart = Math.max(0, Math.min(23, parsed));
       let nextEnd = currentEnd;
 
-      if (nextStart >= nextEnd) {
-        nextEnd = Math.min(24, nextStart + 1);
+      if (newStart >= currentEnd) {
+        nextEnd = newStart + 1;
+        if (nextEnd > 24) {
+          nextEnd = 24;
+        }
+        if (nextEnd !== settings.dayEndHour) {
+          updateSetting?.("dayEndHour", nextEnd);
+        }
       }
 
-      if (currentStart !== nextStart) {
-        updateSetting?.("dayStartHour", nextStart);
-      }
-
-      if (nextEnd !== currentEnd) {
-        updateSetting?.("dayEndHour", nextEnd);
+      if (newStart !== storedStart) {
+        updateSetting?.("dayStartHour", newStart);
       }
     },
     [settings, updateSetting]
@@ -161,42 +165,48 @@ export default function SettingsPage() {
 
   const handleDayEndChange = useCallback(
     (event) => {
-      if (!settings || settings.showFullDay) {
+      if (!settings || settings.showFullDay === true) {
         return;
       }
 
       const rawValue = event.target.value;
-      if (rawValue === "") {
-        return;
-      }
-
       const parsed = parseInt(rawValue, 10);
+
       if (Number.isNaN(parsed)) {
         return;
       }
 
+      let newEnd = parsed;
+      if (newEnd < 1) {
+        newEnd = 1;
+      } else if (newEnd > 24) {
+        newEnd = 24;
+      }
+
+      const storedEnd =
+        typeof settings.dayEndHour === "number" ? settings.dayEndHour : null;
       const currentStart =
         typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
-      const currentEnd =
-        typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
-
-      const nextEnd = Math.max(1, Math.min(24, parsed));
       let nextStart = currentStart;
 
-      if (nextEnd <= nextStart) {
-        nextStart = Math.max(0, Math.min(nextEnd - 1, 23));
+      if (newEnd <= currentStart) {
+        nextStart = newEnd - 1;
+        if (nextStart < 0) {
+          nextStart = 0;
+        }
+        if (nextStart !== settings.dayStartHour) {
+          updateSetting?.("dayStartHour", nextStart);
+        }
       }
 
-      if (nextStart !== currentStart) {
-        updateSetting?.("dayStartHour", nextStart);
-      }
-
-      if (nextEnd !== currentEnd) {
-        updateSetting?.("dayEndHour", nextEnd);
+      if (newEnd !== storedEnd) {
+        updateSetting?.("dayEndHour", newEnd);
       }
     },
     [settings, updateSetting]
   );
+
+  const fullDay = settings?.showFullDay === true;
 
   const showFullDayToggle = toggleSettings.find((item) => item.key === "showFullDay");
   const additionalToggleSettings = toggleSettings.filter((item) => item.key !== "showFullDay");
@@ -275,13 +285,9 @@ export default function SettingsPage() {
                   type="number"
                   min={0}
                   max={23}
-                  value={
-                    typeof settings.dayStartHour === "number"
-                      ? settings.dayStartHour
-                      : 7
-                  }
+                  value={settings.dayStartHour ?? 7}
                   onChange={handleDayStartChange}
-                  disabled={settings.showFullDay === true}
+                  disabled={fullDay}
                   className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 />
               </label>
@@ -293,13 +299,9 @@ export default function SettingsPage() {
                   type="number"
                   min={1}
                   max={24}
-                  value={
-                    typeof settings.dayEndHour === "number"
-                      ? settings.dayEndHour
-                      : 20
-                  }
+                  value={settings.dayEndHour ?? 20}
                   onChange={handleDayEndChange}
-                  disabled={settings.showFullDay === true}
+                  disabled={fullDay}
                   className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 />
               </label>
