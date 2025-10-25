@@ -17,6 +17,8 @@ export interface Client {
   phone?: string;
   address?: Address;
   notes?: string;
+  use_global_rate: boolean;
+  hourly_rate_custom?: number | null;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
