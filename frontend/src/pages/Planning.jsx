@@ -1199,6 +1199,19 @@ export default function Planning() {
           </div>
         </div>
 
+        {/* Daily Todo Section - Only visible in week view */}
+        {view === 'week' && selectedMemberId && (
+          <div className="mt-6">
+            <DailyTodoPanel
+              selectedDate={currentDate}
+              userId={selectedMemberId}
+              readOnly={readOnly}
+              teamId={isTeamContext ? teamId : null}
+              compact={true}
+            />
+          </div>
+        )}
+
         <div className="mt-8 flex items-center gap-6 text-sm text-gray-600 dark:text-slate-300">
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full bg-green-200 dark:bg-green-500" />
