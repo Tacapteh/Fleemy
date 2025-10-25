@@ -919,10 +919,16 @@ const EventModal = ({
     client_name: "",
   });
   const [loading, setLoading] = useState(false);
+  const [clientError, setClientError] = useState("");
 
   const { settings } = useSettings();
   const allowMinutes = settings?.enableMinutes === true;
+  const mustHaveClient = settings?.requireClientName === true;
   const timeInputStep = allowMinutes ? 900 : 3600;
+
+  const hasClientSelection = Boolean(
+    formData.client_id || formData.client_name?.trim(),
+  );
 
   // Use clients hook for client selection
   const {
@@ -939,6 +945,7 @@ const EventModal = ({
 
   useEffect(() => {
     if (!isOpen) {
+      setClientError("");
       return;
     }
 
@@ -983,6 +990,7 @@ const EventModal = ({
         client_id: event.client_id || "",
         client_name: event.client_name || "",
       });
+      setClientError("");
       return;
     }
 
@@ -1001,6 +1009,7 @@ const EventModal = ({
         client_id: "",
         client_name: "",
       });
+      setClientError("");
       return;
     }
 
@@ -1063,6 +1072,7 @@ const EventModal = ({
         client_id: "",
         client_name: "",
       });
+      setClientError("");
       return;
     }
 
@@ -1079,14 +1089,28 @@ const EventModal = ({
       client_id: "",
       client_name: "",
     });
+    setClientError("");
   }, [event, timeSlot, selectedDate, isOpen, allowMinutes]);
+
+  useEffect(() => {
+    if (!mustHaveClient) {
+      setClientError("");
+    }
+  }, [mustHaveClient]);
+
+  useEffect(() => {
+    if (mustHaveClient && hasClientSelection) {
+      setClientError("");
+    }
+  }, [mustHaveClient, hasClientSelection]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation : client obligatoire, description facultative
-    if (!formData.client_id || !formData.client_name.trim()) {
-      alert("Le choix d'un client est obligatoire.");
+    if (mustHaveClient && !hasClientSelection) {
+      setClientError(
+        "Un client est obligatoire pour enregistrer cet événement.",
+      );
       return;
     }
 
@@ -1142,7 +1166,9 @@ const EventModal = ({
         <form onSubmit={handleSubmit}>
           <fieldset disabled={readOnly || loading}>
           <div className="form-group">
-            <label className="form-label">Client *</label>
+            <label className="form-label">
+              Client{mustHaveClient ? " *" : ""}
+            </label>
             <Combobox
               options={clients || []}
               value={formData.client_id}
@@ -1156,14 +1182,31 @@ const EventModal = ({
                   client_id: clientId,
                   client_name: resolvedClientName,
                 }));
+                setClientError("");
               }}
               displayField="display_name"
               valueField="id"
-              placeholder="Sélectionner un client (obligatoire)"
+              placeholder={
+                mustHaveClient
+                  ? "Sélectionner un client (obligatoire)"
+                  : "Sélectionner un client"
+              }
               disabled={loading || clientsLoading}
-              required
+              error={Boolean(clientError)}
+              aria-invalid={
+                mustHaveClient && clientError ? "true" : undefined
+              }
               className="form-input"
             />
+            {clientError && (
+              <p
+                className="mt-1 text-xs text-red-600 dark:text-red-400"
+                aria-live="polite"
+                role="alert"
+              >
+                {clientError}
+              </p>
+            )}
           </div>
 
           <div className="form-group">
@@ -1318,8 +1361,14 @@ const EventModal = ({
             {!readOnly && (
               <button
                 type="submit"
-                className="btn btn-primary"
-                disabled={loading}
+                className={`btn btn-primary${
+                  loading || (mustHaveClient && !hasClientSelection)
+                    ? " opacity-60 cursor-not-allowed"
+                    : ""
+                }`}
+                disabled={
+                  loading || (mustHaveClient && !hasClientSelection)
+                }
               >
                 {loading ? "..." : event ? "Modifier" : "Créer"}
               </button>
