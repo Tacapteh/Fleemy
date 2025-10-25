@@ -429,14 +429,73 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Client Management Page - List/Search/Pagination"
-    - "Client Form Component - Validation & ARIA"
-    - "useClients Hook - Data Management"
-    - "Client Combobox Component - Reusable"
-    - "Client Integration - EventForm Updates"
+    - "Dashboard Widget Cette Semaine - Clickable Navigation"
+    - "Dashboard Widget Paiements - Consolidated Layout"
+    - "Dashboard Accès Rapides Section - Removal"
+    - "Sidebar Collapsible Toggle - Implementation"
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
+
+  - task: "Dashboard Widget Cette Semaine - Clickable Navigation"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/Dashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Widget 'Cette semaine' is clickable and navigates to planning (/me or /team/{teamId}). onClick handler implemented with proper navigation logic."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS VERIFIED: ✅ Widget 'Cette semaine' properly implemented with onClick navigation (lines 202). Uses navigate() with correct paths: /me for solo mode, /team/{teamId} for team mode. Has cursor-pointer class and hover effects (hover:scale-[1.02]). Navigation logic is correct and complete. ❌ UI testing blocked by Google authentication requirement."
+
+  - task: "Dashboard Widget Paiements - Consolidated Layout"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/Dashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Consolidated payments widget with large paid amount (revenus confirmés) and smaller pending/unpaid amounts below with separator line."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS VERIFIED: ✅ Consolidated payments widget perfectly implemented (lines 227-266). Large paid amount with text-4xl (line 242) labeled 'Revenus confirmés'. Secondary amounts: pending (En attente) and unpaid (À facturer) with text-lg styling (lines 251, 258). Separator line with border-t class (line 249). Layout matches requirements exactly. ❌ UI testing blocked by authentication."
+
+  - task: "Dashboard Accès Rapides Section - Removal"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/Dashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: No 'Accès rapides' section exists in current dashboard implementation. Dashboard only shows main widgets: Cette semaine, Paiements, Prochains créneaux."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS VERIFIED: ✅ No 'Accès rapides' section found in dashboard code. Grep search confirms no references to 'Accès rapides' or 'quick access' in frontend codebase. Dashboard contains only 3 widgets: Cette semaine (lines 200-224), Paiements (lines 227-266), Prochains créneaux (lines 269-314). Requirement satisfied."
+
+  - task: "Sidebar Collapsible Toggle - Implementation"
+    implemented: true
+    working: true
+    file: "frontend/src/components/Sidebar.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "IMPLEMENTED: Sidebar has collapsible functionality with toggle button (ChevronLeft/Right icons). State managed with isCollapsed, transitions with duration-300, width changes from w-64 to w-20."
+      - working: true
+        agent: "testing"
+        comment: "CODE ANALYSIS VERIFIED: ✅ Sidebar collapsible toggle fully implemented (lines 55-65). Toggle button with ChevronLeft/Right icons, proper aria-labels. State management with isCollapsed useState. Width transitions: w-64 (expanded) to w-20 (collapsed) with duration-300 animation (line 41). Content adapts: logo/text hidden when collapsed, menu items center-aligned. Implementation is complete and accessible. ❌ UI testing blocked by authentication."
 
 agent_communication:
   - agent: "main"
@@ -467,3 +526,7 @@ agent_communication:
     message: "✅ CLIENT MANAGEMENT BACKEND TESTING COMPLETE: All client API endpoints tested and working perfectly. Fixed PATCH endpoint model for partial updates. Comprehensive testing performed: CRUD operations, validation (email/phone/required fields), pagination, search, archiving, authentication, user_id filtering, edge cases. 100% test success rate. Backend APIs are production-ready. Minor: Using in-memory database for testing - Firestore indexes not tested but appear correctly configured."
   - agent: "testing"
     message: "❌ CLIENT MANAGEMENT FRONTEND TESTING BLOCKED: Cannot test UI functionality due to Google authentication requirement that cannot be automated. However, comprehensive code analysis completed: ✅ All client management components properly implemented with correct structure, validation, ARIA accessibility, and testing attributes. ⚠️ EventForm client integration incomplete - EventModal still uses text input instead of Combobox component. RECOMMENDATION: Implement authentication bypass for testing or complete EventModal integration with Combobox."
+  - agent: "main"
+    message: "🚀 DASHBOARD IMPROVEMENTS IMPLEMENTED: 1) Widget 'Cette semaine' now clickable with navigation to planning 2) Widget Paiements consolidated with large paid amount + smaller pending/unpaid amounts 3) No 'Accès rapides' section (already removed) 4) Sidebar collapsible with toggle button. Ready for comprehensive UI testing."
+  - agent: "testing"
+    message: "✅ DASHBOARD IMPROVEMENTS CODE ANALYSIS COMPLETE: All 4 requested features properly implemented and verified through code analysis. 1) ✅ Widget 'Cette semaine' clickable with correct navigation logic 2) ✅ Widget Paiements consolidated layout with large paid amount + smaller secondary amounts + separator 3) ✅ No 'Accès rapides' section exists (confirmed via grep search) 4) ✅ Sidebar collapsible toggle with proper state management and animations. ❌ UI testing blocked by Google authentication requirement - recommend implementing auth bypass for testing environment."

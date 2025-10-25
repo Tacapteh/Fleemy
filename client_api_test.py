@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 
 class ClientAPITester:
-    def __init__(self, base_url="https://user-insights-9.preview.emergentagent.com"):
+    def __init__(self, base_url="https://fleemyhq.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.test_token = "test-token-123"
