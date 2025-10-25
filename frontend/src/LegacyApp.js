@@ -592,6 +592,104 @@ const dayNames = [
   "Samedi",
   "Dimanche",
 ];
+const englishDayNames = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const toDateValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number" || typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value === "object" && typeof value.toDate === "function") {
+    const parsed = value.toDate();
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+};
+
+const formatTimeFromDate = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return `${String(date.getHours()).padStart(2, "0")}:${String(
+    date.getMinutes(),
+  ).padStart(2, "0")}`;
+};
+
+const extractTimeValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return formatTimeFromDate(value);
+  }
+  if (typeof value === "number") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : formatTimeFromDate(parsed);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (/^\d{1,2}:\d{2}$/.test(trimmed)) {
+      const [hours, minutes] = trimmed.split(":");
+      return `${hours.padStart(2, "0")}:${minutes}`;
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatTimeFromDate(parsed);
+    }
+    const match = trimmed.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      return `${match[1].padStart(2, "0")}:${match[2]}`;
+    }
+    return null;
+  }
+  if (typeof value === "object" && typeof value.toDate === "function") {
+    const parsed = value.toDate();
+    return Number.isNaN(parsed.getTime()) ? null : formatTimeFromDate(parsed);
+  }
+  return null;
+};
+
+const resolveEventDayIndex = (event, startDate) => {
+  if (startDate instanceof Date && !Number.isNaN(startDate.getTime())) {
+    return (startDate.getDay() + 6) % 7;
+  }
+  const rawDay = event?.day;
+  if (typeof rawDay === "number" && Number.isFinite(rawDay)) {
+    const rounded = Math.round(rawDay);
+    return Math.max(0, Math.min(6, rounded));
+  }
+  if (typeof rawDay === "string") {
+    const normalized = rawDay.trim().toLowerCase();
+    const frenchIndex = dayNames.findIndex(
+      (day) => day.toLowerCase() === normalized,
+    );
+    if (frenchIndex !== -1) {
+      return frenchIndex;
+    }
+    const englishIndex = englishDayNames.indexOf(normalized);
+    if (englishIndex !== -1) {
+      return englishIndex;
+    }
+  }
+  return 0;
+};
 const dayNamesShort = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 const monthNames = [
   "Janvier",
@@ -845,27 +943,42 @@ const EventModal = ({
     }
 
     if (event) {
-      let dayIndex = event.day;
-      if (typeof dayIndex === "string") {
-        dayIndex = dayNames.findIndex(
-          (d) => d.toLowerCase() === dayIndex.toLowerCase(),
-        );
-        if (dayIndex === -1) dayIndex = 0;
+      const startDate = toDateValue(event.start ?? event.start_time);
+      const endDate = toDateValue(event.end ?? event.end_time);
+
+      const rawStart =
+        extractTimeValue(event.start) ??
+        extractTimeValue(event.start_time) ??
+        formatTimeFromDate(startDate);
+      const rawEnd =
+        extractTimeValue(event.end) ??
+        extractTimeValue(event.end_time) ??
+        formatTimeFromDate(endDate);
+
+      const fallbackRange = sanitizeRangeForDetailedMode(
+        rawStart || "09:00",
+        rawEnd || "10:00",
+      );
+
+      let resolvedStart = rawStart ?? fallbackRange.start;
+      let resolvedEnd = rawEnd ?? fallbackRange.end;
+
+      if (!allowMinutes) {
+        if (parseTimeStringSafe(resolvedStart) == null) {
+          resolvedStart = fallbackRange.start;
+        }
+        if (parseTimeStringSafe(resolvedEnd) == null) {
+          resolvedEnd = fallbackRange.end;
+        }
       }
 
-      const baseRange = {
-        start: event.start_time || event.start || "09:00",
-        end: event.end_time || event.end || "10:00",
-      };
-      const resolvedRange = allowMinutes
-        ? sanitizeRangeForDetailedMode(baseRange.start, baseRange.end)
-        : sanitizeRangeForHourMode(baseRange.start, baseRange.end);
+      const dayIndex = resolveEventDayIndex(event, startDate);
 
       setFormData({
         description: event.description || "",
-        day: dayIndex || 0,
-        start: resolvedRange.start,
-        end: resolvedRange.end,
+        day: dayIndex,
+        start: resolvedStart,
+        end: resolvedEnd,
         type: event.status || event.type || "pending",
         client_id: event.client_id || "",
         client_name: event.client_name || "",
@@ -966,19 +1079,7 @@ const EventModal = ({
       client_id: "",
       client_name: "",
     });
-  }, [event, timeSlot, selectedDate, isOpen]);
-
-  useEffect(() => {
-    if (!allowMinutes) {
-      setFormData((current) => {
-        const sanitized = sanitizeRangeForHourMode(current.start, current.end);
-        if (sanitized.start === current.start && sanitized.end === current.end) {
-          return current;
-        }
-        return { ...current, start: sanitized.start, end: sanitized.end };
-      });
-    }
-  }, [allowMinutes]);
+  }, [event, timeSlot, selectedDate, isOpen, allowMinutes]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1121,6 +1222,9 @@ const EventModal = ({
                   className="form-input"
                   disabled={loading}
                 >
+                  {!timeSlots.includes(formData.start) && formData.start && (
+                    <option value={formData.start}>{formData.start}</option>
+                  )}
                   {timeSlots.slice(0, -1).map((time) => (
                     <option key={time} value={time}>
                       {time}
@@ -1160,6 +1264,9 @@ const EventModal = ({
                   className="form-input"
                   disabled={loading}
                 >
+                  {!timeSlots.includes(formData.end) && formData.end && (
+                    <option value={formData.end}>{formData.end}</option>
+                  )}
                   {timeSlots.slice(1).map((time) => (
                     <option key={time} value={time}>
                       {time}
