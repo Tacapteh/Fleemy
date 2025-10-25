@@ -78,7 +78,7 @@ def _parse_allowed_origins() -> List[str]:
 
 ALLOWED_ORIGINS = _parse_allowed_origins()
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With"]
+ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With", "X-User-Id"]
 EXPOSE_HEADERS = ["Location"]
 MAX_AGE = 86400
 ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}
