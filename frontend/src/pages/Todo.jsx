@@ -2,22 +2,22 @@ import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import DailyTodoPanel from '../components/DailyTodoPanel';
 
-const toDateString = (date: Date): string => {
+const toDateString = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
-const toDateInputValue = (dateStr: string): string => {
+const toDateInputValue = (dateStr) => {
   return dateStr;
 };
 
 export default function Todo() {
-  const { user } = useOutletContext<{ user: any }>();
-  const [selectedDate, setSelectedDate] = useState<string>(toDateString(new Date()));
+  const { user } = useOutletContext();
+  const [selectedDate, setSelectedDate] = useState(toDateString(new Date()));
 
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDateChange = (e) => {
     setSelectedDate(e.target.value);
   };
 
