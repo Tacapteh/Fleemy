@@ -22,6 +22,26 @@ const MOBILE_BREAKPOINT = 768;
 
 type PositionUnit = 'percentage' | 'minutes';
 
+const floorDateToHour = (value: Date): Date => {
+  const date = new Date(value);
+  date.setMinutes(0, 0, 0);
+  return date;
+};
+
+const ceilDateToHour = (value: Date): Date => {
+  const date = new Date(value);
+  if (
+    date.getMinutes() === 0 &&
+    date.getSeconds() === 0 &&
+    date.getMilliseconds() === 0
+  ) {
+    return date;
+  }
+  date.setMinutes(0, 0, 0);
+  date.setHours(date.getHours() + 1);
+  return date;
+};
+
 interface PlannerGridProps {
   events?: PlannerEventInput[];
   tasks?: unknown[];
@@ -280,6 +300,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   const user = useFirebaseUser();
   const { settings, loading } = useSettings();
   const [viewFilter, setViewFilter] = useState<'today' | 'week'>('week');
+  const allowMinutes = settings?.enableMinutes === true;
   const showWeekendsEnabled = useMemo(() => {
     if (loading || !settings) {
       return true;
@@ -377,7 +398,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     return hours;
   }, [hours, startHour]);
   const finalHourLabel = useMemo(() => formatHourLabel(endHour), [endHour]);
-  const positionUnit: PositionUnit = isMobileLayout ? 'minutes' : 'percentage';
+  const positionUnit: PositionUnit = allowMinutes || isMobileLayout ? 'minutes' : 'percentage';
   const minuteHeight = SLOT_HEIGHT / 60;
   const rowCount = Math.max(hours.length, 1);
 
@@ -423,16 +444,20 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       const layouts: EventLayout[] = [];
 
       sorted.forEach((event) => {
-        const startMinutes = event.startDate.getHours() * 60 + event.startDate.getMinutes();
-        const endMinutes = event.endDate.getHours() * 60 + event.endDate.getMinutes();
+        const effectiveStart = allowMinutes ? event.startDate : floorDateToHour(event.startDate);
+        const effectiveEnd = allowMinutes ? event.endDate : ceilDateToHour(event.endDate);
+
+        const startMinutes =
+          effectiveStart.getHours() * 60 + effectiveStart.getMinutes();
+        const endMinutes = effectiveEnd.getHours() * 60 + effectiveEnd.getMinutes();
         let columnIndex = 0;
         while (columnEndTimes[columnIndex] !== undefined && columnEndTimes[columnIndex] > startMinutes) {
           columnIndex += 1;
         }
         columnEndTimes[columnIndex] = endMinutes;
 
-        const top = calculateTopPosition(event.startDate, true, positionUnit, visibleRange);
-        const height = calculateHeight(event.startDate, event.endDate, true, positionUnit, visibleRange);
+        const top = calculateTopPosition(effectiveStart, true, positionUnit, visibleRange);
+        const height = calculateHeight(effectiveStart, effectiveEnd, true, positionUnit, visibleRange);
 
         layouts.push({
           event,
@@ -446,7 +471,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       const columnCount = layouts.reduce((max, layout) => Math.max(max, layout.columnIndex + 1), 1);
       return layouts.map((layout) => ({ ...layout, columnCount }));
     });
-  }, [displayEvents, positionUnit, visibleRange]);
+  }, [allowMinutes, displayEvents, positionUnit, visibleRange]);
 
   const visibleEventLayouts = useMemo(
     () => (showWeekendsEnabled ? eventLayouts : eventLayouts.filter((_, index) => index < 5)),
@@ -465,8 +490,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           if (task.dayIndex < 0 || task.dayIndex > 6) {
             return;
           }
-          const top = calculateTopPosition(task.startDate, true, positionUnit, visibleRange);
-          const height = calculateHeight(task.startDate, task.endDate, true, positionUnit, visibleRange);
+          const effectiveStart = allowMinutes ? task.startDate : floorDateToHour(task.startDate);
+          const effectiveEnd = allowMinutes ? task.endDate : ceilDateToHour(task.endDate);
+          const top = calculateTopPosition(effectiveStart, true, positionUnit, visibleRange);
+          const height = calculateHeight(effectiveStart, effectiveEnd, true, positionUnit, visibleRange);
           if (height <= 0) {
             return;
           }
@@ -488,7 +515,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
 
     return perDay;
-  }, [displayTaskGroups, positionUnit, visibleRange]);
+  }, [allowMinutes, displayTaskGroups, positionUnit, visibleRange]);
 
   const visibleTaskLayouts = useMemo(
     () => (showWeekendsEnabled ? taskLayouts : taskLayouts.filter((_, index) => index < 5)),

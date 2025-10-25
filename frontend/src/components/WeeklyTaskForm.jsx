@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { saveWeeklyTask } from '../firebase';
 import {
   TASK_ICON_CATEGORIES,
@@ -12,6 +12,7 @@ import {
   DEFAULT_TASK_COLOR,
   PASTEL_COLORS,
 } from '../constants/colors';
+import { useSettings } from '../context/SettingsContext';
 import TaskModalStyles from './TaskModalStyles';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
@@ -21,6 +22,20 @@ const START_HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) =>
   `${String(index).padStart(2, '0')}:00`
 );
 const END_HOUR_OPTIONS = [...START_HOUR_OPTIONS.slice(1), '24:00'];
+
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+const DETAILED_MODE_MIN_STEP = 15;
+
+const minutesToTimeString = (totalMinutes) => {
+  const clamped = Math.max(0, Math.min(totalMinutes, MINUTES_PER_DAY));
+  if (clamped === MINUTES_PER_DAY) {
+    return '24:00';
+  }
+  const hours = Math.floor(clamped / MINUTES_PER_HOUR);
+  const minutes = clamped % MINUTES_PER_HOUR;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
 
 const createDefaultTimeRange = () => ({ ...DEFAULT_TIME_RANGE });
 
@@ -35,7 +50,10 @@ const toDayIndex = (value) => {
   return null;
 };
 
-const normalizeHourValue = (value, { allowEndOfDay = false } = {}) => {
+const normalizeHourValue = (
+  value,
+  { allowEndOfDay = false, allowMinutes = false, roundMode = 'floor' } = {}
+) => {
   if (value == null) {
     return null;
   }
@@ -57,24 +75,55 @@ const normalizeHourValue = (value, { allowEndOfDay = false } = {}) => {
     return null;
   }
 
-  if (allowEndOfDay && hours === 24) {
-    if (minutes === 0) {
+  if (minutes < 0 || minutes > 59) {
+    return null;
+  }
+
+  if (allowMinutes) {
+    if (hours === 24) {
+      if (!allowEndOfDay || minutes !== 0) {
+        return null;
+      }
       return '24:00';
     }
-    return null;
+    if (hours < 0 || hours > 23) {
+      return null;
+    }
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+
+  if (hours === 24) {
+    if (!allowEndOfDay || minutes !== 0) {
+      return null;
+    }
+    return '24:00';
   }
 
   if (hours < 0 || hours > 23) {
     return null;
   }
 
-  if (minutes < 0 || minutes > 59) {
+  let normalizedHours = hours;
+  if (roundMode === 'ceil' && minutes > 0) {
+    normalizedHours += 1;
+    if (allowEndOfDay && normalizedHours > 24) {
+      normalizedHours = 24;
+    }
+  }
+
+  if (!allowEndOfDay && normalizedHours > 23) {
     return null;
   }
 
-  const normalizedMinutes = 0;
+  if (allowEndOfDay && normalizedHours > 24) {
+    normalizedHours = 24;
+  }
 
-  return `${String(hours).padStart(2, '0')}:${String(normalizedMinutes).padStart(2, '0')}`;
+  if (!allowEndOfDay && normalizedHours === 24) {
+    return null;
+  }
+
+  return `${String(normalizedHours).padStart(2, '0')}:00`;
 };
 
 const timeStringToMinutes = (time) => {
@@ -99,52 +148,76 @@ const timeStringToMinutes = (time) => {
   return hours * 60 + minutes;
 };
 
-const normalizeTimeRange = (range, { adjustEndIfNeeded = false } = {}) => {
+const normalizeTimeRange = (
+  range,
+  { adjustEndIfNeeded = false, allowMinutes = false } = {}
+) => {
   if (!range) {
     return null;
   }
 
   const day = toDayIndex(range.day ?? range.dayIndex ?? range.weekday);
-  const start = normalizeHourValue(range.start);
-  const end = normalizeHourValue(range.end, { allowEndOfDay: true });
+  const start = normalizeHourValue(range.start, {
+    allowMinutes,
+    roundMode: allowMinutes ? 'none' : 'floor',
+  });
+  const end = normalizeHourValue(range.end, {
+    allowEndOfDay: true,
+    allowMinutes,
+    roundMode: allowMinutes ? 'none' : 'ceil',
+  });
 
   if (day == null || !start || !end) {
     return null;
   }
 
-  const startMinutes = timeStringToMinutes(start);
-  const endMinutes = timeStringToMinutes(end);
+  let startMinutes = timeStringToMinutes(start);
+  let endMinutes = timeStringToMinutes(end);
 
   if (startMinutes == null || endMinutes == null) {
     return null;
   }
 
+  const minimumDuration = allowMinutes ? DETAILED_MODE_MIN_STEP : MINUTES_PER_HOUR;
+
+  if (!allowMinutes) {
+    startMinutes = Math.floor(startMinutes / MINUTES_PER_HOUR) * MINUTES_PER_HOUR;
+    endMinutes = Math.ceil(endMinutes / MINUTES_PER_HOUR) * MINUTES_PER_HOUR;
+  }
+
   let finalEndMinutes = endMinutes;
-  if (endMinutes <= startMinutes) {
+  if (finalEndMinutes <= startMinutes) {
     if (!adjustEndIfNeeded) {
       return null;
     }
-    finalEndMinutes = Math.min(startMinutes + 60, 24 * 60);
+    finalEndMinutes = Math.min(startMinutes + minimumDuration, MINUTES_PER_DAY);
     if (finalEndMinutes <= startMinutes) {
       return null;
     }
   }
 
-  const finalEnd =
-    finalEndMinutes === endMinutes
-      ? end
-      : `${String(Math.floor(finalEndMinutes / 60)).padStart(2, '0')}:00`;
+  if (!allowMinutes) {
+    finalEndMinutes = Math.ceil(finalEndMinutes / MINUTES_PER_HOUR) * MINUTES_PER_HOUR;
+    if (finalEndMinutes > MINUTES_PER_DAY) {
+      finalEndMinutes = MINUTES_PER_DAY;
+    }
+  } else {
+    finalEndMinutes = Math.min(finalEndMinutes, MINUTES_PER_DAY);
+  }
 
-  return { day, start, end: finalEnd };
+  const finalStart = minutesToTimeString(startMinutes);
+  const finalEnd = minutesToTimeString(finalEndMinutes);
+
+  return { day, start: finalStart, end: finalEnd };
 };
 
-const ensureTimeRanges = (ranges) => {
+const ensureTimeRanges = (ranges, { allowMinutes = false } = {}) => {
   if (!Array.isArray(ranges)) {
     return [createDefaultTimeRange()];
   }
 
   const normalized = ranges
-    .map((range) => normalizeTimeRange(range, { adjustEndIfNeeded: true }))
+    .map((range) => normalizeTimeRange(range, { adjustEndIfNeeded: true, allowMinutes }))
     .filter(Boolean);
   if (!normalized.length) {
     return [createDefaultTimeRange()];
@@ -153,6 +226,9 @@ const ensureTimeRanges = (ranges) => {
 };
 
 const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, context, readOnly = false }) => {
+  const { settings } = useSettings();
+  const allowMinutes = settings?.enableMinutes === true;
+  const timeInputStep = allowMinutes ? 900 : 3600;
   const initialIconValue = initialTask?.icon || 'briefcase';
   const defaultIconKey = resolveTaskIconKey(initialIconValue);
   const defaultIconCategory =
@@ -166,12 +242,19 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
         : '',
     color: initialTask?.color || DEFAULT_TASK_COLOR,
     icon: defaultIconKey,
-    time_ranges: ensureTimeRanges(initialTask?.time_ranges),
+    time_ranges: ensureTimeRanges(initialTask?.time_ranges, { allowMinutes }),
   }));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [selectedIconCategory, setSelectedIconCategory] = useState(defaultIconCategory);
+
+  useEffect(() => {
+    setTask((current) => ({
+      ...current,
+      time_ranges: ensureTimeRanges(current.time_ranges, { allowMinutes }),
+    }));
+  }, [allowMinutes]);
 
   const addTimeRange = () => {
     setTask((current) => ({
@@ -199,7 +282,10 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
         }
 
         if (field === 'start') {
-          const startValue = normalizeHourValue(value);
+          const startValue = normalizeHourValue(value, {
+            allowMinutes,
+            roundMode: allowMinutes ? 'none' : 'floor',
+          });
           if (!startValue) {
             return range;
           }
@@ -207,7 +293,11 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
         }
 
         if (field === 'end') {
-          const endValue = normalizeHourValue(value, { allowEndOfDay: true });
+          const endValue = normalizeHourValue(value, {
+            allowEndOfDay: true,
+            allowMinutes,
+            roundMode: allowMinutes ? 'none' : 'ceil',
+          });
           if (!endValue) {
             return range;
           }
@@ -236,24 +326,41 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
       return 'Jour invalide';
     }
 
-    const start = normalizeHourValue(range.start);
+    const invalidFormatMessage = allowMinutes
+      ? "Format d'heure invalide (HH:MM)"
+      : "Format d'heure invalide (heures pleines uniquement)";
+
+    const start = normalizeHourValue(range.start, {
+      allowMinutes,
+      roundMode: allowMinutes ? 'none' : 'floor',
+    });
     if (!start) {
-      return "Format d'heure invalide (heures pleines uniquement)";
+      return invalidFormatMessage;
     }
 
-    const end = normalizeHourValue(range.end, { allowEndOfDay: true });
+    const end = normalizeHourValue(range.end, {
+      allowEndOfDay: true,
+      allowMinutes,
+      roundMode: allowMinutes ? 'none' : 'ceil',
+    });
     if (!end) {
-      return "Format d'heure invalide (heures pleines uniquement)";
+      return invalidFormatMessage;
     }
 
     const startMinutes = timeStringToMinutes(start);
     const endMinutes = timeStringToMinutes(end);
 
     if (startMinutes == null || endMinutes == null) {
-      return "Format d'heure invalide (heures pleines uniquement)";
+      return invalidFormatMessage;
     }
 
-    if (startMinutes >= endMinutes) {
+    if (!allowMinutes) {
+      const flooredStart = Math.floor(startMinutes / MINUTES_PER_HOUR) * MINUTES_PER_HOUR;
+      const ceiledEnd = Math.ceil(endMinutes / MINUTES_PER_HOUR) * MINUTES_PER_HOUR;
+      if (flooredStart >= ceiledEnd) {
+        return "L'heure de fin doit être après l'heure de début";
+      }
+    } else if (startMinutes >= endMinutes) {
       return "L'heure de fin doit être après l'heure de début";
     }
 
@@ -296,7 +403,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
 
     try {
       const sanitizedRanges = task.time_ranges
-        .map((range) => normalizeTimeRange(range))
+        .map((range) => normalizeTimeRange(range, { allowMinutes }))
         .filter(Boolean);
       if (!sanitizedRanges.length) {
         setError('Au moins un créneau horaire valide est requis');
@@ -409,7 +516,9 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
             <div className="form-group">
               <label className="form-label" htmlFor="weekly-task-range-0">
                 Créneaux horaires *
-                <span className="weekly-task-hint-inline"> (heures pleines uniquement)</span>
+                <span className="weekly-task-hint-inline">
+                  {allowMinutes ? ' (heures et minutes)' : ' (heures pleines uniquement)'}
+                </span>
               </label>
               <div className="weekly-task-time-ranges">
                 {task.time_ranges.map((range, index) => (
@@ -427,33 +536,62 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
                         ))}
                       </select>
 
-                      <select
-                        value={range.start}
-                        onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
-                        className="form-input"
-                        aria-label={`Heure de début ${index + 1}`}
-                      >
-                        {START_HOUR_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                      {allowMinutes ? (
+                        <input
+                          type="time"
+                          step={timeInputStep}
+                          value={range.start}
+                          onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
+                          className="form-input"
+                          aria-label={`Heure de début ${index + 1}`}
+                          required
+                        />
+                      ) : (
+                        <select
+                          value={range.start}
+                          onChange={(e) => updateTimeRange(index, 'start', e.target.value)}
+                          className="form-input"
+                          aria-label={`Heure de début ${index + 1}`}
+                        >
+                          {START_HOUR_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      )}
 
                       <span className="weekly-task-separator">à</span>
 
-                      <select
-                        value={range.end}
-                        onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
-                        className="form-input"
-                        aria-label={`Heure de fin ${index + 1}`}
-                      >
-                        {END_HOUR_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
+                      {allowMinutes ? (
+                        <input
+                          type="time"
+                          step={timeInputStep}
+                          value={range.end === '24:00' ? '23:59' : range.end}
+                          onChange={(e) => {
+                            const value = e.target.value === '23:59' && range.end === '24:00'
+                              ? '24:00'
+                              : e.target.value;
+                            updateTimeRange(index, 'end', value);
+                          }}
+                          className="form-input"
+                          aria-label={`Heure de fin ${index + 1}`}
+                          required
+                        />
+                      ) : (
+                        <select
+                          value={range.end}
+                          onChange={(e) => updateTimeRange(index, 'end', e.target.value)}
+                          className="form-input"
+                          aria-label={`Heure de fin ${index + 1}`}
+                        >
+                          {END_HOUR_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                     <button
