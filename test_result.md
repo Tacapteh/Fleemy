@@ -158,6 +158,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "CODE ANALYSIS: Tasks earnings integration properly implemented. Lines 473-485 in server.py show tasks are loaded and their earnings calculated based on time_slots (hours * task.price). Tasks earnings are added to 'paid' category. Logic is correct: for each time_slot, calculates hours (end_hour - start_hour) * task.price and adds to earnings.paid. Implementation is complete."
+      - working: true
+        agent: "testing"
+        comment: "DASHBOARD EARNINGS ENDPOINT VERIFIED: ✅ GET /api/planning/earnings/{year}/{week} returns {success: true, earnings: {paid, pending, unpaid, total}} with accurate calculations. Fixed KeyError issue with missing 'status' field by using .get() method with default values. Earnings calculation tested with real data: Events (3h * €100 = €300) + Tasks (2h * €75 = €150) = €450 total paid. All earnings categories (paid, pending, unpaid, not_worked, total) properly calculated and returned. Endpoint production-ready for Dashboard integration."
 
   - task: "API CRUD Tasks - Integrated in Planning"
     implemented: true
