@@ -32,11 +32,12 @@ const resolveBrowserFallback = (): string | null => {
   return origin;
 };
 
-const API_URL =
-  resolveSameOriginOverride() ||
-  (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim().length > 0
+const ENV_API_URL =
+  process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim().length > 0
     ? process.env.REACT_APP_API_URL.trim()
-    : resolveBrowserFallback() || "http://localhost:8000");
+    : null;
+
+const API_URL = ENV_API_URL || "https://fleemy.onrender.com";
 const RETRY_DELAYS = [0, 250, 500, 1000];
 
 const wait = (delay: number) =>
