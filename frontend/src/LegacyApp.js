@@ -7,6 +7,7 @@ import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
 import Combobox from "./components/Combobox";
 import useClients from "./hooks/useClients";
+import { useSettings } from "./context/SettingsContext";
 
 const api = async ({ url, data, body, headers, ...options }) => {
   const init = { ...options };
@@ -619,6 +620,116 @@ const timeSlots = [
   "18:00",
 ];
 
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+const DETAILED_MODE_MIN_STEP = 15;
+
+const parseTimeStringSafe = (value) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  if (hours === 24) {
+    return minutes === 0 ? MINUTES_PER_DAY : null;
+  }
+  if (hours < 0 || hours > 23) {
+    return null;
+  }
+  return hours * MINUTES_PER_HOUR + minutes;
+};
+
+const minutesToTimeString = (totalMinutes) => {
+  const clamped = Math.max(0, Math.min(totalMinutes, MINUTES_PER_DAY));
+  if (clamped === MINUTES_PER_DAY) {
+    return "24:00";
+  }
+  const hours = Math.floor(clamped / MINUTES_PER_HOUR);
+  const minutes = clamped % MINUTES_PER_HOUR;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+};
+
+const roundTimeForHourMode = (value, direction, { allowEndOfDay = false } = {}) => {
+  const minutes = parseTimeStringSafe(value);
+  if (minutes == null) {
+    return null;
+  }
+
+  if (direction === "ceil") {
+    if (minutes % MINUTES_PER_HOUR === 0) {
+      const capped = allowEndOfDay
+        ? Math.min(minutes, MINUTES_PER_DAY)
+        : Math.min(minutes, MINUTES_PER_DAY - MINUTES_PER_HOUR);
+      return minutesToTimeString(capped);
+    }
+    let ceiled = minutes + (MINUTES_PER_HOUR - (minutes % MINUTES_PER_HOUR));
+    if (!allowEndOfDay && ceiled >= MINUTES_PER_DAY) {
+      ceiled = MINUTES_PER_DAY - MINUTES_PER_HOUR;
+    }
+    ceiled = Math.min(ceiled, MINUTES_PER_DAY);
+    return minutesToTimeString(ceiled);
+  }
+
+  let floored = minutes - (minutes % MINUTES_PER_HOUR);
+  if (!allowEndOfDay && floored >= MINUTES_PER_DAY) {
+    floored = MINUTES_PER_DAY - MINUTES_PER_HOUR;
+  }
+  floored = Math.max(0, Math.min(floored, MINUTES_PER_DAY));
+  return minutesToTimeString(floored);
+};
+
+const sanitizeRangeForHourMode = (start, end) => {
+  const roundedStart = roundTimeForHourMode(start, "floor") ?? "09:00";
+  let roundedEnd = roundTimeForHourMode(end, "ceil", { allowEndOfDay: true }) ?? "10:00";
+
+  const startMinutes = parseTimeStringSafe(roundedStart);
+  let endMinutes = parseTimeStringSafe(roundedEnd);
+
+  if (startMinutes != null) {
+    if (endMinutes == null || endMinutes <= startMinutes) {
+      endMinutes = Math.min(startMinutes + MINUTES_PER_HOUR, MINUTES_PER_DAY);
+      if (endMinutes <= startMinutes) {
+        endMinutes = Math.min(startMinutes + MINUTES_PER_HOUR, MINUTES_PER_DAY);
+      }
+      roundedEnd = minutesToTimeString(endMinutes);
+    }
+  }
+
+  return { start: roundedStart, end: roundedEnd };
+};
+
+const sanitizeRangeForDetailedMode = (start, end) => {
+  let normalizedStart = start;
+  let normalizedEnd = end;
+
+  let startMinutes = parseTimeStringSafe(normalizedStart);
+  if (startMinutes == null) {
+    normalizedStart = "09:00";
+    startMinutes = parseTimeStringSafe(normalizedStart) ?? 9 * MINUTES_PER_HOUR;
+  }
+
+  let endMinutes = parseTimeStringSafe(normalizedEnd);
+  if (endMinutes == null || endMinutes <= startMinutes) {
+    let candidate = Math.min(startMinutes + DETAILED_MODE_MIN_STEP, MINUTES_PER_DAY);
+    if (candidate <= startMinutes) {
+      candidate = Math.min(startMinutes + MINUTES_PER_HOUR, MINUTES_PER_DAY);
+    }
+    if (candidate <= startMinutes) {
+      candidate = Math.min(startMinutes + 1, MINUTES_PER_DAY);
+    }
+    normalizedEnd = minutesToTimeString(candidate);
+  }
+
+  return { start: normalizedStart, end: normalizedEnd };
+};
+
 const eventTypes = {
   paid: {
     label: "Payé",
@@ -710,7 +821,11 @@ const EventModal = ({
     client_name: "",
   });
   const [loading, setLoading] = useState(false);
-  
+
+  const { settings } = useSettings();
+  const allowMinutes = settings?.enableMinutes === true;
+  const timeInputStep = allowMinutes ? 900 : 3600;
+
   // Use clients hook for client selection
   const {
     clients,
@@ -725,8 +840,11 @@ const EventModal = ({
   }, [isOpen, loadClients]);
 
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
     if (event) {
-      // Convert day from string to number if needed
       let dayIndex = event.day;
       if (typeof dayIndex === "string") {
         dayIndex = dayNames.findIndex(
@@ -735,81 +853,132 @@ const EventModal = ({
         if (dayIndex === -1) dayIndex = 0;
       }
 
+      const baseRange = {
+        start: event.start_time || event.start || "09:00",
+        end: event.end_time || event.end || "10:00",
+      };
+      const resolvedRange = allowMinutes
+        ? sanitizeRangeForDetailedMode(baseRange.start, baseRange.end)
+        : sanitizeRangeForHourMode(baseRange.start, baseRange.end);
+
       setFormData({
         description: event.description || "",
         day: dayIndex || 0,
-        start: event.start_time || event.start || "09:00",
-        end: event.end_time || event.end || "10:00",
+        start: resolvedRange.start,
+        end: resolvedRange.end,
         type: event.status || event.type || "pending",
         client_id: event.client_id || "",
         client_name: event.client_name || "",
       });
-    } else if (timeSlot) {
+      return;
+    }
+
+    if (timeSlot) {
+      const baseRange = { start: timeSlot.start, end: timeSlot.end };
+      const resolvedRange = allowMinutes
+        ? sanitizeRangeForDetailedMode(baseRange.start, baseRange.end)
+        : sanitizeRangeForHourMode(baseRange.start, baseRange.end);
+
       setFormData({
         description: "",
         day: timeSlot.day,
-        start: timeSlot.start,
-        end: timeSlot.end,
+        start: resolvedRange.start,
+        end: resolvedRange.end,
         type: "pending",
         client_id: "",
         client_name: "",
       });
-    } else if (selectedDate) {
+      return;
+    }
+
+    if (selectedDate) {
       const dayIndex = (selectedDate.getDay() + 6) % 7;
       const formatTime = (date) =>
         `${String(date.getHours()).padStart(2, "0")}:${String(
           date.getMinutes(),
         ).padStart(2, "0")}`;
       const selectedTime = formatTime(selectedDate);
-      const timeToMinutes = (time) => {
-        const [hoursValue, minutesValue] = time.split(":").map(Number);
-        return hoursValue * 60 + minutesValue;
-      };
 
-      let startIndex = timeSlots.indexOf(selectedTime);
+      let startSlot = timeSlots[0];
+      let endSlot = timeSlots[1] || timeSlots[0];
 
-      if (startIndex === -1) {
-        const selectedMinutes = timeToMinutes(selectedTime);
-        startIndex = timeSlots.findIndex(
-          (slot) => timeToMinutes(slot) >= selectedMinutes,
-        );
+      if (allowMinutes) {
+        const startMinutes = parseTimeStringSafe(selectedTime) ?? 9 * MINUTES_PER_HOUR;
+        const endMinutes = Math.min(startMinutes + MINUTES_PER_HOUR, MINUTES_PER_DAY);
+        startSlot = minutesToTimeString(startMinutes);
+        endSlot = minutesToTimeString(endMinutes);
+      } else {
+        const timeToMinutes = (time) => {
+          const [hoursValue, minutesValue] = time.split(":").map(Number);
+          return hoursValue * 60 + minutesValue;
+        };
+
+        let startIndex = timeSlots.indexOf(selectedTime);
+
+        if (startIndex === -1) {
+          const selectedMinutes = timeToMinutes(selectedTime);
+          startIndex = timeSlots.findIndex(
+            (slot) => timeToMinutes(slot) >= selectedMinutes,
+          );
+        }
+
+        if (startIndex === -1) {
+          startIndex = Math.max(timeSlots.length - 2, 0);
+        }
+
+        if (startIndex === timeSlots.length - 1 && timeSlots.length > 1) {
+          startIndex -= 1;
+        }
+
+        startSlot = timeSlots[startIndex] || timeSlots[0];
+        endSlot =
+          startIndex < timeSlots.length - 1
+            ? timeSlots[startIndex + 1]
+            : timeSlots[startIndex];
       }
 
-      if (startIndex === -1) {
-        startIndex = Math.max(timeSlots.length - 2, 0);
-      }
-
-      if (startIndex === timeSlots.length - 1 && timeSlots.length > 1) {
-        startIndex -= 1;
-      }
-
-      const startSlot = timeSlots[startIndex] || timeSlots[0];
-      const endSlot =
-        startIndex < timeSlots.length - 1
-          ? timeSlots[startIndex + 1]
-          : timeSlots[startIndex];
+      const resolvedRange = allowMinutes
+        ? sanitizeRangeForDetailedMode(startSlot, endSlot)
+        : sanitizeRangeForHourMode(startSlot, endSlot);
 
       setFormData({
         description: "",
         day: dayIndex,
-        start: startSlot,
-        end: endSlot,
+        start: resolvedRange.start,
+        end: resolvedRange.end,
         type: "pending",
         client_id: "",
         client_name: "",
       });
-    } else {
-      setFormData({
-        description: "",
-        day: 0,
-        start: "09:00",
-        end: "10:00",
-        type: "pending",
-        client_id: "",
-        client_name: "",
+      return;
+    }
+
+    const defaultRange = allowMinutes
+      ? sanitizeRangeForDetailedMode("09:00", "10:00")
+      : sanitizeRangeForHourMode("09:00", "10:00");
+
+    setFormData({
+      description: "",
+      day: 0,
+      start: defaultRange.start,
+      end: defaultRange.end,
+      type: "pending",
+      client_id: "",
+      client_name: "",
+    });
+  }, [event, timeSlot, selectedDate, isOpen]);
+
+  useEffect(() => {
+    if (!allowMinutes) {
+      setFormData((current) => {
+        const sanitized = sanitizeRangeForHourMode(current.start, current.end);
+        if (sanitized.start === current.start && sanitized.end === current.end) {
+          return current;
+        }
+        return { ...current, start: sanitized.start, end: sanitized.end };
       });
     }
-  }, [event, timeSlot, selectedDate, isOpen]);
+  }, [allowMinutes]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -822,7 +991,24 @@ const EventModal = ({
 
     setLoading(true);
     try {
-      await onSave(formData);
+      const range = allowMinutes
+        ? sanitizeRangeForDetailedMode(formData.start, formData.end)
+        : sanitizeRangeForHourMode(formData.start, formData.end);
+
+      const payload = {
+        ...formData,
+        start: range.start,
+        end: range.end,
+      };
+
+      setFormData((current) => {
+        if (current.start === range.start && current.end === range.end) {
+          return current;
+        }
+        return { ...current, start: range.start, end: range.end };
+      });
+
+      await onSave(payload);
     } catch (error) {
       console.error("Error saving event:", error);
     } finally {
@@ -898,7 +1084,7 @@ const EventModal = ({
             <select
               value={formData.day}
               onChange={(e) =>
-                setFormData({ ...formData, day: parseInt(e.target.value) })
+                setFormData({ ...formData, day: parseInt(e.target.value, 10) })
               }
               className="form-input"
               disabled={loading}
@@ -914,38 +1100,73 @@ const EventModal = ({
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Heure de début</label>
-              <select
-                value={formData.start}
-                onChange={(e) =>
-                  setFormData({ ...formData, start: e.target.value })
-                }
-                className="form-input"
-                disabled={loading}
-              >
-                {timeSlots.slice(0, -1).map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))}
-              </select>
+              {allowMinutes ? (
+                <input
+                  type="time"
+                  step={timeInputStep}
+                  value={formData.start}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, start: e.target.value }))
+                  }
+                  className="form-input"
+                  disabled={loading}
+                  required
+                />
+              ) : (
+                <select
+                  value={formData.start}
+                  onChange={(e) =>
+                    setFormData({ ...formData, start: e.target.value })
+                  }
+                  className="form-input"
+                  disabled={loading}
+                >
+                  {timeSlots.slice(0, -1).map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             <div className="form-group">
               <label className="form-label">Heure de fin</label>
-              <select
-                value={formData.end}
-                onChange={(e) =>
-                  setFormData({ ...formData, end: e.target.value })
-                }
-                className="form-input"
-                disabled={loading}
-              >
-                {timeSlots.slice(1).map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))}
-              </select>
+              {allowMinutes ? (
+                <input
+                  type="time"
+                  step={timeInputStep}
+                  value={formData.end === "24:00" ? "23:59" : formData.end}
+                  onChange={(e) =>
+                    setFormData((prev) => {
+                      const rawValue = e.target.value;
+                      const nextEnd =
+                        rawValue === "23:59" && prev.end === "24:00"
+                          ? "24:00"
+                          : rawValue;
+                      return { ...prev, end: nextEnd };
+                    })
+                  }
+                  className="form-input"
+                  disabled={loading}
+                  required
+                />
+              ) : (
+                <select
+                  value={formData.end}
+                  onChange={(e) =>
+                    setFormData({ ...formData, end: e.target.value })
+                  }
+                  className="form-input"
+                  disabled={loading}
+                >
+                  {timeSlots.slice(1).map((time) => (
+                    <option key={time} value={time}>
+                      {time}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 

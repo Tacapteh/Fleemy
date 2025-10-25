@@ -69,6 +69,20 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
   const clientLabel = resolveClientLabel(event);
   const description = normalizeOptionalString(event.description);
 
+  const startTimeLabel = event.startDate
+    ? event.startDate.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
+  const endTimeLabel = event.endDate
+    ? event.endDate.toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
+  const timeLabel = startTimeLabel && endTimeLabel ? `${startTimeLabel} - ${endTimeLabel}` : '';
+
   const title = explicitTitle || clientLabel || description || 'Événement';
   const statusClass = event.status ? ` status-${event.status}` : '';
   const isInteractive = typeof onClick === 'function';
@@ -94,6 +108,11 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       aria-label={`Événement : ${title}`}
       data-testid={`event-${event.id}`}
     >
+      {timeLabel && (
+        <div className="mb-1 text-xs font-semibold leading-tight text-slate-600 dark:text-slate-200">
+          {timeLabel}
+        </div>
+      )}
       <div className="title truncate leading-tight break-words">{title}</div>
 
       {event.attachedTaskBadges.length > 0 && (
