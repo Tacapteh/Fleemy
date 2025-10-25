@@ -892,7 +892,7 @@ export default function Planning() {
           />
         )}
 
-        <div className="mt-4 flex items-center gap-6 text-sm text-gray-600 dark:text-slate-300">
+        <div className="mt-8 flex items-center gap-6 text-sm text-gray-600 dark:text-slate-300">
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full bg-green-200 dark:bg-green-500" />
             <span>Payé</span>

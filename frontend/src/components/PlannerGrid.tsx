@@ -800,7 +800,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                     </div>
 
                     {/* Grille horaire verticale */}
-                    <div className="relative overflow-y-auto border border-white/10 rounded-lg bg-[#1a2235]" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+                    <div
+                      className="relative overflow-y-auto border border-white/10 rounded-lg rounded-b-lg bg-[#1a2235] pb-[calc(env(safe-area-inset-bottom)+2rem)]"
+                      style={{ maxHeight: 'calc(100vh - 280px)' }}
+                    >
                       <div className="grid grid-cols-[60px_1fr] gap-0">
                         {/* Colonne des heures + Colonne des événements */}
                         {hours.map((hourLabel, hourIndex) => {
