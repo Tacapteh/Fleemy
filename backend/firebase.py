@@ -61,6 +61,9 @@ class InMemoryDocument(dict):
     def delete(self):
         self._ref().clear()
 
+    def collection(self, name):
+        return InMemoryCollection(self.store, self.path + [name])
+
 
 class InMemoryCollection:
     def __init__(self, store, path):
