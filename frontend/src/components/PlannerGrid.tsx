@@ -543,7 +543,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         ))}
       </div>
 
-      <div className="week-grid-container overflow-y-auto" style={gridScrollStyle}>
+      <div className="week-grid-container overflow-y-auto items-start" style={gridScrollStyle}>
         <div
           className="time-gutter dark:bg-slate-900 dark:border-slate-700"
           style={{ height: containerHeight }}
