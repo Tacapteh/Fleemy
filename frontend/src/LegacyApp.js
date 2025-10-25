@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useId } from "react";
 import useTeam from "./hooks/useTeam";
 import "./App.css";
 import { apiFetch } from "./lib/api";
@@ -920,6 +920,8 @@ const EventModal = ({
   });
   const [loading, setLoading] = useState(false);
   const [clientError, setClientError] = useState("");
+  const clientFieldId = useId();
+  const clientErrorId = `${clientFieldId}-error`;
 
   const { settings } = useSettings();
   const allowMinutes = settings?.enableMinutes === true;
@@ -1164,12 +1166,20 @@ const EventModal = ({
         </h2>
 
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={readOnly || loading}>
           <div className="form-group">
-            <label className="form-label">
-              Client{mustHaveClient ? " *" : ""}
+            <label className="form-label" htmlFor={clientFieldId}>
+              <span>Client</span>
+              {mustHaveClient && (
+                <span
+                  className="ml-1 text-red-600 dark:text-red-400"
+                  aria-hidden="true"
+                >
+                  *
+                </span>
+              )}
             </label>
             <Combobox
+              id={clientFieldId}
               options={clients || []}
               value={formData.client_id}
               onChange={(clientId, selectedOption) => {
@@ -1191,15 +1201,19 @@ const EventModal = ({
                   ? "Sélectionner un client (obligatoire)"
                   : "Sélectionner un client"
               }
-              disabled={loading || clientsLoading}
+              disabled={readOnly}
               error={Boolean(clientError)}
               aria-invalid={
                 mustHaveClient && clientError ? "true" : undefined
               }
+              aria-describedby={clientError ? clientErrorId : undefined}
+              aria-required={mustHaveClient ? "true" : "false"}
+              aria-busy={clientsLoading ? "true" : undefined}
               className="form-input"
             />
             {clientError && (
               <p
+                id={clientErrorId}
                 className="mt-1 text-xs text-red-600 dark:text-red-400"
                 aria-live="polite"
                 role="alert"
@@ -1209,12 +1223,13 @@ const EventModal = ({
             )}
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Description</label>
-            <input
-              type="text"
-              value={formData.description}
-              onChange={(e) =>
+          <fieldset disabled={readOnly}>
+            <div className="form-group">
+              <label className="form-label">Description</label>
+              <input
+                type="text"
+                value={formData.description}
+                onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
               className="form-input"
@@ -1223,31 +1238,31 @@ const EventModal = ({
             />
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Jour</label>
-            <select
-              value={formData.day}
-              onChange={(e) =>
-                setFormData({ ...formData, day: parseInt(e.target.value, 10) })
-              }
-              className="form-input"
-              disabled={loading}
-            >
-              {dayNames.map((day, index) => (
-                <option key={index} value={index}>
-                  {day}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Heure de début</label>
-              {allowMinutes ? (
-                <input
-                  type="time"
-                  step={timeInputStep}
+              <label className="form-label">Jour</label>
+              <select
+                value={formData.day}
+                onChange={(e) =>
+                  setFormData({ ...formData, day: parseInt(e.target.value, 10) })
+                }
+                className="form-input"
+                disabled={loading}
+              >
+                {dayNames.map((day, index) => (
+                  <option key={index} value={index}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Heure de début</label>
+                {allowMinutes ? (
+                  <input
+                    type="time"
+                    step={timeInputStep}
                   value={formData.start}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, start: e.target.value }))
@@ -1275,14 +1290,14 @@ const EventModal = ({
                   ))}
                 </select>
               )}
-            </div>
+              </div>
 
-            <div className="form-group">
-              <label className="form-label">Heure de fin</label>
-              {allowMinutes ? (
-                <input
-                  type="time"
-                  step={timeInputStep}
+              <div className="form-group">
+                <label className="form-label">Heure de fin</label>
+                {allowMinutes ? (
+                  <input
+                    type="time"
+                    step={timeInputStep}
                   value={formData.end === "24:00" ? "23:59" : formData.end}
                   onChange={(e) =>
                     setFormData((prev) => {
@@ -1317,15 +1332,15 @@ const EventModal = ({
                   ))}
                 </select>
               )}
+              </div>
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Type</label>
-            <select
-              value={formData.type}
-              onChange={(e) =>
-                setFormData({ ...formData, type: e.target.value })
+            <div className="form-group">
+              <label className="form-label">Type</label>
+              <select
+                value={formData.type}
+                onChange={(e) =>
+                  setFormData({ ...formData, type: e.target.value })
               }
               className="form-input"
               disabled={loading}
@@ -1336,7 +1351,7 @@ const EventModal = ({
                 </option>
               ))}
             </select>
-          </div>
+            </div>
           </fieldset>
 
           <div className="modal-actions">
