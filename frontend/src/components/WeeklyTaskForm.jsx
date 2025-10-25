@@ -471,6 +471,20 @@ const WeeklyTaskForm = ({
         return;
       }
 
+      const isEditing = Boolean(initialTask?.id);
+      const existingCreationDate = normalizeTaskDateInput(
+        initialTask?.dateISO ??
+          initialTask?.dateIso ??
+          initialTask?.date_iso ??
+          initialTask?.taskDate ??
+          initialTask?.task_date ??
+          initialTask?.task_day_iso ??
+          null,
+      );
+
+      const creationDateISO =
+        existingCreationDate || (!isEditing ? formatDateOnly(new Date()) : null);
+
       let resolvedWeekStart = null;
       if (typeof weekStartISO === 'string' && weekStartISO) {
         const parsedWeekStart = new Date(`${weekStartISO}T00:00:00`);
@@ -523,6 +537,7 @@ const WeeklyTaskForm = ({
         time_ranges: rangesWithDates,
         id: initialTask?.id || undefined,
         price: priceValue ? parseFloat(priceValue) : null,
+        ...(creationDateISO ? { dateISO: creationDateISO } : {}),
       };
 
       const savedTask = await saveWeeklyTask(context, taskData);
