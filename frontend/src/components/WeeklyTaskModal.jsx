@@ -1,6 +1,15 @@
 import WeeklyTaskForm from './WeeklyTaskForm';
 
-export default function WeeklyTaskModal({ isOpen, task, onSave, onDelete, onClose, context, readOnly }) {
+export default function WeeklyTaskModal({
+  isOpen,
+  task,
+  onSave,
+  onDelete,
+  onClose,
+  context,
+  readOnly,
+  weekStartISO,
+}) {
   if (!isOpen) return null;
 
   const handleSave = (savedTask) => {
@@ -14,6 +23,7 @@ export default function WeeklyTaskModal({ isOpen, task, onSave, onDelete, onClos
       initialTask={task}
       context={context}
       readOnly={readOnly}
+      weekStartISO={weekStartISO}
       onSave={handleSave}
       onCancel={onClose}
       onDelete={onDelete}

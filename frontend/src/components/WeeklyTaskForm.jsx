@@ -27,6 +27,58 @@ const MINUTES_PER_HOUR = 60;
 const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 const DETAILED_MODE_MIN_STEP = 15;
 
+const formatDateOnly = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeTaskDateInput = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    const cloned = new Date(value);
+    cloned.setHours(0, 0, 0, 0);
+    return formatDateOnly(cloned);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const candidate = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
+    const parsed = new Date(candidate);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return formatDateOnly(parsed);
+  }
+
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    return normalizeTaskDateInput(value.toDate());
+  }
+
+  if (typeof value === 'number') {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return formatDateOnly(parsed);
+  }
+
+  return null;
+};
+
 const minutesToTimeString = (totalMinutes) => {
   const clamped = Math.max(0, Math.min(totalMinutes, MINUTES_PER_DAY));
   if (clamped === MINUTES_PER_DAY) {
@@ -225,7 +277,15 @@ const ensureTimeRanges = (ranges, { allowMinutes = false } = {}) => {
   return normalized;
 };
 
-const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, context, readOnly = false }) => {
+const WeeklyTaskForm = ({
+  initialTask = null,
+  onSave,
+  onCancel,
+  onDelete,
+  context,
+  readOnly = false,
+  weekStartISO = null,
+}) => {
   const { settings } = useSettings();
   const allowMinutes = settings?.enableMinutes === true;
   const timeInputStep = allowMinutes ? 900 : 3600;
@@ -411,6 +471,46 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
         return;
       }
 
+      let resolvedWeekStart = null;
+      if (typeof weekStartISO === 'string' && weekStartISO) {
+        const parsedWeekStart = new Date(`${weekStartISO}T00:00:00`);
+        if (!Number.isNaN(parsedWeekStart.getTime())) {
+          parsedWeekStart.setHours(0, 0, 0, 0);
+          resolvedWeekStart = parsedWeekStart;
+        }
+      }
+
+      const rangesWithDates = sanitizedRanges.map((range, index) => {
+        let computedDate = null;
+
+        if (resolvedWeekStart && typeof range.day === 'number') {
+          const dayDate = new Date(resolvedWeekStart);
+          dayDate.setDate(resolvedWeekStart.getDate() + range.day);
+          computedDate = formatDateOnly(dayDate);
+        }
+
+        if (!computedDate) {
+          const originalRange = initialTask?.time_ranges?.[index];
+          const legacyDate =
+            originalRange?.task_date ||
+            originalRange?.taskDate ||
+            originalRange?.task_day_iso ||
+            originalRange?.taskDayIso ||
+            null;
+          computedDate = normalizeTaskDateInput(legacyDate);
+        }
+
+        if (computedDate) {
+          return {
+            ...range,
+            task_date: computedDate,
+            task_day_iso: computedDate,
+          };
+        }
+
+        return range;
+      });
+
       let priceValueRaw = '';
       if (typeof task.price === 'string') {
         priceValueRaw = task.price;
@@ -420,7 +520,7 @@ const WeeklyTaskForm = ({ initialTask = null, onSave, onCancel, onDelete, contex
       const priceValue = priceValueRaw.trim();
       const taskData = {
         ...task,
-        time_ranges: sanitizedRanges,
+        time_ranges: rangesWithDates,
         id: initialTask?.id || undefined,
         price: priceValue ? parseFloat(priceValue) : null,
       };

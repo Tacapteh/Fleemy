@@ -29,6 +29,57 @@ const DAY_NAME_TO_INDEX = {
 
 const TASKS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const formatDateOnly = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseTaskDate = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    const clone = new Date(value);
+    clone.setHours(0, 0, 0, 0);
+    return clone;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const candidate = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
+    const parsed = new Date(candidate);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  if (typeof value === 'number') {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    return parseTaskDate(value.toDate());
+  }
+
+  return null;
+};
+
 const toDayIndex = (value) => {
   if (typeof value === 'number' && value >= 0 && value <= 6) {
     return value;
@@ -207,6 +258,9 @@ export default function useTasks(context, weekStartISO) {
 
     const results = [];
 
+    const weekStartDate = weekDates[0];
+    const weekEndDate = weekDates[weekDates.length - 1];
+
     tasks.forEach((task) => {
       if (!task || !Array.isArray(task.time_ranges)) {
         return;
@@ -219,34 +273,71 @@ export default function useTasks(context, weekStartISO) {
         const start = parseTime(range.start);
         const end = parseTime(range.end);
 
-        if (dayIndex === null || !start || !end) {
+        if (!start || !end) {
           return;
         }
 
-        if (expectedWeekday !== null && expectedWeekday !== dayIndex) {
+        let computedDayIndex = dayIndex;
+        let occurrenceDate = null;
+
+        const explicitDate =
+          parseTaskDate(
+            range.task_date ??
+              range.taskDate ??
+              range.task_day_iso ??
+              range.taskDayIso ??
+              task.task_date ??
+              task.taskDate ??
+              task.task_day_iso ??
+              null,
+          ) || null;
+
+        if (explicitDate && weekStartDate && weekEndDate) {
+          if (explicitDate < weekStartDate || explicitDate > weekEndDate) {
+            return;
+          }
+          const diffMs = explicitDate.getTime() - weekStartDate.getTime();
+          const diffDays = Math.round(diffMs / (24 * 60 * 60 * 1000));
+          if (diffDays < 0 || diffDays >= weekDates.length) {
+            return;
+          }
+          computedDayIndex = diffDays;
+          occurrenceDate = new Date(explicitDate);
+        }
+
+        if (computedDayIndex === null || computedDayIndex < 0 || computedDayIndex >= weekDates.length) {
           return;
         }
 
-        const dayDate = weekDates[dayIndex];
-        if (!dayDate) {
+        if (!occurrenceDate) {
+          const dayDateCandidate = weekDates[computedDayIndex];
+          if (!dayDateCandidate) {
+            return;
+          }
+          occurrenceDate = new Date(dayDateCandidate);
+        }
+
+        if (expectedWeekday !== null && expectedWeekday !== computedDayIndex) {
           return;
         }
 
-        const startDate = new Date(dayDate);
+        const startDate = new Date(occurrenceDate);
         startDate.setHours(start.hours, start.minutes, 0, 0);
 
-        const endDate = new Date(dayDate);
+        const endDate = new Date(occurrenceDate);
         endDate.setHours(end.hours, end.minutes, 0, 0);
 
         if (endDate <= startDate) {
           return;
         }
 
+        const dateIso = formatDateOnly(occurrenceDate);
+
         results.push({
           taskId: task.id,
-          occurrenceId: `${task.id}_${index}`,
-          dayIndex,
-          weekday: expectedWeekday !== null ? expectedWeekday : dayIndex,
+          occurrenceId: `${task.id}_${index}_${dateIso || 'week'}`,
+          dayIndex: computedDayIndex,
+          weekday: expectedWeekday !== null ? expectedWeekday : computedDayIndex,
           startDate,
           endDate,
           label: task.label || 'Tâche',
@@ -255,6 +346,7 @@ export default function useTasks(context, weekStartISO) {
           price: task.price || null,
           readOnly: Boolean(task.readOnly),
           weekly: true,
+          taskDateISO: dateIso,
         });
       });
     });
