@@ -244,6 +244,11 @@ function AppWithSettings() {
                 <Clients />
               </AuthGuard>
             } />
+            <Route path="/todo" element={
+              <AuthGuard user={user}>
+                <Todo />
+              </AuthGuard>
+            } />
             <Route path="/settings" element={
               <AuthGuard user={user}>
                 <SettingsPage />
