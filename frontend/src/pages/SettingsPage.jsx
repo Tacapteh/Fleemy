@@ -42,14 +42,14 @@ function Switch({ checked, onToggle, ...props }) {
 
 const toggleSettings = [
   {
-    key: "showWeekends",
-    label: "Afficher le week-end",
-    description: "Afficher le samedi et le dimanche dans la vue semaine et mois.",
-  },
-  {
     key: "showFullDay",
     label: "Plage horaire 0h → 24h",
     description: "Étendre l’affichage des heures sur 24h complètes.",
+  },
+  {
+    key: "showWeekends",
+    label: "Afficher le week-end",
+    description: "Afficher le samedi et le dimanche dans la vue semaine et mois.",
   },
   {
     key: "enableMinutes",
@@ -120,72 +120,118 @@ export default function SettingsPage() {
     }
   }, [durationInput, settings, updateSetting]);
 
-  const handleHourChange = useCallback(
-    (key, rawValue) => {
+  const handleDayStartChange = useCallback(
+    (event) => {
       if (!settings || settings.showFullDay) {
         return;
       }
 
+      const rawValue = event.target.value;
       if (rawValue === "") {
         return;
       }
 
-      const numericValue = Number(rawValue);
-      if (!Number.isFinite(numericValue)) {
+      const parsed = parseInt(rawValue, 10);
+      if (Number.isNaN(parsed)) {
         return;
       }
 
-      const isStart = key === "dayStartHour";
-      const fallbackStart =
+      const currentStart =
         typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
-      const fallbackEnd =
+      const currentEnd =
         typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
 
-      let value = Math.trunc(numericValue);
-      value = Math.max(0, Math.min(23, value));
-      if (isStart) {
-        value = Math.min(value, 22);
-      } else {
-        value = Math.max(value, 1);
+      const nextStart = Math.max(0, Math.min(23, parsed));
+      let nextEnd = currentEnd;
+
+      if (nextStart >= nextEnd) {
+        nextEnd = Math.min(24, nextStart + 1);
       }
 
-      if (isStart) {
-        let nextEnd = fallbackEnd;
-        if (value >= nextEnd) {
-          nextEnd = Math.min(23, value + 1);
-        }
-
-        if (fallbackStart !== value) {
-          updateSetting?.("dayStartHour", value);
-        }
-
-        if (nextEnd !== fallbackEnd) {
-          updateSetting?.("dayEndHour", nextEnd);
-        }
-        return;
-      }
-
-      let nextStart = fallbackStart;
-      if (value <= nextStart) {
-        nextStart = Math.max(0, Math.min(value - 1, 22));
-      }
-
-      if (nextStart !== fallbackStart) {
+      if (currentStart !== nextStart) {
         updateSetting?.("dayStartHour", nextStart);
       }
 
-      if (fallbackEnd !== value) {
-        updateSetting?.("dayEndHour", value);
+      if (nextEnd !== currentEnd) {
+        updateSetting?.("dayEndHour", nextEnd);
       }
     },
     [settings, updateSetting]
   );
 
-  const handleHourInput = useCallback(
-    (key) => (event) => {
-      handleHourChange(key, event.target.value);
+  const handleDayEndChange = useCallback(
+    (event) => {
+      if (!settings || settings.showFullDay) {
+        return;
+      }
+
+      const rawValue = event.target.value;
+      if (rawValue === "") {
+        return;
+      }
+
+      const parsed = parseInt(rawValue, 10);
+      if (Number.isNaN(parsed)) {
+        return;
+      }
+
+      const currentStart =
+        typeof settings.dayStartHour === "number" ? settings.dayStartHour : 7;
+      const currentEnd =
+        typeof settings.dayEndHour === "number" ? settings.dayEndHour : 20;
+
+      const nextEnd = Math.max(1, Math.min(24, parsed));
+      let nextStart = currentStart;
+
+      if (nextEnd <= nextStart) {
+        nextStart = Math.max(0, Math.min(nextEnd - 1, 23));
+      }
+
+      if (nextStart !== currentStart) {
+        updateSetting?.("dayStartHour", nextStart);
+      }
+
+      if (nextEnd !== currentEnd) {
+        updateSetting?.("dayEndHour", nextEnd);
+      }
     },
-    [handleHourChange]
+    [settings, updateSetting]
+  );
+
+  const showFullDayToggle = toggleSettings.find((item) => item.key === "showFullDay");
+  const additionalToggleSettings = toggleSettings.filter((item) => item.key !== "showFullDay");
+
+  const renderToggleRow = useCallback(
+    (item) => {
+      if (!item) {
+        return null;
+      }
+      const labelId = `setting-${item.key}-label`;
+      const descriptionId = `setting-${item.key}-description`;
+
+      return (
+        <div
+          key={item.key}
+          className="flex items-center justify-between border-b border-slate-200 px-4 py-3 last:border-b-0 dark:border-slate-700"
+        >
+          <div className="flex-1 pr-4">
+            <p id={labelId} className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              {item.label}
+            </p>
+            <p id={descriptionId} className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {item.description}
+            </p>
+          </div>
+          <Switch
+            checked={settings[item.key] === true}
+            onToggle={() => handleToggle(item.key)}
+            aria-labelledby={labelId}
+            aria-describedby={descriptionId}
+          />
+        </div>
+      );
+    },
+    [handleToggle, settings]
   );
 
   if (loading || !settings) {
@@ -208,31 +254,7 @@ export default function SettingsPage() {
       </header>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        {toggleSettings.map((item) => {
-          const labelId = `setting-${item.key}-label`;
-          const descriptionId = `setting-${item.key}-description`;
-
-          return (
-            <div
-              key={item.key}
-              className="flex items-center justify-between py-3 border-b border-slate-200 last:border-b-0 dark:border-slate-700 px-4"
-            >
-              <div className="flex-1 pr-4">
-                <p id={labelId} className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                  {item.label}
-                </p>
-                <p id={descriptionId} className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {item.description}
-                </p>
-              </div>
-              <Switch
-                checked={settings[item.key] === true}
-                onToggle={() => handleToggle(item.key)}
-                aria-labelledby={labelId}
-              />
-            </div>
-          );
-        })}
+        {renderToggleRow(showFullDayToggle)}
 
         <div className="border-b border-slate-200 px-4 py-4 last:border-b-0 dark:border-slate-700">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -258,7 +280,7 @@ export default function SettingsPage() {
                       ? settings.dayStartHour
                       : 7
                   }
-                  onChange={handleHourInput("dayStartHour")}
+                  onChange={handleDayStartChange}
                   disabled={settings.showFullDay === true}
                   className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 />
@@ -269,14 +291,14 @@ export default function SettingsPage() {
                 <input
                   id="setting-dayEndHour-input"
                   type="number"
-                  min={0}
-                  max={23}
+                  min={1}
+                  max={24}
                   value={
                     typeof settings.dayEndHour === "number"
                       ? settings.dayEndHour
                       : 20
                   }
-                  onChange={handleHourInput("dayEndHour")}
+                  onChange={handleDayEndChange}
                   disabled={settings.showFullDay === true}
                   className="mt-1 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                 />
@@ -288,6 +310,8 @@ export default function SettingsPage() {
             24:00.
           </p>
         </div>
+
+        {additionalToggleSettings.map((item) => renderToggleRow(item))}
 
         <div className="flex items-center justify-between py-3 border-b border-slate-200 last:border-b-0 dark:border-slate-700 px-4">
           <div className="flex-1 pr-4">
