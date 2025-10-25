@@ -4193,10 +4193,10 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
   return (
     <div className="modal-overlay">
       <div
-        className="modal-content"
+        className="modal-content dark:bg-slate-800 dark:text-slate-100"
         style={{ maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}
       >
-        <h2 className="modal-header">
+        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
           {quote ? "✏️ Modifier le devis" : "➕ Nouveau devis"}
         </h2>
 
@@ -4262,7 +4262,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
 
           <div className="space-y-3">
             {formData.items.map((item, index) => (
-              <div key={index} className="bg-gray-50 p-4 rounded-lg">
+              <div key={index} className="bg-gray-50 p-4 rounded-lg dark:bg-slate-900 dark:text-slate-100">
                 <div className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-5">
                     <input
@@ -4314,14 +4314,14 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
                       type="text"
                       value={`${item.total.toFixed(2)}€`}
                       readOnly
-                      className="form-input bg-gray-100"
+                      className="form-input bg-gray-100 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
                     />
                   </div>
                   <div className="col-span-1">
                     <button
                       type="button"
                       onClick={() => removeItem(index)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                      className="p-2 text-red-500 hover:bg-red-50 rounded dark:hover:bg-red-900/40"
                       disabled={formData.items.length === 1}
                     >
                       🗑️
@@ -4369,7 +4369,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
         </div>
 
         {/* Totals */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-gray-50 p-4 rounded-lg dark:bg-slate-900 dark:text-slate-100">
           <div className="space-y-2 text-right">
             <div className="flex justify-between">
               <span>Sous-total:</span>
@@ -4712,8 +4712,8 @@ const Quotes = ({ user }) => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">📋 Devis</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">📋 Devis</h1>
+          <p className="text-gray-600 mt-1 dark:text-slate-400">
             Gérez vos devis et propositions commerciales
           </p>
         </div>
@@ -4724,41 +4724,41 @@ const Quotes = ({ user }) => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <div className="text-2xl font-bold text-gray-700">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
+          <div className="text-2xl font-bold text-gray-700 dark:text-slate-100">
             {quoteStats.draft}
           </div>
-          <div className="text-sm text-gray-500">Brouillons</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Brouillons</div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-blue-600">
             {quoteStats.sent}
           </div>
-          <div className="text-sm text-gray-500">Envoyés</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Envoyés</div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-green-600">
             {quoteStats.accepted}
           </div>
-          <div className="text-sm text-gray-500">Acceptés</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Acceptés</div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-red-600">
             {quoteStats.rejected}
           </div>
-          <div className="text-sm text-gray-500">Refusés</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Refusés</div>
         </div>
       </div>
 
       {/* Quotes List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
         {quotes.length === 0 ? (
           <div className="p-12 text-center">
             <div className="text-6xl mb-4">📋</div>
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+            <h3 className="text-lg font-semibold text-gray-700 mb-2 dark:text-slate-100">
               Aucun devis
             </h3>
-            <p className="text-gray-500 mb-4">
+            <p className="text-gray-500 mb-4 dark:text-slate-400">
               Commencez par créer votre premier devis !
             </p>
             <button onClick={handleCreateQuote} className="btn btn-primary">
@@ -4766,16 +4766,16 @@ const Quotes = ({ user }) => {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-slate-700">
             {quotes.map((quote) => (
               <div
                 key={quote.id}
-                className="p-6 hover:bg-gray-50 transition-all"
+                className="p-6 transition-all hover:bg-gray-50 dark:hover:bg-slate-700/60"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="font-semibold text-gray-800">
+                      <h3 className="font-semibold text-gray-800 dark:text-slate-100">
                         {quote.quote_number}
                       </h3>
                       <span
@@ -4786,11 +4786,11 @@ const Quotes = ({ user }) => {
                         {getStatusText(quote.status)}
                       </span>
                     </div>
-                    <p className="text-gray-900 font-medium">{quote.title}</p>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-gray-900 font-medium dark:text-slate-100">{quote.title}</p>
+                    <p className="text-gray-600 text-sm dark:text-slate-400">
                       Client: {quote?.client_name ?? ""}
                     </p>
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500 dark:text-slate-400">
                       <span>💰 {formatCurrency(quote.total)}</span>
                       <span>📅 {formatDate(quote.created_at)}</span>
                       <span>
@@ -4801,7 +4801,7 @@ const Quotes = ({ user }) => {
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleEditQuote(quote)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                       title="Modifier"
                     >
                       ✏️
@@ -4812,7 +4812,7 @@ const Quotes = ({ user }) => {
                           onClick={() =>
                             updateQuoteStatus(quote.id, "accepted")
                           }
-                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                           title="Marquer comme accepté"
                         >
                           ✅
@@ -4821,7 +4821,7 @@ const Quotes = ({ user }) => {
                           onClick={() =>
                             updateQuoteStatus(quote.id, "rejected")
                           }
-                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                           title="Marquer comme refusé"
                         >
                           ❌
@@ -4831,7 +4831,7 @@ const Quotes = ({ user }) => {
                     {quote.status === "accepted" && (
                       <button
                         onClick={() => convertToInvoice(quote)}
-                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                         title="Convertir en facture"
                       >
                         🧾
@@ -4854,7 +4854,7 @@ const Quotes = ({ user }) => {
                     </button>
                     <button
                       onClick={() => handleDeleteQuote(quote.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                       title="Supprimer"
                     >
                       🗑️
@@ -5076,10 +5076,10 @@ const InvoiceModal = ({
   return (
     <div className="modal-overlay">
       <div
-        className="modal-content"
+        className="modal-content dark:bg-slate-800 dark:text-slate-100"
         style={{ maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}
       >
-        <h2 className="modal-header">
+        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
           {invoice ? "✏️ Modifier la facture" : "➕ Nouvelle facture"}
         </h2>
 
@@ -5103,7 +5103,7 @@ const InvoiceModal = ({
                 </option>
               ))}
             </select>
-            <div className="text-sm text-gray-500 mt-1">
+            <div className="text-sm text-gray-500 mt-1 dark:text-slate-400">
               Sélectionnez un devis accepté pour créer automatiquement une
               facture
             </div>
@@ -5176,7 +5176,7 @@ const InvoiceModal = ({
 
           <div className="space-y-3">
             {formData.items.map((item, index) => (
-              <div key={index} className="bg-gray-50 p-4 rounded-lg">
+              <div key={index} className="bg-gray-50 p-4 rounded-lg dark:bg-slate-900 dark:text-slate-100">
                 <div className="grid grid-cols-12 gap-3 items-end">
                   <div className="col-span-5">
                     <input
@@ -5228,14 +5228,14 @@ const InvoiceModal = ({
                       type="text"
                       value={`${item.total.toFixed(2)}€`}
                       readOnly
-                      className="form-input bg-gray-100"
+                      className="form-input bg-gray-100 dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
                     />
                   </div>
                   <div className="col-span-1">
                     <button
                       type="button"
                       onClick={() => removeItem(index)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded"
+                      className="p-2 text-red-500 hover:bg-red-50 rounded dark:hover:bg-red-900/40"
                       disabled={formData.items.length === 1}
                     >
                       🗑️
@@ -5283,7 +5283,7 @@ const InvoiceModal = ({
         </div>
 
         {/* Totals */}
-        <div className="bg-gray-50 p-4 rounded-lg">
+        <div className="bg-gray-50 p-4 rounded-lg dark:bg-slate-900 dark:text-slate-100">
           <div className="space-y-2 text-right">
             <div className="flex justify-between">
               <span>Sous-total:</span>
@@ -5622,8 +5622,8 @@ const Invoices = ({ user }) => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">🧾 Factures</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">🧾 Factures</h1>
+          <p className="text-gray-600 mt-1 dark:text-slate-400">
             Gérez vos factures et suivez les paiements
           </p>
         </div>
@@ -5634,41 +5634,41 @@ const Invoices = ({ user }) => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-green-600">
             {formatCurrency(invoiceStats.totalPaid)}
           </div>
-          <div className="text-sm text-gray-500">Total payé</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Total payé</div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-red-600">
             {formatCurrency(invoiceStats.totalUnpaid)}
           </div>
-          <div className="text-sm text-gray-500">En attente de paiement</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">En attente de paiement</div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-orange-600">
             {invoiceStats.overdueCount}
           </div>
-          <div className="text-sm text-gray-500">En retard</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">En retard</div>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
           <div className="text-2xl font-bold text-gray-700">
             {invoiceStats.total}
           </div>
-          <div className="text-sm text-gray-500">Total factures</div>
+          <div className="text-sm text-gray-500 dark:text-slate-400">Total factures</div>
         </div>
       </div>
 
       {/* Invoices List */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
         {invoices.length === 0 ? (
           <div className="p-12 text-center">
             <div className="text-6xl mb-4">🧾</div>
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">
+            <h3 className="text-lg font-semibold text-gray-700 mb-2 dark:text-slate-100">
               Aucune facture
             </h3>
-            <p className="text-gray-500 mb-4">
+            <p className="text-gray-500 mb-4 dark:text-slate-400">
               Commencez par créer votre première facture !
             </p>
             <button onClick={handleCreateInvoice} className="btn btn-primary">
@@ -5676,20 +5676,20 @@ const Invoices = ({ user }) => {
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-slate-700">
             {invoices.map((invoice) => (
               <div
                 key={invoice.id}
                 className={`p-6 transition-all ${
                   isOverdue(invoice)
-                    ? "bg-red-50 border-l-4 border-red-400"
-                    : "hover:bg-gray-50"
+                    ? "bg-red-50 border-l-4 border-red-400 dark:bg-red-900/40 dark:border-red-500"
+                    : "hover:bg-gray-50 dark:hover:bg-slate-700/60"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="font-semibold text-gray-800">
+                      <h3 className="font-semibold text-gray-800 dark:text-slate-100">
                         {invoice.invoice_number}
                       </h3>
                       <span
@@ -5700,16 +5700,16 @@ const Invoices = ({ user }) => {
                         {getStatusText(invoice.status)}
                       </span>
                       {isOverdue(invoice) && (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
                           ⏰ En retard
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-900 font-medium">{invoice.title}</p>
-                    <p className="text-gray-600 text-sm">
+                    <p className="text-gray-900 font-medium dark:text-slate-100">{invoice.title}</p>
+                    <p className="text-gray-600 text-sm dark:text-slate-400">
                       Client: {invoice?.client_name ?? ""}
                     </p>
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500 dark:text-slate-400">
                       <span>💰 {formatCurrency(invoice.total)}</span>
                       <span>📅 Créée le {formatDate(invoice.created_at)}</span>
                       <span>📋 Échéance: {formatDate(invoice.due_date)}</span>
@@ -5721,7 +5721,7 @@ const Invoices = ({ user }) => {
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handleEditInvoice(invoice)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                       title="Voir/Modifier"
                     >
                       ✏️
@@ -5729,7 +5729,7 @@ const Invoices = ({ user }) => {
                     {invoice.status === "sent" && (
                       <button
                         onClick={() => updateInvoiceStatus(invoice.id, "paid")}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                         title="Marquer comme payée"
                       >
                         ✅
@@ -5740,7 +5740,7 @@ const Invoices = ({ user }) => {
                         onClick={() =>
                           updateInvoiceStatus(invoice.id, "cancelled")
                         }
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                         title="Annuler"
                       >
                         ❌
@@ -5754,7 +5754,7 @@ const Invoices = ({ user }) => {
                     </button>
                     <button
                       onClick={() => handleDeleteInvoice(invoice.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                       title="Supprimer"
                     >
                       🗑️
@@ -5783,9 +5783,9 @@ const Invoices = ({ user }) => {
 };
 
 const Settings = () => (
-  <div className="bg-white p-6 rounded-xl shadow-sm">
-    <h1 className="text-2xl font-bold text-gray-800 mb-4">⚙️ Paramètres</h1>
-    <p className="text-gray-600">Module de paramètres en développement...</p>
+  <div className="bg-white p-6 rounded-xl shadow-sm dark:bg-slate-800 dark:text-slate-100">
+    <h1 className="text-2xl font-bold text-gray-800 mb-4 dark:text-slate-100">⚙️ Paramètres</h1>
+    <p className="text-gray-600 dark:text-slate-400">Module de paramètres en développement...</p>
   </div>
 );
 

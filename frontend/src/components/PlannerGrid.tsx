@@ -92,7 +92,11 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   return (
     <div className="interactive-layer">
       {days.map((day, dayIndex) => (
-        <div key={dayIndex} className="day-column" style={{ gridColumn: dayIndex + 1, gridRow: '1 / -1' }}>
+        <div
+          key={dayIndex}
+          className="day-column dark:border-slate-700"
+          style={{ gridColumn: dayIndex + 1, gridRow: '1 / -1' }}
+        >
           {!isReadOnlyMode && (
             <button
               type="button"
@@ -109,7 +113,7 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             <button
               key={time}
               type="button"
-              className="time-slot-cell"
+              className="time-slot-cell dark:border-slate-700 dark:hover:bg-slate-700/40 dark:focus:bg-slate-700/50"
               style={{ gridRow: hourIndex + 1 }}
               onClick={() => !isReadOnlyMode && onCellClick?.(day.date, time)}
               disabled={isReadOnlyMode}
@@ -469,18 +473,18 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     <div ref={wrapperRef} className="week-shell" style={weeklyGridStyle}>
       <div className="week-day-headers">
         {days.map((day) => (
-          <div key={day.name} className="day-header-label">
+          <div key={day.name} className="day-header-label dark:text-slate-100">
             {day.name} {day.date.getDate()}
           </div>
         ))}
       </div>
 
       <div className="week-grid-container">
-        <div className="time-gutter">
+        <div className="time-gutter dark:bg-slate-900 dark:border-slate-700">
           {timeLabels.map((time, index) => (
             <div
               key={time}
-              className="time-label"
+              className="time-label border border-transparent dark:bg-slate-900 dark:text-slate-100 dark:border-slate-700"
               style={{ top: `calc(${index} * var(--weekly-grid-row-h))` }}
             >
               {time}
@@ -489,7 +493,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         </div>
 
         <div
-          className="week-grid-body"
+          className="week-grid-body dark:bg-slate-800 dark:border-slate-700"
           style={{
             height: containerHeight,
             '--weekly-grid-slot-height': `${SLOT_HEIGHT}px`,
