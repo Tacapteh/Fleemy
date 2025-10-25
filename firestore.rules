@@ -145,5 +145,35 @@ service cloud.firestore {
         }
       }
     }
+
+    match /dailyTodos/{docId} {
+      function extractUserId() {
+        return docId.split('_')[0];
+      }
+
+      function isOwner() {
+        return isAuthenticated() && request.auth.uid == extractUserId();
+      }
+
+      function canReadTodo() {
+        if (!isAuthenticated()) {
+          return false;
+        }
+        let ownerId = extractUserId();
+        if (request.auth.uid == ownerId) {
+          return true;
+        }
+        let teamDoc = exists(/databases/$(database)/documents/teams/$(resource.data.teamId)) 
+          ? get(/databases/$(database)/documents/teams/$(resource.data.teamId)) 
+          : null;
+        return teamDoc != null && (
+          (teamDoc.data.members is list && teamDoc.data.members.hasAny([request.auth.uid])) ||
+          teamDoc.data.owner_uid == request.auth.uid
+        );
+      }
+
+      allow read: if canReadTodo();
+      allow write: if isOwner();
+    }
   }
 }
