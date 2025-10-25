@@ -35,7 +35,19 @@ const buildMemberLabel = (memberData, currentUser) => {
 export default function useTeam(teamId) {
   const [state, setState] = useState({ data: null, error: null });
   const [loading, setLoading] = useState(true);
-  const resolvedTeamId = teamId ?? localStorage.getItem('teamId');
+  const resolvedTeamId = useMemo(() => {
+    if (teamId) {
+      return teamId;
+    }
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem('teamId');
+      }
+    } catch (storageError) {
+      console.warn('useTeam: unable to read teamId from localStorage', storageError);
+    }
+    return null;
+  }, [teamId]);
 
   const currentUser = auth.currentUser;
 
