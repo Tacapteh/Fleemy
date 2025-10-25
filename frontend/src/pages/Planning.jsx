@@ -294,123 +294,6 @@ export default function Planning() {
     return 'pending';
   }, []);
 
-  const earningsSummary = useMemo(() => {
-    const totals = { paid: 0, pending: 0, unpaid: 0 };
-    const sourceEvents = Array.isArray(events) ? events : [];
-
-    sourceEvents.forEach((event) => {
-      const startDate =
-        event?.start instanceof Date ? event.start : new Date(event?.start);
-      const endDate = event?.end instanceof Date ? event.end : new Date(event?.end);
-
-      if (
-        !(startDate instanceof Date) ||
-        Number.isNaN(startDate.getTime()) ||
-        !(endDate instanceof Date) ||
-        Number.isNaN(endDate.getTime())
-      ) {
-        return;
-      }
-
-      const durationMs = endDate.getTime() - startDate.getTime();
-      if (!Number.isFinite(durationMs) || durationMs <= 0) {
-        return;
-      }
-
-      const durationHours = durationMs / (60 * 60 * 1000);
-      if (!Number.isFinite(durationHours) || durationHours <= 0) {
-        return;
-      }
-
-      const clientId = event?.client_id || event?.clientId || null;
-      const clientCandidate =
-        (clientId && clientMap.get(clientId)) ||
-        (event?.client && typeof event.client === 'object' ? event.client : null);
-
-      let rateToApply = hourlyRateGlobal;
-
-      if (clientCandidate) {
-        const clientUsesGlobal =
-          typeof clientCandidate.use_global_rate === 'boolean'
-            ? clientCandidate.use_global_rate
-            : typeof clientCandidate.useGlobalRate === 'boolean'
-            ? clientCandidate.useGlobalRate
-            : undefined;
-
-        if (clientUsesGlobal === false) {
-          const rawCustom =
-            clientCandidate.hourly_rate_custom ??
-            clientCandidate.hourlyRateCustom ??
-            clientCandidate.hourly_rate ??
-            null;
-          const parsedCustom = Number(rawCustom);
-          if (Number.isFinite(parsedCustom) && parsedCustom >= 0) {
-            rateToApply = parsedCustom;
-          } else if (parsedCustom < 0) {
-            rateToApply = 0;
-          }
-        } else if (clientUsesGlobal === true) {
-          rateToApply = hourlyRateGlobal;
-        }
-      }
-
-      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
-        const eventRate = Number(event?.hourly_rate ?? event?.hourlyRate);
-        if (Number.isFinite(eventRate) && eventRate > 0) {
-          rateToApply = eventRate;
-        }
-      }
-
-      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
-        return;
-      }
-
-      const amount = durationHours * rateToApply;
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return;
-      }
-
-      const statusCategory = resolveStatusCategory(event?.status ?? event?.type ?? '');
-      if (!statusCategory) {
-        return;
-      }
-
-      totals[statusCategory] += amount;
-    });
-
-    return totals;
-  }, [events, clientMap, hourlyRateGlobal, resolveStatusCategory]);
-
-  const summaryCards = useMemo(
-    () => [
-      {
-        key: 'paid',
-        label: 'Payé',
-        amount: earningsSummary.paid,
-        border: 'border-emerald-200/70 dark:border-emerald-500/40',
-        background: 'bg-emerald-50 dark:bg-emerald-500/10',
-        accent: 'text-emerald-600 dark:text-emerald-300',
-      },
-      {
-        key: 'pending',
-        label: 'En attente',
-        amount: earningsSummary.pending,
-        border: 'border-amber-200/70 dark:border-amber-500/30',
-        background: 'bg-amber-50 dark:bg-amber-500/10',
-        accent: 'text-amber-600 dark:text-amber-300',
-      },
-      {
-        key: 'unpaid',
-        label: 'Non payé',
-        amount: earningsSummary.unpaid,
-        border: 'border-rose-200/70 dark:border-rose-500/40',
-        background: 'bg-rose-50 dark:bg-rose-500/10',
-        accent: 'text-rose-600 dark:text-rose-300',
-      },
-    ],
-    [earningsSummary],
-  );
-
   useEffect(() => {
     if (!user?.uid) {
       return;
@@ -692,6 +575,131 @@ export default function Planning() {
     weekEnd,
     enabled: !shouldDelayEvents,
   });
+
+  const earningsSummary = useMemo(() => {
+    const totals = { paid: 0, pending: 0, unpaid: 0 };
+    const sourceEvents = Array.isArray(events) ? events : [];
+
+    sourceEvents.forEach((event) => {
+      const startDate =
+        event?.start instanceof Date ? event.start : new Date(event?.start);
+      const endDate = event?.end instanceof Date ? event.end : new Date(event?.end);
+
+      if (
+        !(startDate instanceof Date) ||
+        Number.isNaN(startDate.getTime()) ||
+        !(endDate instanceof Date) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        return;
+      }
+
+      const durationMs = endDate.getTime() - startDate.getTime();
+      if (!Number.isFinite(durationMs) || durationMs <= 0) {
+        return;
+      }
+
+      const durationHours = durationMs / (60 * 60 * 1000);
+      if (!Number.isFinite(durationHours) || durationHours <= 0) {
+        return;
+      }
+
+      let rateToApply = 0;
+      const clientId = event?.clientId || event?.client_id || null;
+
+      if (clientId) {
+        const client =
+          (clientId && clientMap.get(clientId)) ||
+          (Array.isArray(clients)
+            ? clients.find((candidate) => candidate?.id === clientId)
+            : null);
+
+        if (client) {
+          const usesGlobalRate = client?.useGlobalRate ?? client?.use_global_rate;
+          const clientHourlyRate = client?.hourlyRate ?? client?.hourly_rate ?? null;
+
+          if (
+            usesGlobalRate === false &&
+            Number.isFinite(clientHourlyRate) &&
+            clientHourlyRate > 0
+          ) {
+            rateToApply = clientHourlyRate;
+          } else if (usesGlobalRate === true) {
+            rateToApply = hourlyRateGlobal;
+          } else {
+            const clientUsesGlobal =
+              typeof usesGlobalRate === 'string'
+                ? usesGlobalRate === 'global' || usesGlobalRate === 'true'
+                : Boolean(usesGlobalRate);
+            if (
+              clientUsesGlobal === false &&
+              Number.isFinite(clientHourlyRate) &&
+              clientHourlyRate > 0
+            ) {
+              rateToApply = clientHourlyRate;
+            } else if (clientUsesGlobal === true) {
+              rateToApply = hourlyRateGlobal;
+            }
+          }
+        }
+      }
+
+      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+        const eventRate = Number(event?.hourly_rate ?? event?.hourlyRate);
+        if (Number.isFinite(eventRate) && eventRate > 0) {
+          rateToApply = eventRate;
+        }
+      }
+
+      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+        return;
+      }
+
+      const amount = durationHours * rateToApply;
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+
+      const statusCategory = resolveStatusCategory(event?.status ?? event?.type ?? '');
+      if (!statusCategory) {
+        return;
+      }
+
+      totals[statusCategory] += amount;
+    });
+
+    return totals;
+  }, [events, clientMap, clients, hourlyRateGlobal, resolveStatusCategory]);
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        key: 'paid',
+        label: 'Payé',
+        amount: earningsSummary.paid,
+        border: 'border-emerald-200/70 dark:border-emerald-500/40',
+        background: 'bg-emerald-50 dark:bg-emerald-500/10',
+        accent: 'text-emerald-600 dark:text-emerald-300',
+      },
+      {
+        key: 'pending',
+        label: 'En attente',
+        amount: earningsSummary.pending,
+        border: 'border-amber-200/70 dark:border-amber-500/30',
+        background: 'bg-amber-50 dark:bg-amber-500/10',
+        accent: 'text-amber-600 dark:text-amber-300',
+      },
+      {
+        key: 'unpaid',
+        label: 'Non payé',
+        amount: earningsSummary.unpaid,
+        border: 'border-rose-200/70 dark:border-rose-500/40',
+        background: 'bg-rose-50 dark:bg-rose-500/10',
+        accent: 'text-rose-600 dark:text-rose-300',
+      },
+    ],
+    [earningsSummary],
+  );
 
   const {
     tasks: weeklyTasks,
