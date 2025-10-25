@@ -652,25 +652,7 @@ export default function Planning() {
           day: DAY_KEYS[dayIndex] || 'monday',
         };
 
-        const savedEvent = await saveEventNew(planningContext, payload);
-        if (savedEvent?.source === 'api-fallback' && savedEvent?.id) {
-          setEvents((current) => {
-            const others = Array.isArray(current)
-              ? current.filter((evt) => evt && evt.id !== savedEvent.id)
-              : [];
-            const nextEvents = [...others, savedEvent];
-            nextEvents.sort((a, b) => {
-              const aTime = a?.start instanceof Date
-                ? a.start.getTime()
-                : new Date(a?.start || 0).getTime();
-              const bTime = b?.start instanceof Date
-                ? b.start.getTime()
-                : new Date(b?.start || 0).getTime();
-              return aTime - bTime;
-            });
-            return nextEvents;
-          });
-        }
+        await saveEventNew(planningContext, payload);
         showToast('Événement sauvegardé avec succès');
       } catch (error) {
         console.error('saveEventNew error', error);
@@ -688,18 +670,7 @@ export default function Planning() {
         return;
       }
       try {
-        const deletionResult = await deleteEventNew(planningContext, id);
-        if (deletionResult?.source === 'api-fallback') {
-          setEvents((current) => {
-            const nextEvents = Array.isArray(current)
-              ? current.filter((event) => event && event.id !== id)
-              : [];
-            if (eventsCacheKey) {
-              setCachedPlanningData(eventsCacheKey, nextEvents, EVENTS_CACHE_TTL);
-            }
-            return nextEvents;
-          });
-        }
+        await deleteEventNew(planningContext, id);
         showToast('Événement supprimé avec succès');
       } catch (error) {
         console.error('deleteEventNew error', error);
@@ -708,7 +679,7 @@ export default function Planning() {
         closeModal();
       }
     },
-    [planningContext, readOnly, modal.readOnly, closeModal, eventsCacheKey]
+    [planningContext, readOnly, modal.readOnly, closeModal]
   );
 
   const handleMemberChange = useCallback((event) => {
