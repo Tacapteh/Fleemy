@@ -5,6 +5,7 @@ import MonthGrid from '../components/MonthGrid';
 import WeekNavigationHeader from '../components/WeekNavigationHeader';
 import EventModal from '../components/EventModal';
 import WeeklyTaskModal from '../components/WeeklyTaskModal';
+import DailyTodoPanel from '../components/DailyTodoPanel';
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
 import useUserWeekSlots from '../hooks/useUserWeekSlots';
