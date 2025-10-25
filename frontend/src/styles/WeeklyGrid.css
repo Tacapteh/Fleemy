@@ -21,10 +21,14 @@
 
 .week-grid-container {
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
 }
 
 .time-gutter {
   position: sticky;
+  top: 0;
   left: 0;
   z-index: 2;
   width: 64px;
@@ -32,6 +36,7 @@
   background: #fff;
   border-right: 1px solid #e5e7eb;
   pointer-events: none;
+  flex-shrink: 0;
 }
 
 .time-label {
@@ -47,7 +52,8 @@
 
 .week-grid-body {
   position: relative;
-  margin-left: 64px;
+  flex: 1 1 auto;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(var(--weekly-grid-day-count, 7), 1fr);
   grid-template-rows: repeat(
