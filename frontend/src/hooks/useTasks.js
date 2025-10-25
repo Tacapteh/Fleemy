@@ -80,6 +80,16 @@ const parseTaskDate = (value) => {
   return null;
 };
 
+const pickFirstValidDate = (...values) => {
+  for (const value of values) {
+    const parsed = parseTaskDate(value);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
 const toDayIndex = (value) => {
   if (typeof value === 'number' && value >= 0 && value <= 6) {
     return value;
@@ -266,6 +276,25 @@ export default function useTasks(context, weekStartISO) {
         return;
       }
 
+      const creationDate = pickFirstValidDate(
+        task?.dateISO,
+        task?.dateIso,
+        task?.date_iso,
+        task?.creationDate,
+        task?.creation_date,
+      );
+
+      const hasCreationDate = Boolean(creationDate);
+
+      if (
+        hasCreationDate &&
+        weekStartDate &&
+        weekEndDate &&
+        (creationDate < weekStartDate || creationDate > weekEndDate)
+      ) {
+        return;
+      }
+
       const expectedWeekday = toDayIndex(task.weekday ?? task.week_day ?? task.weekDay);
 
       task.time_ranges.forEach((range, index) => {
@@ -281,15 +310,14 @@ export default function useTasks(context, weekStartISO) {
         let occurrenceDate = null;
 
         const explicitDate =
-          parseTaskDate(
-            range.task_date ??
-              range.taskDate ??
-              range.task_day_iso ??
-              range.taskDayIso ??
-              task.task_date ??
-              task.taskDate ??
-              task.task_day_iso ??
-              null,
+          pickFirstValidDate(
+            range.task_date,
+            range.taskDate,
+            range.task_day_iso,
+            range.taskDayIso,
+            task.task_date,
+            task.task_day_iso,
+            !hasCreationDate ? task.taskDate : null,
           ) || null;
 
         if (explicitDate && weekStartDate && weekEndDate) {

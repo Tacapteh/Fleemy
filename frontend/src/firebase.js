@@ -1022,6 +1022,10 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     resolvedWeekday = normalizeWeekdayValue(resolvedRanges[0]?.weekday ?? resolvedRanges[0]?.day ?? null);
   }
 
+  const creationDateIso = normalizeTaskDateField(
+    data.dateISO ?? data.dateIso ?? data.date_iso ?? null,
+  );
+
   return {
     id,
     label: data.label || data.title || data.name || 'Tâche sans titre',
@@ -1040,6 +1044,7 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     readOnly: viewerUid ? resolvedOwner !== viewerUid : true,
     created_at: data.created_at || null,
     updated_at: data.updated_at || null,
+    dateISO: creationDateIso,
   };
 };
 
@@ -1256,6 +1261,14 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
     team_id: teamId || null,
     updated_at: serverTimestamp(),
   };
+
+  const normalizedCreationDate = normalizeTaskDateField(
+    taskData?.dateISO ?? taskData?.dateIso ?? taskData?.date_iso ?? null,
+  );
+
+  if (normalizedCreationDate) {
+    payload.dateISO = normalizedCreationDate;
+  }
 
   const primaryRange = sanitizedRanges[0];
   if (primaryRange?.start) {
