@@ -318,6 +318,8 @@ class Client(BaseModel):
     phone: Optional[str] = ""
     address: Optional[Address] = None
     notes: Optional[str] = ""
+    use_global_rate: bool = True
+    hourly_rate_custom: Optional[float] = None
     is_archived: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -535,6 +537,8 @@ class ClientCreateRequest(BaseModel):
     address: Optional[Address] = None
     notes: Optional[str] = ""
     is_archived: Optional[bool] = False
+    use_global_rate: Optional[bool] = True
+    hourly_rate_custom: Optional[float] = None
 
 
 class ClientUpdateRequest(BaseModel):
@@ -545,6 +549,8 @@ class ClientUpdateRequest(BaseModel):
     address: Optional[Address] = None
     notes: Optional[str] = None
     is_archived: Optional[bool] = None
+    use_global_rate: Optional[bool] = None
+    hourly_rate_custom: Optional[float] = None
 
 
 class QuoteCreateRequest(BaseModel):
@@ -1891,6 +1897,21 @@ def validate_french_phone(phone: str) -> bool:
     return bool(re.match(pattern, cleaned))
 
 
+def normalize_boolean(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+        return default
+    if isinstance(value, (int, float)):
+        return value != 0
+    return default
+
+
 # Clients endpoints
 @api_router.get("/clients")
 async def get_clients(
@@ -1928,7 +1949,25 @@ async def get_clients(
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit
         paginated_clients = all_clients[start_idx:end_idx]
-        
+
+        def normalize_rate(raw):
+            if raw is None or raw == "":
+                return None
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                return None
+            return value
+
+        paginated_clients = [
+            {
+                **client,
+                "use_global_rate": normalize_boolean(client.get("use_global_rate"), True),
+                "hourly_rate_custom": normalize_rate(client.get("hourly_rate_custom")),
+            }
+            for client in paginated_clients
+        ]
+
         return {
             "clients": paginated_clients,
             "total": len(all_clients),
@@ -1959,10 +1998,26 @@ async def create_client(
     # Validate phone format
     if data.get("phone") and not validate_french_phone(data["phone"]):
         raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
-    
+
+    use_global_rate = normalize_boolean(data.get("use_global_rate"), True)
+    data["use_global_rate"] = use_global_rate
+
+    raw_custom_rate = data.get("hourly_rate_custom")
+    if raw_custom_rate in (None, ""):
+        custom_rate = None
+    else:
+        try:
+            custom_rate = float(raw_custom_rate)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="hourly_rate_custom must be a number")
+        if custom_rate < 0:
+            raise HTTPException(status_code=400, detail="hourly_rate_custom must be greater or equal to 0")
+
+    data["hourly_rate_custom"] = None if use_global_rate else (custom_rate if custom_rate is not None else 0.0)
+
     # Create client with new structure
     client = Client(user_id=user["uid"], **data)
-    
+
     # Store in new global collection
     await asyncio.to_thread(
         db.collection("clients").document(client.id).set, client.dict()
@@ -2001,7 +2056,33 @@ async def update_client(
     # Validate phone format if provided
     if "phone" in data and data["phone"] and not validate_french_phone(data["phone"]):
         raise HTTPException(status_code=400, detail="Invalid phone format (French format required)")
-    
+
+    if "use_global_rate" in data:
+        data["use_global_rate"] = normalize_boolean(
+            data["use_global_rate"], existing.get("use_global_rate", True)
+        )
+
+    if "hourly_rate_custom" in data:
+        raw_custom_rate = data["hourly_rate_custom"]
+        if raw_custom_rate in (None, ""):
+            custom_rate = None
+        else:
+            try:
+                custom_rate = float(raw_custom_rate)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="hourly_rate_custom must be a number")
+            if custom_rate < 0:
+                raise HTTPException(status_code=400, detail="hourly_rate_custom must be greater or equal to 0")
+        data["hourly_rate_custom"] = custom_rate
+
+    effective_use_global = data.get("use_global_rate", existing.get("use_global_rate", True))
+
+    if effective_use_global:
+        data["hourly_rate_custom"] = None
+    else:
+        if "hourly_rate_custom" not in data or data["hourly_rate_custom"] is None:
+            data["hourly_rate_custom"] = existing.get("hourly_rate_custom", 0.0)
+
     update_data = {**data, "updated_at": datetime.now(timezone.utc)}
     await asyncio.to_thread(doc_ref.update, update_data)
     

@@ -75,6 +75,7 @@ export default function SettingsPage() {
   const [durationInput, setDurationInput] = useState("60");
   const [startHourInput, setStartHourInput] = useState("");
   const [endHourInput, setEndHourInput] = useState("");
+  const [hourlyRateInput, setHourlyRateInput] = useState("0");
 
   useEffect(() => {
     if (settings && typeof settings[NUMBER_SETTING_KEY] === "number") {
@@ -104,6 +105,23 @@ export default function SettingsPage() {
     }
   }, [settings?.dayEndHour, settings?.dayStartHour]);
 
+  useEffect(() => {
+    if (!settings) {
+      return;
+    }
+
+    const activeElementId =
+      typeof document !== "undefined" ? document.activeElement?.id : null;
+
+    if (activeElementId === "setting-hourlyRateGlobal-input") {
+      return;
+    }
+
+    const numericValue = Number(settings.hourlyRateGlobal);
+    const safeValue = Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : 0;
+    setHourlyRateInput(String(safeValue));
+  }, [settings, settings?.hourlyRateGlobal]);
+
   const handleToggle = useCallback(
     (key) => {
       if (!settings) {
@@ -117,6 +135,10 @@ export default function SettingsPage() {
 
   const handleDurationChange = useCallback((event) => {
     setDurationInput(event.target.value);
+  }, []);
+
+  const handleHourlyRateChange = useCallback((event) => {
+    setHourlyRateInput(event.target.value);
   }, []);
 
   const commitDurationValue = useCallback(() => {
@@ -239,6 +261,31 @@ export default function SettingsPage() {
 
     setEndHourInput(String(clampedEnd));
   }, [endHourInput, settings, updateSetting]);
+
+  const commitHourlyRate = useCallback(() => {
+    if (!settings) {
+      return;
+    }
+
+    const raw = typeof hourlyRateInput === "string" ? hourlyRateInput.trim() : String(hourlyRateInput ?? "");
+    const normalizedRaw = raw.replace(",", ".");
+    const parsed = normalizedRaw === "" ? 0 : Number.parseFloat(normalizedRaw);
+
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      const fallback = Number.isFinite(Number(settings.hourlyRateGlobal)) && Number(settings.hourlyRateGlobal) >= 0
+        ? Number(settings.hourlyRateGlobal)
+        : 0;
+      setHourlyRateInput(String(fallback));
+      return;
+    }
+
+    const rounded = Math.round(parsed * 100) / 100;
+    setHourlyRateInput(String(rounded));
+
+    if (settings.hourlyRateGlobal !== rounded) {
+      updateSetting?.("hourlyRateGlobal", rounded);
+    }
+  }, [hourlyRateInput, settings, updateSetting]);
 
   const fullDay = settings?.showFullDay === true;
 
@@ -395,6 +442,41 @@ export default function SettingsPage() {
             aria-labelledby={`setting-${NUMBER_SETTING_KEY}-label`}
             aria-describedby={`setting-${NUMBER_SETTING_KEY}-description`}
             className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+          />
+        </div>
+
+        <div className="flex items-start justify-between border-b border-slate-200 px-4 py-4 last:border-b-0 dark:border-slate-700">
+          <div className="flex-1 pr-4">
+            <p
+              id="setting-hourlyRateGlobal-label"
+              className="text-sm font-medium text-slate-900 dark:text-slate-100"
+            >
+              Taux horaire global
+            </p>
+            <p
+              id="setting-hourlyRateGlobal-description"
+              className="mt-1 text-xs text-slate-500 dark:text-slate-400"
+            >
+              Ce taux est utilisé pour calculer le total facturé sur les événements, sauf si un client a un taux personnalisé.
+            </p>
+          </div>
+          <input
+            id="setting-hourlyRateGlobal-input"
+            type="number"
+            min={0}
+            step={0.5}
+            value={hourlyRateInput}
+            onChange={handleHourlyRateChange}
+            onBlur={commitHourlyRate}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commitHourlyRate();
+              }
+            }}
+            aria-labelledby="setting-hourlyRateGlobal-label"
+            aria-describedby="setting-hourlyRateGlobal-description"
+            className="w-28 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
       </div>

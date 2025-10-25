@@ -51,6 +51,7 @@ const DEFAULT_PREFS = {
   defaultSlotDurationMinutes: 60,
   dayStartHour: 7,
   dayEndHour: 20,
+  hourlyRateGlobal: 0,
 };
 
 const SettingsContext = createContext({
@@ -84,6 +85,18 @@ export function SettingsProvider({ children }) {
         acc[key] = Number.isFinite(numericValue)
           ? numericValue
           : DEFAULT_PREFS.defaultSlotDurationMinutes;
+        return acc;
+      }
+
+      if (key === "hourlyRateGlobal") {
+        const numericValue = Number(incomingValue);
+        if (!Number.isFinite(numericValue) || numericValue < 0) {
+          acc[key] = 0;
+          return acc;
+        }
+
+        const rounded = Math.round(numericValue * 100) / 100;
+        acc[key] = rounded;
         return acc;
       }
 

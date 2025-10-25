@@ -7,6 +7,7 @@ import EventModal from '../components/EventModal';
 import WeeklyTaskModal from '../components/WeeklyTaskModal';
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
+import { useSettings } from '../context/SettingsContext';
 import {
   useFirebaseUser,
   watchWeekEvents,
@@ -144,6 +145,7 @@ const buildMemberLabel = (member, currentUser) => {
 
 export default function Planning() {
   const user = useFirebaseUser();
+  const { settings } = useSettings();
   const { teamId: routeTeamId } = useParams();
   const isTeamContext = Boolean(routeTeamId);
   const teamId = routeTeamId || null;
@@ -153,6 +155,10 @@ export default function Planning() {
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsError, setEventsError] = useState(null);
+
+  const [clients, setClients] = useState([]);
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const [clientsError, setClientsError] = useState(null);
 
   const [modal, setModal] = useState({ open: false, event: null, selectedDate: null, readOnly: false });
   const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
@@ -180,6 +186,212 @@ export default function Planning() {
   const weekStartISO = useMemo(() => toIsoDate(weekStart), [weekStart]);
   const weekEndISO = useMemo(() => toIsoDate(weekEnd), [weekEnd]);
 
+  const clientMap = useMemo(() => {
+    const map = new Map();
+    clients.forEach((client) => {
+      if (client && client.id) {
+        map.set(client.id, client);
+      }
+    });
+    return map;
+  }, [clients]);
+
+  const hourlyRateGlobal = useMemo(() => {
+    const numeric = Number(settings?.hourlyRateGlobal);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return Math.round(numeric * 100) / 100;
+    }
+    return 0;
+  }, [settings?.hourlyRateGlobal]);
+
+  const currencyFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('fr-FR', {
+        style: 'currency',
+        currency: 'EUR',
+      }),
+    [],
+  );
+
+  const resolveStatusCategory = useCallback((status) => {
+    if (!status) {
+      return 'unpaid';
+    }
+    const normalized = status.toString().trim().toLowerCase();
+    if (!normalized) {
+      return 'unpaid';
+    }
+    if (['not_worked', 'cancelled', 'canceled'].includes(normalized)) {
+      return null;
+    }
+    if (
+      [
+        'paid',
+        'payé',
+        'paye',
+        'payee',
+        'réglé',
+        'regle',
+        'reglé',
+        'reglee',
+        'settled',
+      ].includes(normalized)
+    ) {
+      return 'paid';
+    }
+    if (
+      [
+        'pending',
+        'waiting',
+        'awaiting',
+        'en attente',
+        'en_attente',
+        'attente',
+        'quote',
+        'quote_sent',
+        'sent',
+        'devis',
+        'devis envoyé',
+        'devis_envoye',
+        'estimate',
+        'estimation',
+        'waiting_payment',
+      ].includes(normalized)
+    ) {
+      return 'pending';
+    }
+    if (
+      [
+        'unpaid',
+        'non payé',
+        'non_paye',
+        'impayé',
+        'impaye',
+        'overdue',
+      ].includes(normalized)
+    ) {
+      return 'unpaid';
+    }
+    return 'pending';
+  }, []);
+
+  const earningsSummary = useMemo(() => {
+    const totals = { paid: 0, pending: 0, unpaid: 0 };
+    const sourceEvents = Array.isArray(events) ? events : [];
+
+    sourceEvents.forEach((event) => {
+      const startDate =
+        event?.start instanceof Date ? event.start : new Date(event?.start);
+      const endDate = event?.end instanceof Date ? event.end : new Date(event?.end);
+
+      if (
+        !(startDate instanceof Date) ||
+        Number.isNaN(startDate.getTime()) ||
+        !(endDate instanceof Date) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        return;
+      }
+
+      const durationMs = endDate.getTime() - startDate.getTime();
+      if (!Number.isFinite(durationMs) || durationMs <= 0) {
+        return;
+      }
+
+      const durationHours = durationMs / (60 * 60 * 1000);
+      if (!Number.isFinite(durationHours) || durationHours <= 0) {
+        return;
+      }
+
+      const clientId = event?.client_id || event?.clientId || null;
+      const clientCandidate =
+        (clientId && clientMap.get(clientId)) ||
+        (event?.client && typeof event.client === 'object' ? event.client : null);
+
+      let rateToApply = hourlyRateGlobal;
+
+      if (clientCandidate) {
+        const clientUsesGlobal =
+          typeof clientCandidate.use_global_rate === 'boolean'
+            ? clientCandidate.use_global_rate
+            : typeof clientCandidate.useGlobalRate === 'boolean'
+            ? clientCandidate.useGlobalRate
+            : undefined;
+
+        if (clientUsesGlobal === false) {
+          const rawCustom =
+            clientCandidate.hourly_rate_custom ??
+            clientCandidate.hourlyRateCustom ??
+            clientCandidate.hourly_rate ??
+            null;
+          const parsedCustom = Number(rawCustom);
+          if (Number.isFinite(parsedCustom) && parsedCustom >= 0) {
+            rateToApply = parsedCustom;
+          } else if (parsedCustom < 0) {
+            rateToApply = 0;
+          }
+        } else if (clientUsesGlobal === true) {
+          rateToApply = hourlyRateGlobal;
+        }
+      }
+
+      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+        const eventRate = Number(event?.hourly_rate ?? event?.hourlyRate);
+        if (Number.isFinite(eventRate) && eventRate > 0) {
+          rateToApply = eventRate;
+        }
+      }
+
+      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+        return;
+      }
+
+      const amount = durationHours * rateToApply;
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return;
+      }
+
+      const statusCategory = resolveStatusCategory(event?.status ?? event?.type ?? '');
+      if (!statusCategory) {
+        return;
+      }
+
+      totals[statusCategory] += amount;
+    });
+
+    return totals;
+  }, [events, clientMap, hourlyRateGlobal, resolveStatusCategory]);
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        key: 'paid',
+        label: 'Payé',
+        amount: earningsSummary.paid,
+        border: 'border-emerald-200/70 dark:border-emerald-500/40',
+        background: 'bg-emerald-50 dark:bg-emerald-500/10',
+        accent: 'text-emerald-600 dark:text-emerald-300',
+      },
+      {
+        key: 'pending',
+        label: 'En attente',
+        amount: earningsSummary.pending,
+        border: 'border-amber-200/70 dark:border-amber-500/30',
+        background: 'bg-amber-50 dark:bg-amber-500/10',
+        accent: 'text-amber-600 dark:text-amber-300',
+      },
+      {
+        key: 'unpaid',
+        label: 'Non payé',
+        amount: earningsSummary.unpaid,
+        border: 'border-rose-200/70 dark:border-rose-500/40',
+        background: 'bg-rose-50 dark:bg-rose-500/10',
+        accent: 'text-rose-600 dark:text-rose-300',
+      },
+    ],
+    [earningsSummary],
+  );
+
   useEffect(() => {
     if (!user?.uid) {
       return;
@@ -192,6 +404,97 @@ export default function Planning() {
       setTeamContext(null);
     }
   }, [isTeamContext, teamId, resolvedTeamName, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setClients([]);
+      setClientsError(null);
+      setClientsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setClientsLoading(true);
+    setClientsError(null);
+
+    const aggregatedClients = new Map();
+
+    const fetchAllClients = async () => {
+      const pageSize = 200;
+      let pageIndex = 1;
+      let hasMore = true;
+
+      while (hasMore && !cancelled) {
+        try {
+          const params = new URLSearchParams({
+            page: String(pageIndex),
+            limit: String(pageSize),
+            include_archived: 'false',
+          });
+          const response = await apiFetch(`/clients?${params.toString()}`, {
+            headers: { 'X-User-Id': user.uid },
+          });
+
+          const batch = Array.isArray(response?.clients) ? response.clients : [];
+          batch.forEach((client) => {
+            if (!client || !client.id) {
+              return;
+            }
+
+            const normalized = {
+              ...client,
+              use_global_rate:
+                typeof client.use_global_rate === 'boolean'
+                  ? client.use_global_rate
+                  : true,
+            };
+
+            const rawCustom =
+              normalized.hourly_rate_custom ??
+              normalized.hourlyRateCustom ??
+              null;
+            const parsedCustom = Number(rawCustom);
+            normalized.hourly_rate_custom =
+              Number.isFinite(parsedCustom) && parsedCustom >= 0
+                ? parsedCustom
+                : null;
+
+            aggregatedClients.set(client.id, normalized);
+          });
+
+          const total = typeof response?.total === 'number' ? response.total : null;
+          hasMore = Boolean(response?.has_more) && batch.length > 0;
+          if (total !== null && aggregatedClients.size >= total) {
+            hasMore = false;
+          }
+          if (batch.length === 0) {
+            hasMore = false;
+          }
+
+          pageIndex += 1;
+        } catch (error) {
+          if (!cancelled) {
+            console.error('Planning: unable to load clients', error);
+            setClients([]);
+            setClientsError("Impossible de charger les clients");
+            setClientsLoading(false);
+          }
+          return;
+        }
+      }
+
+      if (!cancelled) {
+        setClients(Array.from(aggregatedClients.values()));
+        setClientsLoading(false);
+      }
+    };
+
+    fetchAllClients();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!isTeamContext) {
@@ -862,6 +1165,37 @@ export default function Planning() {
             context={planningContext}
           />
         )}
+
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Récapitulatif des montants
+          </h2>
+          {clientsLoading && (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Chargement des taux clients…
+            </p>
+          )}
+          {clientsError && !clientsLoading && (
+            <p className="mt-1 text-xs text-red-500 dark:text-red-400" role="alert">
+              {clientsError}
+            </p>
+          )}
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {summaryCards.map((card) => (
+              <div
+                key={card.key}
+                className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition-colors ${card.border} ${card.background}`}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                  {card.label}
+                </p>
+                <p className={`mt-1 text-lg font-semibold ${card.accent}`}>
+                  {currencyFormatter.format(card.amount)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div className="mt-8 flex items-center gap-6 text-sm text-gray-600 dark:text-slate-300">
           <div className="flex items-center gap-2">

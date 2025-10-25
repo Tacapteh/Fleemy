@@ -6,6 +6,17 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
   const [email, setEmail] = useState(initialData.email || '');
   const [phone, setPhone] = useState(initialData.phone || '');
   const [notes, setNotes] = useState(initialData.notes || '');
+
+  const resolvedUseGlobal =
+    typeof initialData.use_global_rate === 'boolean'
+      ? initialData.use_global_rate
+      : !(Number(initialData.hourly_rate_custom) > 0);
+  const [useGlobalRate, setUseGlobalRate] = useState(resolvedUseGlobal);
+  const [hourlyRateCustom, setHourlyRateCustom] = useState(
+    initialData.hourly_rate_custom !== undefined && initialData.hourly_rate_custom !== null
+      ? String(initialData.hourly_rate_custom)
+      : ''
+  );
   
   // Address fields
   const [line1, setLine1] = useState(initialData.address?.line1 || '');
@@ -39,7 +50,15 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
         newErrors.phone = 'Format de téléphone français invalide (ex: 06 12 34 56 78)';
       }
     }
-    
+
+    if (!useGlobalRate) {
+      const normalizedRate = (hourlyRateCustom ?? '').toString().trim().replace(',', '.');
+      const parsedRate = normalizedRate === '' ? NaN : Number.parseFloat(normalizedRate);
+      if (!Number.isFinite(parsedRate) || parsedRate < 0) {
+        newErrors.hourlyRateCustom = 'Veuillez saisir un taux horaire valide (≥ 0).';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -50,7 +69,14 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
     if (!validateForm()) {
       return;
     }
-    
+
+    const normalizedRate = (hourlyRateCustom ?? '').toString().trim().replace(',', '.');
+    const parsedCustomRate = Number.parseFloat(normalizedRate);
+    const sanitizedCustomRate =
+      useGlobalRate
+        ? null
+        : Math.round((Number.isFinite(parsedCustomRate) ? Math.max(0, parsedCustomRate) : 0) * 100) / 100;
+
     const data = {
       display_name: displayName.trim(),
       contact_name: contactName.trim(),
@@ -63,9 +89,11 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
         postal_code: postalCode.trim(),
         city: city.trim(),
         country: country.trim()
-      } : null
+      } : null,
+      use_global_rate: useGlobalRate,
+      hourly_rate_custom: sanitizedCustomRate
     };
-    
+
     onSubmit(data);
   };
 
@@ -190,6 +218,76 @@ export default function ClientForm({ initialData = {}, onSubmit, onCancel }) {
             {errors.phone}
           </p>
         )}
+      </div>
+
+      <div className="rounded border border-gray-200 bg-gray-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              Utiliser le taux horaire global
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Activez cette option pour appliquer votre taux par défaut. Désactivez-la pour définir un taux spécifique à ce client.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800"
+              checked={useGlobalRate}
+              onChange={(event) => {
+                const nextValue = event.target.checked;
+                setUseGlobalRate(nextValue);
+                if (nextValue) {
+                  setErrors((prev) => ({ ...prev, hourlyRateCustom: undefined }));
+                }
+              }}
+            />
+            <span>Activé</span>
+          </label>
+        </div>
+
+        <div className="mt-3">
+          <label
+            htmlFor="hourly_rate_custom"
+            className="mb-1 block text-sm font-medium text-slate-900 dark:text-slate-100"
+          >
+            Taux horaire personnalisé (€ / h)
+          </label>
+          <input
+            id="hourly_rate_custom"
+            type="number"
+            min="0"
+            step="0.5"
+            value={hourlyRateCustom}
+            onChange={(event) => {
+              setHourlyRateCustom(event.target.value);
+              if (errors.hourlyRateCustom) {
+                setErrors((prev) => ({ ...prev, hourlyRateCustom: undefined }));
+              }
+            }}
+            disabled={useGlobalRate}
+            aria-invalid={!!errors.hourlyRateCustom}
+            aria-describedby={errors.hourlyRateCustom ? 'hourly_rate_custom-error' : undefined}
+            className={`w-full rounded border p-2 text-sm text-slate-900 placeholder:text-slate-400 transition-colors dark:text-slate-100 dark:placeholder:text-slate-500 ${
+              useGlobalRate
+                ? 'cursor-not-allowed border-gray-200 bg-gray-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500'
+                : errors.hourlyRateCustom
+                ? 'border-red-500 bg-white dark:border-red-400 dark:bg-slate-800'
+                : 'border-gray-300 bg-white dark:border-slate-700 dark:bg-slate-800'
+            }`}
+          />
+          {errors.hourlyRateCustom && (
+            <p
+              id="hourly_rate_custom-error"
+              className="mt-1 text-sm text-red-500"
+              role="alert"
+              aria-live="polite"
+            >
+              {errors.hourlyRateCustom}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Address Section */}
