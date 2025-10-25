@@ -15,8 +15,12 @@ export default function Combobox({
   valueField = 'id',
   disabled = false,
   error = false,
+  id,
   'aria-label': ariaLabel,
   'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
+  'aria-busy': ariaBusy,
   'data-testid': testId,
   className = ''
 }) {
@@ -123,8 +127,12 @@ export default function Combobox({
         onBlur={handleBlur}
         placeholder={placeholder}
         disabled={disabled}
+        id={id}
         aria-label={ariaLabel}
         aria-invalid={ariaInvalid || error ? 'true' : 'false'}
+        aria-describedby={ariaDescribedBy}
+        aria-required={ariaRequired}
+        aria-busy={ariaBusy}
         aria-expanded={isOpen}
         aria-autocomplete="list"
         aria-controls="combobox-listbox"
