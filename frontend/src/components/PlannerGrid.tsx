@@ -4,6 +4,7 @@ import { useFirebaseUser } from '../firebase';
 import { calculateHeight, calculateTopPosition } from '../utils/time';
 import { getTaskColor } from '../constants/colors';
 import { getIcon } from '../icons/registry';
+import { useSettings } from '../context/SettingsContext';
 import {
   selectDisplayModel,
   DisplayEvent,
@@ -269,6 +270,20 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   isReadOnlyMode = false,
 }) => {
   const user = useFirebaseUser();
+  const { settings, loading } = useSettings();
+  const showWeekendsEnabled = useMemo(() => {
+    if (loading || !settings) {
+      return true;
+    }
+    return settings.showWeekends === true;
+  }, [loading, settings]);
+  const gridColumnCount = showWeekendsEnabled ? 7 : 5;
+  const weeklyGridStyle = useMemo(
+    () => ({
+      '--weekly-grid-day-count': String(gridColumnCount),
+    }) as React.CSSProperties,
+    [gridColumnCount]
+  );
   const normalizedWeekStart = useMemo(() => ensureDate(weekStart), [weekStart]);
   const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -309,12 +324,19 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
   const days = useMemo(() => {
     const base = new Date(normalizedWeekStart);
-    return DAY_NAMES.map((name, index) => {
+    const fullWeek = DAY_NAMES.map((name, index) => {
       const date = new Date(base);
       date.setDate(base.getDate() + index);
       return { name, date };
     });
-  }, [normalizedWeekStart]);
+    if (showWeekendsEnabled) {
+      return fullWeek;
+    }
+    return fullWeek.filter((day) => {
+      const isoDay = day.date.getDay() === 0 ? 7 : day.date.getDay();
+      return isoDay >= 1 && isoDay <= 5;
+    });
+  }, [normalizedWeekStart, showWeekendsEnabled]);
 
   const dateRange = useMemo(() => createDateRange(normalizedWeekStart), [normalizedWeekStart]);
 
@@ -367,6 +389,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
   }, [displayEvents, positionUnit]);
 
+  const visibleEventLayouts = useMemo(
+    () => (showWeekendsEnabled ? eventLayouts : eventLayouts.filter((_, index) => index < 5)),
+    [eventLayouts, showWeekendsEnabled]
+  );
+
   const taskLayouts = useMemo(() => {
     const perDay: TaskBlockLayout[][] = Array.from({ length: 7 }, () => []);
 
@@ -404,6 +431,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     return perDay;
   }, [displayTaskGroups, positionUnit]);
 
+  const visibleTaskLayouts = useMemo(
+    () => (showWeekendsEnabled ? taskLayouts : taskLayouts.filter((_, index) => index < 5)),
+    [showWeekendsEnabled, taskLayouts]
+  );
+
   const onCellClick = useCallback(
     (date: Date, timeString: string) => {
       if (!user) return;
@@ -434,7 +466,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   }
 
   return (
-    <div ref={wrapperRef} className="week-shell">
+    <div ref={wrapperRef} className="week-shell" style={weeklyGridStyle}>
       <div className="week-day-headers">
         {days.map((day) => (
           <div key={day.name} className="day-header-label">
@@ -469,8 +501,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           <InteractiveLayer
             hours={hours}
             days={days}
-            eventLayouts={eventLayouts}
-            taskLayouts={taskLayouts}
+            eventLayouts={visibleEventLayouts}
+            taskLayouts={visibleTaskLayouts}
             onCellClick={onCellClick}
             onAddEvent={onAddEvent}
             onEventClick={onEventClick}

@@ -6,6 +6,7 @@ import {
   getMonthRange,
   useFirebaseUser,
 } from '../firebase';
+import { useSettings } from '../context/SettingsContext';
 
 const DAY_NAME_TO_INDEX = {
   monday: 0,
@@ -167,11 +168,32 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
 };
 function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, context }) {
   const user = useFirebaseUser();
+  const { settings, loading } = useSettings();
+  const showWeekendsEnabled = useMemo(() => {
+    if (loading || !settings) {
+      return true;
+    }
+    return settings.showWeekends === true;
+  }, [loading, settings]);
+  const dayNames = useMemo(
+    () => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+    []
+  );
+  const visibleDayNames = useMemo(
+    () => (showWeekendsEnabled ? dayNames : dayNames.slice(0, 5)),
+    [dayNames, showWeekendsEnabled]
+  );
+  const monthColumnCount = showWeekendsEnabled ? 7 : 5;
+  const monthGridStyle = useMemo(
+    () => ({
+      '--month-grid-day-count': String(monthColumnCount),
+    }),
+    [monthColumnCount]
+  );
   const [events, setEvents] = useState([]);
   const [eventsByDay, setEventsByDay] = useState({});
   const [tasksByDay, setTasksByDay] = useState({});
 
-  const daysOfWeek = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const offset = (firstDay + 6) % 7; // Monday = 0
@@ -390,9 +412,9 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
   };
 
   return (
-    <div className="month-calendar">
+      <div className="month-calendar" style={monthGridStyle}>
       <div className="month-day-header">
-        {daysOfWeek.map((day) => (
+        {visibleDayNames.map((day) => (
           <div key={day} className="calendar-header-cell">
             {day}
           </div>
@@ -401,12 +423,16 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
       <div className="month-grid border rounded-md overflow-hidden">
         {rows.map((week, wi) => (
           <div key={wi} className="calendar-row">
-            {week.map((value, di) => (
-              value ? (
-                <div
-                  key={di}
-                  className="calendar-cell"
-                  onClick={() => handleSelect(value)}
+            {week.map((value, di) => {
+              if (!showWeekendsEnabled && di >= 5) {
+                return null;
+              }
+              return (
+                value ? (
+                  <div
+                    key={di}
+                    className="calendar-cell"
+                    onClick={() => handleSelect(value)}
                 >
                   <div className="calendar-cell-header">
                     <span className="calendar-cell-day">{value}</span>
@@ -416,10 +442,10 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
                     {renderDayItems(getDayItems(value))}
                   </div>
                 </div>
-              ) : (
-                <div key={di} className="calendar-cell empty" />
-              )
-            ))}
+                ) : (
+                  <div key={di} className="calendar-cell empty" />
+                );
+            })}
           </div>
         ))}
       </div>
