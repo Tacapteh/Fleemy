@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
   { id: 'planning', name: 'Planning', icon: '📅' },
+  { id: 'todo', name: 'Notes du jour', icon: '📝', to: '/todo' },
   { id: 'quotes', name: 'Devis', icon: '📋', to: '/quotes' },
   { id: 'invoices', name: 'Factures', icon: '🧾', to: '/invoices' },
   { id: 'clients', name: 'Clients', icon: '👥', to: '/clients' },
