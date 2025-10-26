@@ -8,7 +8,7 @@ import WeeklyTaskModal from '../components/WeeklyTaskModal';
 import DailyTodoPanel from '../components/DailyTodoPanel';
 import useTeam from '../hooks/useTeam';
 import useTasks from '../hooks/useTasks';
-import useUserWeekSlots from '../hooks/useUserWeekSlots';
+import useUserWeekSlots, { requestWeekSlotsRefresh } from '../hooks/useUserWeekSlots';
 import { useSettings } from '../context/SettingsContext';
 import { getIcon } from '../icons/registry';
 import {
@@ -932,6 +932,7 @@ export default function Planning() {
         };
 
         await saveEventNew(planningContext, payload);
+        requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
         showToast('Événement sauvegardé avec succès');
       } catch (error) {
         console.error('saveEventNew error', error);
@@ -940,7 +941,15 @@ export default function Planning() {
         closeModal();
       }
     },
-    [planningContext, readOnly, modal.readOnly, weekStart, closeModal]
+    [
+      planningContext,
+      readOnly,
+      modal.readOnly,
+      weekStart,
+      weekEnd,
+      requestWeekSlotsRefresh,
+      closeModal,
+    ]
   );
 
   const handleDeleteEvent = useCallback(
@@ -950,6 +959,7 @@ export default function Planning() {
       }
       try {
         await deleteEventNew(planningContext, id);
+        requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
         showToast('Événement supprimé avec succès');
       } catch (error) {
         console.error('deleteEventNew error', error);
@@ -958,7 +968,15 @@ export default function Planning() {
         closeModal();
       }
     },
-    [planningContext, readOnly, modal.readOnly, closeModal]
+    [
+      planningContext,
+      readOnly,
+      modal.readOnly,
+      weekStart,
+      weekEnd,
+      requestWeekSlotsRefresh,
+      closeModal,
+    ]
   );
 
   const handleMemberChange = useCallback((event) => {
