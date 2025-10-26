@@ -3109,6 +3109,273 @@ async def root():
     return {"message": "Fleemy API is running!"}
 
 
+# Notifications endpoints
+@api_router.get("/notifications/list")
+async def list_notifications(
+    userId: str,
+    onlyUnread: bool = True,
+    limit: int = 20,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """
+    Récupère les notifications pour un utilisateur.
+    
+    Args:
+        userId: L'ID de l'utilisateur
+        onlyUnread: Si True, ne retourne que les notifications non lues
+        limit: Nombre maximum de notifications à retourner
+        user: Utilisateur authentifié (vérifié par Firebase Auth)
+    
+    Returns:
+        Liste des notifications triées par date (plus récentes en premier)
+    """
+    try:
+        # Vérification d'accès : l'utilisateur ne peut lire que ses propres notifications
+        if user["uid"] != userId:
+            logger.warning(
+                "Unauthorized access attempt: user %s tried to access notifications for user %s",
+                user["uid"],
+                userId
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Vous n'êtes pas autorisé à lire les notifications d'un autre utilisateur"
+            )
+        
+        # Construction de la requête Firestore
+        notifications_ref = db.collection("notifications")
+        query = notifications_ref.where("userId", "==", userId)
+        
+        # Filtrer par statut "non lu" si demandé
+        if onlyUnread:
+            query = query.where("read", "==", False)
+        
+        # Trier par date de création (plus récentes en premier)
+        query = query.order_by("createdAt", direction=firestore.Query.DESCENDING)
+        
+        # Limiter le nombre de résultats
+        query = query.limit(limit)
+        
+        # Exécuter la requête
+        docs = await asyncio.to_thread(lambda: list(query.stream()))
+        
+        # Construire la liste des notifications
+        notifications: List[Dict[str, Any]] = []
+        for doc in docs:
+            data = doc.to_dict()
+            if data:
+                notification = {
+                    "id": doc.id,
+                    "userId": data.get("userId"),
+                    "title": data.get("title"),
+                    "message": data.get("message"),
+                    "type": data.get("type"),
+                    "createdAt": data.get("createdAt").isoformat() if isinstance(data.get("createdAt"), datetime) else data.get("createdAt"),
+                    "read": data.get("read", False),
+                    "relatedResource": data.get("relatedResource"),
+                }
+                notifications.append(notification)
+        
+        logger.info(
+            "Retrieved %d notifications for user %s (onlyUnread=%s)",
+            len(notifications),
+            userId,
+            onlyUnread
+        )
+        
+        return {
+            "success": True,
+            "notifications": notifications
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("list_notifications error: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de récupérer les notifications"
+        )
+
+
+@api_router.patch("/notifications/mark-read")
+async def mark_notifications_read(
+    request_data: NotificationMarkReadRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """
+    Marque une ou plusieurs notifications comme lues.
+    
+    Args:
+        request_data: Contient userId et la liste des IDs de notifications
+        user: Utilisateur authentifié (vérifié par Firebase Auth)
+    
+    Returns:
+        Nombre de notifications modifiées
+    """
+    try:
+        # Vérification d'accès : l'utilisateur ne peut modifier que ses propres notifications
+        if user["uid"] != request_data.userId:
+            logger.warning(
+                "Unauthorized access attempt: user %s tried to mark read notifications for user %s",
+                user["uid"],
+                request_data.userId
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Vous n'êtes pas autorisé à modifier les notifications d'un autre utilisateur"
+            )
+        
+        if not request_data.notificationIds:
+            return {
+                "status": "ok",
+                "updated": 0
+            }
+        
+        # Marquer chaque notification comme lue
+        updated_count = 0
+        notifications_ref = db.collection("notifications")
+        
+        for notification_id in request_data.notificationIds:
+            try:
+                doc_ref = notifications_ref.document(notification_id)
+                
+                # Vérifier que la notification existe et appartient à l'utilisateur
+                snap = await asyncio.to_thread(doc_ref.get)
+                
+                if not snap.exists:
+                    logger.warning(
+                        "Notification %s not found for user %s",
+                        notification_id,
+                        request_data.userId
+                    )
+                    continue
+                
+                notification_data = snap.to_dict()
+                if notification_data.get("userId") != request_data.userId:
+                    logger.warning(
+                        "Notification %s does not belong to user %s",
+                        notification_id,
+                        request_data.userId
+                    )
+                    continue
+                
+                # Mettre à jour le champ "read"
+                await asyncio.to_thread(
+                    doc_ref.update,
+                    {"read": True}
+                )
+                updated_count += 1
+                
+            except Exception as notif_error:
+                logger.error(
+                    "Error updating notification %s: %s",
+                    notification_id,
+                    notif_error
+                )
+                continue
+        
+        logger.info(
+            "Marked %d notifications as read for user %s",
+            updated_count,
+            request_data.userId
+        )
+        
+        return {
+            "status": "ok",
+            "updated": updated_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("mark_notifications_read error: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de marquer les notifications comme lues"
+        )
+
+
+@api_router.post("/notifications/create-test")
+async def create_test_notification(
+    notification_request: NotificationCreateRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    """
+    Endpoint utilitaire pour créer une notification de test.
+    Permet de tester l'UI de la cloche avant d'implémenter les règles métier automatiques.
+    
+    Args:
+        notification_request: Données de la notification à créer
+        user: Utilisateur authentifié (vérifié par Firebase Auth)
+    
+    Returns:
+        La notification créée
+    """
+    try:
+        # Vérification d'accès : l'utilisateur ne peut créer que ses propres notifications
+        if user["uid"] != notification_request.userId:
+            logger.warning(
+                "Unauthorized access attempt: user %s tried to create notification for user %s",
+                user["uid"],
+                notification_request.userId
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Vous n'êtes pas autorisé à créer des notifications pour un autre utilisateur"
+            )
+        
+        # Créer un nouveau document dans la collection "notifications"
+        notifications_ref = db.collection("notifications")
+        doc_ref = notifications_ref.document()
+        
+        notification_data = {
+            "userId": notification_request.userId,
+            "title": notification_request.title,
+            "message": notification_request.message,
+            "type": notification_request.type,
+            "createdAt": datetime.now(timezone.utc),
+            "read": False,
+            "relatedResource": notification_request.relatedResource,
+        }
+        
+        # Enregistrer la notification
+        await asyncio.to_thread(doc_ref.set, notification_data)
+        
+        # Construire la réponse
+        created_notification = {
+            "id": doc_ref.id,
+            "userId": notification_data["userId"],
+            "title": notification_data["title"],
+            "message": notification_data["message"],
+            "type": notification_data["type"],
+            "createdAt": notification_data["createdAt"].isoformat(),
+            "read": notification_data["read"],
+            "relatedResource": notification_data["relatedResource"],
+        }
+        
+        logger.info(
+            "Created test notification %s for user %s",
+            doc_ref.id,
+            notification_request.userId
+        )
+        
+        return {
+            "status": "created",
+            "id": doc_ref.id,
+            "notification": created_notification
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("create_test_notification error: %s", e, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de créer la notification de test"
+        )
+
+
 # Include the router in the main app
 app.include_router(api_router)
 
