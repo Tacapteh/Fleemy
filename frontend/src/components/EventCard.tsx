@@ -89,17 +89,17 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
   const isReadOnly = Boolean(event.readOnly);
 
   let subtitle = '';
-  let subtitleClass = 'subtitle truncate break-words leading-tight text-xs text-gray-600';
+  let subtitleClass = 'subtitle truncate break-words leading-tight md:leading-normal text-xs text-gray-600';
   if (clientLabel && clientLabel !== title) {
     subtitle = clientLabel;
-    subtitleClass = 'subtitle truncate leading-tight break-words';
+    subtitleClass = 'subtitle truncate leading-tight md:leading-normal break-words';
   } else if (description && description !== title) {
     subtitle = description;
   }
 
   return (
     <div
-      className={`event-chip${statusClass}`}
+      className={`event-chip${statusClass} min-h-[3rem]`}
       style={style}
       onClick={isInteractive ? handleClick : undefined}
       onKeyDown={handleKeyDown}
@@ -108,13 +108,13 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       aria-label={`Événement : ${title}`}
       data-testid={`event-${event.id}`}
     >
-      <div className="event-chip-content relative flex h-full w-full flex-col pr-8 pb-5">
+      <div className="event-chip-content relative flex h-full min-h-[3rem] w-full flex-col justify-center gap-1 pr-8 pb-5 text-[13px] leading-tight sm:text-[14px] md:leading-normal">
         {timeLabel && (
           <div className="mb-1 text-xs font-semibold leading-tight text-slate-600 dark:text-slate-200">
             {timeLabel}
           </div>
         )}
-        <div className="title truncate leading-tight break-words">{title}</div>
+        <div className="title truncate break-words leading-tight md:leading-normal">{title}</div>
 
         {event.attachedTaskBadges.length > 0 && (
           <div className="event-chip-badge absolute bottom-1 right-1 flex items-center justify-end gap-1">
