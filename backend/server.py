@@ -645,6 +645,31 @@ class LastContextUpdate(BaseModel):
     team_id: Optional[str] = None
 
 
+# Notification models
+class NotificationItem(BaseModel):
+    id: str
+    userId: str
+    title: str
+    message: str
+    type: str
+    createdAt: datetime
+    read: bool
+    relatedResource: Optional[Dict[str, Any]] = None
+
+
+class NotificationMarkReadRequest(BaseModel):
+    userId: str
+    notificationIds: List[str]
+
+
+class NotificationCreateRequest(BaseModel):
+    userId: str
+    title: str
+    message: str
+    type: str
+    relatedResource: Optional[Dict[str, Any]] = None
+
+
 # Firestore helper utilities
 def user_doc(uid: str):
     return db.collection("users").document(uid)
