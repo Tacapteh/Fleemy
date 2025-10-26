@@ -6,18 +6,33 @@ from pydantic import BaseModel
 import httpx
 
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://fleemy.vercel.app",
+    "https://fleemy.web.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
+
 def _parse_allowed_origins() -> List[str]:
     raw = os.getenv("CORS_ORIGINS", "")
     if raw:
         parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
         if parsed:
             return parsed
-    return ["https://fleemy.vercel.app"]
+
+    seen = set()
+    defaults: List[str] = []
+    for origin in DEFAULT_ALLOWED_ORIGINS:
+        if origin not in seen:
+            defaults.append(origin)
+            seen.add(origin)
+    return defaults
 
 
 ALLOWED_ORIGINS = _parse_allowed_origins()
 ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With"]
+ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With", "X-User-Id"]
 EXPOSE_HEADERS = ["Location"]
 MAX_AGE = 86400
 ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}

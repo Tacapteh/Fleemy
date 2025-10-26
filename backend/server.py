@@ -67,13 +67,30 @@ app = FastAPI()
 from fastapi.middleware.cors import CORSMiddleware
 
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://fleemy.vercel.app",
+    "https://fleemy.web.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+
+
 def _parse_allowed_origins() -> List[str]:
     raw = os.getenv("CORS_ORIGINS", "")
     if raw:
         parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
         if parsed:
             return parsed
-    return ["https://fleemy.vercel.app"]
+
+    # Fall back to our default list while keeping the order stable and removing
+    # any potential duplicates.
+    seen = set()
+    defaults: List[str] = []
+    for origin in DEFAULT_ALLOWED_ORIGINS:
+        if origin not in seen:
+            defaults.append(origin)
+            seen.add(origin)
+    return defaults
 
 
 ALLOWED_ORIGINS = _parse_allowed_origins()
