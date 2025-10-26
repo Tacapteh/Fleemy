@@ -8,7 +8,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, logout } from "./firebase";
+import { auth, logout, waitForAuth } from "./firebase";
 import { contextStore } from "./stores/contextStore";
 import { SettingsProvider, useSettings } from "./context/SettingsContext";
 
@@ -137,22 +137,62 @@ function AppWithSettings() {
   const darkModeEnabled = !loading && Boolean(settings?.darkMode);
 
   useEffect(() => {
+    let isMounted = true;
+    let initialResolved = false;
+
+    const finalizeInitialization = (nextUser) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setUser(nextUser || null);
+
+      if (!initialResolved) {
+        initialResolved = true;
+        setInitializing(false);
+      }
+    };
+
+    waitForAuth()
+      .then((resolvedUser) => {
+        finalizeInitialization(resolvedUser);
+      })
+      .catch((error) => {
+        console.error("Erreur lors de l'attente de l'authentification", error);
+        finalizeInitialization(null);
+      });
+
     const unsubscribe = onAuthStateChanged(
       auth,
       (nextUser) => {
-        setUser(nextUser);
-        setInitializing(false); // Firebase a fini d’initialiser
+        finalizeInitialization(nextUser);
       },
       (error) => {
         console.error("Erreur d'observation de l'authentification", error);
-        setUser(null);
-        setInitializing(false);
+        finalizeInitialization(null);
       },
     );
 
+    const timeoutId = typeof window !== "undefined"
+      ? window.setTimeout(() => {
+          if (!initialResolved) {
+            console.warn(
+              "Timeout lors de l'initialisation Firebase, affichage de l'écran de connexion en secours.",
+            );
+            finalizeInitialization(null);
+          }
+        }, 8000)
+      : null;
+
     return () => {
+      isMounted = false;
+
       if (typeof unsubscribe === "function") {
         unsubscribe();
+      }
+
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
       }
     };
   }, []);
