@@ -146,6 +146,7 @@ export interface DisplayEvent extends PlannerEventInput {
   startDate: Date;
   endDate: Date;
   attachedTaskBadges: AttachedTaskBadge[];
+  displayPriority?: number;
 }
 
 export interface DisplayTaskGroup {
@@ -258,7 +259,7 @@ const normalizeBadgePrice = (value: unknown): number | undefined => {
   return undefined;
 };
 
-type DisplayEventWithSource = DisplayEvent & { __sourceIndex?: number };
+type DisplayEventWithSource = DisplayEvent & { __sourceIndex?: number; __recencyScore?: number };
 
 const normalizeEvent = (event: PlannerEventInput, rangeStart: Date): DisplayEvent | null => {
   const fallbackDate = event.date ? parseDate(`${event.date}T00:00:00`) : null;
@@ -367,13 +368,14 @@ const getEventRecencyScore = (event: DisplayEventWithSource): number => {
 };
 
 const dedupeEventsByRecency = (events: DisplayEventWithSource[]): DisplayEvent[] => {
-  if (events.length <= 1) {
-    return events.map(({ __sourceIndex: _omit, ...rest }) => rest as DisplayEvent);
-  }
+  const withRecency = events.map((event) => ({
+    ...event,
+    __recencyScore: getEventRecencyScore(event),
+  }));
 
-  const prioritized = [...events].sort((a, b) => {
-    const bScore = getEventRecencyScore(b);
-    const aScore = getEventRecencyScore(a);
+  const prioritized = withRecency.sort((a, b) => {
+    const aScore = Number.isFinite(a.__recencyScore) ? (a.__recencyScore as number) : -Infinity;
+    const bScore = Number.isFinite(b.__recencyScore) ? (b.__recencyScore as number) : -Infinity;
     if (bScore !== aScore) {
       return bScore - aScore;
     }
@@ -396,11 +398,22 @@ const dedupeEventsByRecency = (events: DisplayEventWithSource[]): DisplayEvent[]
     }
   });
 
-  const ordered = selected
-    .map(({ __sourceIndex: _omit, ...rest }) => rest as DisplayEvent)
-    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+  const toDisplayEvent = ({ __sourceIndex, __recencyScore, ...rest }: DisplayEventWithSource): DisplayEvent => {
+    const basePriority = Number.isFinite(__recencyScore)
+      ? (__recencyScore as number)
+      : typeof __sourceIndex === 'number'
+      ? __sourceIndex
+      : rest.startDate.getTime();
 
-  return ordered;
+    return {
+      ...(rest as DisplayEvent),
+      displayPriority: basePriority,
+    };
+  };
+
+  return selected
+    .map(toDisplayEvent)
+    .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 };
 
 const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccurrence[] => {
