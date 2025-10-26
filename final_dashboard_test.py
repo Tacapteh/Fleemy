@@ -7,7 +7,7 @@ from datetime import datetime
 def test_dashboard_endpoints():
     """Test the three main dashboard planning endpoints"""
     
-    base_url = "https://todo-integration.preview.emergentagent.com/api"
+    base_url = "https://alert-center-5.preview.emergentagent.com/api"
     headers = {
         'Authorization': 'Bearer test-token-123',
         'Content-Type': 'application/json'
