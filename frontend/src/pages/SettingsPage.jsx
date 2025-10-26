@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useSettings } from "../context/SettingsContext";
+import useNotificationPreferences from "../hooks/useNotificationPreferences";
+import { showToast } from "../utils/toast";
 
 function Switch({ checked, onToggle, ...props }) {
   const handleToggle = useCallback(() => {
@@ -72,10 +74,20 @@ const NUMBER_SETTING_KEY = "defaultSlotDurationMinutes";
 
 export default function SettingsPage() {
   const { settings, loading, updateSetting } = useSettings();
+  const { notificationsEnabled, toggleNotifications } = useNotificationPreferences();
   const [durationInput, setDurationInput] = useState("60");
   const [startHourInput, setStartHourInput] = useState("");
   const [endHourInput, setEndHourInput] = useState("");
   const [hourlyRateInput, setHourlyRateInput] = useState("0");
+
+  const handleNotificationsToggle = useCallback(() => {
+    const nextValue = !notificationsEnabled;
+    toggleNotifications();
+
+    if (typeof window !== "undefined" && typeof document !== "undefined") {
+      showToast(nextValue ? "Notifications activées" : "Notifications désactivées");
+    }
+  }, [notificationsEnabled, toggleNotifications]);
 
   useEffect(() => {
     if (settings && typeof settings[NUMBER_SETTING_KEY] === "number") {
@@ -343,6 +355,37 @@ export default function SettingsPage() {
           Personnalisez l’apparence de votre planning. Les modifications sont enregistrées automatiquement.
         </p>
       </header>
+
+      <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1 pr-4">
+            <h2 className="text-sm font-medium text-slate-900 dark:text-slate-100">Notifications</h2>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Contrôlez l’affichage de la cloche et la réception des alertes locales.
+            </p>
+          </div>
+
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <label
+              htmlFor="settings-notifications-toggle"
+              className="text-sm font-medium text-slate-900 dark:text-slate-100"
+            >
+              Activer les notifications
+            </label>
+            <div className="relative inline-flex h-6 w-11 items-center">
+              <input
+                id="settings-notifications-toggle"
+                type="checkbox"
+                checked={notificationsEnabled}
+                onChange={handleNotificationsToggle}
+                aria-label="Activer ou désactiver les notifications"
+                className="peer relative h-6 w-11 cursor-pointer appearance-none rounded-full border border-transparent bg-slate-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white checked:bg-indigo-600 dark:bg-slate-600 dark:focus-visible:ring-offset-slate-900 dark:checked:bg-indigo-500"
+              />
+              <span aria-hidden="true" className="pointer-events-none absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         {renderToggleRow(showFullDayToggle)}

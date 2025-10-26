@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { auth } from '../firebase';
 import { getAuthHeaders } from '../utils/authHeaders';
+import useNotificationPreferences from './useNotificationPreferences';
 
 const LIST_ENDPOINT = '/api/notifications/list';
 const MARK_READ_ENDPOINT = '/api/notifications/mark-read';
 
 export function useNotifications(userId) {
+  const { notificationsEnabled } = useNotificationPreferences();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -16,6 +18,11 @@ export function useNotifications(userId) {
   );
 
   const fetchNotifications = useCallback(async () => {
+    if (!notificationsEnabled) {
+      setNotifications([]);
+      return;
+    }
+
     const currentUserId = userId || auth.currentUser?.uid;
     if (!currentUserId) {
       setNotifications([]);
@@ -57,10 +64,14 @@ export function useNotifications(userId) {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [notificationsEnabled, userId]);
 
   const markAllAsRead = useCallback(
     async (ids) => {
+      if (!notificationsEnabled) {
+        return false;
+      }
+
       const currentUserId = userId || auth.currentUser?.uid;
       const unreadIds = Array.isArray(ids) && ids.length > 0
         ? ids
@@ -102,7 +113,7 @@ export function useNotifications(userId) {
         return false;
       }
     },
-    [notifications, userId],
+    [notifications, notificationsEnabled, userId],
   );
 
   useEffect(() => {
@@ -112,6 +123,27 @@ export function useNotifications(userId) {
       setLoading(false);
     }
   }, [userId]);
+
+  useEffect(() => {
+    if (!notificationsEnabled) {
+      setNotifications([]);
+      setError(null);
+      setLoading(false);
+    }
+  }, [notificationsEnabled]);
+
+  if (!notificationsEnabled) {
+    const noop = () => {};
+    return {
+      notifications: [],
+      unreadCount: 0,
+      loading: false,
+      error: null,
+      fetchNotifications: noop,
+      markAllAsRead: noop,
+      setNotifications: noop,
+    };
+  }
 
   return {
     notifications,
