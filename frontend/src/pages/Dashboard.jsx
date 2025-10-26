@@ -182,6 +182,88 @@ const getSlotRate = (slot) => {
   return null;
 };
 
+const calculateWeeklyEstimatedAmount = (slots, globalHourlyRate) => {
+  if (!Array.isArray(slots) || slots.length === 0) {
+    return 0;
+  }
+
+  let total = 0;
+
+  slots.forEach((slot) => {
+    if (!slot || slot.type === 'absence') {
+      return;
+    }
+
+    const statusCandidate =
+      slot?.payment_status ??
+      slot?.paymentStatus ??
+      slot?.status ??
+      slot?.type ??
+      slot?.state ??
+      null;
+    const statusCategory = resolveStatusCategoryValue(statusCandidate);
+    if (statusCategory === null) {
+      return;
+    }
+
+    const start = getSlotStartDate(slot);
+    const end = getSlotEndDate(slot);
+    if (!(start instanceof Date) || !(end instanceof Date)) {
+      return;
+    }
+
+    const durationMs = end.getTime() - start.getTime();
+    if (!Number.isFinite(durationMs) || durationMs <= 0) {
+      return;
+    }
+
+    const durationHours = durationMs / (60 * 60 * 1000);
+    if (!Number.isFinite(durationHours) || durationHours <= 0) {
+      return;
+    }
+
+    let rateToApply = null;
+    const client = slot?.client;
+
+    if (
+      client &&
+      (client.useGlobalRate === false || client.use_global_rate === false)
+    ) {
+      const clientRateCandidates = [client.hourlyRate, client.hourly_rate];
+      for (const candidate of clientRateCandidates) {
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric) && numeric > 0) {
+          rateToApply = numeric;
+          break;
+        }
+      }
+    }
+
+    if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+      const numericGlobalRate = Number(globalHourlyRate);
+      if (Number.isFinite(numericGlobalRate) && numericGlobalRate > 0) {
+        rateToApply = numericGlobalRate;
+      }
+    }
+
+    if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+      rateToApply = getSlotRate(slot);
+    }
+
+    const numericRate = Number(rateToApply);
+    if (!Number.isFinite(numericRate) || numericRate <= 0) {
+      return;
+    }
+
+    const amount = durationHours * numericRate;
+    if (Number.isFinite(amount) && amount > 0) {
+      total += amount;
+    }
+  });
+
+  return total;
+};
+
 const resolveSlotLabel = (slot) => {
   if (!slot) {
     return 'Créneau planifié';
@@ -245,10 +327,9 @@ export default function Dashboard() {
     [],
   );
 
-  const { weeklyHours, weeklyEarnings, paymentTotals, upcomingSlots } = useMemo(() => {
+  const { weeklyHours, paymentTotals, upcomingSlots } = useMemo(() => {
     const totals = { confirmed: 0, pending: 0, toInvoice: 0 };
     let hoursTotal = 0;
-    let earningsTotal = 0;
     const future = [];
     const now = new Date();
 
@@ -278,9 +359,7 @@ export default function Dashboard() {
       let amount = 0;
       if (Number.isFinite(rateToApply) && rateToApply > 0) {
         amount = durationHours * rateToApply;
-        if (Number.isFinite(amount) && amount > 0) {
-          earningsTotal += amount;
-        } else {
+        if (!Number.isFinite(amount) || amount <= 0) {
           amount = 0;
         }
       }
@@ -313,11 +392,15 @@ export default function Dashboard() {
 
     return {
       weeklyHours: hoursTotal,
-      weeklyEarnings: earningsTotal,
       paymentTotals: totals,
       upcomingSlots: upcoming,
     };
   }, [slots, globalHourlyRate]);
+
+  const weeklyEstimatedAmount = useMemo(
+    () => calculateWeeklyEstimatedAmount(slots, globalHourlyRate),
+    [slots, globalHourlyRate],
+  );
 
   const weeklyHoursDisplay = useMemo(() => {
     const rounded = Math.round((Number.isFinite(weeklyHours) ? weeklyHours : 0) * 4) / 4;
@@ -333,9 +416,9 @@ export default function Dashboard() {
   }, [weeklyHours]);
 
   const weeklyEarningsDisplay = useMemo(() => {
-    const value = Number.isFinite(weeklyEarnings) ? weeklyEarnings : 0;
+    const value = Number.isFinite(weeklyEstimatedAmount) ? weeklyEstimatedAmount : 0;
     return currencyFormatter.format(Math.round(value));
-  }, [weeklyEarnings, currencyFormatter]);
+  }, [weeklyEstimatedAmount, currencyFormatter]);
 
   const paymentsDisplay = useMemo(
     () => ({
