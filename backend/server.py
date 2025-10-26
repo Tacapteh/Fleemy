@@ -3345,7 +3345,7 @@ async def create_test_notification(
         
         # Construire la réponse
         created_notification = {
-            "id": doc_ref.id,
+            "id": doc_id,
             "userId": notification_data["userId"],
             "title": notification_data["title"],
             "message": notification_data["message"],
@@ -3357,13 +3357,13 @@ async def create_test_notification(
         
         logger.info(
             "Created test notification %s for user %s",
-            doc_ref.id,
+            doc_id,
             notification_request.userId
         )
         
         return {
             "status": "created",
-            "id": doc_ref.id,
+            "id": doc_id,
             "notification": created_notification
         }
         
