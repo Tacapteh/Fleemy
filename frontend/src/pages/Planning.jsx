@@ -117,6 +117,92 @@ const toIsoDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+const toDateSafe = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value);
+  }
+
+  if (typeof value === 'number') {
+    const candidate = new Date(value);
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const candidate = new Date(trimmed);
+    return Number.isNaN(candidate.getTime()) ? null : candidate;
+  }
+
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    try {
+      const candidate = value.toDate();
+      return candidate instanceof Date && !Number.isNaN(candidate.getTime())
+        ? candidate
+        : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const getSlotStartDate = (slot) => {
+  if (!slot) {
+    return null;
+  }
+  return (
+    toDateSafe(slot.start) ||
+    toDateSafe(slot.startTime) ||
+    toDateSafe(slot.start_time) ||
+    toDateSafe(slot.startDate) ||
+    toDateSafe(slot.start_date) ||
+    null
+  );
+};
+
+const getSlotEndDate = (slot) => {
+  if (!slot) {
+    return null;
+  }
+  return (
+    toDateSafe(slot.end) ||
+    toDateSafe(slot.endTime) ||
+    toDateSafe(slot.end_time) ||
+    toDateSafe(slot.endDate) ||
+    toDateSafe(slot.end_date) ||
+    null
+  );
+};
+
+const getSlotRate = (slot) => {
+  if (!slot) {
+    return null;
+  }
+  const candidates = [
+    slot.hourly_rate,
+    slot.hourlyRate,
+    slot.rate,
+    slot.price_per_hour,
+    slot.pricePerHour,
+    slot.hourly_rate_value,
+  ];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      return numeric;
+    }
+  }
+  return null;
+};
+
 const toTimeString = (value) => {
   if (!value) return DEFAULT_START;
   if (typeof value === 'string' && value.includes(':')) {
@@ -605,129 +691,289 @@ export default function Planning() {
     enabled: !shouldDelayEvents,
   });
 
-  const earningsSummary = useMemo(() => {
-    const totals = { paid: 0, pending: 0, unpaid: 0 };
-    const sourceEvents = Array.isArray(events) ? events : [];
+  const calculateRecapTotals = useCallback(
+    (slotsList, taskList, hourlyRateValue) => {
+      const totals = {
+        totalPaye: 0,
+        totalEnAttente: 0,
+        totalNonPaye: 0,
+        totalTaches: 0,
+      };
 
-    sourceEvents.forEach((event) => {
-      const startDate =
-        event?.start instanceof Date ? event.start : new Date(event?.start);
-      const endDate = event?.end instanceof Date ? event.end : new Date(event?.end);
+      const countedTaskIds = new Set();
+      const numericGlobalRate = Number(hourlyRateValue);
+      const globalRate =
+        Number.isFinite(numericGlobalRate) && numericGlobalRate > 0 ? numericGlobalRate : 0;
 
-      if (
-        !(startDate instanceof Date) ||
-        Number.isNaN(startDate.getTime()) ||
-        !(endDate instanceof Date) ||
-        Number.isNaN(endDate.getTime())
-      ) {
-        return;
-      }
+      const slotsArray = Array.isArray(slotsList) ? slotsList : [];
 
-      const durationMs = endDate.getTime() - startDate.getTime();
-      if (!Number.isFinite(durationMs) || durationMs <= 0) {
-        return;
-      }
+      slotsArray.forEach((slot) => {
+        if (!slot || typeof slot !== 'object') {
+          return;
+        }
 
-      const durationHours = durationMs / (60 * 60 * 1000);
-      if (!Number.isFinite(durationHours) || durationHours <= 0) {
-        return;
-      }
+        const normalizedType =
+          typeof slot.type === 'string' ? slot.type.trim().toLowerCase() : '';
 
-      let rateToApply = 0;
-      const clientId = event?.clientId || event?.client_id || null;
+        if (normalizedType === 'absence') {
+          return;
+        }
 
-      if (clientId) {
-        const client =
-          (clientId && clientMap.get(clientId)) ||
-          (Array.isArray(clients)
-            ? clients.find((candidate) => candidate?.id === clientId)
-            : null);
+        const rawStatusCandidates = [
+          slot?.payment_status,
+          slot?.paymentStatus,
+          slot?.status,
+          slot?.state,
+          slot?.type,
+        ];
 
-        if (client) {
-          const usesGlobalRate = client?.useGlobalRate ?? client?.use_global_rate;
-          const clientHourlyRate = client?.hourlyRate ?? client?.hourly_rate ?? null;
-
-          if (
-            usesGlobalRate === false &&
-            Number.isFinite(clientHourlyRate) &&
-            clientHourlyRate > 0
-          ) {
-            rateToApply = clientHourlyRate;
-          } else if (usesGlobalRate === true) {
-            rateToApply = hourlyRateGlobal;
-          } else {
-            const clientUsesGlobal =
-              typeof usesGlobalRate === 'string'
-                ? usesGlobalRate === 'global' || usesGlobalRate === 'true'
-                : Boolean(usesGlobalRate);
-            if (
-              clientUsesGlobal === false &&
-              Number.isFinite(clientHourlyRate) &&
-              clientHourlyRate > 0
-            ) {
-              rateToApply = clientHourlyRate;
-            } else if (clientUsesGlobal === true) {
-              rateToApply = hourlyRateGlobal;
+        let explicitStatus = null;
+        for (const candidate of rawStatusCandidates) {
+          if (candidate === undefined || candidate === null) {
+            continue;
+          }
+          if (typeof candidate === 'string') {
+            const normalized = candidate.trim().toLowerCase();
+            if (!normalized) {
+              continue;
+            }
+            if (['task', 'weekly_task', 'weekly-task', 'absence'].includes(normalized)) {
+              continue;
             }
           }
+          explicitStatus = candidate;
+          break;
         }
-      }
 
-      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
-        const eventRate = Number(event?.hourly_rate ?? event?.hourlyRate);
-        if (Number.isFinite(eventRate) && eventRate > 0) {
-          rateToApply = eventRate;
+        const normalizedSource =
+          typeof slot?.source === 'string' ? slot.source.trim().toLowerCase() : '';
+        const normalizedKind =
+          typeof slot?.kind === 'string' ? slot.kind.trim().toLowerCase() : '';
+
+        const explicitWeeklyTask =
+          slot?.weekly === true ||
+          slot?.isWeeklyTask === true ||
+          slot?.is_task === true ||
+          normalizedSource === 'weekly_task' ||
+          normalizedKind === 'weekly_task' ||
+          normalizedType === 'task' ||
+          normalizedType === 'weekly_task' ||
+          normalizedType === 'weekly-task' ||
+          typeof slot?.weekly_task_id === 'string' ||
+          typeof slot?.weeklyTaskId === 'string' ||
+          typeof slot?.task_id === 'string' ||
+          typeof slot?.taskId === 'string' ||
+          typeof slot?.weekly_task_occurrence_id === 'string' ||
+          typeof slot?.weeklyTaskOccurrenceId === 'string' ||
+          typeof slot?.task_occurrence_id === 'string' ||
+          typeof slot?.taskOccurrenceId === 'string';
+
+        const taskLabel = (() => {
+          if (typeof slot?.task_label === 'string' && slot.task_label.trim()) {
+            return slot.task_label.trim();
+          }
+          if (typeof slot?.taskLabel === 'string' && slot.taskLabel.trim()) {
+            return slot.taskLabel.trim();
+          }
+          if (typeof slot?.task_name === 'string' && slot.task_name.trim()) {
+            return slot.task_name.trim();
+          }
+          if (typeof slot?.taskName === 'string' && slot.taskName.trim()) {
+            return slot.taskName.trim();
+          }
+          return '';
+        })();
+
+        const hasClientSignal = Boolean(
+          (typeof slot?.client === 'string' && slot.client.trim()) ||
+            (slot?.client && typeof slot.client === 'object') ||
+            (typeof slot?.client_name === 'string' && slot.client_name.trim()) ||
+            (typeof slot?.clientName === 'string' && slot.clientName.trim()) ||
+            (typeof slot?.client_label === 'string' && slot.client_label.trim()) ||
+            (typeof slot?.clientLabel === 'string' && slot.clientLabel.trim()) ||
+            (typeof slot?.client_id === 'string' && slot.client_id.trim()) ||
+            (typeof slot?.clientId === 'string' && slot.clientId.trim()),
+        );
+
+        const slotRateCandidate = getSlotRate(slot);
+        const hasRate = Number.isFinite(slotRateCandidate) && slotRateCandidate > 0;
+
+        const hasExplicitStatus = Boolean(explicitStatus);
+
+        const looksLikeStandaloneTask =
+          (explicitWeeklyTask || Boolean(taskLabel)) &&
+          !hasClientSignal &&
+          !hasRate &&
+          !hasExplicitStatus;
+
+        if (looksLikeStandaloneTask) {
+          const taskPriceCandidates = [
+            slot?.task_price,
+            slot?.taskPrice,
+            slot?.price,
+            slot?.flat_price,
+            slot?.flatPrice,
+            slot?.fixed_price,
+            slot?.fixedPrice,
+            slot?.amount,
+          ];
+          for (const candidate of taskPriceCandidates) {
+            const numeric = Number(candidate);
+            if (Number.isFinite(numeric) && numeric > 0) {
+              totals.totalTaches += numeric;
+              const taskIdentifier =
+                slot?.task_occurrence_id ||
+                slot?.taskOccurrenceId ||
+                slot?.weekly_task_occurrence_id ||
+                slot?.weeklyTaskOccurrenceId ||
+                slot?.task_id ||
+                slot?.taskId ||
+                slot?.id ||
+                null;
+              if (taskIdentifier) {
+                countedTaskIds.add(String(taskIdentifier));
+              }
+              break;
+            }
+          }
+          return;
         }
-      }
 
-      if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
-        return;
-      }
+        if (!hasClientSignal && !hasRate && !hasExplicitStatus) {
+          return;
+        }
 
-      const amount = durationHours * rateToApply;
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return;
-      }
+        const startDate = getSlotStartDate(slot);
+        const endDate = getSlotEndDate(slot);
 
-      const statusCategory = resolveStatusCategory(event?.status ?? event?.type ?? '');
-      if (!statusCategory) {
-        return;
-      }
+        if (
+          !(startDate instanceof Date) ||
+          Number.isNaN(startDate.getTime()) ||
+          !(endDate instanceof Date) ||
+          Number.isNaN(endDate.getTime())
+        ) {
+          return;
+        }
 
-      totals[statusCategory] += amount;
-    });
+        const durationMs = endDate.getTime() - startDate.getTime();
+        if (!Number.isFinite(durationMs) || durationMs <= 0) {
+          return;
+        }
 
-    return totals;
-  }, [events, clientMap, clients, hourlyRateGlobal, resolveStatusCategory]);
+        const durationHours = durationMs / (60 * 60 * 1000);
+        if (!Number.isFinite(durationHours) || durationHours <= 0) {
+          return;
+        }
 
-  const summaryCards = useMemo(
-    () => [
-      {
-        key: 'paid',
-        label: 'Payé',
-        amount: earningsSummary.paid,
-        border: 'border-emerald-200/70 dark:border-emerald-500/40',
-        background: 'bg-emerald-50 dark:bg-emerald-500/10',
-        accent: 'text-emerald-600 dark:text-emerald-300',
-      },
-      {
-        key: 'pending',
-        label: 'En attente',
-        amount: earningsSummary.pending,
-        border: 'border-amber-200/70 dark:border-amber-500/30',
-        background: 'bg-amber-50 dark:bg-amber-500/10',
-        accent: 'text-amber-600 dark:text-amber-300',
-      },
-      {
-        key: 'unpaid',
-        label: 'Non payé',
-        amount: earningsSummary.unpaid,
-        border: 'border-rose-200/70 dark:border-rose-500/40',
-        background: 'bg-rose-50 dark:bg-rose-500/10',
-        accent: 'text-rose-600 dark:text-rose-300',
-      },
-    ],
-    [earningsSummary],
+        let rateToApply = null;
+
+        const clientId = slot?.clientId || slot?.client_id || null;
+        let resolvedClient = null;
+
+        if (clientId) {
+          resolvedClient =
+            clientMap.get(clientId) ||
+            (Array.isArray(clients)
+              ? clients.find((candidate) => candidate?.id === clientId)
+              : null);
+        }
+
+        if (!resolvedClient && slot?.client && typeof slot.client === 'object') {
+          resolvedClient = slot.client;
+        }
+
+        if (resolvedClient) {
+          const usesGlobalRate = resolvedClient?.useGlobalRate ?? resolvedClient?.use_global_rate;
+          const clientHourlyRate =
+            resolvedClient?.hourlyRate ??
+            resolvedClient?.hourly_rate ??
+            resolvedClient?.hourly_rate_custom ??
+            resolvedClient?.hourlyRateCustom ??
+            null;
+
+          const parsedClientRate = Number(clientHourlyRate);
+          const normalizedUseGlobal =
+            typeof usesGlobalRate === 'string'
+              ? ['global', 'true'].includes(usesGlobalRate.trim().toLowerCase())
+              : usesGlobalRate;
+
+          if (normalizedUseGlobal === false && Number.isFinite(parsedClientRate) && parsedClientRate > 0) {
+            rateToApply = parsedClientRate;
+          } else if (normalizedUseGlobal === true) {
+            if (globalRate > 0) {
+              rateToApply = globalRate;
+            }
+          } else if (Number.isFinite(parsedClientRate) && parsedClientRate > 0) {
+            rateToApply = parsedClientRate;
+          }
+        }
+
+        if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+          if (globalRate > 0) {
+            rateToApply = globalRate;
+          }
+        }
+
+        if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+          if (Number.isFinite(slotRateCandidate) && slotRateCandidate > 0) {
+            rateToApply = slotRateCandidate;
+          }
+        }
+
+        if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
+          return;
+        }
+
+        const amount = durationHours * rateToApply;
+        if (!Number.isFinite(amount) || amount <= 0) {
+          return;
+        }
+
+        const statusCategory = resolveStatusCategory(
+          explicitStatus ?? slot?.payment_status ?? slot?.status ?? slot?.type ?? '',
+        );
+        if (!statusCategory) {
+          return;
+        }
+
+        if (statusCategory === 'paid') {
+          totals.totalPaye += amount;
+        } else if (statusCategory === 'pending') {
+          totals.totalEnAttente += amount;
+        } else if (statusCategory === 'unpaid') {
+          totals.totalNonPaye += amount;
+        }
+      });
+
+      const occurrences = Array.isArray(taskList) ? taskList : [];
+      occurrences.forEach((occurrence) => {
+        if (!occurrence) {
+          return;
+        }
+
+        const occurrenceId =
+          occurrence.occurrenceId ||
+          occurrence.id ||
+          (occurrence.taskId
+            ? `${occurrence.taskId}-${occurrence.taskDateISO || occurrence.task_date_iso || ''}`
+            : null);
+
+        if (occurrenceId && countedTaskIds.has(String(occurrenceId))) {
+          return;
+        }
+
+        const price = Number(occurrence.price);
+        if (Number.isFinite(price) && price > 0) {
+          totals.totalTaches += price;
+          if (occurrenceId) {
+            countedTaskIds.add(String(occurrenceId));
+          }
+        }
+      });
+
+      return totals;
+    },
+    [clientMap, clients, resolveStatusCategory],
   );
 
   const {
@@ -736,6 +982,41 @@ export default function Planning() {
     loading: tasksLoading,
     error: tasksError,
   } = useTasks(planningContext, weekStartISO);
+
+  const recapTotals = useMemo(
+    () => calculateRecapTotals(events, taskOccurrences, hourlyRateGlobal),
+    [calculateRecapTotals, events, taskOccurrences, hourlyRateGlobal],
+  );
+
+  const summaryCards = useMemo(
+    () => [
+      {
+        key: 'paid',
+        label: 'Payé',
+        amount: recapTotals.totalPaye,
+        border: 'border-emerald-200/70 dark:border-emerald-500/40',
+        background: 'bg-emerald-50 dark:bg-emerald-500/10',
+        accent: 'text-emerald-600 dark:text-emerald-300',
+      },
+      {
+        key: 'pending',
+        label: 'En attente',
+        amount: recapTotals.totalEnAttente,
+        border: 'border-amber-200/70 dark:border-amber-500/30',
+        background: 'bg-amber-50 dark:bg-amber-500/10',
+        accent: 'text-amber-600 dark:text-amber-300',
+      },
+      {
+        key: 'unpaid',
+        label: 'Non payé',
+        amount: recapTotals.totalNonPaye,
+        border: 'border-rose-200/70 dark:border-rose-500/40',
+        background: 'bg-rose-50 dark:bg-rose-500/10',
+        accent: 'text-rose-600 dark:text-rose-300',
+      },
+    ],
+    [recapTotals],
+  );
 
   const tasksSummary = useMemo(() => {
     if (!Array.isArray(taskOccurrences) || taskOccurrences.length === 0) {
@@ -1199,7 +1480,7 @@ export default function Planning() {
                 Tâches
               </p>
               <p className="mt-1 text-lg font-semibold text-sky-700 dark:text-sky-300">
-                {currencyFormatter.format(tasksSummary.total)}
+                {currencyFormatter.format(recapTotals.totalTaches)}
               </p>
               {tasksSummary.items.length > 0 && (
                 <div className="mt-3 space-y-2" role="list">
