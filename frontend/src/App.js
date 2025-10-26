@@ -22,6 +22,7 @@ import SettingsPage from "./pages/SettingsPage";
 import ProfilePickerPage from "./pages/ProfilePickerPage";
 import Todo from "./pages/Todo";
 import Sidebar from "./components/Sidebar";
+import Header from "./components/Header";
 import NotFound from "./pages/NotFound";
 import { apiFetch } from "./lib/api";
 import {
@@ -40,10 +41,13 @@ function Layout({ user, onLogout }) {
       <Sidebar user={user} onLogout={onLogout} />
       <div
         style={{ flex: 1, padding: "20px" }}
-        className="flex-1 bg-white transition-colors dark:bg-slate-900"
+        className="relative flex-1 bg-white transition-colors dark:bg-slate-900"
       >
-        {/* Outlet = là où s’affichent les pages */}
-        <Outlet context={{ user }} />
+        <Header user={user} />
+        <div className="pt-16">
+          {/* Outlet = là où s’affichent les pages */}
+          <Outlet context={{ user }} />
+        </div>
       </div>
     </div>
   );
