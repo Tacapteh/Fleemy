@@ -3327,7 +3327,7 @@ async def create_test_notification(
         
         # Créer un nouveau document dans la collection "notifications"
         notifications_ref = db.collection("notifications")
-        doc_ref = notifications_ref.document()
+        doc_ref = notifications_ref.document(str(uuid.uuid4()))
         
         notification_data = {
             "userId": notification_request.userId,
