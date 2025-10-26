@@ -69,19 +69,38 @@ class InMemoryCollection:
     def __init__(self, store, path):
         self.store = store
         self.path = path
+        self._filters = []
+        self._order_field = None
+        self._order_direction = None
+        self._limit_count = None
 
     def document(self, doc_id):
         return InMemoryDocument(self.store, self.path + [doc_id])
 
     # Simplified query helpers
-    def where(self, *args, **kwargs):
-        return self
+    def where(self, field, op, value):
+        new_collection = InMemoryCollection(self.store, self.path)
+        new_collection._filters = self._filters + [(field, op, value)]
+        new_collection._order_field = self._order_field
+        new_collection._order_direction = self._order_direction
+        new_collection._limit_count = self._limit_count
+        return new_collection
 
-    def order_by(self, *args, **kwargs):
-        return self
+    def order_by(self, field, direction=None):
+        new_collection = InMemoryCollection(self.store, self.path)
+        new_collection._filters = self._filters
+        new_collection._order_field = field
+        new_collection._order_direction = direction
+        new_collection._limit_count = self._limit_count
+        return new_collection
 
-    def limit(self, *args, **kwargs):
-        return self
+    def limit(self, count):
+        new_collection = InMemoryCollection(self.store, self.path)
+        new_collection._filters = self._filters
+        new_collection._order_field = self._order_field
+        new_collection._order_direction = self._order_direction
+        new_collection._limit_count = count
+        return new_collection
 
     def stream(self):
         d = InMemoryDocument(self.store, self.path)._ref()
@@ -94,8 +113,45 @@ class InMemoryCollection:
             def to_dict(self):
                 return dict(self._d)
 
+        # Apply filters
+        results = []
         for k, v in d.items():
-            yield Snap(k, v)
+            if self._apply_filters(v):
+                results.append(Snap(k, v))
+        
+        # Apply ordering
+        if self._order_field:
+            reverse = self._order_direction and hasattr(self._order_direction, 'DESCENDING')
+            results.sort(key=lambda x: x.to_dict().get(self._order_field, ''), reverse=reverse)
+        
+        # Apply limit
+        if self._limit_count:
+            results = results[:self._limit_count]
+        
+        return results
+
+    def _apply_filters(self, data):
+        for field, op, value in self._filters:
+            field_value = data.get(field)
+            if op == "==":
+                if field_value != value:
+                    return False
+            elif op == "!=":
+                if field_value == value:
+                    return False
+            elif op == ">":
+                if not (field_value and field_value > value):
+                    return False
+            elif op == ">=":
+                if not (field_value and field_value >= value):
+                    return False
+            elif op == "<":
+                if not (field_value and field_value < value):
+                    return False
+            elif op == "<=":
+                if not (field_value and field_value <= value):
+                    return False
+        return True
 
 
 class InMemoryFirestore:
