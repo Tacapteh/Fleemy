@@ -11,6 +11,7 @@ import {
   TaskOccurrence,
   DateRange,
   PlannerEventInput,
+  AttachedTaskBadge,
 } from '../selectors/planningSelectors';
 import EventCard from './EventCard';
 
@@ -107,6 +108,16 @@ interface TaskBlockLayout {
   backgroundColor: string;
   borderColor: string;
   textColor: string;
+}
+
+interface DaySlot {
+  key: string;
+  dayIndex: number;
+  startDate: Date;
+  endDate: Date;
+  event: DisplayEvent | null;
+  eventTaskBadges: AttachedTaskBadge[];
+  tasks: TaskOccurrence[];
 }
 
 const formatHourLabel = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;
@@ -465,6 +476,106 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     [dateRange, events, tasks]
   );
 
+  const mergedDaySlots = useMemo(() => {
+    const slotMaps: Map<string, DaySlot>[] = Array.from({ length: 7 }, () => new Map());
+
+    const createSlotKey = (dayIndex: number, start: Date, end: Date) =>
+      `${dayIndex}-${start.getTime()}-${end.getTime()}`;
+
+    const resolvePriority = (event: DisplayEvent | null | undefined) => {
+      if (!event) {
+        return -Infinity;
+      }
+      if (typeof event.displayPriority === 'number' && Number.isFinite(event.displayPriority)) {
+        return event.displayPriority;
+      }
+      return event.startDate.getTime();
+    };
+
+    displayEvents.forEach((event) => {
+      if (event.dayIndex < 0 || event.dayIndex > 6) {
+        return;
+      }
+
+      const startDate = new Date(event.startDate);
+      const endDate = new Date(event.endDate);
+      const key = createSlotKey(event.dayIndex, startDate, endDate);
+      const dayMap = slotMaps[event.dayIndex];
+      const existing = dayMap.get(key);
+
+      if (!existing) {
+        dayMap.set(key, {
+          key,
+          dayIndex: event.dayIndex,
+          startDate,
+          endDate,
+          event,
+          eventTaskBadges: Array.isArray(event.attachedTaskBadges)
+            ? [...event.attachedTaskBadges]
+            : [],
+          tasks: [],
+        });
+        return;
+      }
+
+      const currentPriority = resolvePriority(existing.event);
+      const nextPriority = resolvePriority(event);
+
+      if (nextPriority >= currentPriority) {
+        existing.event = event;
+        existing.eventTaskBadges = Array.isArray(event.attachedTaskBadges)
+          ? [...event.attachedTaskBadges]
+          : [];
+      }
+    });
+
+    displayTaskGroups.forEach((group) => {
+      if (group.dayIndex < 0 || group.dayIndex > 6) {
+        return;
+      }
+
+      const startDate = new Date(group.startDate);
+      const endDate = new Date(group.endDate);
+      const key = createSlotKey(group.dayIndex, startDate, endDate);
+      const dayMap = slotMaps[group.dayIndex];
+      const slot = dayMap.get(key);
+
+      if (!slot) {
+        dayMap.set(key, {
+          key,
+          dayIndex: group.dayIndex,
+          startDate,
+          endDate,
+          event: null,
+          eventTaskBadges: [],
+          tasks: [...group.tasks],
+        });
+        return;
+      }
+
+      group.tasks.forEach((task) => {
+        if (!slot.tasks.some((existingTask) => existingTask.occurrenceId === task.occurrenceId)) {
+          slot.tasks.push(task);
+        }
+      });
+    });
+
+    return slotMaps.map((dayMap) => {
+      const slots = Array.from(dayMap.values());
+      if (slots.length === 0) {
+        return [];
+      }
+
+      return slots.sort((a, b) => {
+        const diff = a.startDate.getTime() - b.startDate.getTime();
+        if (diff !== 0) {
+          return diff;
+        }
+        return a.endDate.getTime() - b.endDate.getTime();
+      });
+    });
+  }, [displayEvents, displayTaskGroups]);
+
   const eventLayouts = useMemo(() => {
     const perDay: DisplayEvent[][] = Array.from({ length: 7 }, () => []);
 
@@ -698,8 +809,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           <>
             {mobileDaysToShow.map((day, dayIndex) => {
               const originalDayIndex = days.findIndex(d => d.date.getTime() === day.date.getTime());
-              const dayEvents = originalDayIndex >= 0 ? visibleEventLayouts[originalDayIndex] || [] : [];
-              const dayTasks = originalDayIndex >= 0 ? visibleTaskLayouts[originalDayIndex] || [] : [];
+              const daySlots = originalDayIndex >= 0 ? mergedDaySlots[originalDayIndex] || [] : [];
+              const dayHasContent = daySlots.some(
+                (slot) => (slot.event !== null) || slot.tasks.length > 0
+              );
 
               return (
                 <div key={`mobile-day-${dayIndex}`} className="border border-white/10 rounded-lg bg-[#1a2235] p-2 mb-4 w-full">
@@ -717,10 +830,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                     )}
                   </div>
 
-                  {/* Liste des événements du jour */}
-                  {dayEvents.length > 0 && (
-                    <div className="space-y-2 mb-3">
-                      {dayEvents.map(({ event }) => {
+                  <div className="space-y-2 mb-3">
+                    {daySlots.map((slot) => {
+                      if (slot.event) {
+                        const event = slot.event;
                         const startTime = event.startDate.toLocaleTimeString('fr-FR', {
                           hour: '2-digit',
                           minute: '2-digit',
@@ -745,9 +858,9 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
                         return (
                           <div
-                            key={event.id}
+                            key={`${slot.key}-event`}
                             onClick={() => onEventClick?.(event)}
-                            className={`${bgColorClass} ${borderColorClass} border rounded p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
+                            className={`${bgColorClass} ${borderColorClass} relative border rounded p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
                           >
                             <div className="font-medium text-gray-900 dark:text-white">
                               {startTime} - {endTime}
@@ -755,70 +868,94 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                             <div className="text-gray-800 dark:text-slate-200">
                               {event.client || event.description || 'Sans titre'}
                             </div>
+
+                            {slot.eventTaskBadges.length > 0 && (
+                              <div className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1">
+                                {slot.eventTaskBadges.map((badge) => {
+                                  const IconComponent = getIcon(badge.iconId ?? undefined);
+                                  const badgeColors = getTaskColor(badge.color);
+
+                                  return (
+                                    <span
+                                      key={`${slot.key}-badge-${badge.taskId}`}
+                                      className="flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
+                                      style={{
+                                        backgroundColor: badgeColors.backgroundColor,
+                                        color: badgeColors.color,
+                                        borderColor: badgeColors.borderColor,
+                                      }}
+                                      aria-hidden="true"
+                                    >
+                                      <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} />
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
+                      }
 
-                  {/* Liste des tâches hebdo du jour */}
-                  {dayTasks.length > 0 && (
-                    <div className="space-y-2">
-                      {dayTasks.map(({ task, backgroundColor, borderColor, textColor }) => {
-                        const startTime = task.startDate.toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        });
-                        const endTime = task.endDate.toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        });
-                        const IconComponent = getIcon(task.icon ?? undefined);
+                      if (slot.tasks.length > 0) {
+                        return slot.tasks.map((task) => {
+                          const startTime = task.startDate.toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          });
+                          const endTime = task.endDate.toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          });
+                          const IconComponent = getIcon(task.icon ?? undefined);
+                          const colors = getTaskColor(task.color);
 
-                        const formattedPrice =
-                          typeof task.price === 'number'
-                            ? `${task.price.toLocaleString('fr-FR', {
-                                minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
-                                maximumFractionDigits: 2,
-                              })} €`
-                            : typeof task.price === 'string'
-                            ? task.price.trim()
-                            : '';
+                          const formattedPrice =
+                            typeof task.price === 'number'
+                              ? `${task.price.toLocaleString('fr-FR', {
+                                  minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
+                                  maximumFractionDigits: 2,
+                                })} €`
+                              : typeof task.price === 'string'
+                              ? task.price.trim()
+                              : '';
 
-                        const isInteractive =
-                          !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
+                          const isInteractive =
+                            !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
 
-                        return (
-                          <div
-                            key={task.occurrenceId}
-                            onClick={() => isInteractive && onTaskClick?.(task)}
-                            className={`rounded p-2 text-xs min-h-[44px] flex items-center gap-2 ${
-                              isInteractive ? 'cursor-pointer' : ''
-                            }`}
-                            style={{
-                              backgroundColor,
-                              border: `1px solid ${borderColor}`,
-                              color: textColor,
-                            }}
-                          >
-                            <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-                            <div className="flex flex-col flex-1 min-w-0">
-                              <span className="font-medium truncate">{task.label}</span>
-                              <div className="flex items-center gap-2 text-[11px] opacity-90">
-                                <span>
-                                  {startTime} - {endTime}
-                                </span>
-                                {formattedPrice && <span>{formattedPrice}</span>}
+                          return (
+                            <div
+                              key={`${slot.key}-task-${task.occurrenceId}`}
+                              onClick={() => isInteractive && onTaskClick?.(task)}
+                              className={`rounded p-2 text-xs min-h-[44px] flex items-center gap-2 ${
+                                isInteractive ? 'cursor-pointer' : ''
+                              }`}
+                              style={{
+                                backgroundColor: colors.backgroundColor,
+                                border: `1px solid ${colors.borderColor}`,
+                                color: colors.color,
+                              }}
+                            >
+                              <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
+                              <div className="flex flex-col flex-1 min-w-0">
+                                <span className="font-medium truncate">{task.label}</span>
+                                <div className="flex items-center gap-2 text-[11px] opacity-90">
+                                  <span>
+                                    {startTime} - {endTime}
+                                  </span>
+                                  {formattedPrice && <span>{formattedPrice}</span>}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          );
+                        });
+                      }
+
+                      return null;
+                    })}
+                  </div>
 
                   {/* Message si pas d'événements ni de tâches */}
-                  {dayEvents.length === 0 && dayTasks.length === 0 && (
+                  {!dayHasContent && (
                     <div className="text-sm text-gray-500 dark:text-slate-400 text-center py-4">
                       Aucun événement ou tâche
                     </div>
@@ -932,20 +1069,43 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               <div
                                 key={event.id}
                                 onClick={() => onEventClick?.(event)}
-                                className={`absolute left-1 right-1 ${bgColorClass} ${borderColorClass} border rounded-lg shadow-sm cursor-pointer text-xs overflow-hidden pointer-events-auto`}
-                                style={{
-                                  top: topValue,
-                                  height: heightValue,
-                                  minHeight: '44px',
-                                }}
-                              >
-                                <div className="p-2 h-full flex flex-col justify-center">
+                            className={`absolute left-1 right-1 ${bgColorClass} ${borderColorClass} border rounded-lg shadow-sm cursor-pointer text-xs overflow-hidden pointer-events-auto`}
+                            style={{
+                              top: topValue,
+                              height: heightValue,
+                              minHeight: '44px',
+                            }}
+                          >
+                                <div className="p-2 h-full flex flex-col justify-center relative pr-8 pb-6">
                                   <div className="font-medium text-gray-900 dark:text-white text-sm">
                                     {startTime} - {endTime}
                                   </div>
                                   <div className="text-gray-800 dark:text-slate-200 truncate">
                                     {event.client || event.description || 'Sans titre'}
                                   </div>
+                                  {event.attachedTaskBadges.length > 0 && (
+                                    <div className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1">
+                                      {event.attachedTaskBadges.map((badge) => {
+                                        const IconComponent = getIcon(badge.iconId ?? undefined);
+                                        const badgeColors = getTaskColor(badge.color);
+
+                                        return (
+                                          <span
+                                            key={`${event.id}-badge-${badge.taskId}`}
+                                            className="flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
+                                            style={{
+                                              backgroundColor: badgeColors.backgroundColor,
+                                              color: badgeColors.color,
+                                              borderColor: badgeColors.borderColor,
+                                            }}
+                                            aria-hidden="true"
+                                          >
+                                            <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} />
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );
