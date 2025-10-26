@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { watchWeekEvents, fetchWeekEventsOnce } from '../firebase';
 import { getCachedPlanningData, setCachedPlanningData } from '../utils/planningCache';
 
 const EVENTS_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const REFRESH_EVENT_NAME = 'planning:refresh-week-slots';
 
 const startOfWeek = (date) => {
   const value = date instanceof Date ? new Date(date) : new Date();
@@ -72,7 +73,7 @@ const normalizeDateInput = (value) => {
   return null;
 };
 
-const buildContextKey = (context) => {
+export const buildContextKey = (context) => {
   if (!context || typeof context !== 'object') {
     return 'none';
   }
@@ -93,6 +94,28 @@ const buildContextKey = (context) => {
   }
 
   return 'none';
+};
+
+export const requestWeekSlotsRefresh = (context, weekStartInput, weekEndInput) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const contextKey = buildContextKey(context);
+  if (!contextKey || contextKey === 'none') {
+    return;
+  }
+
+  const startDate = normalizeDateInput(weekStartInput);
+  const endDate = normalizeDateInput(weekEndInput);
+
+  const detail = {
+    contextKey,
+    weekStartISO: toIsoDate(startDate),
+    weekEndISO: toIsoDate(endDate || (startDate ? endOfWeek(startDate) : null)),
+  };
+
+  window.dispatchEvent(new CustomEvent(REFRESH_EVENT_NAME, { detail }));
 };
 
 export default function useUserWeekSlots(userId, options = {}) {
@@ -165,6 +188,39 @@ export default function useUserWeekSlots(userId, options = {}) {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  const handleRefreshRequest = useCallback(
+    (event) => {
+      const detail = event?.detail || {};
+
+      if (detail.contextKey && detail.contextKey !== contextKey) {
+        return;
+      }
+
+      if (detail.weekStartISO && weekStartISO && detail.weekStartISO !== weekStartISO) {
+        return;
+      }
+
+      if (detail.weekEndISO && weekEndISO && detail.weekEndISO !== weekEndISO) {
+        return;
+      }
+
+      setRefreshToken((token) => token + 1);
+    },
+    [contextKey, weekStartISO, weekEndISO],
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return () => {};
+    }
+
+    window.addEventListener(REFRESH_EVENT_NAME, handleRefreshRequest);
+    return () => {
+      window.removeEventListener(REFRESH_EVENT_NAME, handleRefreshRequest);
+    };
+  }, [handleRefreshRequest]);
 
   useEffect(() => {
     if (!enabled) {
@@ -298,6 +354,7 @@ export default function useUserWeekSlots(userId, options = {}) {
     weekStartISO,
     weekEndISO,
     eventsCacheKey,
+    refreshToken,
   ]);
 
   return { slots, loading, error };
