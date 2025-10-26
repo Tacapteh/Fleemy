@@ -1,9 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { contextStore } from '../stores/contextStore';
-import { Bell, ChevronLeft, ChevronRight } from 'lucide-react';
-import NotificationsPanel from './NotificationsPanel';
-import useNotifications from '../hooks/useNotifications';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
@@ -25,54 +23,6 @@ const getMenuItemClass = (isActive, isCollapsed) =>
 export default function Sidebar({ user, onLogout }) {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [hasFetchedNotifications, setHasFetchedNotifications] = useState(false);
-  const bellButtonRef = useRef(null);
-  const wasOpenRef = useRef(false);
-
-  const {
-    notifications,
-    unreadCount,
-    fetchNotifications,
-    markAllAsRead,
-  } = useNotifications(user?.uid);
-
-  useEffect(() => {
-    if (wasOpenRef.current && !isNotificationsOpen) {
-      bellButtonRef.current?.focus();
-    }
-    wasOpenRef.current = isNotificationsOpen;
-  }, [isNotificationsOpen]);
-
-  useEffect(() => {
-    setIsNotificationsOpen(false);
-    setHasFetchedNotifications(false);
-  }, [user?.uid]);
-
-  const handleToggleNotifications = () => {
-    if (!isNotificationsOpen) {
-      if (!hasFetchedNotifications) {
-        fetchNotifications()
-          .then(() => {
-            setHasFetchedNotifications(true);
-          })
-          .catch(() => {
-            setHasFetchedNotifications(false);
-          });
-      }
-      setIsNotificationsOpen(true);
-      return;
-    }
-    setIsNotificationsOpen(false);
-  };
-
-  const handleCloseNotifications = () => {
-    setIsNotificationsOpen(false);
-  };
-
-  const handleMarkAllAsRead = async (ids) => {
-    await markAllAsRead(ids);
-  };
 
   const planningPath = React.useMemo(() => {
     const context = contextStore.get();
@@ -100,28 +50,6 @@ export default function Sidebar({ user, onLogout }) {
               <p className="text-xs text-gray-500 dark:text-slate-400">Outil tout-en-un</p>
             </div>
           )}
-        </div>
-
-        <div className={`absolute top-6 ${isCollapsed ? 'right-8' : 'right-14'} flex items-center`}>
-          <button
-            ref={bellButtonRef}
-            type="button"
-            onClick={handleToggleNotifications}
-            aria-label={
-              unreadCount > 0
-                ? `Notifications, ${unreadCount} non lues`
-                : 'Notifications'
-            }
-            className="relative rounded-full border border-gray-200 bg-white p-2 text-gray-600 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
-          >
-            <Bell className="h-5 w-5" aria-hidden="true" />
-            {unreadCount > 0 && (
-              <span
-                className="absolute -right-1 -top-1 inline-flex h-3 w-3 items-center justify-center rounded-full bg-red-500"
-                aria-hidden="true"
-              />
-            )}
-          </button>
         </div>
 
         {/* Bouton toggle */}
@@ -229,14 +157,6 @@ export default function Sidebar({ user, onLogout }) {
           )}
         </div>
       )}
-
-      <NotificationsPanel
-        isOpen={isNotificationsOpen}
-        onClose={handleCloseNotifications}
-        notifications={notifications}
-        onMarkAllAsRead={handleMarkAllAsRead}
-        anchorRef={bellButtonRef}
-      />
     </div>
   );
 }
