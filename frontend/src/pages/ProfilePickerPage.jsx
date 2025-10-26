@@ -37,7 +37,7 @@ const ProfilePickerPage = () => {
   }, []);
 
   const loadTeams = useCallback(
-    async ({ skipSpinner = false } = {}) => {
+    async ({ skipSpinner = false, forceRefresh = false } = {}) => {
       if (!skipSpinner) {
         setLoading(true);
       }
@@ -53,7 +53,7 @@ const ProfilePickerPage = () => {
 
         const result = await ensureTeamsCache(
           () => apiFetch('/teams/my'),
-          { forceRefresh: true },
+          { forceRefresh },
         );
 
         if (result.success) {
@@ -90,7 +90,7 @@ const ProfilePickerPage = () => {
       usedCache = true;
     }
 
-    loadTeams({ skipSpinner: usedCache });
+    loadTeams({ skipSpinner: usedCache, forceRefresh: true });
   }, [loadTeams]);
 
   const updateLastContext = useCallback(async (contextData) => {
@@ -190,7 +190,7 @@ const ProfilePickerPage = () => {
           await updateLastContext(soloContext);
         }
 
-        await loadTeams({ skipSpinner: true });
+        await loadTeams({ skipSpinner: true, forceRefresh: true });
       } catch (err) {
         console.error('Error deleting team:', err);
         const message = err?.message || "Impossible de supprimer l'équipe";
@@ -221,7 +221,7 @@ const ProfilePickerPage = () => {
 
       clearTeamsCache();
       // Reload teams
-      const result = await loadTeams();
+      const result = await loadTeams({ forceRefresh: true });
 
       const createdTeam =
         (Array.isArray(result?.teams)
@@ -263,7 +263,7 @@ const ProfilePickerPage = () => {
 
       clearTeamsCache();
       // Reload teams
-      const result = await loadTeams();
+      const result = await loadTeams({ forceRefresh: true });
 
       const joinedTeam =
         (Array.isArray(result?.teams)
