@@ -54,28 +54,6 @@ const TaskSummaryRow = ({ iconId, label, price }) => {
   );
 };
 
-const PAYMENT_STATUS_ITEMS = [
-  { id: 'paid', label: 'Payé', dotClass: 'bg-green-200 dark:bg-green-500' },
-  { id: 'unpaid', label: 'Impayé', dotClass: 'bg-red-200 dark:bg-red-500' },
-  { id: 'pending', label: 'En attente', dotClass: 'bg-orange-200 dark:bg-orange-500' },
-];
-
-const PaymentStatusLegend = () => (
-  <div className="mt-8 space-y-3 text-sm text-gray-600 dark:text-slate-300">
-    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-      Statuts de paiement
-    </p>
-    <div className="flex flex-wrap items-center gap-6">
-      {PAYMENT_STATUS_ITEMS.map(({ id, label, dotClass }) => (
-        <div key={id} className="flex items-center gap-2">
-          <span className={`inline-block h-3 w-3 rounded-full ${dotClass}`} />
-          <span>{label}</span>
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
 const matchTeamId = (team, teamId) => {
   if (!team || !teamId) {
     return false;
@@ -1233,8 +1211,6 @@ export default function Planning() {
             />
           </div>
         )}
-
-        <PaymentStatusLegend />
 
         {showSkeleton && (
           <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">Chargement des données…</div>
