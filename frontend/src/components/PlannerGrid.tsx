@@ -42,6 +42,46 @@ const ceilDateToHour = (value: Date): Date => {
   return date;
 };
 
+const rangesOverlap = (aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean => {
+  return aStart.getTime() < bEnd.getTime() && bStart.getTime() < aEnd.getTime();
+};
+
+const resolveDayEventConflicts = (eventsForDay: DisplayEvent[]): DisplayEvent[] => {
+  if (eventsForDay.length <= 1) {
+    return eventsForDay;
+  }
+
+  const prioritized = [...eventsForDay].sort((a, b) => {
+    const aScore = typeof a.displayPriority === 'number' ? a.displayPriority : -Infinity;
+    const bScore = typeof b.displayPriority === 'number' ? b.displayPriority : -Infinity;
+
+    if (bScore !== aScore) {
+      return bScore - aScore;
+    }
+
+    const startDiff = b.startDate.getTime() - a.startDate.getTime();
+    if (startDiff !== 0) {
+      return startDiff;
+    }
+
+    return b.endDate.getTime() - a.endDate.getTime();
+  });
+
+  const resolved: DisplayEvent[] = [];
+
+  prioritized.forEach((event) => {
+    const overlapsExisting = resolved.some((existing) =>
+      rangesOverlap(existing.startDate, existing.endDate, event.startDate, event.endDate)
+    );
+
+    if (!overlapsExisting) {
+      resolved.push(event);
+    }
+  });
+
+  return resolved.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+};
+
 interface PlannerGridProps {
   events?: PlannerEventInput[];
   tasks?: unknown[];
@@ -434,16 +474,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
 
     return perDay.map((dayEvents) => {
-      const sorted = [...dayEvents].sort((a, b) => {
-        const diff = a.startDate.getTime() - b.startDate.getTime();
-        if (diff !== 0) return diff;
-        return a.endDate.getTime() - b.endDate.getTime();
-      });
-
+      const resolvedEvents = resolveDayEventConflicts(dayEvents);
       const columnEndTimes: number[] = [];
       const layouts: EventLayout[] = [];
 
-      sorted.forEach((event) => {
+      resolvedEvents.forEach((event) => {
         const effectiveStart = allowMinutes ? event.startDate : floorDateToHour(event.startDate);
         const effectiveEnd = allowMinutes ? event.endDate : ceilDateToHour(event.endDate);
 

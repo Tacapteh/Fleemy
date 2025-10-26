@@ -196,6 +196,14 @@
   transition: opacity 0.2s ease;
 }
 
+.event-chip-content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
 /* S'assurer que le positionnement absolu des enfants fonctionne */
 .event-chip > * {
   position: relative;
@@ -311,7 +319,15 @@
 /* Conteneur d'icônes de tâches en bas à droite de l'événement */
 .event-chip .absolute {
   pointer-events: auto;
-  z-index: 1;
+  z-index: 2;
+}
+
+.event-chip .event-chip-badge {
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
 }
 
 /* S'assurer que les icônes ne provoquent pas de débordement */
@@ -335,7 +351,7 @@
   .event-chip .flex-wrap {
     line-height: 1;
   }
-  
+
   /* Icônes de tâches en bas à droite - ajuster l'espacement sur mobile */
   .event-chip .absolute.bottom-1.right-1 {
     bottom: 0.125rem;

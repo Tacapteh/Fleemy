@@ -99,7 +99,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
 
   return (
     <div
-      className={`event-chip relative pr-8 pb-5${statusClass}`}
+      className={`event-chip${statusClass}`}
       style={style}
       onClick={isInteractive ? handleClick : undefined}
       onKeyDown={handleKeyDown}
@@ -108,32 +108,34 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       aria-label={`Événement : ${title}`}
       data-testid={`event-${event.id}`}
     >
-      {timeLabel && (
-        <div className="mb-1 text-xs font-semibold leading-tight text-slate-600 dark:text-slate-200">
-          {timeLabel}
-        </div>
-      )}
-      <div className="title truncate leading-tight break-words">{title}</div>
+      <div className="event-chip-content relative flex h-full w-full flex-col pr-8 pb-5">
+        {timeLabel && (
+          <div className="mb-1 text-xs font-semibold leading-tight text-slate-600 dark:text-slate-200">
+            {timeLabel}
+          </div>
+        )}
+        <div className="title truncate leading-tight break-words">{title}</div>
 
-      {event.attachedTaskBadges.length > 0 && (
-        <div className="absolute bottom-1 right-1 flex items-center justify-end gap-1">
-          {event.attachedTaskBadges.map((badge) => (
-            <TaskIconBadge
-              key={badge.taskId}
-              taskId={badge.taskId}
-              iconId={badge.iconId}
-              label={badge.label}
-              price={badge.price}
-              colorKey={badge.color}
-              onEdit={openTaskModal}
-              onDelete={confirmDeleteTask}
-              readOnly={isReadOnly}
-            />
-          ))}
-        </div>
-      )}
+        {event.attachedTaskBadges.length > 0 && (
+          <div className="event-chip-badge absolute bottom-1 right-1 flex items-center justify-end gap-1">
+            {event.attachedTaskBadges.map((badge) => (
+              <TaskIconBadge
+                key={badge.taskId}
+                taskId={badge.taskId}
+                iconId={badge.iconId}
+                label={badge.label}
+                price={badge.price}
+                colorKey={badge.color}
+                onEdit={openTaskModal}
+                onDelete={confirmDeleteTask}
+                readOnly={isReadOnly}
+              />
+            ))}
+          </div>
+        )}
 
-      {subtitle && <div className={subtitleClass}>{subtitle}</div>}
+        {subtitle && <div className={subtitleClass}>{subtitle}</div>}
+      </div>
     </div>
   );
 };
