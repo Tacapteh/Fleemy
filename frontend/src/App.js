@@ -137,15 +137,24 @@ function AppWithSettings() {
   const darkModeEnabled = !loading && Boolean(settings?.darkMode);
 
   useEffect(() => {
-    let first = true;
-    const unsub = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (first) {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (nextUser) => {
+        setUser(nextUser);
         setInitializing(false); // Firebase a fini d’initialiser
-        first = false;
+      },
+      (error) => {
+        console.error("Erreur d'observation de l'authentification", error);
+        setUser(null);
+        setInitializing(false);
+      },
+    );
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
       }
-    });
-    return () => unsub();
+    };
   }, []);
 
   useEffect(() => {
