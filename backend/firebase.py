@@ -154,9 +154,15 @@ class InMemoryCollection:
         return True
 
 
+class Query:
+    DESCENDING = "DESCENDING"
+    ASCENDING = "ASCENDING"
+
+
 class InMemoryFirestore:
     def __init__(self):
         self.store = {}
+        self.Query = Query
 
     def collection(self, name):
         return InMemoryCollection(self.store, [name])
