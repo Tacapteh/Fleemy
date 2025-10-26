@@ -182,6 +182,123 @@ const getSlotRate = (slot) => {
   return null;
 };
 
+const isBillableSlot = (slot) => {
+  if (!slot || typeof slot !== 'object') {
+    return false;
+  }
+
+  const normalizedType =
+    typeof slot.type === 'string' ? slot.type.trim().toLowerCase() : null;
+
+  if (normalizedType === 'absence') {
+    return false;
+  }
+
+  const rawStatusCandidates = [
+    slot?.payment_status,
+    slot?.paymentStatus,
+    slot?.status,
+    slot?.state,
+    slot?.type,
+  ];
+
+  let explicitStatus = null;
+  for (const candidate of rawStatusCandidates) {
+    if (candidate === undefined || candidate === null) {
+      continue;
+    }
+    if (typeof candidate === 'string') {
+      const normalized = candidate.trim().toLowerCase();
+      if (!normalized) {
+        continue;
+      }
+      if (['task', 'weekly_task', 'weekly-task', 'absence'].includes(normalized)) {
+        continue;
+      }
+    }
+    explicitStatus = candidate;
+    break;
+  }
+
+  if (explicitStatus) {
+    const statusCategory = resolveStatusCategoryValue(explicitStatus);
+    if (statusCategory === null) {
+      return false;
+    }
+  }
+
+  const hasClientSignal = Boolean(
+    (typeof slot?.client === 'string' && slot.client.trim()) ||
+      (slot?.client && typeof slot.client === 'object') ||
+      (typeof slot?.client_name === 'string' && slot.client_name.trim()) ||
+      (typeof slot?.clientName === 'string' && slot.clientName.trim()) ||
+      (typeof slot?.client_label === 'string' && slot.client_label.trim()) ||
+      (typeof slot?.clientLabel === 'string' && slot.clientLabel.trim()) ||
+      (typeof slot?.client_id === 'string' && slot.client_id.trim()) ||
+      (typeof slot?.clientId === 'string' && slot.clientId.trim()),
+  );
+
+  const numericRate = getSlotRate(slot);
+  const hasRate = Number.isFinite(numericRate);
+
+  const normalizedSource =
+    typeof slot?.source === 'string' ? slot.source.trim().toLowerCase() : '';
+  const normalizedKind =
+    typeof slot?.kind === 'string' ? slot.kind.trim().toLowerCase() : '';
+
+  const explicitWeeklyTask =
+    slot?.weekly === true ||
+    slot?.isWeeklyTask === true ||
+    slot?.is_task === true ||
+    normalizedSource === 'weekly_task' ||
+    normalizedKind === 'weekly_task' ||
+    normalizedType === 'task' ||
+    normalizedType === 'weekly_task' ||
+    normalizedType === 'weekly-task' ||
+    typeof slot?.weekly_task_id === 'string' ||
+    typeof slot?.weeklyTaskId === 'string' ||
+    typeof slot?.task_id === 'string' ||
+    typeof slot?.taskId === 'string' ||
+    typeof slot?.weekly_task_occurrence_id === 'string' ||
+    typeof slot?.weeklyTaskOccurrenceId === 'string' ||
+    typeof slot?.task_occurrence_id === 'string' ||
+    typeof slot?.taskOccurrenceId === 'string';
+
+  const taskLabel = (() => {
+    if (typeof slot?.task_label === 'string' && slot.task_label.trim()) {
+      return slot.task_label.trim();
+    }
+    if (typeof slot?.taskLabel === 'string' && slot.taskLabel.trim()) {
+      return slot.taskLabel.trim();
+    }
+    if (typeof slot?.task_name === 'string' && slot.task_name.trim()) {
+      return slot.task_name.trim();
+    }
+    if (typeof slot?.taskName === 'string' && slot.taskName.trim()) {
+      return slot.taskName.trim();
+    }
+    return '';
+  })();
+
+  const hasExplicitStatus = Boolean(explicitStatus);
+
+  const looksLikeStandaloneTask =
+    (explicitWeeklyTask || Boolean(taskLabel)) &&
+    !hasClientSignal &&
+    !hasRate &&
+    !hasExplicitStatus;
+
+  if (looksLikeStandaloneTask) {
+    return false;
+  }
+
+  if (!hasClientSignal && !hasRate && !hasExplicitStatus) {
+    return false;
+  }
+
+  return true;
+};
+
 const calculateWeeklyEstimatedAmount = (slots, globalHourlyRate) => {
   if (!Array.isArray(slots) || slots.length === 0) {
     return 0;
@@ -190,19 +307,7 @@ const calculateWeeklyEstimatedAmount = (slots, globalHourlyRate) => {
   let total = 0;
 
   slots.forEach((slot) => {
-    if (!slot || slot.type === 'absence') {
-      return;
-    }
-
-    const statusCandidate =
-      slot?.payment_status ??
-      slot?.paymentStatus ??
-      slot?.status ??
-      slot?.type ??
-      slot?.state ??
-      null;
-    const statusCategory = resolveStatusCategoryValue(statusCandidate);
-    if (statusCategory === null) {
+    if (!isBillableSlot(slot)) {
       return;
     }
 
@@ -351,7 +456,11 @@ export default function Dashboard() {
         return;
       }
 
-      hoursTotal += durationHours;
+      const billable = isBillableSlot(slot);
+
+      if (billable) {
+        hoursTotal += durationHours;
+      }
 
       const slotRate = getSlotRate(slot);
       const rateToApply = Number.isFinite(slotRate) && slotRate > 0 ? slotRate : globalHourlyRate;
@@ -362,6 +471,10 @@ export default function Dashboard() {
         if (!Number.isFinite(amount) || amount <= 0) {
           amount = 0;
         }
+      }
+
+      if (!billable) {
+        amount = 0;
       }
 
       const statusCategory = getSlotPaymentCategory(slot);
