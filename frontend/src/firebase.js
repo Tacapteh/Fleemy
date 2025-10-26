@@ -877,11 +877,14 @@ export async function fetchUserTeamsFromFirestore() {
   try {
     const teamsCollection = collection(db, 'teams');
     const memberQuery = query(teamsCollection, where('members', 'array-contains', uid));
-    const memberSnapshot = await getDocs(memberQuery);
-    collect(memberSnapshot);
-
     const ownerQuery = query(teamsCollection, where('owner_uid', '==', uid));
-    const ownerSnapshot = await getDocs(ownerQuery);
+
+    const [memberSnapshot, ownerSnapshot] = await Promise.all([
+      getDocs(memberQuery),
+      getDocs(ownerQuery),
+    ]);
+
+    collect(memberSnapshot);
     collect(ownerSnapshot);
 
     return Array.from(uniqueTeams.values());
