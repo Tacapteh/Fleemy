@@ -94,7 +94,7 @@ export default function DailyTodoPanel({
 }: DailyTodoPanelProps) {
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
 
-  const { todos, loading, error, readOnly: isReadOnly, addItem, updateItem, deleteItem, toggleItem } = useDailyTodos({
+  const { todos, loading, error, readOnly: isReadOnly, addItem, updateItem, deleteItem } = useDailyTodos({
     userId,
     date: dateStr,
     teamId,
@@ -171,18 +171,6 @@ export default function DailyTodoPanel({
       setNewTime('');
     } catch (err) {
       console.error('Failed to add todo item', err);
-    }
-  };
-
-  const handleToggle = async (itemId: string) => {
-    if (effectiveReadOnly) {
-      return;
-    }
-
-    try {
-      await toggleItem(itemId);
-    } catch (err) {
-      console.error('Failed to toggle item', err);
     }
   };
 
@@ -369,25 +357,13 @@ export default function DailyTodoPanel({
               <div
                 key={item.id}
                 data-testid={`todo-item-${item.id}`}
-                className={`flex items-start gap-3 rounded-lg border bg-white/70 p-3 shadow-sm transition-colors dark:bg-amber-950/20 ${
+                className={`flex items-center gap-3 rounded-lg border bg-white/70 p-3 shadow-sm transition-colors dark:bg-amber-950/20 ${
                   item.done
                     ? 'border-amber-200/30 opacity-60 dark:border-amber-800/20'
                     : 'border-amber-200/50 dark:border-amber-800/30'
                 }`}
               >
-              {/* Checkbox */}
-              <input
-                type="checkbox"
-                checked={item.done}
-                onChange={() => handleToggle(item.id)}
-                disabled={effectiveReadOnly}
-                data-testid={`todo-checkbox-${item.id}`}
-                className="mt-1 h-5 w-5 cursor-pointer rounded border-amber-300 text-amber-600 transition-colors focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed dark:border-amber-700 dark:bg-slate-800"
-                aria-label={`Marquer "${item.text}" comme ${item.done ? 'non fait' : 'fait'}`}
-              />
-
-              {/* Content */}
-              <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0">
                 {editingId === item.id ? (
                   <div className="space-y-2">
                     <input
@@ -423,7 +399,7 @@ export default function DailyTodoPanel({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {showStatusBadges && (
                       <button
                         type="button"
@@ -455,7 +431,7 @@ export default function DailyTodoPanel({
                       type="button"
                       onClick={() => !effectiveReadOnly && startEdit(item)}
                       disabled={effectiveReadOnly}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:cursor-default"
                     >
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                         {item.time && (
@@ -466,17 +442,18 @@ export default function DailyTodoPanel({
                         <span
                           className={`min-w-0 text-sm ${
                             item.done
-                              ? 'flex-1 text-slate-500 line-through dark:text-slate-400'
+                              ? 'flex-1 text-slate-300 line-through opacity-60 dark:text-slate-400'
                               : 'flex-1 text-slate-900 dark:text-slate-100'
                           }`}
                         >
                           {item.text}
                         </span>
                       </div>
-                      <PriorityNumberBadge
-                        priority={resolvedPriority}
-                        show={showPriorityBadges}
-                      />
+                      {showPriorityBadges && (
+                        <div className="flex-shrink-0">
+                          <PriorityNumberBadge priority={resolvedPriority} show />
+                        </div>
+                      )}
                     </button>
                   </div>
                 )}
