@@ -61,21 +61,21 @@ const STATUS_DISPLAY: Record<
     label: 'À faire',
     srLabel: 'Tâche à faire',
     iconClass: 'text-slate-400 dark:text-slate-300',
-    chipClass: 'bg-slate-500/10 text-slate-300 border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-200 dark:border-slate-500/40',
+    chipClass: 'bg-slate-500/10 text-slate-300 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-200 dark:border-slate-500/40',
   },
   doing: {
     Icon: TaskDoingIcon,
     label: 'En cours',
     srLabel: 'Tâche en cours',
     iconClass: 'text-amber-300',
-    chipClass: 'bg-amber-500/10 text-amber-300 border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/40',
+    chipClass: 'bg-amber-500/10 text-amber-300 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/40',
   },
   done: {
     Icon: TaskDoneIcon,
     label: 'Terminé',
     srLabel: 'Tâche terminée',
     iconClass: 'text-emerald-400',
-    chipClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
+    chipClass: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
   },
 };
 
@@ -101,9 +101,9 @@ export default function DailyTodoPanel({
     enabled: Boolean(userId && dateStr),
   });
 
-  const { settings } = useSettings();
-  const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
-  const showStatusBadges = settings?.showTaskStatusBadges !== false;
+  const { showTaskStatusBadges, showTaskPriorityBadges } = useSettings() || {};
+  const showStatusBadges = showTaskStatusBadges !== false;
+  const showPriorityBadges = showTaskPriorityBadges !== false;
 
   const [newText, setNewText] = useState('');
   const [newTime, setNewTime] = useState('');
@@ -429,14 +429,22 @@ export default function DailyTodoPanel({
                         type="button"
                         onClick={() => toggleTaskDone(item.id, statusKey)}
                         disabled={effectiveReadOnly}
-                        className="inline-flex items-center gap-1 rounded-md border border-transparent bg-transparent p-0 text-xs font-medium text-slate-500 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
-                        aria-label={statusKey === 'done' ? 'Marquer la tâche comme à faire' : 'Marquer la tâche comme terminée'}
+                        className="inline-flex items-center gap-1 rounded-md bg-transparent p-0 text-xs font-medium text-slate-500 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        aria-label={
+                          statusKey === 'done'
+                            ? 'Marquer la tâche comme à faire'
+                            : 'Marquer la tâche comme terminée'
+                        }
                         aria-pressed={statusKey === 'done'}
                         data-testid={`todo-status-toggle-${item.id}`}
                       >
-                        <StatusIcon className={`h-4 w-4 ${statusDisplay.iconClass}`} aria-hidden="true" />
+                        <StatusIcon
+                          className={`h-4 w-4 ${statusDisplay.iconClass}`}
+                          aria-hidden="true"
+                        />
                         <span
-                          className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none border ${statusDisplay.chipClass}`}
+                          className={`ml-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusDisplay.chipClass}`}
+                          aria-hidden="true"
                         >
                           {statusDisplay.label}
                         </span>

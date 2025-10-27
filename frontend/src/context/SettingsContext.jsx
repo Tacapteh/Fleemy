@@ -60,6 +60,8 @@ const SettingsContext = createContext({
   settings: DEFAULT_PREFS,
   loading: true,
   updateSetting: () => {},
+  showTaskPriorityBadges: DEFAULT_PREFS.showTaskPriorityBadges,
+  showTaskStatusBadges: DEFAULT_PREFS.showTaskStatusBadges,
 });
 
 export function SettingsProvider({ children }) {
@@ -262,14 +264,17 @@ export function SettingsProvider({ children }) {
     [currentUser]
   );
 
-  const value = useMemo(
-    () => ({
-      settings,
+  const value = useMemo(() => {
+    const resolvedSettings = settings || DEFAULT_PREFS;
+    return {
+      settings: resolvedSettings,
       loading,
       updateSetting,
-    }),
-    [settings, loading, updateSetting]
-  );
+      showTaskPriorityBadges:
+        resolvedSettings?.showTaskPriorityBadges !== false,
+      showTaskStatusBadges: resolvedSettings?.showTaskStatusBadges !== false,
+    };
+  }, [settings, loading, updateSetting]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }
