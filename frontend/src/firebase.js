@@ -410,7 +410,8 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
     day: ensureDayKey(eventData.day, startDate),
     start_time: toHourMinuteString(eventData.start, DEFAULT_EVENT_START),
     end_time: toHourMinuteString(eventData.end, DEFAULT_EVENT_END),
-    status: eventData.status || eventData.type || "pending",
+    status: eventData.payment_status || eventData.status || eventData.type || "pending",
+    type: eventData.type === 'absence' ? 'absence' : 'normal',
     hourly_rate: hourlyRate,
   };
 
@@ -462,7 +463,21 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
     description: rawEvent?.description ?? eventData.description ?? "",
     client_name: rawEvent?.client_name ?? eventData.client_name ?? "",
     client_id: rawEvent?.client_id ?? eventData.client_id ?? "",
-    status: rawEvent?.status ?? eventData.status ?? eventData.type ?? "pending",
+    status:
+      rawEvent?.status ??
+      rawEvent?.payment_status ??
+      eventData.payment_status ??
+      eventData.status ??
+      eventData.type ??
+      "pending",
+    payment_status:
+      rawEvent?.payment_status ??
+      rawEvent?.status ??
+      eventData.payment_status ??
+      eventData.status ??
+      eventData.type ??
+      "pending",
+    type: rawEvent?.type ?? (eventData.type === 'absence' ? 'absence' : 'normal'),
     hourly_rate: normalizedRate,
     day: normalizedDay,
     start: startDate,
@@ -924,6 +939,55 @@ const toDateSafe = (value) => {
   return null;
 };
 
+const EVENT_STATUS_VALUES = new Set(['paid', 'unpaid', 'pending', 'not_worked']);
+
+const normalizeStringLower = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim().toLowerCase();
+};
+
+const deriveEventStatus = (data) => {
+  const candidates = [
+    data?.payment_status,
+    data?.paymentStatus,
+    data?.status,
+    data?.state,
+    data?.type,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+    const normalized = normalizeStringLower(candidate);
+    if (normalized && EVENT_STATUS_VALUES.has(normalized)) {
+      return normalized;
+    }
+  }
+
+  if (typeof data?.status === 'string' && data.status.trim()) {
+    return data.status.trim();
+  }
+
+  return 'pending';
+};
+
+const deriveEventType = (data) => {
+  const candidates = [data?.type, data?.event_type, data?.eventType, data?.category];
+  for (const candidate of candidates) {
+    const normalized = normalizeStringLower(candidate);
+    if (normalized === 'absence') {
+      return 'absence';
+    }
+    if (normalized === 'normal' || normalized === 'work') {
+      return 'normal';
+    }
+  }
+  return 'normal';
+};
+
 const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
   if (!data) {
     return null;
@@ -938,7 +1002,14 @@ const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
 
   const resolvedOwner = data.owner_uid || data.user_id || ownerUid;
 
-  return {
+  const resolvedStatus = deriveEventStatus(data);
+  const resolvedType = deriveEventType(data);
+  const legacyTypeValue =
+    typeof data.type === 'string' && !['absence', 'normal', 'work'].includes(normalizeStringLower(data.type))
+      ? data.type
+      : undefined;
+
+  const normalized = {
     ...data,
     id,
     start: startValue,
@@ -947,7 +1018,16 @@ const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
     owner_uid: resolvedOwner,
     team_id: teamId ?? data.team_id ?? null,
     readOnly: viewerUid ? resolvedOwner !== viewerUid : true,
+    status: resolvedStatus,
+    payment_status: data.payment_status || resolvedStatus,
+    type: resolvedType,
   };
+
+  if (legacyTypeValue !== undefined) {
+    normalized.legacy_type = legacyTypeValue;
+  }
+
+  return normalized;
 };
 
 const normalizeEventDocument = (docSnap, ownerUid, teamId, viewerUid) => {

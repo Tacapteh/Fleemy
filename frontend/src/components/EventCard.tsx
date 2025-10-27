@@ -65,8 +65,11 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
     [event, onClick]
   );
 
-  const explicitTitle = normalizeOptionalString(event.title);
-  const clientLabel = resolveClientLabel(event);
+  const eventType = normalizeOptionalString((event as { type?: string }).type).toLowerCase();
+  const isAbsence = eventType === 'absence';
+
+  const explicitTitle = !isAbsence ? normalizeOptionalString(event.title) : '';
+  const clientLabel = isAbsence ? '' : resolveClientLabel(event);
   const description = normalizeOptionalString(event.description);
 
   const startTimeLabel = event.startDate
@@ -83,23 +86,27 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
     : '';
   const timeLabel = startTimeLabel && endTimeLabel ? `${startTimeLabel} - ${endTimeLabel}` : '';
 
-  const title = explicitTitle || clientLabel || description || 'Événement';
-  const statusClass = event.status ? ` status-${event.status}` : '';
+  const title = isAbsence ? 'Indisponible' : explicitTitle || clientLabel || description || 'Événement';
+  const statusClass = !isAbsence && event.status ? ` status-${event.status}` : '';
   const isInteractive = typeof onClick === 'function';
   const isReadOnly = Boolean(event.readOnly);
 
   let subtitle = '';
   let subtitleClass = 'subtitle truncate break-words leading-tight md:leading-normal text-xs text-gray-600';
-  if (clientLabel && clientLabel !== title) {
-    subtitle = clientLabel;
-    subtitleClass = 'subtitle truncate leading-tight md:leading-normal break-words';
-  } else if (description && description !== title) {
+  if (!isAbsence) {
+    if (clientLabel && clientLabel !== title) {
+      subtitle = clientLabel;
+      subtitleClass = 'subtitle truncate leading-tight md:leading-normal break-words';
+    } else if (description && description !== title) {
+      subtitle = description;
+    }
+  } else if (description && description.toLowerCase() !== 'indisponible') {
     subtitle = description;
   }
 
   return (
     <div
-      className={`event-chip${statusClass} min-h-[3rem]`}
+      className={`event-chip${statusClass}${isAbsence ? ' absence' : ''} min-h-[3rem]`}
       style={style}
       onClick={isInteractive ? handleClick : undefined}
       onKeyDown={handleKeyDown}
@@ -116,7 +123,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
         )}
         <div className="title truncate break-words leading-tight md:leading-normal">{title}</div>
 
-        {event.attachedTaskBadges.length > 0 && (
+        {!isAbsence && event.attachedTaskBadges.length > 0 && (
           <div className="event-chip-badge absolute bottom-1 right-1 flex items-center justify-end gap-1">
             {event.attachedTaskBadges.map((badge) => (
               <TaskIconBadge

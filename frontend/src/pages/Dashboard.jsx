@@ -373,6 +373,11 @@ const resolveSlotLabel = (slot) => {
   if (!slot) {
     return 'Créneau planifié';
   }
+  const slotType =
+    typeof slot.type === 'string' ? slot.type.trim().toLowerCase() : '';
+  if (slotType === 'absence') {
+    return 'Indisponible';
+  }
   const candidates = [
     slot.client_name,
     slot.clientName,

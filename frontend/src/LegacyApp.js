@@ -851,6 +851,60 @@ const eventTypes = {
   },
 };
 
+const EVENT_KIND_OPTIONS = [
+  { value: "normal", label: "Travail / Intervention" },
+  { value: "absence", label: "Absence / Indisponible" },
+];
+
+const normalizeStringValue = (value) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim().toLowerCase();
+};
+
+const PAYMENT_STATUS_VALUES = ["paid", "unpaid", "pending", "not_worked"];
+
+const resolvePaymentStatus = (event) => {
+  const candidates = [
+    event?.payment_status,
+    event?.paymentStatus,
+    event?.status,
+    event?.state,
+    event?.type,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeStringValue(candidate);
+    if (PAYMENT_STATUS_VALUES.includes(normalized)) {
+      return normalized;
+    }
+  }
+
+  return "pending";
+};
+
+const resolveEventKind = (event) => {
+  const rawCandidates = [
+    event?.type,
+    event?.event_type,
+    event?.eventType,
+    event?.category,
+  ];
+
+  for (const candidate of rawCandidates) {
+    const normalized = normalizeStringValue(candidate);
+    if (normalized === "absence") {
+      return "absence";
+    }
+    if (normalized === "normal" || normalized === "work") {
+      return "normal";
+    }
+  }
+
+  return "normal";
+};
+
 // Utility functions for planning
 const getWeekDates = (year, week) => {
   const simple = new Date(year, 0, 1 + (week - 1) * 7);
@@ -914,13 +968,15 @@ const EventModal = ({
     day: 0,
     start: "09:00",
     end: "10:00",
-    type: "pending",
+    type: "normal",
+    payment_status: "pending",
     client_id: "",
     client_name: "",
   });
   const [loading, setLoading] = useState(false);
   const [clientError, setClientError] = useState("");
   const clientFieldId = useId();
+  const eventTypeFieldId = useId();
   const clientErrorId = `${clientFieldId}-error`;
 
   const { settings } = useSettings();
@@ -928,9 +984,10 @@ const EventModal = ({
   const mustHaveClient = settings?.requireClientName === true;
   const timeInputStep = allowMinutes ? 900 : 3600;
 
-  const hasClientSelection = Boolean(
-    formData.client_id || formData.client_name?.trim(),
-  );
+  const hasClientSelection =
+    formData.type === "absence" ||
+    Boolean(formData.client_id || formData.client_name?.trim());
+  const isAbsenceEvent = formData.type === "absence";
 
   // Use clients hook for client selection
   const {
@@ -983,14 +1040,38 @@ const EventModal = ({
 
       const dayIndex = resolveEventDayIndex(event, startDate);
 
+      const resolvedType = resolveEventKind(event);
+      const resolvedStatus = resolvePaymentStatus(event);
+      const resolvedClientName = (() => {
+        if (resolvedType === "absence") {
+          return "";
+        }
+        if (typeof event.client_name === "string" && event.client_name.trim()) {
+          return event.client_name;
+        }
+        if (typeof event.client === "string" && event.client.trim()) {
+          return event.client;
+        }
+        if (event.client && typeof event.client === "object") {
+          return (
+            event.client.display_name ||
+            event.client.name ||
+            event.client.label ||
+            ""
+          );
+        }
+        return "";
+      })();
+
       setFormData({
         description: event.description || "",
         day: dayIndex,
         start: resolvedStart,
         end: resolvedEnd,
-        type: event.status || event.type || "pending",
-        client_id: event.client_id || "",
-        client_name: event.client_name || "",
+        type: resolvedType,
+        payment_status: resolvedStatus,
+        client_id: resolvedType === "absence" ? "" : event.client_id || "",
+        client_name: resolvedType === "absence" ? "" : resolvedClientName,
       });
       setClientError("");
       return;
@@ -1007,7 +1088,8 @@ const EventModal = ({
         day: timeSlot.day,
         start: resolvedRange.start,
         end: resolvedRange.end,
-        type: "pending",
+        type: "normal",
+        payment_status: "pending",
         client_id: "",
         client_name: "",
       });
@@ -1070,7 +1152,8 @@ const EventModal = ({
         day: dayIndex,
         start: resolvedRange.start,
         end: resolvedRange.end,
-        type: "pending",
+        type: "normal",
+        payment_status: "pending",
         client_id: "",
         client_name: "",
       });
@@ -1087,7 +1170,8 @@ const EventModal = ({
       day: 0,
       start: defaultRange.start,
       end: defaultRange.end,
-      type: "pending",
+      type: "normal",
+      payment_status: "pending",
       client_id: "",
       client_name: "",
     });
@@ -1109,7 +1193,7 @@ const EventModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (mustHaveClient && !hasClientSelection) {
+    if (formData.type !== "absence" && mustHaveClient && !hasClientSelection) {
       setClientError(
         "Un client est obligatoire pour enregistrer cet événement.",
       );
@@ -1122,17 +1206,45 @@ const EventModal = ({
         ? sanitizeRangeForDetailedMode(formData.start, formData.end)
         : sanitizeRangeForHourMode(formData.start, formData.end);
 
+      const normalizedType = formData.type === "absence" ? "absence" : "normal";
+      const paymentStatus =
+        normalizedType === "absence"
+          ? "not_worked"
+          : formData.payment_status || "pending";
+
       const payload = {
         ...formData,
+        type: normalizedType,
+        payment_status: paymentStatus,
+        status: paymentStatus,
+        client_id: normalizedType === "absence" ? "" : formData.client_id,
+        client_name: normalizedType === "absence" ? "" : formData.client_name,
         start: range.start,
         end: range.end,
       };
 
       setFormData((current) => {
         if (current.start === range.start && current.end === range.end) {
-          return current;
+          if (
+            current.type === normalizedType &&
+            current.payment_status === paymentStatus &&
+            (normalizedType === "absence"
+              ? !current.client_id && !current.client_name
+              : current.client_id === payload.client_id &&
+                current.client_name === payload.client_name)
+          ) {
+            return current;
+          }
         }
-        return { ...current, start: range.start, end: range.end };
+        return {
+          ...current,
+          start: range.start,
+          end: range.end,
+          type: normalizedType,
+          payment_status: paymentStatus,
+          client_id: payload.client_id,
+          client_name: payload.client_name,
+        };
       });
 
       await onSave(payload);
@@ -1166,63 +1278,6 @@ const EventModal = ({
         </h2>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label" htmlFor={clientFieldId}>
-              <span>Client</span>
-              {mustHaveClient && (
-                <span
-                  className="ml-1 text-red-600 dark:text-red-400"
-                  aria-hidden="true"
-                >
-                  *
-                </span>
-              )}
-            </label>
-            <Combobox
-              id={clientFieldId}
-              options={clients || []}
-              value={formData.client_id}
-              onChange={(clientId, selectedOption) => {
-                const clientFromList =
-                  selectedOption || clients?.find((c) => c.id === clientId);
-                const resolvedClientName =
-                  clientFromList?.display_name || clientFromList?.name || "";
-                setFormData((prev) => ({
-                  ...prev,
-                  client_id: clientId,
-                  client_name: resolvedClientName,
-                }));
-                setClientError("");
-              }}
-              displayField="display_name"
-              valueField="id"
-              placeholder={
-                mustHaveClient
-                  ? "Sélectionner un client (obligatoire)"
-                  : "Sélectionner un client"
-              }
-              disabled={readOnly}
-              error={Boolean(clientError)}
-              aria-invalid={
-                mustHaveClient && clientError ? "true" : undefined
-              }
-              aria-describedby={clientError ? clientErrorId : undefined}
-              aria-required={mustHaveClient ? "true" : "false"}
-              aria-busy={clientsLoading ? "true" : undefined}
-              className="form-input"
-            />
-            {clientError && (
-              <p
-                id={clientErrorId}
-                className="mt-1 text-xs text-red-600 dark:text-red-400"
-                aria-live="polite"
-                role="alert"
-              >
-                {clientError}
-              </p>
-            )}
-          </div>
-
           <fieldset disabled={readOnly}>
             <div className="form-group">
               <label className="form-label">Description</label>
@@ -1230,13 +1285,13 @@ const EventModal = ({
                 type="text"
                 value={formData.description}
                 onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              className="form-input"
-              disabled={loading}
-              placeholder="Description de l'événement (optionnel)"
-            />
-          </div>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                className="form-input"
+                disabled={loading}
+                placeholder="Description de l'événement (optionnel)"
+              />
+            </div>
 
             <div className="form-group">
               <label className="form-label">Jour</label>
@@ -1263,33 +1318,33 @@ const EventModal = ({
                   <input
                     type="time"
                     step={timeInputStep}
-                  value={formData.start}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, start: e.target.value }))
-                  }
-                  className="form-input"
-                  disabled={loading}
-                  required
-                />
-              ) : (
-                <select
-                  value={formData.start}
-                  onChange={(e) =>
-                    setFormData({ ...formData, start: e.target.value })
-                  }
-                  className="form-input"
-                  disabled={loading}
-                >
-                  {!timeSlots.includes(formData.start) && formData.start && (
-                    <option value={formData.start}>{formData.start}</option>
-                  )}
-                  {timeSlots.slice(0, -1).map((time) => (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
-              )}
+                    value={formData.start}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, start: e.target.value }))
+                    }
+                    className="form-input"
+                    disabled={loading}
+                    required
+                  />
+                ) : (
+                  <select
+                    value={formData.start}
+                    onChange={(e) =>
+                      setFormData({ ...formData, start: e.target.value })
+                    }
+                    className="form-input"
+                    disabled={loading}
+                  >
+                    {!timeSlots.includes(formData.start) && formData.start && (
+                      <option value={formData.start}>{formData.start}</option>
+                    )}
+                    {timeSlots.slice(0, -1).map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="form-group">
@@ -1298,59 +1353,159 @@ const EventModal = ({
                   <input
                     type="time"
                     step={timeInputStep}
-                  value={formData.end === "24:00" ? "23:59" : formData.end}
-                  onChange={(e) =>
-                    setFormData((prev) => {
-                      const rawValue = e.target.value;
-                      const nextEnd =
-                        rawValue === "23:59" && prev.end === "24:00"
-                          ? "24:00"
-                          : rawValue;
-                      return { ...prev, end: nextEnd };
-                    })
-                  }
-                  className="form-input"
-                  disabled={loading}
-                  required
-                />
-              ) : (
-                <select
-                  value={formData.end}
-                  onChange={(e) =>
-                    setFormData({ ...formData, end: e.target.value })
-                  }
-                  className="form-input"
-                  disabled={loading}
-                >
-                  {!timeSlots.includes(formData.end) && formData.end && (
-                    <option value={formData.end}>{formData.end}</option>
-                  )}
-                  {timeSlots.slice(1).map((time) => (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
-              )}
+                    value={formData.end === "24:00" ? "23:59" : formData.end}
+                    onChange={(e) =>
+                      setFormData((prev) => {
+                        const rawValue = e.target.value;
+                        const nextEnd =
+                          rawValue === "23:59" && prev.end === "24:00"
+                            ? "24:00"
+                            : rawValue;
+                        return { ...prev, end: nextEnd };
+                      })
+                    }
+                    className="form-input"
+                    disabled={loading}
+                    required
+                  />
+                ) : (
+                  <select
+                    value={formData.end}
+                    onChange={(e) =>
+                      setFormData({ ...formData, end: e.target.value })
+                    }
+                    className="form-input"
+                    disabled={loading}
+                  >
+                    {!timeSlots.includes(formData.end) && formData.end && (
+                      <option value={formData.end}>{formData.end}</option>
+                    )}
+                    {timeSlots.slice(1).map((time) => (
+                      <option key={time} value={time}>
+                        {time}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Type</label>
+              <label className="form-label" htmlFor={eventTypeFieldId}>
+                Type d'événement
+              </label>
               <select
+                id={eventTypeFieldId}
                 value={formData.type}
+                onChange={(e) => {
+                  const nextType = e.target.value === "absence" ? "absence" : "normal";
+                  setFormData((prev) => ({
+                    ...prev,
+                    type: nextType,
+                    payment_status:
+                      nextType === "absence"
+                        ? "not_worked"
+                        : prev.payment_status && prev.payment_status !== "not_worked"
+                          ? prev.payment_status
+                          : "pending",
+                    client_id: nextType === "absence" ? "" : prev.client_id,
+                    client_name: nextType === "absence" ? "" : prev.client_name,
+                  }));
+                  if (nextType === "absence") {
+                    setClientError("");
+                  }
+                }}
+                className="form-input"
+                disabled={loading}
+              >
+                {EVENT_KIND_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor={clientFieldId}>
+                <span>Client</span>
+                {mustHaveClient && !isAbsenceEvent && (
+                  <span
+                    className="ml-1 text-red-600 dark:text-red-400"
+                    aria-hidden="true"
+                  >
+                    *
+                  </span>
+                )}
+              </label>
+              <Combobox
+                id={clientFieldId}
+                options={clients || []}
+                value={isAbsenceEvent ? "" : formData.client_id}
+                onChange={(clientId, selectedOption) => {
+                  if (isAbsenceEvent) {
+                    return;
+                  }
+                  const clientFromList =
+                    selectedOption || clients?.find((c) => c.id === clientId);
+                  const resolvedClientName =
+                    clientFromList?.display_name || clientFromList?.name || "";
+                  setFormData((prev) => ({
+                    ...prev,
+                    client_id: clientId,
+                    client_name: resolvedClientName,
+                  }));
+                  setClientError("");
+                }}
+                displayField="display_name"
+                valueField="id"
+                placeholder={
+                  isAbsenceEvent
+                    ? "Client non requis pour une absence"
+                    : mustHaveClient
+                      ? "Sélectionner un client (obligatoire)"
+                      : "Sélectionner un client"
+                }
+                disabled={readOnly || loading || isAbsenceEvent}
+                error={Boolean(clientError)}
+                aria-invalid={
+                  !isAbsenceEvent && mustHaveClient && clientError ? "true" : undefined
+                }
+                aria-describedby={clientError ? clientErrorId : undefined}
+                aria-required={
+                  isAbsenceEvent ? "false" : mustHaveClient ? "true" : "false"
+                }
+                aria-busy={clientsLoading ? "true" : undefined}
+                className="form-input"
+              />
+              {clientError && !isAbsenceEvent && (
+                <p
+                  id={clientErrorId}
+                  className="mt-1 text-xs text-red-600 dark:text-red-400"
+                  aria-live="polite"
+                  role="alert"
+                >
+                  {clientError}
+                </p>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Statut de paiement</label>
+              <select
+                value={formData.payment_status}
                 onChange={(e) =>
-                  setFormData({ ...formData, type: e.target.value })
-              }
-              className="form-input"
-              disabled={loading}
-            >
-              {Object.entries(eventTypes).map(([key, type]) => (
-                <option key={key} value={key}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
+                  setFormData({ ...formData, payment_status: e.target.value })
+                }
+                className="form-input"
+                disabled={readOnly || loading || isAbsenceEvent}
+              >
+                {Object.entries(eventTypes).map(([key, type]) => (
+                  <option key={key} value={key}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </fieldset>
 
@@ -1417,12 +1572,18 @@ const DayEventsModal = ({
               style={{ display: "flex", flexDirection: "column", gap: "12px" }}
             >
               {events.map((event) => {
+                const status =
+                  (typeof event.status === "string" && event.status.trim()) ||
+                  (typeof event.payment_status === "string" && event.payment_status.trim()) ||
+                  (typeof event.type === "string" && event.type.trim()) ||
+                  "pending";
+                const normalizedStatus = status.toLowerCase();
                 const eventClass = `event-${
-                  event.type === "paid"
+                  normalizedStatus === "paid"
                     ? "meeting"
-                    : event.type === "unpaid"
+                    : normalizedStatus === "unpaid"
                       ? "task"
-                      : event.type === "pending"
+                      : normalizedStatus === "pending"
                         ? "break"
                         : "notworked"
                 }`;
@@ -2619,7 +2780,9 @@ const Planning = ({ user }) => {
 
       // Calculate revenue from events
       weekEvents.forEach((event) => {
-        if ((event.status || event.type) !== "not_worked") {
+        const statusValue =
+          event.status || event.payment_status || event.type || "pending";
+        if (statusValue !== "not_worked") {
           const startTime = event.start_time || event.start || "09:00";
           const endTime = event.end_time || event.end || "10:00";
           const startHour = parseInt(startTime.split(":")[0]);
@@ -2627,7 +2790,7 @@ const Planning = ({ user }) => {
           const hours = endHour - startHour;
           const amount = hours * hourlyRate;
 
-          const eventType = event.status || event.type;
+          const eventType = statusValue;
           switch (eventType) {
             case "paid":
               revenue.paid += amount;
@@ -2766,13 +2929,18 @@ const Planning = ({ user }) => {
   };
 
   const MonthEvent = ({ event, onClick }) => {
-    const eventType = event.status || event.type;
+    const statusValue =
+      (typeof event.status === "string" && event.status.trim()) ||
+      (typeof event.payment_status === "string" && event.payment_status.trim()) ||
+      (typeof event.type === "string" && event.type.trim()) ||
+      "pending";
+    const normalizedStatus = statusValue.toLowerCase();
     const eventClass = `month-event ${
-      eventType === "paid"
+      normalizedStatus === "paid"
         ? "event-meeting"
-        : eventType === "unpaid"
+        : normalizedStatus === "unpaid"
           ? "event-task"
-          : eventType === "pending"
+          : normalizedStatus === "pending"
             ? "event-break"
             : "event-notworked"
     }`;
@@ -2956,7 +3124,15 @@ const Planning = ({ user }) => {
                   }
                 >
                   {/* Display events */}
-                  {slotEvents.map((event) => (
+                  {slotEvents.map((event) => {
+                    const statusValue =
+                      (typeof event.status === "string" && event.status.trim()) ||
+                      (typeof event.payment_status === "string" && event.payment_status.trim()) ||
+                      (typeof event.type === "string" && event.type.trim()) ||
+                      "pending";
+                    const normalizedStatus = statusValue.toLowerCase();
+
+                    return (
                     <div
                       key={event.id}
                       onClick={(e) => {
@@ -2964,11 +3140,11 @@ const Planning = ({ user }) => {
                         onEventClick(event);
                       }}
                       className={`planning-event ${
-                        (event.status || event.type) === "paid"
+                        normalizedStatus === "paid"
                           ? "event-meeting"
-                          : (event.status || event.type) === "unpaid"
+                          : normalizedStatus === "unpaid"
                             ? "event-task"
-                            : (event.status || event.type) === "pending"
+                            : normalizedStatus === "pending"
                               ? "event-break"
                               : "event-notworked"
                       } ${transitioning ? "" : "new-event"}`}
@@ -2986,7 +3162,8 @@ const Planning = ({ user }) => {
                         </div>
                       )}
                     </div>
-                  ))}
+                  );
+                  })}
 
                   {/* Display tasks - conditional rendering based on event presence */}
                   {slotTasks.map((task) => {
@@ -3121,12 +3298,14 @@ const Planning = ({ user }) => {
     try {
       const eventToCreate = {
         description: eventData.description || "", // Description facultative
-        client_id: eventData.client_id || "",
-        client_name: eventData.client_name || "", // Client obligatoire (validé dans la modal)
+        client_id: eventData.type === "absence" ? "" : eventData.client_id || "",
+        client_name:
+          eventData.type === "absence" ? "" : eventData.client_name || "", // Client obligatoire (validé dans la modal)
         day: dayNames[eventData.day].toLowerCase(),
         start_time: eventData.start,
         end_time: eventData.end,
-        status: eventData.type,
+        status: eventData.payment_status || eventData.status || "pending",
+        type: eventData.type === "absence" ? "absence" : "normal",
         uid: ownerId,
         week: currentWeek,
         year: currentYear,
@@ -3245,12 +3424,13 @@ const Planning = ({ user }) => {
     try {
       const updateData = {
         description: eventData.description,
-        client_id: eventData.client_id || "",
-        client_name: eventData.client_name || "",
+        client_id: eventData.type === "absence" ? "" : eventData.client_id || "",
+        client_name: eventData.type === "absence" ? "" : eventData.client_name || "",
         day: dayNames[eventData.day].toLowerCase(),
         start_time: eventData.start,
         end_time: eventData.end,
-        status: eventData.type,
+        status: eventData.payment_status || eventData.status || "pending",
+        type: eventData.type === "absence" ? "absence" : "normal",
       };
 
       const response = await apiCall(
