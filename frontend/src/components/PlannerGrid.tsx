@@ -390,10 +390,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 }) => {
   const user = useFirebaseUser();
   const settingsContext = useSettings();
+  const { showTaskStatusBadges = true, showTaskPriorityBadges = true } = settingsContext || {};
   const settings = settingsContext?.settings;
   const loading = settingsContext?.loading ?? false;
-  const showPriorityBadges = settingsContext?.showTaskPriorityBadges !== false;
-  const showStatusBadges = settingsContext?.showTaskStatusBadges !== false;
+  const showPriorityBadges = showTaskPriorityBadges;
+  const showStatusBadges = showTaskStatusBadges;
   const [viewFilter, setViewFilter] = useState<'today' | 'week'>('week');
   const allowMinutes = settings?.enableMinutes === true;
   const showWeekendsEnabled = useMemo(() => {
