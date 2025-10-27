@@ -1197,18 +1197,40 @@ export default function Planning() {
           return;
         }
 
+        const rawType = typeof data.type === 'string' ? data.type.trim().toLowerCase() : '';
+        const eventType = rawType === 'absence' ? 'absence' : 'normal';
+
+        const paymentStatusCandidates = [
+          data.payment_status,
+          data.status,
+          data.paymentStatus,
+        ];
+        let resolvedStatus = eventType === 'absence' ? 'not_worked' : 'unpaid';
+        for (const candidate of paymentStatusCandidates) {
+          if (typeof candidate === 'string' && candidate.trim()) {
+            resolvedStatus = candidate.trim();
+            break;
+          }
+        }
+
+        const shouldClearClient = eventType === 'absence';
+        const sanitizedClientId = shouldClearClient ? '' : data.client_id || '';
+        const sanitizedClientName = shouldClearClient ? '' : data.client_name || '';
+
         const payload = {
           id: data.id,
           start: start.toISOString(),
           end: end.toISOString(),
-          client: data.client_name || data.description || '',
-          status: data.status || data.type || 'unpaid',
-          hourly_rate: data.hourly_rate || 50,
+          type: eventType,
+          client: shouldClearClient ? '' : sanitizedClientName || data.description || '',
+          status: resolvedStatus,
+          payment_status: resolvedStatus,
+          hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
           duration: Math.round((end - start) / (60 * 1000)),
-          task_id: data.task_id || null,
+          task_id: shouldClearClient ? null : data.task_id || null,
           description: data.description || '',
-          client_id: data.client_id || '',
-          client_name: data.client_name || '',
+          client_id: sanitizedClientId,
+          client_name: sanitizedClientName,
           day: DAY_KEYS[dayIndex] || 'monday',
         };
 
