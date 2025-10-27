@@ -53,6 +53,7 @@ const DEFAULT_PREFS = {
   dayEndHour: 20,
   hourlyRateGlobal: 0,
   showTaskPriorityBadges: true,
+  showTaskStatusBadges: true,
 };
 
 const SettingsContext = createContext({
