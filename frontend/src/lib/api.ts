@@ -2,6 +2,9 @@ import { auth } from "../firebase";
 
 const LOCAL_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
 
+const SAME_ORIGIN_ALLOWED_SUFFIXES = [".vercel.app", ".fleemy.fr"] as const;
+const SAME_ORIGIN_ALLOWED_HOSTS = new Set(["fleemy.fr"]);
+
 const resolveSameOriginOverride = (): string | null => {
   if (typeof window === "undefined") {
     return null;
@@ -12,7 +15,11 @@ const resolveSameOriginOverride = (): string | null => {
     return null;
   }
 
-  if (hostname.endsWith(".vercel.app")) {
+  if (SAME_ORIGIN_ALLOWED_HOSTS.has(hostname)) {
+    return origin;
+  }
+
+  if (SAME_ORIGIN_ALLOWED_SUFFIXES.some((suffix) => hostname.endsWith(suffix))) {
     return origin;
   }
 
