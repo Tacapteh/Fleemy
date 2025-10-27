@@ -55,8 +55,8 @@ const toggleSettings = [
   },
   {
     key: "showTaskPriorityBadges",
-    label: "Afficher l’indicateur de priorité sur les tâches",
-    description: "Ajoute un badge de priorité dans les listes et bulles de tâches.",
+    label: "Afficher la priorité des tâches (1 = urgente)",
+    description: "Ajoute une pastille numérique 1/2/3 pour montrer la priorité.",
     ariaLabel: "Activer ou désactiver l’affichage visuel de la priorité des tâches",
   },
   {

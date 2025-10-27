@@ -4,6 +4,7 @@ export interface TodoItem {
   done: boolean;
   time?: string | null;
   priority?: 'high' | 'medium' | 'low';
+  status?: 'todo' | 'doing' | 'done';
 }
 
 export interface DailyTodoDoc {

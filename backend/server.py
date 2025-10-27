@@ -340,6 +340,7 @@ class DailyTodoItem(BaseModel):
     done: bool = False
     time: Optional[str] = None  # Format "HH:MM"
     priority: Literal['high', 'medium', 'low'] = 'medium'
+    status: Literal['todo', 'doing', 'done'] = 'todo'
 
 
 class DailyTodo(BaseModel):
@@ -353,6 +354,7 @@ class DailyTodoCreateRequest(BaseModel):
     text: str
     time: Optional[str] = None
     priority: Literal['high', 'medium', 'low'] = 'medium'
+    status: Literal['todo', 'doing', 'done'] = 'todo'
 
 
 class DailyTodoUpdateRequest(BaseModel):
@@ -360,9 +362,11 @@ class DailyTodoUpdateRequest(BaseModel):
     done: Optional[bool] = None
     time: Optional[str] = None
     priority: Optional[Literal['high', 'medium', 'low']] = None
+    status: Optional[Literal['todo', 'doing', 'done']] = None
 
 
 PRIORITY_VALUES = {'high', 'medium', 'low'}
+TODO_STATUS_VALUES = {'todo', 'doing', 'done'}
 
 
 def normalize_todo_priority(value: Optional[str]) -> str:
@@ -371,6 +375,18 @@ def normalize_todo_priority(value: Optional[str]) -> str:
         if normalized in PRIORITY_VALUES:
             return normalized
     return 'medium'
+
+
+def normalize_todo_status(value: Optional[str], done: Optional[bool] = None) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in TODO_STATUS_VALUES:
+            return normalized
+
+    if done:
+        return 'done'
+
+    return 'todo'
 
 
 def normalize_daily_todo_doc(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -388,9 +404,11 @@ def normalize_daily_todo_doc(data: Dict[str, Any]) -> Dict[str, Any]:
             normalized_items.append(item)
             continue
         normalized_priority = normalize_todo_priority(item.get('priority'))
+        normalized_status = normalize_todo_status(item.get('status'), item.get('done'))
         normalized_item = {
             **item,
             'priority': normalized_priority,
+            'status': normalized_status,
         }
         normalized_items.append(normalized_item)
 
@@ -2158,6 +2176,7 @@ async def add_daily_todo_item(
         "done": False,
         "time": item.time,
         "priority": normalize_todo_priority(item.priority),
+        "status": normalize_todo_status(item.status, False),
     }
     
     if snap.exists:
@@ -2221,6 +2240,10 @@ async def update_daily_todo_item(
                 item["time"] = updates.time
             if updates.priority is not None:
                 item["priority"] = normalize_todo_priority(updates.priority)
+            if updates.status is not None:
+                item["status"] = normalize_todo_status(updates.status, item.get("done"))
+            elif updates.done is not None:
+                item["status"] = 'done' if updates.done else 'todo'
             break
 
     if not item_found:

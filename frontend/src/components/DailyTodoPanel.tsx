@@ -3,11 +3,8 @@ import { Trash2, Plus, Clock } from 'lucide-react';
 import useDailyTodos from '../hooks/useDailyTodos';
 import type { TodoItem } from '../types/todo';
 import { useSettings } from '../context/SettingsContext';
-import {
-  PriorityHighIcon,
-  PriorityMediumIcon,
-  PriorityLowIcon,
-} from './icons/PriorityIcons';
+import PriorityNumberBadge from './PriorityNumberBadge';
+import { TaskTodoIcon, TaskDoingIcon, TaskDoneIcon } from './icons/TaskStatusIcons';
 
 interface DailyTodoPanelProps {
   selectedDate: string | Date; // "YYYY-MM-DD" or Date object
@@ -36,6 +33,42 @@ const resolvePriority = (
   return value === 'high' || value === 'medium' || value === 'low'
     ? value
     : 'medium';
+};
+
+const resolveStatus = (
+  value: TodoItem['status'],
+  done: boolean,
+): 'todo' | 'doing' | 'done' => {
+  if (value === 'todo' || value === 'doing' || value === 'done') {
+    return value;
+  }
+
+  return done ? 'done' : 'todo';
+};
+
+const STATUS_DISPLAY: Record<
+  'todo' | 'doing' | 'done',
+  {
+    Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+    label: string;
+    className: string;
+  }
+> = {
+  todo: {
+    Icon: TaskTodoIcon,
+    label: 'À faire',
+    className: 'text-slate-400 dark:text-slate-500',
+  },
+  doing: {
+    Icon: TaskDoingIcon,
+    label: 'En cours',
+    className: 'text-amber-500 dark:text-amber-300',
+  },
+  done: {
+    Icon: TaskDoneIcon,
+    label: 'Terminée',
+    className: 'text-emerald-500 dark:text-emerald-400',
+  },
 };
 
 const PRIORITY_ORDER: Record<'high' | 'medium' | 'low', number> = {
@@ -71,35 +104,6 @@ export default function DailyTodoPanel({
   const [editTime, setEditTime] = useState('');
 
   const effectiveReadOnly = readOnly || isReadOnly;
-
-  const renderPriorityBadge = (priority: TodoItem['priority']) => {
-    const resolvedPriority = resolvePriority(priority);
-    const IconComponent =
-      resolvedPriority === 'high'
-        ? PriorityHighIcon
-        : resolvedPriority === 'medium'
-        ? PriorityMediumIcon
-        : PriorityLowIcon;
-    const colorClass =
-      resolvedPriority === 'high'
-        ? 'text-red-500 dark:text-red-400'
-        : resolvedPriority === 'medium'
-        ? 'text-amber-400 dark:text-amber-300'
-        : 'text-emerald-500 dark:text-emerald-400';
-    const priorityLabel =
-      resolvedPriority === 'high'
-        ? 'Priorité importante'
-        : resolvedPriority === 'medium'
-        ? 'Priorité moyenne'
-        : 'Priorité faible';
-
-    return (
-      <span className="inline-flex items-center">
-        <IconComponent className={`h-4 w-4 ${colorClass}`} aria-hidden="true" />
-        <span className="sr-only">{priorityLabel}</span>
-      </span>
-    );
-  };
 
   const sortedItems = useMemo(() => {
     if (!todos?.items) {
@@ -326,16 +330,22 @@ export default function DailyTodoPanel({
             Rien à noter pour le moment 👍
           </p>
         ) : (
-          sortedItems.map((item) => (
-            <div
-              key={item.id}
-              data-testid={`todo-item-${item.id}`}
-              className={`flex items-start gap-3 rounded-lg border bg-white/70 p-3 shadow-sm transition-colors dark:bg-amber-950/20 ${
-                item.done
-                  ? 'border-amber-200/30 opacity-60 dark:border-amber-800/20'
-                  : 'border-amber-200/50 dark:border-amber-800/30'
-              }`}
-            >
+          sortedItems.map((item) => {
+            const statusKey = resolveStatus(item.status, item.done);
+            const statusDisplay = STATUS_DISPLAY[statusKey];
+            const StatusIcon = statusDisplay.Icon;
+            const resolvedPriority = resolvePriority(item.priority);
+
+            return (
+              <div
+                key={item.id}
+                data-testid={`todo-item-${item.id}`}
+                className={`flex items-start gap-3 rounded-lg border bg-white/70 p-3 shadow-sm transition-colors dark:bg-amber-950/20 ${
+                  item.done
+                    ? 'border-amber-200/30 opacity-60 dark:border-amber-800/20'
+                    : 'border-amber-200/50 dark:border-amber-800/30'
+                }`}
+              >
               {/* Checkbox */}
               <input
                 type="checkbox"
@@ -390,22 +400,31 @@ export default function DailyTodoPanel({
                     disabled={effectiveReadOnly}
                     className="w-full text-left disabled:cursor-default"
                   >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {showPriorityBadges && renderPriorityBadge(item.priority)}
-                      {item.time && (
-                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
-                          {item.time}
-                        </span>
-                      )}
-                      <span
-                        className={`text-sm ${
-                          item.done
-                            ? 'text-slate-500 line-through dark:text-slate-400'
-                            : 'text-slate-900 dark:text-slate-100'
-                        }`}
-                      >
-                        {item.text}
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                        <StatusIcon className={`h-4 w-4 ${statusDisplay.className}`} aria-hidden="true" />
+                        <span className="sr-only">{statusDisplay.label}</span>
                       </span>
+                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                        {item.time && (
+                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+                            {item.time}
+                          </span>
+                        )}
+                        <span
+                          className={`min-w-0 text-sm ${
+                            item.done
+                              ? 'flex-1 text-slate-500 line-through dark:text-slate-400'
+                              : 'flex-1 text-slate-900 dark:text-slate-100'
+                          }`}
+                        >
+                          {item.text}
+                        </span>
+                      </div>
+                      <PriorityNumberBadge
+                        priority={resolvedPriority}
+                        show={showPriorityBadges}
+                      />
                     </div>
                   </button>
                 )}
@@ -423,8 +442,9 @@ export default function DailyTodoPanel({
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
     </div>
