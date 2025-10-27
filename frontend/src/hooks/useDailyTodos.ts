@@ -18,6 +18,32 @@ interface CacheEntry {
 const TODO_CACHE = new Map<string, CacheEntry>();
 const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
+const normalizeTodoPriority = (
+  value: TodoItem['priority'],
+): 'high' | 'medium' | 'low' => {
+  return value === 'high' || value === 'medium' || value === 'low'
+    ? value
+    : 'medium';
+};
+
+const normalizeTodoDoc = (doc: DailyTodoDoc | null): DailyTodoDoc | null => {
+  if (!doc) {
+    return null;
+  }
+
+  const normalizedItems = Array.isArray(doc.items)
+    ? doc.items.map((item) => ({
+        ...item,
+        priority: normalizeTodoPriority(item.priority),
+      }))
+    : [];
+
+  return {
+    ...doc,
+    items: normalizedItems,
+  };
+};
+
 const buildCacheKey = (userId: string, date: string, teamId?: string | null) => {
   const scope = teamId ?? 'solo';
   return `${userId}::${scope}::${date}`;
@@ -39,7 +65,7 @@ const getCacheEntry = (key: string): CacheEntry | null => {
 
 const setCacheEntry = (key: string, data: DailyTodoDoc | null, readOnly: boolean) => {
   TODO_CACHE.set(key, {
-    data,
+    data: normalizeTodoDoc(data),
     readOnly,
     timestamp: Date.now(),
   });
@@ -73,12 +99,13 @@ export default function useDailyTodos({
     (nextTodos: DailyTodoDoc | null, nextReadOnly?: boolean) => {
       const resolvedReadOnly = typeof nextReadOnly === 'boolean' ? nextReadOnly : readOnly;
 
-      setTodos(nextTodos);
+      const normalizedTodos = normalizeTodoDoc(nextTodos);
+      setTodos(normalizedTodos);
       setReadOnly(resolvedReadOnly);
       setError(null);
 
       if (cacheKey) {
-        setCacheEntry(cacheKey, nextTodos, resolvedReadOnly);
+        setCacheEntry(cacheKey, normalizedTodos, resolvedReadOnly);
       }
     },
     [cacheKey, readOnly],
@@ -105,7 +132,7 @@ export default function useDailyTodos({
       const cachedEntry = !ignoreCache && key ? getCacheEntry(key) : null;
 
       if (cachedEntry) {
-        setTodos(cachedEntry.data);
+        setTodos(normalizeTodoDoc(cachedEntry.data));
         setReadOnly(cachedEntry.readOnly);
         setError(null);
 
@@ -195,15 +222,20 @@ export default function useDailyTodos({
   );
 
   const addItem = useCallback(
-    async (text: string, time?: string | null) => {
+    async (
+      text: string,
+      time?: string | null,
+      priority?: TodoItem['priority'],
+    ) => {
       if (!userId || !date || readOnly) {
         return;
       }
 
       try {
+        const resolvedPriority = normalizeTodoPriority(priority);
         const response = await apiFetch(`/daily-todos/${userId}/${date}/items`, {
           method: 'POST',
-          body: JSON.stringify({ text, time: time || null }),
+          body: JSON.stringify({ text, time: time || null, priority: resolvedPriority }),
         });
 
         if (response && response.success) {
@@ -230,11 +262,19 @@ export default function useDailyTodos({
       }
 
       try {
+        const payload: Partial<TodoItem> = { ...updates };
+        if (Object.prototype.hasOwnProperty.call(payload, 'priority')) {
+          if (payload.priority === undefined) {
+            delete (payload as Record<string, unknown>).priority;
+          } else {
+            payload.priority = normalizeTodoPriority(payload.priority);
+          }
+        }
         const response = await apiFetch(
           `/daily-todos/${userId}/${date}/items/${itemId}`,
           {
             method: 'PATCH',
-            body: JSON.stringify(updates),
+            body: JSON.stringify(payload),
           }
         );
 
