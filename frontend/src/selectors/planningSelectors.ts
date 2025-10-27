@@ -132,6 +132,8 @@ export interface TaskOccurrence {
   readOnly?: boolean;
   attachedToEvent?: boolean;
   priority?: 'high' | 'medium' | 'low';
+  status?: 'todo' | 'doing' | 'done';
+  done?: boolean;
   [key: string]: unknown;
 }
 
@@ -182,6 +184,17 @@ const normalizeTaskPriority = (value: unknown): 'high' | 'medium' | 'low' => {
   }
   const normalized = value.trim().toLowerCase();
   return normalized === 'high' || normalized === 'low' ? (normalized as 'high' | 'low') : 'medium';
+};
+
+const normalizeTaskStatus = (value: unknown): 'todo' | 'doing' | 'done' | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'todo' || normalized === 'doing' || normalized === 'done') {
+    return normalized;
+  }
+  return undefined;
 };
 
 const parseDate = (value: unknown): Date | null => {
@@ -436,6 +449,14 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
     if (!taskRaw || typeof taskRaw !== 'object') return;
     const task = taskRaw as Partial<WeeklyTaskDefinition> & Partial<TaskOccurrence>;
     const taskRecord = task as Record<string, unknown>;
+    const rawStatusValue =
+      typeof task.status === 'string'
+        ? task.status
+        : typeof taskRecord?.status === 'string'
+        ? (taskRecord.status as string)
+        : undefined;
+    const normalizedStatus = normalizeTaskStatus(rawStatusValue);
+    const isTaskDone = task.done === true || taskRecord?.done === true;
     const taskWeekday = resolveDayIndex(
       taskRecord?.weekday ?? taskRecord?.week_day ?? taskRecord?.weekDay ?? null,
       rangeStart,
@@ -466,6 +487,8 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         readOnly: task.readOnly,
         attachedToEvent: false,
         priority: normalizeTaskPriority(task.priority),
+        status: normalizedStatus ?? (isTaskDone ? 'done' : undefined),
+        done: isTaskDone,
       };
       occurrenceMap.set(occId, occurrence);
       occurrences.push(occurrence);
@@ -538,6 +561,8 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         readOnly: task.readOnly,
         attachedToEvent: false,
         priority: normalizeTaskPriority(task.priority),
+        status: normalizedStatus ?? (isTaskDone ? 'done' : undefined),
+        done: isTaskDone,
       };
       occurrenceMap.set(occId, occurrence);
       occurrences.push(occurrence);
