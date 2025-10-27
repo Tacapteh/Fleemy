@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { getIcon } from '../icons/registry';
 import { getTaskColor } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
+import { getPriorityDisplay } from '../utils/priorityDisplay';
 
 interface TaskIconBadgeProps {
   taskId: string;
@@ -51,30 +52,16 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
     ? priority
     : undefined;
 
-  const priorityColorClass = normalizedPriority === 'high'
-    ? 'bg-red-500'
-    : normalizedPriority === 'medium'
-    ? 'bg-amber-400'
-    : normalizedPriority === 'low'
-    ? 'bg-emerald-400'
-    : '';
-
-  const priorityLabel = normalizedPriority === 'high'
-    ? 'Priorité importante'
-    : normalizedPriority === 'medium'
-    ? 'Priorité moyenne'
-    : normalizedPriority === 'low'
-    ? 'Priorité faible'
+  const priorityDisplay = showPriorityBadges && normalizedPriority
+    ? getPriorityDisplay(normalizedPriority)
     : null;
-
-  const showPriorityIndicator = Boolean(showPriorityBadges && priorityColorClass && priorityLabel);
 
   const baseAriaLabel = formattedPrice
     ? `Ouvrir la tâche: ${safeLabel} — ${formattedPrice} €`
     : `Ouvrir la tâche: ${safeLabel}`;
 
-  const ariaLabel = showPriorityIndicator && priorityLabel
-    ? `${baseAriaLabel} — ${priorityLabel}`
+  const ariaLabel = priorityDisplay
+    ? `${baseAriaLabel} — ${priorityDisplay.ariaLabel}`
     : baseAriaLabel;
 
   const colorStyles = getTaskColor(colorKey);
@@ -219,14 +206,13 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
                 }}
               >
                 <IconComponent className="h-[14px] w-[14px]" strokeWidth={2.2} aria-hidden="true" />
-                {showPriorityIndicator && priorityLabel ? (
-                  <>
-                    <span
-                      className={`pointer-events-none absolute top-0 right-0 h-2 w-2 rounded-full ring-1 ring-white/70 ${priorityColorClass}`}
-                      aria-hidden="true"
-                    />
-                    <span className="sr-only">{priorityLabel}</span>
-                  </>
+                {priorityDisplay ? (
+                  <span
+                    className={`pointer-events-none absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70 ${priorityDisplay.bgClass}`}
+                  >
+                    {priorityDisplay.labelNumber}
+                    <span className="sr-only">{priorityDisplay.ariaLabel}</span>
+                  </span>
                 ) : null}
               </button>
             </TooltipPrimitive.Trigger>

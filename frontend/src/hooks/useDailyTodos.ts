@@ -26,6 +26,21 @@ const normalizeTodoPriority = (
     : 'medium';
 };
 
+const normalizeTodoStatus = (
+  value: TodoItem['status'],
+  done?: boolean,
+): 'todo' | 'doing' | 'done' => {
+  if (value === 'todo' || value === 'doing' || value === 'done') {
+    return value;
+  }
+
+  if (done) {
+    return 'done';
+  }
+
+  return 'todo';
+};
+
 const normalizeTodoDoc = (doc: DailyTodoDoc | null): DailyTodoDoc | null => {
   if (!doc) {
     return null;
@@ -35,6 +50,7 @@ const normalizeTodoDoc = (doc: DailyTodoDoc | null): DailyTodoDoc | null => {
     ? doc.items.map((item) => ({
         ...item,
         priority: normalizeTodoPriority(item.priority),
+        status: normalizeTodoStatus(item.status, item.done),
       }))
     : [];
 
@@ -235,7 +251,12 @@ export default function useDailyTodos({
         const resolvedPriority = normalizeTodoPriority(priority);
         const response = await apiFetch(`/daily-todos/${userId}/${date}/items`, {
           method: 'POST',
-          body: JSON.stringify({ text, time: time || null, priority: resolvedPriority }),
+          body: JSON.stringify({
+            text,
+            time: time || null,
+            priority: resolvedPriority,
+            status: 'todo',
+          }),
         });
 
         if (response && response.success) {
@@ -268,6 +289,17 @@ export default function useDailyTodos({
             delete (payload as Record<string, unknown>).priority;
           } else {
             payload.priority = normalizeTodoPriority(payload.priority);
+          }
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'status')) {
+          if (payload.status === undefined) {
+            delete (payload as Record<string, unknown>).status;
+          } else {
+            const nextDone =
+              Object.prototype.hasOwnProperty.call(payload, 'done') && typeof payload.done === 'boolean'
+                ? payload.done
+                : undefined;
+            payload.status = normalizeTodoStatus(payload.status, nextDone);
           }
         }
         const response = await apiFetch(
@@ -337,7 +369,11 @@ export default function useDailyTodos({
         return;
       }
 
-      await updateItem(itemId, { done: !item.done });
+      const nextDone = !item.done;
+      await updateItem(itemId, {
+        done: nextDone,
+        status: nextDone ? 'done' : 'todo',
+      });
     },
     [todos, updateItem, readOnly]
   );
