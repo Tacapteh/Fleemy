@@ -1,5 +1,6 @@
 import os
-from typing import List
+import re
+from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,6 +12,9 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://fleemy.web.app",
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://fleemy.fr",
+    "https://www.fleemy.fr",
+    "https://app.fleemy.fr",
 ]
 
 
@@ -35,13 +39,26 @@ ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With", "X-User-Id"]
 EXPOSE_HEADERS = ["Location"]
 MAX_AGE = 86400
+ALLOWED_ORIGIN_REGEX_PATTERN = r"https://([a-z0-9-]+\.)?fleemy\.fr"
+ALLOWED_ORIGIN_REGEX = re.compile(ALLOWED_ORIGIN_REGEX_PATTERN)
 ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}
+
+
+def _is_origin_allowed(origin: Optional[str]) -> bool:
+    if not origin:
+        return False
+    if origin in ALLOWED_ORIGIN_SET:
+        return True
+    if ALLOWED_ORIGIN_REGEX.fullmatch(origin):
+        return True
+    return False
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX_PATTERN,
     allow_credentials=False,
     allow_methods=ALLOWED_METHODS,
     allow_headers=ALLOWED_HEADERS,
@@ -54,7 +71,7 @@ app.add_middleware(
 async def ensure_vary_origin(request, call_next):
     response = await call_next(request)
     origin = request.headers.get("origin")
-    if origin and origin in ALLOWED_ORIGIN_SET:
+    if _is_origin_allowed(origin):
         vary = response.headers.get("Vary")
         if vary:
             if "origin" not in vary.lower():

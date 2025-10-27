@@ -72,6 +72,9 @@ DEFAULT_ALLOWED_ORIGINS = [
     "https://fleemy.web.app",
     "http://localhost:5173",
     "http://localhost:3000",
+    "https://fleemy.fr",
+    "https://www.fleemy.fr",
+    "https://app.fleemy.fr",
 ]
 
 
@@ -98,13 +101,26 @@ ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With", "X-User-Id"]
 EXPOSE_HEADERS = ["Location"]
 MAX_AGE = 86400
+ALLOWED_ORIGIN_REGEX_PATTERN = r"https://([a-z0-9-]+\.)?fleemy\.fr"
+ALLOWED_ORIGIN_REGEX = re.compile(ALLOWED_ORIGIN_REGEX_PATTERN)
 ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}
+
+
+def _is_origin_allowed(origin: Optional[str]) -> bool:
+    if not origin:
+        return False
+    if origin in ALLOWED_ORIGIN_SET:
+        return True
+    if ALLOWED_ORIGIN_REGEX.fullmatch(origin):
+        return True
+    return False
 
 logger.info("CORS activé pour : %s", ALLOWED_ORIGINS)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX_PATTERN,
     allow_credentials=False,
     allow_methods=ALLOWED_METHODS,
     allow_headers=ALLOWED_HEADERS,
@@ -172,7 +188,7 @@ from fastapi.exceptions import RequestValidationError
 def _apply_cors_headers(request: Request, response: Response) -> Response:
     """Apply CORS headers consistently on any response when origin allowed."""
     origin = request.headers.get("origin")
-    if origin and origin in ALLOWED_ORIGIN_SET:
+    if _is_origin_allowed(origin):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = ", ".join(ALLOWED_METHODS)
         response.headers["Access-Control-Allow-Headers"] = ", ".join(ALLOWED_HEADERS)
