@@ -6,6 +6,7 @@ import { getTaskColor } from '../constants/colors';
 import { getIcon } from '../icons/registry';
 import { useSettings } from '../context/SettingsContext';
 import PriorityNumberBadge from './PriorityNumberBadge';
+import { TaskTodoIcon, TaskDoingIcon, TaskDoneIcon } from './icons/TaskStatusIcons';
 import { getPriorityDisplay } from '../utils/priorityDisplay';
 import {
   selectDisplayModel,
@@ -83,6 +84,43 @@ const resolveDayEventConflicts = (eventsForDay: DisplayEvent[]): DisplayEvent[] 
   });
 
   return resolved.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+};
+
+type StatusKey = 'todo' | 'doing' | 'done';
+
+interface StatusDisplayConfig {
+  label: string;
+  srLabel: string;
+  iconComponent: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  iconClass: string;
+  chipClass: string;
+}
+
+const TASK_STATUS_DISPLAY: Record<StatusKey, StatusDisplayConfig> = {
+  todo: {
+    label: 'À faire',
+    srLabel: 'Tâche à faire',
+    iconComponent: TaskTodoIcon,
+    iconClass: 'text-slate-400 dark:text-slate-300',
+    chipClass:
+      'bg-slate-500/10 text-slate-300 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-200 dark:border-slate-500/40',
+  },
+  doing: {
+    label: 'En cours',
+    srLabel: 'Tâche en cours',
+    iconComponent: TaskDoingIcon,
+    iconClass: 'text-amber-300',
+    chipClass:
+      'bg-amber-500/10 text-amber-300 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/40',
+  },
+  done: {
+    label: 'Terminé',
+    srLabel: 'Tâche terminée',
+    iconComponent: TaskDoneIcon,
+    iconClass: 'text-emerald-400',
+    chipClass:
+      'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
+  },
 };
 
 interface PlannerGridProps {
@@ -351,10 +389,13 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   isReadOnlyMode = false,
 }) => {
   const user = useFirebaseUser();
-  const { settings, loading } = useSettings();
+  const settingsContext = useSettings();
+  const settings = settingsContext?.settings;
+  const loading = settingsContext?.loading ?? false;
+  const showPriorityBadges = settingsContext?.showTaskPriorityBadges !== false;
+  const showStatusBadges = settingsContext?.showTaskStatusBadges !== false;
   const [viewFilter, setViewFilter] = useState<'today' | 'week'>('week');
   const allowMinutes = settings?.enableMinutes === true;
-  const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
   const showWeekendsEnabled = useMemo(() => {
     if (loading || !settings) {
       return true;
@@ -926,9 +967,22 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                             task.priority === 'high' || task.priority === 'medium' || task.priority === 'low'
                               ? task.priority
                               : null;
-                          const priorityDisplay =
-                            showPriorityBadges && priorityLevel ? getPriorityDisplay(priorityLevel) : null;
-
+                          const isAbsenceTask =
+                            typeof task.type === 'string' && task.type.trim().toLowerCase() === 'absence';
+                          const rawStatus =
+                            typeof task.status === 'string'
+                              ? task.status.trim().toLowerCase()
+                              : undefined;
+                          let statusKey: StatusKey = 'todo';
+                          if (rawStatus === 'todo' || rawStatus === 'doing' || rawStatus === 'done') {
+                            statusKey = rawStatus;
+                          } else if (task.done === true) {
+                            statusKey = 'done';
+                          }
+                          const statusDisplay =
+                            showStatusBadges && !isAbsenceTask ? TASK_STATUS_DISPLAY[statusKey] : null;
+                          const StatusIcon = statusDisplay?.iconComponent;
+                          
                           const formattedPrice =
                             typeof task.price === 'number'
                               ? `${task.price.toLocaleString('fr-FR', {
@@ -956,11 +1010,24 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               }}
                             >
                               <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-                              <div className="flex flex-col flex-1 min-w-0">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className="font-medium truncate">{task.label}</span>
-                                  {priorityDisplay && priorityLevel ? (
-                                    <PriorityNumberBadge priority={priorityLevel} show />
+                              <div className="flex flex-col flex-1 min-w-0 gap-1">
+                                <div className="flex min-w-0 items-start gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="font-medium truncate block">{task.label}</span>
+                                    {statusDisplay && StatusIcon ? (
+                                      <span
+                                        className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusDisplay.chipClass}`}
+                                      >
+                                        <StatusIcon className={`h-3.5 w-3.5 ${statusDisplay.iconClass}`} aria-hidden="true" />
+                                        <span>{statusDisplay.label}</span>
+                                        <span className="sr-only">{statusDisplay.srLabel}</span>
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {showPriorityBadges && priorityLevel ? (
+                                    <div className="flex-shrink-0">
+                                      <PriorityNumberBadge priority={priorityLevel} show />
+                                    </div>
                                   ) : null}
                                 </div>
                                 <div className="flex items-center gap-2 text-[11px] opacity-90">
