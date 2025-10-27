@@ -302,8 +302,10 @@ const WeeklyTaskForm = ({
   readOnly = false,
   weekStartISO = null,
 }) => {
-  const { settings } = useSettings();
+  const settingsContext = useSettings() || {};
+  const { settings, showTaskStatusBadges } = settingsContext;
   const allowMinutes = settings?.enableMinutes === true;
+  const shouldShowStatusField = showTaskStatusBadges !== false;
   const timeInputStep = allowMinutes ? 900 : 3600;
   const initialIconValue = initialTask?.icon || 'briefcase';
   const defaultIconKey = resolveTaskIconKey(initialIconValue);
@@ -320,7 +322,9 @@ const WeeklyTaskForm = ({
     icon: defaultIconKey,
     time_ranges: ensureTimeRanges(initialTask?.time_ranges, { allowMinutes }),
     priority: normalizePriorityValue(initialTask?.priority),
-    status: normalizeStatusValue(initialTask?.status),
+    status: shouldShowStatusField
+      ? normalizeStatusValue(initialTask?.status)
+      : 'todo',
   }));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -333,6 +337,12 @@ const WeeklyTaskForm = ({
       time_ranges: ensureTimeRanges(current.time_ranges, { allowMinutes }),
     }));
   }, [allowMinutes]);
+
+  useEffect(() => {
+    if (!shouldShowStatusField) {
+      setTask((current) => ({ ...current, status: 'todo' }));
+    }
+  }, [shouldShowStatusField]);
 
   const addTimeRange = () => {
     setTask((current) => ({
@@ -550,13 +560,17 @@ const WeeklyTaskForm = ({
         priceValueRaw = String(task.price);
       }
       const priceValue = priceValueRaw.trim();
+      const normalizedStatus = shouldShowStatusField
+        ? normalizeStatusValue(task.status)
+        : 'todo';
+
       const taskData = {
         ...task,
         time_ranges: rangesWithDates,
         id: initialTask?.id || undefined,
         price: priceValue ? parseFloat(priceValue) : null,
         priority: normalizePriorityValue(task.priority),
-        status: normalizeStatusValue(task.status),
+        status: normalizedStatus,
         ...(creationDateISO ? { dateISO: creationDateISO } : {}),
       };
 
@@ -780,19 +794,23 @@ const WeeklyTaskForm = ({
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="task-status">Avancement</label>
-                <select
-                  id="task-status"
-                  value={task.status}
-                  onChange={(e) => setTask({ ...task, status: normalizeStatusValue(e.target.value) })}
-                  className="form-input"
-                >
-                  <option value="todo">À faire</option>
-                  <option value="doing">En cours</option>
-                  <option value="done">Terminé</option>
-                </select>
-              </div>
+              {shouldShowStatusField && (
+                <div className="form-group">
+                  <label className="form-label" htmlFor="task-status">Avancement</label>
+                  <select
+                    id="task-status"
+                    value={task.status}
+                    onChange={(e) =>
+                      setTask({ ...task, status: normalizeStatusValue(e.target.value) })
+                    }
+                    className="form-input"
+                  >
+                    <option value="todo">À faire</option>
+                    <option value="doing">En cours</option>
+                    <option value="done">Terminé</option>
+                  </select>
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Icône</label>
