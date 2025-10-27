@@ -35,45 +35,35 @@ const resolvePriority = (
     : 'medium';
 };
 
-const resolveStatus = (
-  value: TodoItem['status'],
-  done: boolean,
-): 'todo' | 'doing' | 'done' => {
-  if (value === 'todo' || value === 'doing' || value === 'done') {
-    return value;
-  }
+type StatusKey = 'todo' | 'doing' | 'done';
 
-  return done ? 'done' : 'todo';
-};
+interface StatusDisplayConfig {
+  label: string;
+  srLabel: string;
+  iconComponent: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  iconClass: string;
+  chipClass: string;
+}
 
-const STATUS_DISPLAY: Record<
-  'todo' | 'doing' | 'done',
-  {
-    Icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-    label: string;
-    srLabel: string;
-    iconClass: string;
-    chipClass: string;
-  }
-> = {
+const STATUS_DISPLAY: Record<StatusKey, StatusDisplayConfig> = {
   todo: {
-    Icon: TaskTodoIcon,
     label: 'À faire',
     srLabel: 'Tâche à faire',
+    iconComponent: TaskTodoIcon,
     iconClass: 'text-slate-400 dark:text-slate-300',
     chipClass: 'bg-slate-500/10 text-slate-300 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-200 dark:border-slate-500/40',
   },
   doing: {
-    Icon: TaskDoingIcon,
     label: 'En cours',
     srLabel: 'Tâche en cours',
+    iconComponent: TaskDoingIcon,
     iconClass: 'text-amber-300',
     chipClass: 'bg-amber-500/10 text-amber-300 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/40',
   },
   done: {
-    Icon: TaskDoneIcon,
     label: 'Terminé',
     srLabel: 'Tâche terminée',
+    iconComponent: TaskDoneIcon,
     iconClass: 'text-emerald-400',
     chipClass: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
   },
@@ -101,9 +91,9 @@ export default function DailyTodoPanel({
     enabled: Boolean(userId && dateStr),
   });
 
-  const { showTaskStatusBadges, showTaskPriorityBadges } = useSettings() || {};
-  const showStatusBadges = showTaskStatusBadges !== false;
-  const showPriorityBadges = showTaskPriorityBadges !== false;
+  const settingsContext = useSettings();
+  const showTaskStatusBadges = settingsContext?.showTaskStatusBadges !== false;
+  const showTaskPriorityBadges = settingsContext?.showTaskPriorityBadges !== false;
 
   const [newText, setNewText] = useState('');
   const [newTime, setNewTime] = useState('');
@@ -187,7 +177,7 @@ export default function DailyTodoPanel({
   };
 
   const toggleTaskDone = useCallback(
-    async (itemId: string, currentStatus: 'todo' | 'doing' | 'done') => {
+    async (itemId: string, currentStatus: StatusKey) => {
       if (effectiveReadOnly) {
         return;
       }
@@ -348,9 +338,13 @@ export default function DailyTodoPanel({
           </p>
         ) : (
           sortedItems.map((item) => {
-            const statusKey = resolveStatus(item.status, item.done);
+            const normalizedStatus =
+              item.status === 'todo' || item.status === 'doing' || item.status === 'done'
+                ? item.status
+                : (item.done ? 'done' : 'todo');
+            const statusKey: StatusKey = normalizedStatus;
             const statusDisplay = STATUS_DISPLAY[statusKey];
-            const StatusIcon = statusDisplay.Icon;
+            const StatusIcon = statusDisplay.iconComponent;
             const resolvedPriority = resolvePriority(item.priority);
 
             return (
@@ -400,7 +394,7 @@ export default function DailyTodoPanel({
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    {showStatusBadges && (
+                    {showTaskStatusBadges && (
                       <button
                         type="button"
                         onClick={() => toggleTaskDone(item.id, statusKey)}
@@ -449,7 +443,7 @@ export default function DailyTodoPanel({
                           {item.text}
                         </span>
                       </div>
-                      {showPriorityBadges && (
+                      {showTaskPriorityBadges && (
                         <div className="flex-shrink-0">
                           <PriorityNumberBadge priority={resolvedPriority} show />
                         </div>
