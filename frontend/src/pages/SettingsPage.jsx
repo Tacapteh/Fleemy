@@ -54,6 +54,12 @@ const toggleSettings = [
     description: "Afficher le samedi et le dimanche dans la vue semaine et mois.",
   },
   {
+    key: "showTaskPriorityBadges",
+    label: "Afficher l’indicateur de priorité sur les tâches",
+    description: "Ajoute un badge de priorité dans les listes et bulles de tâches.",
+    ariaLabel: "Activer ou désactiver l’affichage visuel de la priorité des tâches",
+  },
+  {
     key: "enableMinutes",
     label: "Minutes détaillées",
     description: "Autoriser la saisie de créneaux comme 09h15 → 10h45.",
@@ -330,6 +336,7 @@ export default function SettingsPage() {
             onToggle={() => handleToggle(item.key)}
             aria-labelledby={labelId}
             aria-describedby={descriptionId}
+            aria-label={item.ariaLabel}
           />
         </div>
       );
