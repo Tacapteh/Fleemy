@@ -35,6 +35,14 @@ const normalizePriorityValue = (value) => {
   return ['high', 'medium', 'low'].includes(normalized) ? normalized : 'medium';
 };
 
+const normalizeStatusValue = (value) => {
+  if (typeof value !== 'string') {
+    return 'todo';
+  }
+  const normalized = value.trim().toLowerCase();
+  return ['todo', 'doing', 'done'].includes(normalized) ? normalized : 'todo';
+};
+
 const formatDateOnly = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return null;
@@ -312,6 +320,7 @@ const WeeklyTaskForm = ({
     icon: defaultIconKey,
     time_ranges: ensureTimeRanges(initialTask?.time_ranges, { allowMinutes }),
     priority: normalizePriorityValue(initialTask?.priority),
+    status: normalizeStatusValue(initialTask?.status),
   }));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -547,6 +556,7 @@ const WeeklyTaskForm = ({
         id: initialTask?.id || undefined,
         price: priceValue ? parseFloat(priceValue) : null,
         priority: normalizePriorityValue(task.priority),
+        status: normalizeStatusValue(task.status),
         ...(creationDateISO ? { dateISO: creationDateISO } : {}),
       };
 
@@ -767,6 +777,20 @@ const WeeklyTaskForm = ({
                   <option value="high">Importante (urgent)</option>
                   <option value="medium">Moyenne (par défaut)</option>
                   <option value="low">Faible</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="task-status">Avancement</label>
+                <select
+                  id="task-status"
+                  value={task.status}
+                  onChange={(e) => setTask({ ...task, status: normalizeStatusValue(e.target.value) })}
+                  className="form-input"
+                >
+                  <option value="todo">À faire</option>
+                  <option value="doing">En cours</option>
+                  <option value="done">Terminé</option>
                 </select>
               </div>
 
