@@ -60,6 +60,12 @@ const toggleSettings = [
     ariaLabel: "Activer ou désactiver l’affichage visuel de la priorité des tâches",
   },
   {
+    key: "showTaskStatusBadges",
+    label: "Afficher l’avancement des tâches (à faire / en cours / terminé)",
+    description: "Affiche l’état et la couleur de chaque tâche.",
+    ariaLabel: "Afficher ou masquer l’état des tâches",
+  },
+  {
     key: "enableMinutes",
     label: "Minutes détaillées",
     description: "Autoriser la saisie de créneaux comme 09h15 → 10h45.",
