@@ -13,7 +13,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
 import asyncio
@@ -339,6 +339,7 @@ class DailyTodoItem(BaseModel):
     text: str
     done: bool = False
     time: Optional[str] = None  # Format "HH:MM"
+    priority: Literal['high', 'medium', 'low'] = 'medium'
 
 
 class DailyTodo(BaseModel):
@@ -351,12 +352,50 @@ class DailyTodo(BaseModel):
 class DailyTodoCreateRequest(BaseModel):
     text: str
     time: Optional[str] = None
+    priority: Literal['high', 'medium', 'low'] = 'medium'
 
 
 class DailyTodoUpdateRequest(BaseModel):
     text: Optional[str] = None
     done: Optional[bool] = None
     time: Optional[str] = None
+    priority: Optional[Literal['high', 'medium', 'low']] = None
+
+
+PRIORITY_VALUES = {'high', 'medium', 'low'}
+
+
+def normalize_todo_priority(value: Optional[str]) -> str:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in PRIORITY_VALUES:
+            return normalized
+    return 'medium'
+
+
+def normalize_daily_todo_doc(data: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return data
+
+    items = data.get('items')
+    if not isinstance(items, list):
+        data['items'] = []
+        return data
+
+    normalized_items = []
+    for item in items:
+        if not isinstance(item, dict):
+            normalized_items.append(item)
+            continue
+        normalized_priority = normalize_todo_priority(item.get('priority'))
+        normalized_item = {
+            **item,
+            'priority': normalized_priority,
+        }
+        normalized_items.append(normalized_item)
+
+    data['items'] = normalized_items
+    return data
 
 
 class Address(BaseModel):
@@ -2039,6 +2078,7 @@ async def get_daily_todos(
         }
     
     data = snap.to_dict()
+    data = normalize_daily_todo_doc(data)
     return {
         "success": True,
         "data": data,
@@ -2079,9 +2119,11 @@ async def update_daily_todos(
         "items": items,
         "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
     }
-    
+
+    data = normalize_daily_todo_doc(data)
+
     await asyncio.to_thread(doc_ref.set, data)
-    
+
     return {
         "success": True,
         "data": data,
@@ -2115,6 +2157,7 @@ async def add_daily_todo_item(
         "text": item.text,
         "done": False,
         "time": item.time,
+        "priority": normalize_todo_priority(item.priority),
     }
     
     if snap.exists:
@@ -2131,6 +2174,8 @@ async def add_daily_todo_item(
             "updatedAt": int(datetime.now(timezone.utc).timestamp() * 1000),
         }
     
+    data = normalize_daily_todo_doc(data)
+
     await asyncio.to_thread(doc_ref.set, data)
     
     return {
@@ -2174,14 +2219,18 @@ async def update_daily_todo_item(
                 item["done"] = updates.done
             if updates.time is not None:
                 item["time"] = updates.time
+            if updates.priority is not None:
+                item["priority"] = normalize_todo_priority(updates.priority)
             break
-    
+
     if not item_found:
         raise HTTPException(status_code=404, detail="Item not found")
-    
+
     data["items"] = items
     data["updatedAt"] = int(datetime.now(timezone.utc).timestamp() * 1000)
-    
+
+    data = normalize_daily_todo_doc(data)
+
     await asyncio.to_thread(doc_ref.set, data)
     
     return {
@@ -2221,7 +2270,9 @@ async def delete_daily_todo_item(
     
     data["items"] = items
     data["updatedAt"] = int(datetime.now(timezone.utc).timestamp() * 1000)
-    
+
+    data = normalize_daily_todo_doc(data)
+
     await asyncio.to_thread(doc_ref.set, data)
     
     return {

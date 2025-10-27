@@ -2,6 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { Trash2, Plus, Clock } from 'lucide-react';
 import useDailyTodos from '../hooks/useDailyTodos';
 import type { TodoItem } from '../types/todo';
+import { useSettings } from '../context/SettingsContext';
+import {
+  PriorityHighIcon,
+  PriorityMediumIcon,
+  PriorityLowIcon,
+} from './icons/PriorityIcons';
 
 interface DailyTodoPanelProps {
   selectedDate: string | Date; // "YYYY-MM-DD" or Date object
@@ -24,6 +30,20 @@ const toDateString = (value: string | Date): string => {
   return '';
 };
 
+const resolvePriority = (
+  value: TodoItem['priority'],
+): 'high' | 'medium' | 'low' => {
+  return value === 'high' || value === 'medium' || value === 'low'
+    ? value
+    : 'medium';
+};
+
+const PRIORITY_ORDER: Record<'high' | 'medium' | 'low', number> = {
+  high: 0,
+  medium: 1,
+  low: 2,
+};
+
 export default function DailyTodoPanel({
   selectedDate,
   userId,
@@ -32,7 +52,7 @@ export default function DailyTodoPanel({
   compact = false,
 }: DailyTodoPanelProps) {
   const dateStr = useMemo(() => toDateString(selectedDate), [selectedDate]);
-  
+
   const { todos, loading, error, readOnly: isReadOnly, addItem, updateItem, deleteItem, toggleItem } = useDailyTodos({
     userId,
     date: dateStr,
@@ -40,32 +60,90 @@ export default function DailyTodoPanel({
     enabled: Boolean(userId && dateStr),
   });
 
+  const { settings } = useSettings();
+  const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
+
   const [newText, setNewText] = useState('');
   const [newTime, setNewTime] = useState('');
+  const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [editTime, setEditTime] = useState('');
 
   const effectiveReadOnly = readOnly || isReadOnly;
 
+  const renderPriorityBadge = (priority: TodoItem['priority']) => {
+    const resolvedPriority = resolvePriority(priority);
+    const IconComponent =
+      resolvedPriority === 'high'
+        ? PriorityHighIcon
+        : resolvedPriority === 'medium'
+        ? PriorityMediumIcon
+        : PriorityLowIcon;
+    const colorClass =
+      resolvedPriority === 'high'
+        ? 'text-red-500 dark:text-red-400'
+        : resolvedPriority === 'medium'
+        ? 'text-amber-400 dark:text-amber-300'
+        : 'text-emerald-500 dark:text-emerald-400';
+    const priorityLabel =
+      resolvedPriority === 'high'
+        ? 'Priorité importante'
+        : resolvedPriority === 'medium'
+        ? 'Priorité moyenne'
+        : 'Priorité faible';
+
+    return (
+      <span className="inline-flex items-center">
+        <IconComponent className={`h-4 w-4 ${colorClass}`} aria-hidden="true" />
+        <span className="sr-only">{priorityLabel}</span>
+      </span>
+    );
+  };
+
   const sortedItems = useMemo(() => {
     if (!todos?.items) {
       return [];
     }
 
-    const undone = todos.items.filter((item) => !item.done);
-    const done = todos.items.filter((item) => item.done);
+    const withIndex = todos.items.map((item, index) => ({ item, index }));
 
-    const sortByTime = (a: TodoItem, b: TodoItem) => {
-      const aTime = a.time || '';
-      const bTime = b.time || '';
-      if (!aTime && !bTime) return 0;
-      if (!aTime) return 1;
-      if (!bTime) return -1;
-      return aTime.localeCompare(bTime);
+    const sortByPriorityAndTime = (
+      a: { item: TodoItem; index: number },
+      b: { item: TodoItem; index: number },
+    ) => {
+      const priorityA = PRIORITY_ORDER[resolvePriority(a.item.priority)];
+      const priorityB = PRIORITY_ORDER[resolvePriority(b.item.priority)];
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      const aTime = a.item.time || '';
+      const bTime = b.item.time || '';
+
+      if (aTime && bTime) {
+        const comparison = aTime.localeCompare(bTime);
+        if (comparison !== 0) {
+          return comparison;
+        }
+      } else if (aTime || bTime) {
+        return aTime ? -1 : 1;
+      }
+
+      return a.index - b.index;
     };
 
-    return [...undone.sort(sortByTime), ...done.sort(sortByTime)];
+    const undone = withIndex
+      .filter(({ item }) => !item.done)
+      .sort(sortByPriorityAndTime)
+      .map(({ item }) => item);
+
+    const done = withIndex
+      .filter(({ item }) => item.done)
+      .sort(sortByPriorityAndTime)
+      .map(({ item }) => item);
+
+    return [...undone, ...done];
   }, [todos?.items]);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -75,7 +153,7 @@ export default function DailyTodoPanel({
     }
 
     try {
-      await addItem(newText.trim(), newTime || null);
+      await addItem(newText.trim(), newTime || null, newPriority);
       setNewText('');
       setNewTime('');
     } catch (err) {
@@ -200,7 +278,25 @@ export default function DailyTodoPanel({
             data-testid="todo-input-text"
             className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-amber-800 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex-1 min-w-[140px] sm:flex-none">
+              <label htmlFor="daily-todo-priority" className="sr-only">
+                Priorité
+              </label>
+              <select
+                id="daily-todo-priority"
+                value={newPriority}
+                onChange={(event) =>
+                  setNewPriority(event.target.value as 'high' | 'medium' | 'low')
+                }
+                className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-amber-800 dark:bg-slate-800 dark:text-slate-100"
+                aria-label="Priorité"
+              >
+                <option value="high">Importante 🔥</option>
+                <option value="medium">Moyenne 🙂</option>
+                <option value="low">Faible 💤</option>
+              </select>
+            </div>
             <input
               type="time"
               value={newTime}
@@ -295,6 +391,7 @@ export default function DailyTodoPanel({
                     className="w-full text-left disabled:cursor-default"
                   >
                     <div className="flex items-center gap-2 flex-wrap">
+                      {showPriorityBadges && renderPriorityBadge(item.priority)}
                       {item.time && (
                         <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
                           {item.time}

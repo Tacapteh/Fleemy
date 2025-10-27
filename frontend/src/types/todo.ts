@@ -3,6 +3,7 @@ export interface TodoItem {
   text: string;
   done: boolean;
   time?: string | null;
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface DailyTodoDoc {
