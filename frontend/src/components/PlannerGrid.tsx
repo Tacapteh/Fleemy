@@ -5,6 +5,7 @@ import { calculateHeight, calculateTopPosition } from '../utils/time';
 import { getTaskColor } from '../constants/colors';
 import { getIcon } from '../icons/registry';
 import { useSettings } from '../context/SettingsContext';
+import { PriorityHighIcon, PriorityMediumIcon, PriorityLowIcon } from './icons/PriorityIcons';
 import {
   selectDisplayModel,
   DisplayEvent,
@@ -352,6 +353,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   const { settings, loading } = useSettings();
   const [viewFilter, setViewFilter] = useState<'today' | 'week'>('week');
   const allowMinutes = settings?.enableMinutes === true;
+  const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
   const showWeekendsEnabled = useMemo(() => {
     if (loading || !settings) {
       return true;
@@ -874,19 +876,48 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                 {slot.eventTaskBadges.map((badge) => {
                                   const IconComponent = getIcon(badge.iconId ?? undefined);
                                   const badgeColors = getTaskColor(badge.color);
+                                  const normalizedPriority =
+                                    badge.priority === 'high' || badge.priority === 'medium' || badge.priority === 'low'
+                                      ? badge.priority
+                                      : undefined;
+                                  const priorityColorClass = normalizedPriority === 'high'
+                                    ? 'bg-red-500'
+                                    : normalizedPriority === 'medium'
+                                    ? 'bg-amber-400'
+                                    : normalizedPriority === 'low'
+                                    ? 'bg-emerald-400'
+                                    : '';
+                                  const priorityLabel = normalizedPriority === 'high'
+                                    ? 'Priorité importante'
+                                    : normalizedPriority === 'medium'
+                                    ? 'Priorité moyenne'
+                                    : normalizedPriority === 'low'
+                                    ? 'Priorité faible'
+                                    : null;
+                                  const showPriorityIndicator = Boolean(
+                                    showPriorityBadges && priorityColorClass && priorityLabel
+                                  );
 
                                   return (
                                     <span
                                       key={`${slot.key}-badge-${badge.taskId}`}
-                                      className="flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
+                                      className="relative flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
                                       style={{
                                         backgroundColor: badgeColors.backgroundColor,
                                         color: badgeColors.color,
                                         borderColor: badgeColors.borderColor,
                                       }}
-                                      aria-hidden="true"
                                     >
-                                      <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} />
+                                      <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
+                                      {showPriorityIndicator && priorityLabel ? (
+                                        <>
+                                          <span
+                                            className={`pointer-events-none absolute top-0 right-0 h-2 w-2 rounded-full ring-1 ring-white/70 ${priorityColorClass}`}
+                                            aria-hidden="true"
+                                          />
+                                          <span className="sr-only">{priorityLabel}</span>
+                                        </>
+                                      ) : null}
                                     </span>
                                   );
                                 })}
@@ -908,6 +939,39 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                           });
                           const IconComponent = getIcon(task.icon ?? undefined);
                           const colors = getTaskColor(task.color);
+
+                          const priorityLevel =
+                            task.priority === 'high' || task.priority === 'medium' || task.priority === 'low'
+                              ? task.priority
+                              : undefined;
+
+                          const priorityLabel = priorityLevel === 'high'
+                            ? 'Priorité importante'
+                            : priorityLevel === 'medium'
+                            ? 'Priorité moyenne'
+                            : priorityLevel === 'low'
+                            ? 'Priorité faible'
+                            : null;
+
+                          const priorityIconClass = priorityLevel === 'high'
+                            ? 'w-3 h-3 text-red-500'
+                            : priorityLevel === 'medium'
+                            ? 'w-3 h-3 text-amber-400'
+                            : priorityLevel === 'low'
+                            ? 'w-3 h-3 text-emerald-400'
+                            : '';
+
+                          const PriorityIndicatorIcon = priorityLevel === 'high'
+                            ? PriorityHighIcon
+                            : priorityLevel === 'medium'
+                            ? PriorityMediumIcon
+                            : priorityLevel === 'low'
+                            ? PriorityLowIcon
+                            : null;
+
+                          const showPriorityIndicator = Boolean(
+                            showPriorityBadges && PriorityIndicatorIcon && priorityIconClass && priorityLabel
+                          );
 
                           const formattedPrice =
                             typeof task.price === 'number'
@@ -937,7 +1001,15 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                             >
                               <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
                               <div className="flex flex-col flex-1 min-w-0">
-                                <span className="font-medium truncate">{task.label}</span>
+                                <div className="flex items-center gap-1 min-w-0">
+                                  <span className="font-medium truncate">{task.label}</span>
+                                  {showPriorityIndicator && PriorityIndicatorIcon && priorityLabel ? (
+                                    <span className="ml-1 inline-flex items-center">
+                                      <PriorityIndicatorIcon className={priorityIconClass} aria-hidden="true" />
+                                      <span className="sr-only">{priorityLabel}</span>
+                                    </span>
+                                  ) : null}
+                                </div>
                                 <div className="flex items-center gap-2 text-[11px] opacity-90">
                                   <span>
                                     {startTime} - {endTime}
@@ -1088,19 +1160,48 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                       {event.attachedTaskBadges.map((badge) => {
                                         const IconComponent = getIcon(badge.iconId ?? undefined);
                                         const badgeColors = getTaskColor(badge.color);
+                                        const normalizedPriority =
+                                          badge.priority === 'high' || badge.priority === 'medium' || badge.priority === 'low'
+                                            ? badge.priority
+                                            : undefined;
+                                        const priorityColorClass = normalizedPriority === 'high'
+                                          ? 'bg-red-500'
+                                          : normalizedPriority === 'medium'
+                                          ? 'bg-amber-400'
+                                          : normalizedPriority === 'low'
+                                          ? 'bg-emerald-400'
+                                          : '';
+                                        const priorityLabel = normalizedPriority === 'high'
+                                          ? 'Priorité importante'
+                                          : normalizedPriority === 'medium'
+                                          ? 'Priorité moyenne'
+                                          : normalizedPriority === 'low'
+                                          ? 'Priorité faible'
+                                          : null;
+                                        const showPriorityIndicator = Boolean(
+                                          showPriorityBadges && priorityColorClass && priorityLabel
+                                        );
 
                                         return (
                                           <span
                                             key={`${event.id}-badge-${badge.taskId}`}
-                                            className="flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
+                                            className="relative flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
                                             style={{
                                               backgroundColor: badgeColors.backgroundColor,
                                               color: badgeColors.color,
                                               borderColor: badgeColors.borderColor,
                                             }}
-                                            aria-hidden="true"
                                           >
-                                            <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} />
+                                            <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
+                                            {showPriorityIndicator && priorityLabel ? (
+                                              <>
+                                                <span
+                                                  className={`pointer-events-none absolute top-0 right-0 h-2 w-2 rounded-full ring-1 ring-white/70 ${priorityColorClass}`}
+                                                  aria-hidden="true"
+                                                />
+                                                <span className="sr-only">{priorityLabel}</span>
+                                              </>
+                                            ) : null}
                                           </span>
                                         );
                                       })}

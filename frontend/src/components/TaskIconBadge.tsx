@@ -4,6 +4,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import type { LucideIcon } from 'lucide-react';
 import { getIcon } from '../icons/registry';
 import { getTaskColor } from '../constants/colors';
+import { useSettings } from '../context/SettingsContext';
 
 interface TaskIconBadgeProps {
   taskId: string;
@@ -14,6 +15,7 @@ interface TaskIconBadgeProps {
   onEdit?: (taskId: string) => void;
   onDelete?: (taskId: string) => void;
   readOnly?: boolean;
+  priority?: 'high' | 'medium' | 'low' | null;
 }
 
 const formatPrice = (price?: number | null): string | undefined => {
@@ -35,14 +37,45 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   onDelete,
   readOnly = false,
   colorKey,
+  priority,
 }) => {
   const IconComponent: LucideIcon = getIcon(iconId ?? undefined);
   const safeLabel = (label && label.trim()) || 'Tâche';
   const formattedPrice = formatPrice(price);
   const tooltipContent = formattedPrice ? `${safeLabel} — ${formattedPrice} €` : safeLabel;
-  const ariaLabel = formattedPrice
+
+  const { settings } = useSettings();
+  const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
+
+  const normalizedPriority = priority === 'high' || priority === 'medium' || priority === 'low'
+    ? priority
+    : undefined;
+
+  const priorityColorClass = normalizedPriority === 'high'
+    ? 'bg-red-500'
+    : normalizedPriority === 'medium'
+    ? 'bg-amber-400'
+    : normalizedPriority === 'low'
+    ? 'bg-emerald-400'
+    : '';
+
+  const priorityLabel = normalizedPriority === 'high'
+    ? 'Priorité importante'
+    : normalizedPriority === 'medium'
+    ? 'Priorité moyenne'
+    : normalizedPriority === 'low'
+    ? 'Priorité faible'
+    : null;
+
+  const showPriorityIndicator = Boolean(showPriorityBadges && priorityColorClass && priorityLabel);
+
+  const baseAriaLabel = formattedPrice
     ? `Ouvrir la tâche: ${safeLabel} — ${formattedPrice} €`
     : `Ouvrir la tâche: ${safeLabel}`;
+
+  const ariaLabel = showPriorityIndicator && priorityLabel
+    ? `${baseAriaLabel} — ${priorityLabel}`
+    : baseAriaLabel;
 
   const colorStyles = getTaskColor(colorKey);
 
@@ -137,7 +170,7 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   );
 
   const buttonClasses = [
-    'inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border text-[0]',
+    'relative inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border text-[0]',
     'transition-opacity duration-150',
     isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:opacity-80',
     'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
@@ -186,6 +219,15 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
                 }}
               >
                 <IconComponent className="h-[14px] w-[14px]" strokeWidth={2.2} aria-hidden="true" />
+                {showPriorityIndicator && priorityLabel ? (
+                  <>
+                    <span
+                      className={`pointer-events-none absolute top-0 right-0 h-2 w-2 rounded-full ring-1 ring-white/70 ${priorityColorClass}`}
+                      aria-hidden="true"
+                    />
+                    <span className="sr-only">{priorityLabel}</span>
+                  </>
+                ) : null}
               </button>
             </TooltipPrimitive.Trigger>
           </DropdownMenu.Trigger>

@@ -133,6 +133,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
                 label={badge.label}
                 price={badge.price}
                 colorKey={badge.color}
+                priority={badge.priority}
                 onEdit={openTaskModal}
                 onDelete={confirmDeleteTask}
                 readOnly={isReadOnly}
