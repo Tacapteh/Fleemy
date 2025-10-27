@@ -158,6 +158,8 @@ interface DaySlot {
   event: DisplayEvent | null;
   eventTaskBadges: AttachedTaskBadge[];
   tasks: TaskOccurrence[];
+  status?: string;
+  done?: boolean;
 }
 
 const formatHourLabel = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;
@@ -970,14 +972,19 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               : null;
                           const isAbsenceTask =
                             typeof task.type === 'string' && task.type.trim().toLowerCase() === 'absence';
+                          const slotStatusRaw =
+                            typeof slot.status === 'string'
+                              ? slot.status.trim().toLowerCase()
+                              : undefined;
                           const rawStatus =
                             typeof task.status === 'string'
                               ? task.status.trim().toLowerCase()
-                              : undefined;
+                              : slotStatusRaw;
+                          const slotDone = slot.done === true;
                           let statusKey: StatusKey = 'todo';
                           if (rawStatus === 'todo' || rawStatus === 'doing' || rawStatus === 'done') {
                             statusKey = rawStatus;
-                          } else if (task.done === true) {
+                          } else if (task.done === true || slotDone) {
                             statusKey = 'done';
                           }
                           const statusDisplay =
