@@ -1070,6 +1070,15 @@ const normalizeTaskDateField = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeTaskPriority = (value) => {
+  if (typeof value !== 'string') {
+    return 'medium';
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return ['high', 'medium', 'low'].includes(normalized) ? normalized : 'medium';
+};
+
 const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
   if (!data) {
     return null;
@@ -1128,6 +1137,7 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     created_at: data.created_at || null,
     updated_at: data.updated_at || null,
     dateISO: creationDateIso,
+    priority: normalizeTaskPriority(data.priority),
   };
 };
 
@@ -1343,6 +1353,7 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
     user_id: ownerUid,
     team_id: teamId || null,
     updated_at: serverTimestamp(),
+    priority: normalizeTaskPriority(taskData?.priority),
   };
 
   const normalizedCreationDate = normalizeTaskDateField(
@@ -1409,6 +1420,7 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
     price: normalizedPrice,
     color: taskData?.color ?? null,
     icon: taskData?.icon ?? null,
+    priority: normalizeTaskPriority(taskData?.priority),
     time_ranges: sanitizedRanges.map((range) => {
       const normalizedWeekday = normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
       const payloadRange = {
@@ -1957,6 +1969,7 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
     ...taskData,
     time_ranges: sanitizedRanges,
     weekday: normalizeWeekdayValue(taskData?.weekday ?? sanitizedRanges[0]?.day ?? null),
+    priority: normalizeTaskPriority(taskData?.priority),
   };
   const payload = buildWeeklyTaskPayload(normalizedTaskData, ownerUid, teamId || null, sanitizedRanges);
 

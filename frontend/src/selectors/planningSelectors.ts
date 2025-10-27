@@ -114,6 +114,7 @@ export interface WeeklyTaskDefinition {
   weekday?: number | string | null;
   time_ranges?: WeeklyTaskRange[] | null;
   timeSlots?: WeeklyTaskRange[] | null;
+  priority?: 'high' | 'medium' | 'low' | string | null;
   [key: string]: unknown;
 }
 
@@ -130,6 +131,7 @@ export interface TaskOccurrence {
   price?: number | string | null;
   readOnly?: boolean;
   attachedToEvent?: boolean;
+  priority?: 'high' | 'medium' | 'low';
   [key: string]: unknown;
 }
 
@@ -139,6 +141,7 @@ export interface AttachedTaskBadge {
   label: string;
   price?: number;
   color?: string;
+  priority?: 'high' | 'medium' | 'low';
 }
 
 export interface DisplayEvent extends PlannerEventInput {
@@ -171,6 +174,14 @@ const clampDateToMidnight = (value: Date): Date => {
   const copy = new Date(value);
   copy.setHours(0, 0, 0, 0);
   return copy;
+};
+
+const normalizeTaskPriority = (value: unknown): 'high' | 'medium' | 'low' => {
+  if (typeof value !== 'string') {
+    return 'medium';
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'high' || normalized === 'low' ? (normalized as 'high' | 'low') : 'medium';
 };
 
 const parseDate = (value: unknown): Date | null => {
@@ -454,6 +465,7 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         price: task.price,
         readOnly: task.readOnly,
         attachedToEvent: false,
+        priority: normalizeTaskPriority(task.priority),
       };
       occurrenceMap.set(occId, occurrence);
       occurrences.push(occurrence);
@@ -525,6 +537,7 @@ const expandTaskOccurrences = (dateRange: DateRange, tasks: unknown[]): TaskOccu
         price: task.price,
         readOnly: task.readOnly,
         attachedToEvent: false,
+        priority: normalizeTaskPriority(task.priority),
       };
       occurrenceMap.set(occId, occurrence);
       occurrences.push(occurrence);
@@ -592,6 +605,7 @@ export const computeDisplayBlocks = (
         label,
         price,
         color: typeof occurrence.color === 'string' ? occurrence.color : undefined,
+        priority: normalizeTaskPriority(occurrence.priority),
       });
     });
 

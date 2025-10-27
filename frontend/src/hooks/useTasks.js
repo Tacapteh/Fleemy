@@ -29,6 +29,24 @@ const DAY_NAME_TO_INDEX = {
 
 const TASKS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const normalizeTaskPriority = (value) => {
+  if (typeof value !== 'string') {
+    return 'medium';
+  }
+  const normalized = value.trim().toLowerCase();
+  return ['high', 'medium', 'low'].includes(normalized) ? normalized : 'medium';
+};
+
+const withNormalizedPriority = (task) => {
+  if (!task || typeof task !== 'object') {
+    return task;
+  }
+  return {
+    ...task,
+    priority: normalizeTaskPriority(task.priority),
+  };
+};
+
 const formatDateOnly = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return null;
@@ -195,7 +213,8 @@ export default function useTasks(context, weekStartISO) {
 
     const cachedTasks = tasksCacheKey ? getCachedPlanningData(tasksCacheKey) : null;
     if (Array.isArray(cachedTasks)) {
-      setTasks(cachedTasks);
+      const normalizedCached = cachedTasks.map(withNormalizedPriority);
+      setTasks(normalizedCached);
       setLoading(false);
     } else {
       setTasks([]);
@@ -212,9 +231,10 @@ export default function useTasks(context, weekStartISO) {
         if (cancelled || hasRealtimeUpdate || !Array.isArray(fallbackTasks)) {
           return;
         }
-        setTasks(fallbackTasks);
+        const normalizedFallback = fallbackTasks.map(withNormalizedPriority);
+        setTasks(normalizedFallback);
         setLoading(false);
-        setCachedPlanningData(tasksCacheKey, fallbackTasks, TASKS_CACHE_TTL);
+        setCachedPlanningData(tasksCacheKey, normalizedFallback, TASKS_CACHE_TTL);
       } catch (prefetchError) {
         if (!cancelled) {
           console.warn('useTasks: prefetch error', prefetchError);
@@ -232,10 +252,11 @@ export default function useTasks(context, weekStartISO) {
         }
         hasRealtimeUpdate = true;
         const normalized = Array.isArray(list) ? list : [];
-        setTasks(normalized);
+        const withPriority = normalized.map(withNormalizedPriority);
+        setTasks(withPriority);
         setLoading(false);
         if (tasksCacheKey) {
-          setCachedPlanningData(tasksCacheKey, normalized, TASKS_CACHE_TTL);
+          setCachedPlanningData(tasksCacheKey, withPriority, TASKS_CACHE_TTL);
         }
       },
       (err) => {
@@ -375,6 +396,7 @@ export default function useTasks(context, weekStartISO) {
           readOnly: Boolean(task.readOnly),
           weekly: true,
           taskDateISO: dateIso,
+          priority: normalizeTaskPriority(task.priority),
         });
       });
     });

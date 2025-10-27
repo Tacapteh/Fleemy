@@ -27,6 +27,14 @@ const MINUTES_PER_HOUR = 60;
 const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 const DETAILED_MODE_MIN_STEP = 15;
 
+const normalizePriorityValue = (value) => {
+  if (typeof value !== 'string') {
+    return 'medium';
+  }
+  const normalized = value.trim().toLowerCase();
+  return ['high', 'medium', 'low'].includes(normalized) ? normalized : 'medium';
+};
+
 const formatDateOnly = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return null;
@@ -303,6 +311,7 @@ const WeeklyTaskForm = ({
     color: initialTask?.color || DEFAULT_TASK_COLOR,
     icon: defaultIconKey,
     time_ranges: ensureTimeRanges(initialTask?.time_ranges, { allowMinutes }),
+    priority: normalizePriorityValue(initialTask?.priority),
   }));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -537,6 +546,7 @@ const WeeklyTaskForm = ({
         time_ranges: rangesWithDates,
         id: initialTask?.id || undefined,
         price: priceValue ? parseFloat(priceValue) : null,
+        priority: normalizePriorityValue(task.priority),
         ...(creationDateISO ? { dateISO: creationDateISO } : {}),
       };
 
@@ -744,6 +754,20 @@ const WeeklyTaskForm = ({
                   step="0.5"
                   className="form-input"
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="task-priority">Priorité</label>
+                <select
+                  id="task-priority"
+                  value={task.priority}
+                  onChange={(e) => setTask({ ...task, priority: normalizePriorityValue(e.target.value) })}
+                  className="form-input"
+                >
+                  <option value="high">Importante (urgent)</option>
+                  <option value="medium">Moyenne (par défaut)</option>
+                  <option value="low">Faible</option>
+                </select>
               </div>
 
               <div className="form-group">
