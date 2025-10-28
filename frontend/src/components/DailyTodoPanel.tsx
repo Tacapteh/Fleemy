@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Trash2, Plus, Clock } from 'lucide-react';
+import { Trash2, Plus, Clock, Flame, Smile, Bed } from 'lucide-react';
 import useDailyTodos from '../hooks/useDailyTodos';
 import type { TodoItem } from '../types/todo';
 import { useSettings } from '../context/SettingsContext';
-import PriorityNumberBadge from './PriorityNumberBadge';
+import PriorityNumberBadge from '../ui/PriorityNumberBadge';
 import { TaskTodoIcon, TaskDoingIcon, TaskDoneIcon } from './icons/TaskStatusIcons';
+import CardSection from '../ui/CardSection';
+import StatusChip from '../ui/StatusChip';
 
 interface DailyTodoPanelProps {
   selectedDate: string | Date; // "YYYY-MM-DD" or Date object
