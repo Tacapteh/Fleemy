@@ -1094,7 +1094,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
                     {/* Grille horaire verticale */}
                     <div
-                      className="relative overflow-y-auto border border-white/10 rounded-lg rounded-b-lg bg-[#1a2235] pb-[calc(env(safe-area-inset-bottom)+2rem)]"
+                      className={`relative overflow-y-auto border border-white/10 ${radius.card} ${surface.base} pb-[calc(env(safe-area-inset-bottom)+2rem)]`}
                       style={{ maxHeight: 'calc(100vh - 280px)' }}
                     >
                       <div className="grid grid-cols-[60px_1fr] gap-0">
@@ -1103,7 +1103,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                           <React.Fragment key={hourLabel}>
                             {/* Heure à gauche */}
                             <div
-                              className="sticky left-0 bg-[#1a2235] border-b border-white/10 flex items-start justify-end pr-2 py-1"
+                              className={`sticky left-0 ${surface.base} border-b border-white/10 flex items-start justify-end pr-2 py-1`}
                               style={{ height: `${SLOT_HEIGHT}px` }}
                             >
                               <span className="text-xs text-gray-400 dark:text-slate-400">{hourLabel}</span>
