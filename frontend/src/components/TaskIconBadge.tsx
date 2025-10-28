@@ -6,6 +6,12 @@ import { getIcon } from '../icons/registry';
 import { getTaskColor } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 import { getPriorityDisplay } from '../utils/priorityDisplay';
+import {
+  TASK_STATUS_DISPLAY,
+  TASK_STATUS_INDICATOR_STYLES,
+  resolveEffectiveTaskStatus,
+  type TaskStatusKey,
+} from '../constants/taskStatusDisplay';
 
 interface TaskIconBadgeProps {
   taskId: string;
@@ -17,6 +23,8 @@ interface TaskIconBadgeProps {
   onDelete?: (taskId: string) => void;
   readOnly?: boolean;
   priority?: 'high' | 'medium' | 'low' | null;
+  status?: 'todo' | 'doing' | 'done' | null;
+  done?: boolean | null;
 }
 
 const formatPrice = (price?: number | null): string | undefined => {
@@ -39,11 +47,24 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   readOnly = false,
   colorKey,
   priority,
+  status,
+  done,
 }) => {
   const IconComponent: LucideIcon = getIcon(iconId ?? undefined);
   const safeLabel = (label && label.trim()) || 'Tâche';
   const formattedPrice = formatPrice(price);
-  const tooltipContent = formattedPrice ? `${safeLabel} — ${formattedPrice} €` : safeLabel;
+  const statusKey: TaskStatusKey = resolveEffectiveTaskStatus(status ?? undefined, done === true);
+  const statusDisplay = TASK_STATUS_DISPLAY[statusKey];
+  const statusIndicatorStyle = TASK_STATUS_INDICATOR_STYLES[statusKey];
+
+  const tooltipParts = [safeLabel];
+  if (statusDisplay) {
+    tooltipParts.push(statusDisplay.label);
+  }
+  if (formattedPrice) {
+    tooltipParts.push(`${formattedPrice} €`);
+  }
+  const tooltipContent = tooltipParts.join(' — ');
 
   const { settings } = useSettings();
   const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
@@ -60,9 +81,14 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
     ? `Ouvrir la tâche: ${safeLabel} — ${formattedPrice} €`
     : `Ouvrir la tâche: ${safeLabel}`;
 
-  const ariaLabel = priorityDisplay
-    ? `${baseAriaLabel} — ${priorityDisplay.ariaLabel}`
-    : baseAriaLabel;
+  const ariaLabelParts = [baseAriaLabel];
+  if (statusDisplay) {
+    ariaLabelParts.push(statusDisplay.srLabel);
+  }
+  if (priorityDisplay) {
+    ariaLabelParts.push(priorityDisplay.ariaLabel);
+  }
+  const ariaLabel = ariaLabelParts.join(' — ');
 
   const colorStyles = getTaskColor(colorKey);
 
@@ -206,6 +232,16 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
                 }}
               >
                 <IconComponent className="h-[14px] w-[14px]" strokeWidth={2.2} aria-hidden="true" />
+                <span className="sr-only">{statusDisplay?.srLabel}</span>
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-full border"
+                  style={{
+                    backgroundColor: statusIndicatorStyle.backgroundColor,
+                    borderColor: statusIndicatorStyle.borderColor,
+                    boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.35)',
+                  }}
+                />
                 {priorityDisplay ? (
                   <span
                     className={`pointer-events-none absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70 ${priorityDisplay.bgClass}`}
