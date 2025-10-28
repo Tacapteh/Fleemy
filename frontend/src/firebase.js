@@ -211,8 +211,9 @@ const buildSignInResult = ({ user = null, status, error = null }) => ({
 });
 
 export const signInWithGoogle = async () => {
+  let persistenceKey = null;
   try {
-    await ensureAuthPersistence();
+    persistenceKey = await ensureAuthPersistence();
     const popupResult = await signInWithPopup(auth, googleProvider);
     return buildSignInResult({
       user: popupResult?.user || null,
@@ -227,6 +228,17 @@ export const signInWithGoogle = async () => {
     }
 
     if (isRecoverablePopupError(error)) {
+      if (!persistenceKey || persistenceKey === "memory") {
+        console.warn(
+          "Popup sign-in failed and redirect flow is unavailable without persistent storage",
+          error,
+        );
+        return buildSignInResult({
+          status: GOOGLE_SIGN_IN_STATUS.RECOVERABLE_ERROR,
+          error,
+        });
+      }
+
       console.warn("Popup sign-in failed, falling back to redirect flow", error);
       redirectResultPromise = null;
       try {
