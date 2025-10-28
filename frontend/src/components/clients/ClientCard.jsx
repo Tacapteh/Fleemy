@@ -1,4 +1,8 @@
 import React from 'react';
+import { UserIcon } from '../icons/UserIcon';
+import { MailIcon } from '../icons/MailIcon';
+import { PhoneIcon } from '../icons/PhoneIcon';
+import { LocationIcon } from '../icons/LocationIcon';
 
 export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
   const readonly = readOnly;
@@ -24,7 +28,10 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-2xl">👤</span>
+            <UserIcon
+              aria-hidden="true"
+              className="h-6 w-6 text-blue-500 dark:text-blue-400"
+            />
             <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100" data-testid="client-display-name">
               {client.display_name}
             </h3>
@@ -62,7 +69,10 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
       <div className="ml-8 space-y-1 text-sm text-gray-600 dark:text-slate-300">
         {client.email && (
           <div className="flex items-center gap-2">
-            <span>📧</span>
+            <MailIcon
+              aria-hidden="true"
+              className="h-4 w-4 text-gray-400 dark:text-slate-400"
+            />
             <a href={`mailto:${client.email}`} className="hover:text-blue-600 dark:hover:text-blue-300">
               {client.email}
             </a>
@@ -70,7 +80,10 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
         )}
         {client.phone && (
           <div className="flex items-center gap-2">
-            <span>📞</span>
+            <PhoneIcon
+              aria-hidden="true"
+              className="h-4 w-4 text-gray-400 dark:text-slate-400"
+            />
             <a href={`tel:${client.phone}`} className="hover:text-blue-600 dark:hover:text-blue-300">
               {client.phone}
             </a>
@@ -78,7 +91,10 @@ export default function ClientCard({ client, onEdit, onDelete, readOnly }) {
         )}
         {client.address && formatAddress(client.address) && (
           <div className="flex items-start gap-2">
-            <span>📍</span>
+            <LocationIcon
+              aria-hidden="true"
+              className="mt-0.5 h-4 w-4 text-gray-400 dark:text-slate-400"
+            />
             <span>{formatAddress(client.address)}</span>
           </div>
         )}
