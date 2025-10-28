@@ -8,6 +8,7 @@ import WeekNavigationHeader from "./components/WeekNavigationHeader";
 import Combobox from "./components/Combobox";
 import useClients from "./hooks/useClients";
 import { useSettings } from "./context/SettingsContext";
+import { FileText, Receipt } from "./ui";
 
 const api = async ({ url, data, body, headers, ...options }) => {
   const init = { ...options };
@@ -1027,6 +1028,7 @@ const EventModal = ({
   timeSlot,
   selectedDate,
   readOnly,
+  navigate,
 }) => {
   const [formData, setFormData] = useState({
     description: "",
@@ -1053,6 +1055,12 @@ const EventModal = ({
     formData.type === "absence" ||
     Boolean(formData.client_id || formData.client_name?.trim());
   const isAbsenceEvent = formData.type === "absence";
+  const normalizedClientIdForDocs = normalizeId(formData.client_id).trim();
+  const canNavigateToDocuments =
+    typeof navigate === "function" &&
+    !isAbsenceEvent &&
+    normalizedClientIdForDocs.length > 0;
+  const isDocumentsShortcutDisabled = !canNavigateToDocuments;
 
   // Use clients hook for client selection
   const {
@@ -1254,6 +1262,35 @@ const EventModal = ({
       setClientError("");
     }
   }, [mustHaveClient, hasClientSelection]);
+
+  const handleNavigateToDocuments = (targetTab) => {
+    if (isDocumentsShortcutDisabled) {
+      return;
+    }
+
+    if (typeof navigate !== "function") {
+      return;
+    }
+
+    const params = new URLSearchParams();
+    params.set("tab", targetTab);
+    params.set("client", normalizedClientIdForDocs);
+
+    if (typeof onClose === "function") {
+      onClose();
+    }
+
+    navigate(`/documents?${params.toString()}`);
+  };
+
+  const documentsShortcutBaseClasses =
+    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900";
+  const documentsShortcutEnabledClasses =
+    "bg-blue-500 text-white shadow-sm hover:bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-400";
+  const documentsShortcutDisabledClasses =
+    "cursor-not-allowed bg-slate-200 text-slate-500 opacity-70 dark:bg-slate-800 dark:text-slate-500";
+  const shouldShowDocumentsHint =
+    !isAbsenceEvent && normalizedClientIdForDocs.length === 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1551,6 +1588,47 @@ const EventModal = ({
                   role="alert"
                 >
                   {clientError}
+                </p>
+              )}
+            </div>
+
+            <div className="form-group">
+              <span className="form-label">Documents</span>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleNavigateToDocuments("devis")}
+                  className={`${documentsShortcutBaseClasses} ${
+                    isDocumentsShortcutDisabled
+                      ? documentsShortcutDisabledClasses
+                      : documentsShortcutEnabledClasses
+                  }`}
+                  disabled={isDocumentsShortcutDisabled}
+                  aria-disabled={isDocumentsShortcutDisabled ? "true" : "false"}
+                  aria-label="Ouvrir les devis pour ce client"
+                >
+                  <FileText aria-hidden="true" className="h-5 w-5" />
+                  <span>Devis</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNavigateToDocuments("factures")}
+                  className={`${documentsShortcutBaseClasses} ${
+                    isDocumentsShortcutDisabled
+                      ? documentsShortcutDisabledClasses
+                      : documentsShortcutEnabledClasses
+                  }`}
+                  disabled={isDocumentsShortcutDisabled}
+                  aria-disabled={isDocumentsShortcutDisabled ? "true" : "false"}
+                  aria-label="Ouvrir les factures pour ce client"
+                >
+                  <Receipt aria-hidden="true" className="h-5 w-5" />
+                  <span>Factures</span>
+                </button>
+              </div>
+              {isDocumentsShortcutDisabled && shouldShowDocumentsHint && (
+                <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                  Sélectionnez un client pour accéder aux documents.
                 </p>
               )}
             </div>
