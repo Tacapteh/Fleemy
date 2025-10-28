@@ -32,13 +32,10 @@ import {
   Settings,
   
   // ═══ ENTRETIEN & JARDINAGE ═══
-  Broom,
   Leaf,
-  TreePine,
   Droplets,
   Sun,
   Hammer,
-  Paintbrush,
   Home,
   Building,
   Zap,
