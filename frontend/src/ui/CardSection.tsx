@@ -45,7 +45,7 @@ export default function CardSection({
   return (
     <div
       data-testid={dataTestId}
-      className={`${radius.card} ${surface.card} shadow-sm transition-colors overflow-hidden ${className}`}
+      className={`${radius.card} ${surface.card} shadow-lg shadow-slate-900/25 transition-colors transition-shadow duration-200 overflow-hidden hover:shadow-xl hover:shadow-slate-900/30 ${className}`}
     >
       {/* Header avec teinte d'accent légère */}
       <div className={`${accent.headerBg} px-6 py-4 border-b ${accent.borderAccent || 'border-slate-200/10 dark:border-slate-700/20'}`}>
