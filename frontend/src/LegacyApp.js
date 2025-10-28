@@ -4771,8 +4771,11 @@ const QuoteModal = ({
   });
 
   const [errors, setErrors] = useState({});
+  const [appliedInitializationKey, setAppliedInitializationKey] = useState(
+    null,
+  );
 
-  useEffect(() => {
+  const buildInitialFormData = useCallback(() => {
     const normalizedDefaultClientId = defaultClientId
       ? String(defaultClientId)
       : "";
@@ -4781,44 +4784,130 @@ const QuoteModal = ({
       : null;
 
     if (quote) {
-      setFormData({
+      const items =
+        Array.isArray(quote.items) && quote.items.length > 0
+          ? quote.items.map((item) => ({
+              description: item?.description || "",
+              quantity:
+                item?.quantity != null ? Number(item.quantity) : 1,
+              unit_price:
+                item?.unit_price != null ? Number(item.unit_price) : 0,
+              total: item?.total != null ? Number(item.total) : 0,
+            }))
+          : [{ description: "", quantity: 1, unit_price: 0, total: 0 }];
+
+      const validUntil = quote.valid_until
+        ? quote.valid_until.split("T")[0]
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0];
+
+      return {
         client_id: quote.client_id ? String(quote.client_id) : "",
         client_name: quote.client_name || "",
         title: quote.title || "",
-        items:
-          quote.items?.length > 0
-            ? quote.items
-            : [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
+        items,
         tax_rate: quote.tax_rate || 20.0,
-        valid_until: quote.valid_until
-          ? quote.valid_until.split("T")[0]
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split("T")[0],
+        valid_until: validUntil,
         subtotal: quote.subtotal || 0,
         tax_amount: quote.tax_amount || 0,
         total: quote.total || 0,
-      });
-    } else {
-      setFormData({
-        client_id: normalizedDefaultClientId,
-        client_name:
-          defaultClient?.display_name ||
-          defaultClient?.name ||
-          "",
-        title: "",
-        items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
-        tax_rate: 20.0,
-        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0],
-        subtotal: 0,
-        tax_amount: 0,
-        total: 0,
-      });
+      };
     }
+
+    const defaultValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    return {
+      client_id: normalizedDefaultClientId,
+      client_name:
+        defaultClient?.display_name ||
+        defaultClient?.name ||
+        "",
+      title: "",
+      items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
+      tax_rate: 20.0,
+      valid_until: defaultValidUntil,
+      subtotal: 0,
+      tax_amount: 0,
+      total: 0,
+    };
+  }, [clients, defaultClientId, quote]);
+
+  const currentInitializationKey = useMemo(() => {
+    if (quote && quote.id != null) {
+      return `quote-${quote.id}`;
+    }
+    const normalizedDefaultClientId = defaultClientId
+      ? String(defaultClientId)
+      : "";
+    return `new-${normalizedDefaultClientId}`;
+  }, [defaultClientId, quote]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (appliedInitializationKey === currentInitializationKey) {
+      return;
+    }
+
+    setFormData(buildInitialFormData());
     setErrors({});
-  }, [quote, isOpen, defaultClientId, clients]);
+    setAppliedInitializationKey(currentInitializationKey);
+  }, [
+    appliedInitializationKey,
+    buildInitialFormData,
+    currentInitializationKey,
+    isOpen,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || quote) {
+      return;
+    }
+
+    const normalizedDefaultClientId = defaultClientId
+      ? String(defaultClientId)
+      : "";
+    if (!normalizedDefaultClientId) {
+      return;
+    }
+
+    const defaultClient = clients.find(
+      (c) => String(c.id) === normalizedDefaultClientId,
+    );
+    if (!defaultClient) {
+      return;
+    }
+
+    const nextClientName =
+      defaultClient.display_name || defaultClient.name || "";
+
+    setFormData((prev) => {
+      if (
+        prev.client_id &&
+        prev.client_id !== normalizedDefaultClientId
+      ) {
+        return prev;
+      }
+
+      if (
+        prev.client_id === normalizedDefaultClientId &&
+        prev.client_name === nextClientName
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        client_id: normalizedDefaultClientId,
+        client_name: nextClientName,
+      };
+    });
+  }, [clients, defaultClientId, isOpen, quote]);
 
   const handleClientChange = (clientId) => {
     const normalizedClientId = clientId ? String(clientId) : "";
@@ -5704,8 +5793,11 @@ const InvoiceModal = ({
   });
 
   const [errors, setErrors] = useState({});
+  const [appliedInitializationKey, setAppliedInitializationKey] = useState(
+    null,
+  );
 
-  useEffect(() => {
+  const buildInitialFormData = useCallback(() => {
     const normalizedDefaultClientId = defaultClientId
       ? String(defaultClientId)
       : "";
@@ -5714,45 +5806,131 @@ const InvoiceModal = ({
       : null;
 
     if (invoice) {
-      setFormData({
+      const items = Array.isArray(invoice.items)
+        ? invoice.items.map((item) => ({
+            description: item?.description || "",
+            quantity:
+              item?.quantity != null ? Number(item.quantity) : 1,
+            unit_price:
+              item?.unit_price != null ? Number(item.unit_price) : 0,
+            total: item?.total != null ? Number(item.total) : 0,
+          }))
+        : [{ description: "", quantity: 1, unit_price: 0, total: 0 }];
+
+      const dueDate = invoice.due_date
+        ? invoice.due_date.split("T")[0]
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split("T")[0];
+
+      return {
         quote_id: invoice.quote_id ? String(invoice.quote_id) : "",
         client_id: invoice.client_id ? String(invoice.client_id) : "",
         client_name: invoice.client_name || "",
         title: invoice.title || "",
-        items: invoice.items || [
-          { description: "", quantity: 1, unit_price: 0, total: 0 },
-        ],
+        items,
         tax_rate: invoice.tax_rate || 20.0,
-        due_date: invoice.due_date
-          ? invoice.due_date.split("T")[0]
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-              .toISOString()
-              .split("T")[0],
+        due_date: dueDate,
         subtotal: invoice.subtotal || 0,
         tax_amount: invoice.tax_amount || 0,
         total: invoice.total || 0,
-      });
-    } else {
-      setFormData({
-        quote_id: "",
-        client_id: normalizedDefaultClientId,
-        client_name:
-          defaultClient?.display_name ||
-          defaultClient?.name ||
-          "",
-        title: "",
-        items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
-        tax_rate: 20.0,
-        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-          .toISOString()
-          .split("T")[0],
-        subtotal: 0,
-        tax_amount: 0,
-        total: 0,
-      });
+      };
     }
+
+    const defaultDueDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    return {
+      quote_id: "",
+      client_id: normalizedDefaultClientId,
+      client_name:
+        defaultClient?.display_name ||
+        defaultClient?.name ||
+        "",
+      title: "",
+      items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
+      tax_rate: 20.0,
+      due_date: defaultDueDate,
+      subtotal: 0,
+      tax_amount: 0,
+      total: 0,
+    };
+  }, [clients, defaultClientId, invoice]);
+
+  const currentInitializationKey = useMemo(() => {
+    if (invoice && invoice.id != null) {
+      return `invoice-${invoice.id}`;
+    }
+    const normalizedDefaultClientId = defaultClientId
+      ? String(defaultClientId)
+      : "";
+    return `new-${normalizedDefaultClientId}`;
+  }, [defaultClientId, invoice]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (appliedInitializationKey === currentInitializationKey) {
+      return;
+    }
+
+    setFormData(buildInitialFormData());
     setErrors({});
-  }, [invoice, isOpen, defaultClientId, clients]);
+    setAppliedInitializationKey(currentInitializationKey);
+  }, [
+    appliedInitializationKey,
+    buildInitialFormData,
+    currentInitializationKey,
+    isOpen,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen || invoice) {
+      return;
+    }
+
+    const normalizedDefaultClientId = defaultClientId
+      ? String(defaultClientId)
+      : "";
+    if (!normalizedDefaultClientId) {
+      return;
+    }
+
+    const defaultClient = clients.find(
+      (c) => String(c.id) === normalizedDefaultClientId,
+    );
+    if (!defaultClient) {
+      return;
+    }
+
+    const nextClientName =
+      defaultClient.display_name || defaultClient.name || "";
+
+    setFormData((prev) => {
+      if (
+        prev.client_id &&
+        prev.client_id !== normalizedDefaultClientId
+      ) {
+        return prev;
+      }
+
+      if (
+        prev.client_id === normalizedDefaultClientId &&
+        prev.client_name === nextClientName
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        client_id: normalizedDefaultClientId,
+        client_name: nextClientName,
+      };
+    });
+  }, [clients, defaultClientId, invoice, isOpen]);
 
   const handleQuoteSelection = (quoteId) => {
     const normalizedQuoteId = quoteId ? String(quoteId) : "";
