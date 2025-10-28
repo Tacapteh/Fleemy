@@ -27,14 +27,35 @@ export default function Login({ onLogin }) {
         return;
       }
 
-      const token = await user.getIdToken();
+      let token = null;
 
       try {
-        if (typeof window !== "undefined" && window.localStorage) {
-          window.localStorage.setItem("authToken", token);
+        token = await user.getIdToken();
+      } catch (initialError) {
+        console.warn(
+          "Impossible de récupérer le token Firebase, tentative de rafraîchissement…",
+          initialError
+        );
+
+        try {
+          token = await user.getIdToken(true);
+        } catch (refreshError) {
+          console.error(
+            "Échec de récupération du token Firebase après rafraîchissement",
+            refreshError
+          );
         }
-      } catch (storageError) {
-        console.warn("Impossible d'enregistrer le token localement", storageError);
+      }
+
+      if (token && typeof window !== "undefined" && window.localStorage) {
+        try {
+          window.localStorage.setItem("authToken", token);
+        } catch (storageError) {
+          console.warn(
+            "Impossible d'enregistrer le token localement",
+            storageError
+          );
+        }
       }
 
       onLogin(user);
