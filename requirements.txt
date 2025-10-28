@@ -3,3 +3,4 @@ uvicorn[standard]
 firebase-admin
 python-dotenv
 requests
+reportlab
