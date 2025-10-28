@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import calendar
 
 class DashboardPlanningTester:
-    def __init__(self, base_url="https://alert-center-5.preview.emergentagent.com"):
+    def __init__(self, base_url="https://visual-update-15.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.test_token = "test-token-123"  # Test token from server.py
