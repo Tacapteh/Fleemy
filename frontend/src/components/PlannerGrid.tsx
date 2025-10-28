@@ -1162,7 +1162,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               <div
                                 key={event.id}
                                 onClick={() => onEventClick?.(event)}
-                            className={`absolute left-1 right-1 ${bgColorClass} ${borderColorClass} border rounded-lg shadow-sm cursor-pointer text-xs overflow-hidden pointer-events-auto`}
+                            className={`absolute left-1 right-1 ${bgColorClass} ${borderColorClass} border ${radius.button} shadow-sm cursor-pointer text-xs overflow-hidden pointer-events-auto`}
                             style={{
                               top: topValue,
                               height: heightValue,
