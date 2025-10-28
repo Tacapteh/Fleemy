@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { signOut } from 'firebase/auth';
 import { apiFetch } from '../lib/api';
-import { auth, signInWithGoogle, useFirebaseUser } from '../firebase';
+import {
+  auth,
+  signInWithGoogle,
+  useFirebaseUser,
+  GOOGLE_SIGN_IN_STATUS,
+} from '../firebase';
 
 let reauthPromise = null;
 const triggerReauthentication = () => {
@@ -15,7 +20,13 @@ const triggerReauthentication = () => {
       try {
         const result = await signInWithGoogle();
         if (!result?.user) {
-          console.info('Redirection Google déclenchée pour la reconnexion.');
+          if (result?.status === GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED) {
+            console.info('Redirection Google déclenchée pour la reconnexion.');
+          } else if (result?.status === GOOGLE_SIGN_IN_STATUS.RECOVERABLE_ERROR) {
+            console.warn(
+              'La tentative de redirection Google a été bloquée. Demandez à l’utilisateur de débloquer les cookies/popup puis de réessayer.'
+            );
+          }
         }
       } catch (reauthError) {
         console.error('useClients reauthentication error:', reauthError);
