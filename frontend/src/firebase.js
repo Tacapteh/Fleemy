@@ -5,6 +5,9 @@ import {
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -56,6 +59,85 @@ console.log("FB projectId", projectId);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
+const POPUP_FALLBACK_ERROR_CODES = new Set([
+  "auth/network-request-failed",
+  "auth/internal-error",
+  "auth/popup-blocked",
+  "auth/cancelled-popup-request",
+  "auth/operation-not-supported-in-this-environment",
+  "auth/web-storage-unsupported",
+]);
+
+const REDIRECT_IGNORABLE_ERROR_CODES = new Set(["auth/no-auth-event"]);
+
+const isRecoverablePopupError = (error) => {
+  if (!error || typeof error.code !== "string") {
+    return false;
+  }
+
+  if (POPUP_FALLBACK_ERROR_CODES.has(error.code)) {
+    return true;
+  }
+
+  if (
+    error.code === "auth/internal-error" &&
+    typeof error.message === "string" &&
+    error.message.toLowerCase().includes("third-party cookies")
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+let redirectResultPromise = null;
+
+export const signInWithGoogle = async () => {
+  try {
+    return await signInWithPopup(auth, googleProvider);
+  } catch (error) {
+    if (isRecoverablePopupError(error)) {
+      console.warn("Popup sign-in failed, falling back to redirect flow", error);
+      redirectResultPromise = null;
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const getGoogleRedirectResult = () => {
+  if (!redirectResultPromise) {
+    redirectResultPromise = getRedirectResult(auth)
+      .then((result) => result)
+      .catch((error) => {
+        if (!error || typeof error.code !== "string") {
+          console.error("Failed to resolve Google redirect result", error);
+          return null;
+        }
+
+        if (REDIRECT_IGNORABLE_ERROR_CODES.has(error.code)) {
+          return null;
+        }
+
+        if (isRecoverablePopupError(error)) {
+          console.warn("Recoverable redirect error encountered", error);
+          return null;
+        }
+
+        console.error("Unhandled Google redirect error", error);
+        return null;
+      })
+      .finally(() => {
+        redirectResultPromise = null;
+      });
+  }
+
+  return redirectResultPromise;
+};
 
 let cachedAuthPromise = null;
 let authReady = false;

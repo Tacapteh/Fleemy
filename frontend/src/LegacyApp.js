@@ -160,16 +160,48 @@ const getCurrentWeek = () => {
 };
 
 // Authentication Screen
-import { signInWithPopup, getAuth } from "firebase/auth";
-import { auth, googleProvider } from "./firebase";
+import { getAuth } from "firebase/auth";
+import { auth, signInWithGoogle, getGoogleRedirectResult } from "./firebase";
 
 const AuthScreen = ({ onLogin }) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    getGoogleRedirectResult()
+      .then((result) => {
+        if (!mounted || !result?.user) {
+          return;
+        }
+        onLogin(result.user);
+      })
+      .catch((redirectError) => {
+        console.error("Firebase redirect auth error", redirectError);
+        if (mounted) {
+          setError("Erreur de connexion.");
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [onLogin]);
+
   const handleLogin = async () => {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      onLogin(result.user);
+      setError(null);
+      setLoading(true);
+      const result = await signInWithGoogle();
+      if (result?.user) {
+        onLogin(result.user);
+      }
     } catch (e) {
       console.error("Firebase auth error", e);
+      setError("Erreur de connexion.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -181,11 +213,13 @@ const AuthScreen = ({ onLogin }) => {
         <p className="text-gray-600 mb-8">
           Votre outil tout-en-un pour indépendants
         </p>
+        {error && <p className="text-red-600 mb-4">{error}</p>}
         <button
           onClick={handleLogin}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105"
+          disabled={loading}
         >
-          Se connecter
+          {loading ? "Connexion…" : "Se connecter"}
         </button>
       </div>
     </div>
