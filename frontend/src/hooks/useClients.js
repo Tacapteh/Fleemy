@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { signInWithPopup, signOut } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { apiFetch } from '../lib/api';
-import { auth, googleProvider, useFirebaseUser } from '../firebase';
+import { auth, signInWithGoogle, useFirebaseUser } from '../firebase';
 
 let reauthPromise = null;
 const triggerReauthentication = () => {
@@ -13,7 +13,10 @@ const triggerReauthentication = () => {
         console.error('useClients signOut error:', signOutError);
       }
       try {
-        await signInWithPopup(auth, googleProvider);
+        const result = await signInWithGoogle();
+        if (!result?.user) {
+          console.info('Redirection Google déclenchée pour la reconnexion.');
+        }
       } catch (reauthError) {
         console.error('useClients reauthentication error:', reauthError);
         throw reauthError;
