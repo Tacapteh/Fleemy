@@ -37,13 +37,28 @@ const normalizeTaskPriority = (value) => {
   return ['high', 'medium', 'low'].includes(normalized) ? normalized : 'medium';
 };
 
+const normalizeTaskStatus = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return ['todo', 'doing', 'done'].includes(normalized) ? normalized : null;
+};
+
 const withNormalizedPriority = (task) => {
   if (!task || typeof task !== 'object') {
     return task;
   }
+
+  const normalizedStatus = normalizeTaskStatus(task.status);
+  const isDone = task.done === true;
+
   return {
     ...task,
     priority: normalizeTaskPriority(task.priority),
+    status: normalizedStatus ?? (isDone ? 'done' : 'todo'),
+    done: isDone,
   };
 };
 
@@ -382,6 +397,9 @@ export default function useTasks(context, weekStartISO) {
 
         const dateIso = formatDateOnly(occurrenceDate);
 
+        const normalizedStatus = normalizeTaskStatus(task.status);
+        const isDone = task.done === true;
+
         results.push({
           taskId: task.id,
           occurrenceId: `${task.id}_${index}_${dateIso || 'week'}`,
@@ -397,6 +415,8 @@ export default function useTasks(context, weekStartISO) {
           weekly: true,
           taskDateISO: dateIso,
           priority: normalizeTaskPriority(task.priority),
+          status: normalizedStatus ?? (isDone ? 'done' : 'todo'),
+          done: isDone,
         });
       });
     });
