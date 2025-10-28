@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useSettings } from "../context/SettingsContext";
 import useNotificationPreferences from "../hooks/useNotificationPreferences";
 import { showToast } from "../utils/toast";
+import { SectionHeaderRow, Settings as SettingsIcon } from "../ui";
 
 function Switch({ checked, onToggle, ...props }) {
   const handleToggle = useCallback(() => {
@@ -361,9 +362,14 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-8">
       <header className="space-y-2">
-        <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100 sm:text-2xl">
-          Paramètres d’affichage
-        </h1>
+        <SectionHeaderRow
+          headingLevel={1}
+          icon={<SettingsIcon aria-hidden="true" className="h-6 w-6" />}
+          iconClassName="text-slate-900 dark:text-slate-100"
+          title="Paramètres d’affichage"
+          titleClassName="text-xl font-semibold text-slate-900 dark:text-slate-100 sm:text-2xl"
+          className="items-start gap-3"
+        />
         <p className="text-sm text-slate-600 dark:text-slate-300">
           Personnalisez l’apparence de votre planning. Les modifications sont enregistrées automatiquement.
         </p>

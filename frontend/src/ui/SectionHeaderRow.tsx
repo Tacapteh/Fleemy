@@ -8,6 +8,7 @@ interface SectionHeaderRowProps {
   className?: string;
   iconClassName?: string;
   titleClassName?: string;
+  headingLevel?: 1 | 2 | 3 | 4 | 5 | 6;
   'data-testid'?: string;
 }
 
@@ -31,8 +32,11 @@ export default function SectionHeaderRow({
   className = '',
   iconClassName = 'text-slate-300',
   titleClassName = '',
+  headingLevel = 3,
   'data-testid': dataTestId,
 }: SectionHeaderRowProps) {
+  const HeadingTag = (`h${headingLevel}` as keyof JSX.IntrinsicElements);
+
   return (
     <div
       data-testid={dataTestId}
@@ -44,9 +48,9 @@ export default function SectionHeaderRow({
             {icon}
           </div>
         )}
-        <h3 className={`text-base font-semibold ${text.primary} tracking-tight ${titleClassName}`}>
+        <HeadingTag className={`text-base font-semibold ${text.primary} tracking-tight ${titleClassName}`}>
           {title}
-        </h3>
+        </HeadingTag>
       </div>
       
       {actionsRight && (
