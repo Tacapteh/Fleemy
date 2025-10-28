@@ -88,19 +88,25 @@ export default function Clients() {
   return (
     <div className="mx-auto max-w-7xl text-slate-900 dark:text-slate-100">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100" data-testid="clients-page-title">
-          Clients
-        </h1>
-        <button
-          onClick={handleAdd}
-          className="rounded-lg bg-blue-500 px-4 py-2 text-white shadow-sm transition-colors hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
-          data-testid="add-client-button"
-          aria-label="Ajouter un nouveau client"
-        >
-          + Nouveau client
-        </button>
-      </div>
+      <SectionHeaderRow
+        headingLevel={1}
+        icon={<UsersIcon aria-hidden="true" className="h-7 w-7" />}
+        iconClassName="text-gray-900 dark:text-slate-100"
+        title="Clients"
+        titleClassName="text-3xl font-bold text-gray-900 dark:text-slate-100"
+        className="mb-6 flex-col items-start gap-4 sm:flex-row sm:items-center"
+        data-testid="clients-page-title"
+        actionsRight={(
+          <button
+            onClick={handleAdd}
+            className="rounded-lg bg-blue-500 px-4 py-2 text-white shadow-sm transition-colors hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
+            data-testid="add-client-button"
+            aria-label="Ajouter un nouveau client"
+          >
+            + Nouveau client
+          </button>
+        )}
+      />
 
       {/* Search bar */}
       <div className="mb-6">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import DailyTodoPanel from '../components/DailyTodoPanel';
+import { SectionHeaderRow, Book } from '../ui';
 
 const toDateString = (date) => {
   const year = date.getFullYear();
@@ -60,14 +61,19 @@ export default function Todo() {
       data-testid="todo-page"
       className="space-y-6 text-slate-900 dark:text-slate-100"
     >
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">
-          Notes du jour
-        </h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">
+      <header className="space-y-2">
+        <SectionHeaderRow
+          headingLevel={1}
+          icon={<Book aria-hidden="true" className="h-6 w-6" />}
+          iconClassName="text-gray-900 dark:text-slate-100"
+          title="Notes du jour"
+          titleClassName="text-2xl font-semibold text-gray-900 dark:text-slate-100"
+          className="items-start gap-3"
+        />
+        <p className="text-sm text-gray-600 dark:text-slate-300">
           Gérez vos rappels et notes personnelles pour chaque journée
         </p>
-      </div>
+      </header>
 
       {/* Date selector */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

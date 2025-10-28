@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { contextStore } from '../stores/contextStore';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Calendar,
+  Book,
+  FileText,
+  Receipt,
+  Users as UsersIcon,
+  Settings as SettingsIcon,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+} from '../ui';
 
 const menuItems = [
-  { id: 'dashboard', name: 'Dashboard', icon: '📊', to: '/' },
-  { id: 'planning', name: 'Planning', icon: '📅' },
-  { id: 'todo', name: 'Notes du jour', icon: '📝', to: '/todo' },
-  { id: 'quotes', name: 'Devis', icon: '📋', to: '/quotes' },
-  { id: 'invoices', name: 'Factures', icon: '🧾', to: '/invoices' },
-  { id: 'clients', name: 'Clients', icon: '👥', to: '/clients' },
-  { id: 'settings', name: 'Paramètres', icon: '⚙️', to: '/settings' },
+  { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, to: '/' },
+  { id: 'planning', name: 'Planning', icon: Calendar },
+  { id: 'todo', name: 'Notes du jour', icon: Book, to: '/todo' },
+  { id: 'quotes', name: 'Devis', icon: FileText, to: '/quotes' },
+  { id: 'invoices', name: 'Factures', icon: Receipt, to: '/invoices' },
+  { id: 'clients', name: 'Clients', icon: UsersIcon, to: '/clients' },
+  { id: 'settings', name: 'Paramètres', icon: SettingsIcon, to: '/settings' },
 ];
 
 const getMenuItemClass = (isActive, isCollapsed) =>
@@ -43,7 +54,10 @@ export default function Sidebar({ user, onLogout }) {
       {/* Header avec logo et bouton toggle */}
       <div className="relative border-b border-gray-200 p-6 transition-colors dark:border-slate-800">
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-          <div className="text-2xl">📊</div>
+          <LayoutDashboard
+            aria-hidden="true"
+            className="h-8 w-8 text-blue-600 dark:text-blue-400"
+          />
           {!isCollapsed && (
             <div>
               <h1 className="text-xl font-bold text-gray-800 dark:text-slate-100">Fleemy</h1>
@@ -68,33 +82,37 @@ export default function Sidebar({ user, onLogout }) {
       
       <nav className="flex-1 p-4">
         <ul className="space-y-2">
-          {menuItems.map((item) => (
-            <li key={item.id}>
-              {item.id === 'planning' ? (
-                <Link
-                  to={planningPath}
-                  className={getMenuItemClass(isPlanningActive, isCollapsed)}
-                  aria-label={item.name}
-                  aria-current={isPlanningActive ? 'page' : undefined}
-                  title={isCollapsed ? item.name : undefined}
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  {!isCollapsed && <span className="font-medium">{item.name}</span>}
-                </Link>
-              ) : (
-                <NavLink
-                  to={item.to}
-                  end={item.to === '/'}
-                  className={({ isActive }) => getMenuItemClass(isActive, isCollapsed)}
-                  aria-label={item.name}
-                  title={isCollapsed ? item.name : undefined}
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  {!isCollapsed && <span className="font-medium">{item.name}</span>}
-                </NavLink>
-              )}
-            </li>
-          ))}
+          {menuItems.map((item) => {
+            const IconComponent = item.icon;
+
+            return (
+              <li key={item.id}>
+                {item.id === 'planning' ? (
+                  <Link
+                    to={planningPath}
+                    className={getMenuItemClass(isPlanningActive, isCollapsed)}
+                    aria-label={item.name}
+                    aria-current={isPlanningActive ? 'page' : undefined}
+                    title={isCollapsed ? item.name : undefined}
+                  >
+                    <IconComponent aria-hidden="true" className="h-5 w-5" />
+                    {!isCollapsed && <span className="font-medium">{item.name}</span>}
+                  </Link>
+                ) : (
+                  <NavLink
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={({ isActive }) => getMenuItemClass(isActive, isCollapsed)}
+                    aria-label={item.name}
+                    title={isCollapsed ? item.name : undefined}
+                  >
+                    <IconComponent aria-hidden="true" className="h-5 w-5" />
+                    {!isCollapsed && <span className="font-medium">{item.name}</span>}
+                  </NavLink>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </nav>
       
@@ -142,7 +160,7 @@ export default function Sidebar({ user, onLogout }) {
                 className="rounded border border-blue-200 p-2 text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-400/40 dark:text-blue-300 dark:hover:bg-blue-500/10"
                 title="Changer d'équipes"
               >
-                <span className="text-lg">👥</span>
+                <UsersIcon aria-hidden="true" className="h-5 w-5" />
               </Link>
               {onLogout && (
                 <button
@@ -150,7 +168,7 @@ export default function Sidebar({ user, onLogout }) {
                   className="rounded border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
                   title="Se déconnecter"
                 >
-                  <span className="text-lg">🚪</span>
+                  <LogOut aria-hidden="true" className="h-5 w-5" />
                 </button>
               )}
             </div>

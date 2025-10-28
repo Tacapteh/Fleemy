@@ -24,6 +24,7 @@ import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
 import { readTeamsCache } from '../utils/teamCache';
+import { SectionHeaderRow, Calendar } from '../ui';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DEFAULT_START = '09:00';
@@ -1351,19 +1352,28 @@ export default function Planning() {
   return (
     <div className="space-y-6 text-slate-900 dark:text-slate-100">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-100">{pageTitle}</h1>
-          <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">{subtitle}</p>
+        <header className="space-y-2">
+          <SectionHeaderRow
+            headingLevel={1}
+            icon={
+              <Calendar aria-hidden="true" className="h-6 w-6" />
+            }
+            iconClassName="text-gray-900 dark:text-slate-100"
+            title={pageTitle}
+            titleClassName="text-2xl font-semibold text-gray-900 dark:text-slate-100"
+            className="items-start gap-3"
+          />
+          <p className="text-sm text-gray-600 dark:text-slate-300">{subtitle}</p>
           {eventsError && (
-            <p className="mt-2 text-sm text-red-600">{eventsError}</p>
+            <p className="text-sm text-red-600">{eventsError}</p>
           )}
           {tasksError && (
-            <p className="mt-1 text-sm text-red-600">{tasksError}</p>
+            <p className="text-sm text-red-600">{tasksError}</p>
           )}
           {membersError && (
-            <p className="mt-1 text-sm text-red-600">{membersError}</p>
+            <p className="text-sm text-red-600">{membersError}</p>
           )}
-        </div>
+        </header>
 
         {isTeamContext && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">

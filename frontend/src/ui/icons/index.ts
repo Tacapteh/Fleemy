@@ -16,6 +16,7 @@ import {
   Briefcase,
   Monitor,
   Code,
+  LayoutDashboard,
   FileText,
   Presentation,
   Users,
@@ -55,6 +56,7 @@ import {
   Truck,
   CreditCard,
   DollarSign,
+  Receipt,
   
   // ═══ BIEN-ÊTRE & PAUSES ═══
   Pause,
@@ -85,6 +87,7 @@ import {
   Save,
   Download,
   Upload,
+  LogOut,
   
   // ═══ NAVIGATION ═══
   ChevronLeft,
@@ -115,6 +118,7 @@ export const WorkIcons = {
   Briefcase,
   Monitor,
   Code,
+  LayoutDashboard,
   FileText,
   Presentation,
   Users,
@@ -159,6 +163,7 @@ export const DailyLifeIcons = {
   Truck,
   CreditCard,
   DollarSign,
+  Receipt,
 };
 
 export const WellbeingIcons = {
@@ -194,6 +199,7 @@ export const ActionIcons = {
   Save,
   Download,
   Upload,
+  LogOut,
 };
 
 export const NavigationIcons = {
@@ -227,6 +233,7 @@ export {
   Briefcase,
   Monitor,
   Code,
+  LayoutDashboard,
   FileText,
   Presentation,
   Users,
@@ -266,6 +273,7 @@ export {
   Truck,
   CreditCard,
   DollarSign,
+  Receipt,
   
   // Bien-être
   Pause,
@@ -298,6 +306,7 @@ export {
   Save,
   Download,
   Upload,
+  LogOut,
   
   // Navigation
   ChevronLeft,
