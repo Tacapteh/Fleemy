@@ -23,7 +23,9 @@ import httpx
 import re
 import secrets
 import string
-from io import BytesIO
+
+from .pdf_utils import document_filename, invoice_pdf_bytes, quote_pdf_bytes
+from .email_utils import send_document_email
 
 # Firebase Admin
 import firebase_admin
@@ -2822,18 +2824,21 @@ async def export_document_pdf(
             status_code=403, detail="Not authorized to access this document"
         )
 
-    # TODO: generate the actual PDF content from document_data
-    buffer = BytesIO()
-    buffer.write(b"%PDF-1.4\n")
-    buffer.write(b"% Fleemy placeholder PDF\n")
-    buffer.write(f"Document ID: {doc_id}\\n".encode("utf-8"))
-    buffer.write(f"Type: {document_type}\\n".encode("utf-8"))
-    buffer.write(b"%%EOF")
+    try:
+        pdf_bytes = (
+            await quote_pdf_bytes(document_data)
+            if document_type == "quote"
+            else await invoice_pdf_bytes(document_data)
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("PDF generation failed for %s %s: %s", document_type, doc_id, exc)
+        raise HTTPException(
+            status_code=500, detail="Impossible de générer le PDF demandé"
+        ) from exc
 
-    filename_prefix = "devis" if document_type == "quote" else "facture"
-    filename = f"{filename_prefix}-{doc_id}.pdf"
+    filename = document_filename(document_data, document_type)
 
-    response = Response(content=buffer.getvalue(), media_type="application/pdf")
+    response = Response(content=pdf_bytes, media_type="application/pdf")
     response.headers["Content-Disposition"] = (
         f'attachment; filename="{filename}"'
     )
@@ -2861,7 +2866,31 @@ async def email_document_endpoint(
             status_code=403, detail="Not authorized to access this document"
         )
 
-    # TODO: generate the real PDF and send the e-mail via the selected provider (SendGrid, Mailgun, ...)
+    try:
+        pdf_bytes = (
+            await quote_pdf_bytes(document_data)
+            if document_type == "quote"
+            else await invoice_pdf_bytes(document_data)
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error("PDF generation failed for email %s %s: %s", document_type, doc_id, exc)
+        raise HTTPException(
+            status_code=500, detail="Impossible de générer le PDF pour l'envoi"
+        ) from exc
+
+    try:
+        await asyncio.to_thread(
+            send_document_email,
+            document=document_data,
+            document_type=document_type,
+            recipient=payload.to,
+            document_id=doc_id,
+            pdf_bytes=pdf_bytes,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    logger.info("Document %s %s sent to %s", document_type, doc_id, payload.to)
     return {"ok": True, "sentTo": payload.to}
 
 
