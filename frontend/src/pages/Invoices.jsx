@@ -1,7 +1,7 @@
-import { Invoices as LegacyInvoices } from '../LegacyApp';
 import { useOutletContext } from 'react-router-dom';
+import InvoicesContent from '../components/documents/InvoicesContent';
 
 export default function Invoices() {
   const { user } = useOutletContext();
-  return <LegacyInvoices user={user} />;
+  return <InvoicesContent user={user} />;
 }

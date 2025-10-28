@@ -1,7 +1,7 @@
-import { Quotes as LegacyQuotes } from '../LegacyApp';
 import { useOutletContext } from 'react-router-dom';
+import QuotesContent from '../components/documents/QuotesContent';
 
 export default function Quotes() {
   const { user } = useOutletContext();
-  return <LegacyQuotes user={user} />;
+  return <QuotesContent user={user} />;
 }

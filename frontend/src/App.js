@@ -17,6 +17,7 @@ import Dashboard from "./pages/Dashboard";
 import Planning from "./pages/Planning";
 import Quotes from "./pages/Quotes";
 import Invoices from "./pages/Invoices";
+import Documents from "./pages/Documents";
 import Clients from "./pages/Clients";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePickerPage from "./pages/ProfilePickerPage";
@@ -280,6 +281,11 @@ function AppWithSettings() {
             <Route path="/dashboard" element={
               <AuthGuard user={user}>
                 <Dashboard />
+              </AuthGuard>
+            } />
+            <Route path="/documents" element={
+              <AuthGuard user={user}>
+                <Documents />
               </AuthGuard>
             } />
             <Route path="/quotes" element={
