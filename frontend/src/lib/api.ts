@@ -48,16 +48,30 @@ const SAME_ORIGIN_OVERRIDE = resolveSameOriginOverride();
 const BROWSER_FALLBACK_URL = resolveBrowserFallback();
 
 const DEFAULT_API_URL = "https://fleemy.onrender.com";
-const PRIMARY_API_URL = ENV_API_URL || SAME_ORIGIN_OVERRIDE || DEFAULT_API_URL;
 
-const API_BASE_URLS = [PRIMARY_API_URL];
+const API_BASE_URLS: string[] = [];
 
-if (
-  BROWSER_FALLBACK_URL &&
-  !API_BASE_URLS.some((baseUrl) => baseUrl.replace(/\/$/, "") === BROWSER_FALLBACK_URL.replace(/\/$/, ""))
-) {
-  API_BASE_URLS.push(BROWSER_FALLBACK_URL);
-}
+const appendBaseUrl = (candidate: string | null) => {
+  if (!candidate) {
+    return;
+  }
+
+  const normalized = candidate.replace(/\/$/, "");
+  if (
+    API_BASE_URLS.some(
+      (baseUrl) => baseUrl.replace(/\/$/, "") === normalized,
+    )
+  ) {
+    return;
+  }
+
+  API_BASE_URLS.push(candidate);
+};
+
+appendBaseUrl(ENV_API_URL);
+appendBaseUrl(DEFAULT_API_URL);
+appendBaseUrl(SAME_ORIGIN_OVERRIDE);
+appendBaseUrl(BROWSER_FALLBACK_URL);
 const RETRY_DELAYS = [0, 250, 500, 1000];
 
 const wait = (delay: number) =>
