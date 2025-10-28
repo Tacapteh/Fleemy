@@ -1001,7 +1001,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                             <div
                               key={`${slot.key}-task-${task.occurrenceId}`}
                               onClick={() => isInteractive && onTaskClick?.(task)}
-                              className={`rounded p-2 text-xs min-h-[44px] flex items-center gap-2 ${
+                              className={`${radius.button} p-2 text-xs min-h-[44px] flex items-center gap-2 ${
                                 isInteractive ? 'cursor-pointer' : ''
                               }`}
                               style={{
