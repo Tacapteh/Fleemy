@@ -8,6 +8,16 @@ import Combobox from "./components/Combobox";
 import useClients from "./hooks/useClients";
 import { useSettings } from "./context/SettingsContext";
 import { FileText, Receipt } from "./ui";
+import { CalendarIcon } from "./components/icons/CalendarIcon";
+import { CheckCircleIcon } from "./components/icons/CheckCircleIcon";
+import { ClockIcon } from "./components/icons/ClockIcon";
+import { CrossCircleIcon } from "./components/icons/CrossCircleIcon";
+import { DocumentIcon } from "./components/icons/DocumentIcon";
+import { EditIcon } from "./components/icons/EditIcon";
+import { MoneyIcon } from "./components/icons/MoneyIcon";
+import { ReceiptIcon } from "./components/icons/ReceiptIcon";
+import { TrashIcon } from "./components/icons/TrashIcon";
+import { PlusCircleIcon } from "./components/icons/PlusCircleIcon";
 
 const api = async ({ url, data, body, headers, ...options }) => {
   const init = { ...options };
@@ -5020,7 +5030,19 @@ const QuoteModal = ({
         style={{ maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}
       >
         <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
-          {quote ? "✏️ Modifier le devis" : "➕ Nouveau devis"}
+          <span className="flex items-center gap-2">
+            {quote ? (
+              <>
+                <EditIcon aria-hidden="true" className="h-5 w-5" />
+                <span>Modifier le devis</span>
+              </>
+            ) : (
+              <>
+                <PlusCircleIcon aria-hidden="true" className="h-5 w-5" />
+                <span>Nouveau devis</span>
+              </>
+            )}
+          </span>
         </h2>
 
         <div className="form-row">
@@ -5146,8 +5168,9 @@ const QuoteModal = ({
                       onClick={() => removeItem(index)}
                       className="p-2 text-red-500 hover:bg-red-50 rounded dark:hover:bg-red-900/40"
                       disabled={formData.items.length === 1}
+                      aria-label="Supprimer la ligne"
                     >
-                      🗑️
+                      <TrashIcon aria-hidden="true" className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
@@ -5585,7 +5608,10 @@ const Quotes = ({
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">📋 Devis</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800 dark:text-slate-100">
+            <DocumentIcon aria-hidden="true" className="h-6 w-6" />
+            <span>Devis</span>
+          </h1>
           <p className="text-gray-600 mt-1 dark:text-slate-400">
             Gérez vos devis et propositions commerciales
           </p>
@@ -5627,7 +5653,12 @@ const Quotes = ({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
         {quotes.length === 0 ? (
           <div className="p-12 text-center">
-            <div className="text-6xl mb-4">📋</div>
+            <div className="mb-4 flex justify-center">
+              <DocumentIcon
+                aria-hidden="true"
+                className="h-16 w-16 text-slate-300 dark:text-slate-600"
+              />
+            </div>
             <h3 className="text-lg font-semibold text-gray-700 mb-2 dark:text-slate-100">
               Aucun devis
             </h3>
@@ -5681,9 +5712,18 @@ const Quotes = ({
                         Client: {quote?.client_name ?? ''}
                       </p>
                       <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500 dark:text-slate-400">
-                        <span>💰 {formatCurrency(quote.total)}</span>
-                        <span>📅 {formatDate(quote.created_at)}</span>
-                        <span>⏰ Valide jusqu'au {formatDate(quote.valid_until)}</span>
+                        <span className="flex items-center gap-2">
+                          <MoneyIcon aria-hidden="true" className="h-4 w-4" />
+                          {formatCurrency(quote.total)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <CalendarIcon aria-hidden="true" className="h-4 w-4" />
+                          {formatDate(quote.created_at)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <ClockIcon aria-hidden="true" className="h-4 w-4" />
+                          Valide jusqu'au {formatDate(quote.valid_until)}
+                        </span>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-3">
@@ -5695,8 +5735,10 @@ const Quotes = ({
                           onClick={() => handleEditQuote(quote)}
                           className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                           title="Modifier"
+                          aria-label="Modifier"
+                          type="button"
                         >
-                          ✏️
+                          <EditIcon aria-hidden="true" className="h-5 w-5" />
                         </button>
                         {quote.status === 'sent' && (
                           <>
@@ -5704,15 +5746,19 @@ const Quotes = ({
                               onClick={() => updateQuoteStatus(quote.id, 'accepted')}
                               className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                               title="Marquer comme accepté"
+                              aria-label="Marquer comme accepté"
+                              type="button"
                             >
-                              ✅
+                              <CheckCircleIcon aria-hidden="true" className="h-5 w-5" />
                             </button>
                             <button
                               onClick={() => updateQuoteStatus(quote.id, 'rejected')}
                               className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                               title="Marquer comme refusé"
+                              aria-label="Marquer comme refusé"
+                              type="button"
                             >
-                              ❌
+                              <CrossCircleIcon aria-hidden="true" className="h-5 w-5" />
                             </button>
                           </>
                         )}
@@ -5721,8 +5767,10 @@ const Quotes = ({
                             onClick={() => convertToInvoice(quote)}
                             className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                             title="Convertir en facture"
+                            aria-label="Convertir en facture"
+                            type="button"
                           >
-                            🧾
+                            <ReceiptIcon aria-hidden="true" className="h-5 w-5" />
                           </button>
                         )}
                         {(quote.status === 'draft' || quote.status === 'sent') && (
@@ -5738,8 +5786,10 @@ const Quotes = ({
                           onClick={() => handleDeleteQuote(quote.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                           title="Supprimer"
+                          aria-label="Supprimer"
+                          type="button"
                         >
-                          🗑️
+                          <TrashIcon aria-hidden="true" className="h-5 w-5" />
                         </button>
                       </div>
                     </div>
@@ -6066,7 +6116,19 @@ const InvoiceModal = ({
         style={{ maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}
       >
         <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
-          {invoice ? "✏️ Modifier la facture" : "➕ Nouvelle facture"}
+          <span className="flex items-center gap-2">
+            {invoice ? (
+              <>
+                <EditIcon aria-hidden="true" className="h-5 w-5" />
+                <span>Modifier la facture</span>
+              </>
+            ) : (
+              <>
+                <PlusCircleIcon aria-hidden="true" className="h-5 w-5" />
+                <span>Nouvelle facture</span>
+              </>
+            )}
+          </span>
         </h2>
 
         {/* Quote to Invoice Conversion */}
@@ -6223,8 +6285,9 @@ const InvoiceModal = ({
                       onClick={() => removeItem(index)}
                       className="p-2 text-red-500 hover:bg-red-50 rounded dark:hover:bg-red-900/40"
                       disabled={formData.items.length === 1}
+                      aria-label="Supprimer la ligne"
                     >
-                      🗑️
+                      <TrashIcon aria-hidden="true" className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
@@ -6658,7 +6721,10 @@ const Invoices = ({
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-slate-100">🧾 Factures</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800 dark:text-slate-100">
+            <ReceiptIcon aria-hidden="true" className="h-6 w-6" />
+            <span>Factures</span>
+          </h1>
           <p className="text-gray-600 mt-1 dark:text-slate-400">
             Gérez vos factures et suivez les paiements
           </p>
@@ -6700,7 +6766,12 @@ const Invoices = ({
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100">
         {invoices.length === 0 ? (
           <div className="p-12 text-center">
-            <div className="text-6xl mb-4">🧾</div>
+            <div className="mb-4 flex justify-center">
+              <ReceiptIcon
+                aria-hidden="true"
+                className="h-16 w-16 text-slate-300 dark:text-slate-600"
+              />
+            </div>
             <h3 className="text-lg font-semibold text-gray-700 mb-2 dark:text-slate-100">
               Aucune facture
             </h3>
@@ -6753,8 +6824,9 @@ const Invoices = ({
                           {getStatusText(invoice.status)}
                         </span>
                         {isOverdue(invoice) && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
-                            ⏰ En retard
+                          <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
+                            <ClockIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                            <span>En retard</span>
                           </span>
                         )}
                       </div>
@@ -6763,10 +6835,24 @@ const Invoices = ({
                         Client: {invoice?.client_name ?? ''}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-slate-400">
-                        <span>💰 {formatCurrency(invoice.total)}</span>
-                        <span>📅 Créée le {formatDate(invoice.created_at)}</span>
-                        <span>📋 Échéance: {formatDate(invoice.due_date)}</span>
-                        {invoice.paid_date && <span>✅ Payée le {formatDate(invoice.paid_date)}</span>}
+                        <span className="flex items-center gap-2">
+                          <MoneyIcon aria-hidden="true" className="h-4 w-4" />
+                          {formatCurrency(invoice.total)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <CalendarIcon aria-hidden="true" className="h-4 w-4" />
+                          Créée le {formatDate(invoice.created_at)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <ClockIcon aria-hidden="true" className="h-4 w-4" />
+                          Échéance: {formatDate(invoice.due_date)}
+                        </span>
+                        {invoice.paid_date && (
+                          <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                            <CheckCircleIcon aria-hidden="true" className="h-4 w-4" />
+                            Payée le {formatDate(invoice.paid_date)}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-3">
@@ -6778,16 +6864,20 @@ const Invoices = ({
                           onClick={() => handleEditInvoice(invoice)}
                           className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                           title="Voir/Modifier"
+                          aria-label="Voir ou modifier"
+                          type="button"
                         >
-                          ✏️
+                          <EditIcon aria-hidden="true" className="h-5 w-5" />
                         </button>
                         {invoice.status === 'sent' && (
                           <button
                             onClick={() => updateInvoiceStatus(invoice.id, 'paid')}
                             className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                             title="Marquer comme payée"
+                            aria-label="Marquer comme payée"
+                            type="button"
                           >
-                            ✅
+                            <CheckCircleIcon aria-hidden="true" className="h-5 w-5" />
                           </button>
                         )}
                         {invoice.status !== 'paid' && (
@@ -6795,16 +6885,20 @@ const Invoices = ({
                             onClick={() => updateInvoiceStatus(invoice.id, 'cancelled')}
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                             title="Annuler"
+                            aria-label="Annuler"
+                            type="button"
                           >
-                            ❌
+                            <CrossCircleIcon aria-hidden="true" className="h-5 w-5" />
                           </button>
                         )}
                         <button
                           onClick={() => handleDeleteInvoice(invoice.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
                           title="Supprimer"
+                          aria-label="Supprimer"
+                          type="button"
                         >
-                          🗑️
+                          <TrashIcon aria-hidden="true" className="h-5 w-5" />
                         </button>
                       </div>
                     </div>
