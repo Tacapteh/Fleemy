@@ -87,6 +87,8 @@ export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
+const REDIRECT_IN_PROGRESS_ERROR_CODE = "auth/redirect-in-progress";
+
 const POPUP_FALLBACK_ERROR_CODES = new Set([
   "auth/network-request-failed",
   "auth/internal-error",
@@ -94,9 +96,13 @@ const POPUP_FALLBACK_ERROR_CODES = new Set([
   "auth/cancelled-popup-request",
   "auth/operation-not-supported-in-this-environment",
   "auth/web-storage-unsupported",
+  REDIRECT_IN_PROGRESS_ERROR_CODE,
 ]);
 
-const REDIRECT_IGNORABLE_ERROR_CODES = new Set(["auth/no-auth-event"]);
+const REDIRECT_IGNORABLE_ERROR_CODES = new Set([
+  "auth/no-auth-event",
+  REDIRECT_IN_PROGRESS_ERROR_CODE,
+]);
 
 const isRecoverablePopupError = (error) => {
   if (!error || typeof error.code !== "string") {
@@ -140,6 +146,13 @@ export const signInWithGoogle = async () => {
       status: GOOGLE_SIGN_IN_STATUS.SUCCESS,
     });
   } catch (error) {
+    if (error?.code === REDIRECT_IN_PROGRESS_ERROR_CODE) {
+      console.info("Google redirect already in progress, reusing existing flow");
+      return buildSignInResult({
+        status: GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED,
+      });
+    }
+
     if (isRecoverablePopupError(error)) {
       console.warn("Popup sign-in failed, falling back to redirect flow", error);
       redirectResultPromise = null;
@@ -149,6 +162,16 @@ export const signInWithGoogle = async () => {
           status: GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED,
         });
       } catch (redirectError) {
+        if (redirectError?.code === REDIRECT_IN_PROGRESS_ERROR_CODE) {
+          console.info(
+            "Google redirect was already pending when attempting fallback",
+            redirectError
+          );
+          return buildSignInResult({
+            status: GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED,
+          });
+        }
+
         if (isRecoverablePopupError(redirectError)) {
           console.warn(
             "Redirect sign-in encountered a recoverable issue",
