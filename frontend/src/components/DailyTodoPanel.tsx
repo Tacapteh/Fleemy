@@ -47,6 +47,9 @@ interface StatusDisplayConfig {
   chipClass: string;
 }
 
+const PRIMARY_ACTION_BUTTON_CLASSES =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors transition-shadow duration-150 hover:bg-blue-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-lg disabled:hover:bg-blue-500';
+
 const STATUS_DISPLAY: Record<StatusKey, StatusDisplayConfig> = {
   todo: {
     label: 'À faire',
@@ -309,7 +312,7 @@ export default function DailyTodoPanel({
               type="submit"
               disabled={!newText.trim()}
               data-testid="todo-add-button"
-              className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed disabled:bg-amber-900/40 disabled:text-slate-500"
+              className={PRIMARY_ACTION_BUTTON_CLASSES}
               aria-label="Ajouter une note"
             >
               <Plus className="h-4 w-4" />
@@ -340,10 +343,10 @@ export default function DailyTodoPanel({
               <div
                 key={item.id}
                 data-testid={`todo-item-${item.id}`}
-                className={`flex items-center gap-3 rounded-lg border bg-slate-800/40 p-3 shadow-sm transition-colors ${
+                className={`flex items-center gap-3 rounded-xl border bg-slate-800/40 p-3 shadow-md transition-colors transition-opacity transition-shadow duration-200 focus-within:ring-2 focus-within:ring-amber-400/30 focus-within:ring-offset-0 ${
                   item.done
                     ? 'border-slate-700/30 opacity-60'
-                    : 'border-slate-700/50'
+                    : 'border-slate-700/50 hover:border-amber-400/50 hover:shadow-lg hover:shadow-amber-900/20'
                 }`}
               >
                 <div className="flex-1 min-w-0">
@@ -368,14 +371,14 @@ export default function DailyTodoPanel({
                       <button
                         type="button"
                         onClick={() => saveEdit(item.id)}
-                        className="rounded bg-amber-600 px-3 py-1 text-xs text-white hover:bg-amber-700"
+                        className="inline-flex items-center rounded-md bg-blue-500 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-blue-900/30 transition-colors transition-shadow duration-150 hover:bg-blue-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90"
                       >
                         OK
                       </button>
                       <button
                         type="button"
                         onClick={cancelEdit}
-                        className="rounded bg-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-500"
+                        className="inline-flex items-center rounded-md bg-slate-600 px-3 py-1 text-xs font-semibold text-slate-100 shadow-sm transition-colors duration-150 hover:bg-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-200 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90"
                       >
                         Annuler
                       </button>
@@ -388,7 +391,7 @@ export default function DailyTodoPanel({
                         type="button"
                         onClick={() => toggleTaskDone(item.id, statusKey)}
                         disabled={effectiveReadOnly}
-                        className="inline-flex items-center gap-1 rounded-md bg-transparent p-0 text-xs font-medium transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center gap-1 rounded-md bg-transparent p-0 text-xs font-medium transition-colors transition-opacity duration-150 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 active:opacity-90"
                         aria-label={
                           statusKey === 'done'
                             ? 'Marquer la tâche comme à faire'
@@ -409,19 +412,19 @@ export default function DailyTodoPanel({
                       type="button"
                       onClick={() => !effectiveReadOnly && startEdit(item)}
                       disabled={effectiveReadOnly}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left disabled:cursor-default"
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-lg px-2 py-1 text-left transition-colors transition-opacity duration-200 hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-default disabled:hover:bg-transparent"
                     >
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                         {item.time && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 border border-amber-500/30">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 transition-colors duration-150">
                             <Clock className="h-3 w-3" />
                             {item.time}
                           </span>
                         )}
                         <span
-                          className={`min-w-0 text-sm ${
+                          className={`min-w-0 text-sm transition-colors transition-opacity duration-200 ${
                             item.done
-                              ? 'flex-1 text-slate-400 line-through opacity-60'
+                              ? 'flex-1 text-slate-400 line-through opacity-70'
                               : 'flex-1 text-slate-100'
                           }`}
                         >
@@ -444,10 +447,10 @@ export default function DailyTodoPanel({
                   type="button"
                   onClick={() => handleDelete(item.id)}
                   data-testid={`todo-delete-${item.id}`}
-                  className="mt-1 rounded p-1 text-red-400 transition-colors hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="mt-1 rounded-lg p-1.5 text-red-400 transition-colors transition-shadow duration-150 hover:bg-red-500/15 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 active:scale-95"
                   aria-label={`Supprimer "${item.text}"`}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
               </div>

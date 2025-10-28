@@ -37,6 +37,13 @@ export default function WeekNavigationHeader({
       ? selectedTeamId
       : teamOptions[0]?.value || '';
 
+  const basePillButton =
+    'inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 active:opacity-90';
+  const neutralPillClasses =
+    'bg-slate-200/80 text-slate-800 hover:bg-slate-300 dark:bg-slate-800/70 dark:text-slate-100 dark:hover:bg-slate-700/70';
+  const activePillClasses =
+    'bg-blue-500 text-white shadow-md shadow-blue-900/25 hover:bg-blue-500';
+
   const handleModeClick = (mode) => {
     if (!onPlanningModeChange) return;
     if (mode === 'team' && !canUseTeamMode) return;
@@ -51,23 +58,23 @@ export default function WeekNavigationHeader({
   };
 
   return (
-    <div className="mb-4 flex flex-col gap-4 rounded-md border border-gray-200 bg-gray-100 p-4 text-slate-900 shadow transition-colors dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 md:flex-row md:items-center md:justify-between">
+    <div className="mb-4 flex flex-col gap-4 rounded-xl border border-gray-200 bg-gray-100 p-4 text-slate-900 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 md:flex-row md:items-center md:justify-between">
       <div className="flex items-center gap-2">
         <button
           onClick={onToday}
-          className="rounded bg-gray-300 px-3 py-1 transition-colors hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600"
+          className={`${basePillButton} ${neutralPillClasses}`}
         >
           Aujourd'hui
         </button>
         <button
           onClick={onPrev}
-          className="rounded bg-gray-300 px-3 py-1 transition-colors hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600"
+          className={`${basePillButton} ${neutralPillClasses}`}
         >
           ◀︎
         </button>
         <button
           onClick={onNext}
-          className="rounded bg-gray-300 px-3 py-1 transition-colors hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600"
+          className={`${basePillButton} ${neutralPillClasses}`}
         >
           ▶︎
         </button>
@@ -92,7 +99,7 @@ export default function WeekNavigationHeader({
                 </label>
                 <select
                   id="planning-team-select"
-                  className="rounded-md border border-gray-300 bg-white px-2 py-1 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm transition-colors transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
                   value={selectedTeamValue}
                   onChange={(event) => onTeamChange?.(event.target.value)}
                   disabled={teamsLoading}
@@ -119,7 +126,7 @@ export default function WeekNavigationHeader({
             </label>
             <select
               id="planning-member-select"
-              className="rounded-md border border-gray-300 bg-white px-2 py-1 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm transition-colors transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
               value={selectedValue}
               onChange={(event) => onMemberChange?.(event.target.value)}
             >
@@ -130,7 +137,7 @@ export default function WeekNavigationHeader({
               ))}
             </select>
             {isReadOnlyMode && (
-              <span className="inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-slate-800 dark:text-slate-200">
+              <span className="inline-flex items-center rounded-full bg-slate-200/80 px-2.5 py-0.5 text-xs font-semibold text-slate-700 transition-colors duration-150 dark:bg-slate-800/70 dark:text-slate-200">
                 Lecture seule
               </span>
             )}
@@ -143,20 +150,16 @@ export default function WeekNavigationHeader({
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleModeClick('personal')}
-              className={`px-3 py-1 rounded ${
-                planningMode === 'personal'
-                  ? 'bg-green-300 dark:bg-green-500/70'
-                  : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
+              className={`${basePillButton} ${
+                planningMode === 'personal' ? activePillClasses : neutralPillClasses
               }`}
             >
               Mon planning
             </button>
             <button
               onClick={() => handleModeClick('team')}
-              className={`px-3 py-1 rounded ${
-                planningMode === 'team'
-                  ? 'bg-blue-300 dark:bg-blue-500/70'
-                  : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
+              className={`${basePillButton} ${
+                planningMode === 'team' ? activePillClasses : neutralPillClasses
               }`}
             >
               Planning équipe
@@ -166,21 +169,13 @@ export default function WeekNavigationHeader({
         <div className="flex items-center gap-2 justify-center">
           <button
             onClick={() => handleViewChange('week')}
-            className={`px-3 py-1 rounded ${
-              view === 'week'
-                ? 'bg-blue-300 dark:bg-blue-500/70'
-                : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
-            }`}
+            className={`${basePillButton} ${view === 'week' ? activePillClasses : neutralPillClasses}`}
           >
             Semaine
           </button>
           <button
             onClick={() => handleViewChange('month')}
-            className={`px-3 py-1 rounded ${
-              view === 'month'
-                ? 'bg-blue-300 dark:bg-blue-500/70'
-                : 'bg-gray-300 hover:bg-gray-400 dark:bg-slate-700 dark:hover:bg-slate-600'
-            }`}
+            className={`${basePillButton} ${view === 'month' ? activePillClasses : neutralPillClasses}`}
           >
             Mois
           </button>

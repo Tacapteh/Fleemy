@@ -61,7 +61,7 @@ export default function StatusSummaryCard({
   return (
     <div
       data-testid={dataTestId}
-      className={`${radius.card} border px-4 py-3 text-sm shadow-sm transition-colors ${styles.border} ${styles.background} ${className}`}
+      className={`${radius.card} border px-4 py-3 text-sm shadow-md shadow-slate-900/15 transition-colors transition-shadow duration-200 hover:shadow-lg hover:shadow-slate-900/20 ${styles.border} ${styles.background} ${className}`}
     >
       <p className={`text-xs font-medium uppercase tracking-wide ${styles.labelColor}`}>
         {label}

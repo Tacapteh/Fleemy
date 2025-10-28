@@ -106,12 +106,12 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
 
   return (
     <div
-      className={`event-chip${statusClass}${isAbsence ? ' absence' : ''} min-h-[3rem]`}
+      className={`event-chip${statusClass}${isAbsence ? ' absence' : ''} min-h-[3rem] transition-transform transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-slate-100/70 dark:focus-visible:ring-offset-slate-900`}
       style={style}
       onClick={isInteractive ? handleClick : undefined}
       onKeyDown={handleKeyDown}
       role={isInteractive ? 'button' : 'group'}
-      tabIndex={0}
+      tabIndex={isInteractive ? 0 : -1}
       aria-label={`Événement : ${title}`}
       data-testid={`event-${event.id}`}
     >

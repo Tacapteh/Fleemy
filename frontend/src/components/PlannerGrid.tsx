@@ -287,10 +287,16 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               }
             };
 
+            const taskCardClassName = `task-standalone transition-transform transition-shadow duration-150 ease-out ${
+              isInteractive
+                ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-slate-100/70 dark:focus-visible:ring-offset-slate-900 hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.99]'
+                : ''
+            }`;
+
             return (
               <div
                 key={task.occurrenceId}
-                className={`task-standalone ${isInteractive ? 'cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500' : ''}`}
+                className={taskCardClassName}
                 style={{
                   top: topValue,
                   height: heightValue,

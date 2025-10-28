@@ -55,6 +55,9 @@ const TaskSummaryRow = ({ iconId, label, price }) => {
   );
 };
 
+const PRIMARY_ACTION_BUTTON_CLASSES =
+  'inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors transition-shadow duration-150 hover:bg-blue-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-lg disabled:hover:bg-blue-500';
+
 const matchTeamId = (team, teamId) => {
   if (!team || !teamId) {
     return false;
@@ -1418,11 +1421,7 @@ export default function Planning() {
             type="button"
             onClick={!readOnly ? () => openCreateModal() : undefined}
             disabled={readOnly || !planningContext}
-            className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              readOnly || !planningContext
-                ? 'cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
-                : 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500'
-            }`}
+            className={PRIMARY_ACTION_BUTTON_CLASSES}
           >
             + Événement
           </button>
@@ -1430,18 +1429,14 @@ export default function Planning() {
             type="button"
             onClick={!readOnly ? openWeeklyTaskModal : undefined}
             disabled={readOnly || !planningContext}
-            className={`inline-flex items-center rounded-md border border-transparent px-3 py-2 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-              readOnly || !planningContext
-                ? 'cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
-                : 'bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500'
-            }`}
+            className={PRIMARY_ACTION_BUTTON_CLASSES}
           >
             + Tâche hebdo
           </button>
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-colors dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
         {view === 'week' ? (
           <PlannerGrid
             events={events}
