@@ -22,6 +22,7 @@ import {
   resolveEffectiveTaskStatus,
   type TaskStatusKey,
 } from '../constants/taskStatusDisplay';
+import { surface, radius } from '../ui/designTokens';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SLOT_HEIGHT = 64;
