@@ -831,7 +831,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
               );
 
               return (
-                <div key={`mobile-day-${dayIndex}`} className="border border-white/10 rounded-lg bg-[#1a2235] p-2 mb-4 w-full">
+                <div key={`mobile-day-${dayIndex}`} className={`border border-white/10 ${radius.card} ${surface.base} ${surface.border} p-3 mb-4 w-full`}>
                   {/* En-tête du jour */}
                   <div className="text-base font-semibold text-white flex items-center justify-between mb-2">
                     <span>{day.name} {day.date.getDate()}</span>
