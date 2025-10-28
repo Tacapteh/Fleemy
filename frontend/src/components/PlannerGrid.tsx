@@ -1248,7 +1248,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               <div
                                 key={task.occurrenceId}
                                 onClick={() => isInteractive && onTaskClick?.(task)}
-                                className={`absolute left-1 right-1 rounded-lg shadow-sm text-xs overflow-hidden pointer-events-auto ${
+                                className={`absolute left-1 right-1 ${radius.button} shadow-sm text-xs overflow-hidden pointer-events-auto ${
                                   isInteractive ? 'cursor-pointer' : ''
                                 }`}
                                 style={{
