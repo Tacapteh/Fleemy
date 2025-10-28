@@ -11,6 +11,7 @@ export { default as CardSection } from './CardSection';
 export { default as SectionHeaderRow } from './SectionHeaderRow';
 export { default as StatusChip } from './StatusChip';
 export { default as PriorityNumberBadge } from './PriorityNumberBadge';
+export { default as StatusSummaryCard } from './StatusSummaryCard';
 
 // Icons
 export * from './icons';
