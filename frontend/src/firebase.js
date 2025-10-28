@@ -120,15 +120,48 @@ const isRecoverablePopupError = (error) => {
 
 let redirectResultPromise = null;
 
+export const GOOGLE_SIGN_IN_STATUS = Object.freeze({
+  SUCCESS: "success",
+  REDIRECT_TRIGGERED: "redirect-triggered",
+  RECOVERABLE_ERROR: "recoverable-error",
+});
+
+const buildSignInResult = ({ user = null, status, error = null }) => ({
+  user: user || null,
+  status,
+  error,
+});
+
 export const signInWithGoogle = async () => {
   try {
-    return await signInWithPopup(auth, googleProvider);
+    const popupResult = await signInWithPopup(auth, googleProvider);
+    return buildSignInResult({
+      user: popupResult?.user || null,
+      status: GOOGLE_SIGN_IN_STATUS.SUCCESS,
+    });
   } catch (error) {
     if (isRecoverablePopupError(error)) {
       console.warn("Popup sign-in failed, falling back to redirect flow", error);
       redirectResultPromise = null;
-      await signInWithRedirect(auth, googleProvider);
-      return null;
+      try {
+        await signInWithRedirect(auth, googleProvider);
+        return buildSignInResult({
+          status: GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED,
+        });
+      } catch (redirectError) {
+        if (isRecoverablePopupError(redirectError)) {
+          console.warn(
+            "Redirect sign-in encountered a recoverable issue",
+            redirectError
+          );
+          return buildSignInResult({
+            status: GOOGLE_SIGN_IN_STATUS.RECOVERABLE_ERROR,
+            error: redirectError,
+          });
+        }
+
+        throw redirectError;
+      }
     }
 
     throw error;

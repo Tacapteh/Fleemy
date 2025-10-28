@@ -161,11 +161,17 @@ const getCurrentWeek = () => {
 
 // Authentication Screen
 import { getAuth } from "firebase/auth";
-import { auth, signInWithGoogle, getGoogleRedirectResult } from "./firebase";
+import {
+  auth,
+  signInWithGoogle,
+  getGoogleRedirectResult,
+  GOOGLE_SIGN_IN_STATUS,
+} from "./firebase";
 
 const AuthScreen = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [statusMessage, setStatusMessage] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -175,6 +181,7 @@ const AuthScreen = ({ onLogin }) => {
         if (!mounted || !result?.user) {
           return;
         }
+        setStatusMessage(null);
         onLogin(result.user);
       })
       .catch((redirectError) => {
@@ -192,13 +199,34 @@ const AuthScreen = ({ onLogin }) => {
   const handleLogin = async () => {
     try {
       setError(null);
+      setStatusMessage(null);
       setLoading(true);
       const result = await signInWithGoogle();
+      const statusFromResult = result?.status;
+
       if (result?.user) {
         onLogin(result.user);
+        return;
       }
+
+      if (statusFromResult === GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED) {
+        setStatusMessage(
+          "Redirection vers Google en cours… Finalisez la connexion sur la fenêtre ouverte."
+        );
+        return;
+      }
+
+      if (statusFromResult === GOOGLE_SIGN_IN_STATUS.RECOVERABLE_ERROR) {
+        setError(
+          "Google n'a pas pu s'ouvrir automatiquement. Autorisez les popups et cookies tiers, puis réessayez."
+        );
+        return;
+      }
+
+      setError("Erreur de connexion.");
     } catch (e) {
       console.error("Firebase auth error", e);
+      setStatusMessage(null);
       setError("Erreur de connexion.");
     } finally {
       setLoading(false);
@@ -214,6 +242,9 @@ const AuthScreen = ({ onLogin }) => {
           Votre outil tout-en-un pour indépendants
         </p>
         {error && <p className="text-red-600 mb-4">{error}</p>}
+        {!error && statusMessage && (
+          <p className="text-blue-600 mb-4">{statusMessage}</p>
+        )}
         <button
           onClick={handleLogin}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200 transform hover:scale-105"

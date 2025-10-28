@@ -1,18 +1,20 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { signInWithGoogle, getGoogleRedirectResult } from "./firebase";
+import {
+  signInWithGoogle,
+  getGoogleRedirectResult,
+  GOOGLE_SIGN_IN_STATUS,
+} from "./firebase";
 
 const INVALID_API_KEY_CODES = new Set([
   "auth/api-key-not-valid",
   "auth/invalid-api-key",
 ]);
 
-const RECOVERABLE_ERROR_CODES = new Set([
-  "auth/network-request-failed",
-  "auth/internal-error",
-]);
-
 const REDIRECT_IN_PROGRESS_MESSAGE =
   "Redirection vers Google… Veuillez finaliser la connexion.";
+
+const REDIRECT_RECOVERABLE_ISSUE_MESSAGE =
+  "Google n'a pas pu s'ouvrir automatiquement. Autorisez les popups et les cookies tiers, puis réessayez.";
 
 const DEFAULT_LOGIN_ERROR = "Erreur lors de la connexion.";
 
@@ -109,22 +111,29 @@ export default function Login({ onLogin }) {
     try {
       const result = await signInWithGoogle();
       const user = result?.user;
+      const statusFromResult = result?.status;
 
-      if (!user) {
+      if (user) {
+        await persistUser(user);
+        return;
+      }
+
+      if (statusFromResult === GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED) {
         setStatus(REDIRECT_IN_PROGRESS_MESSAGE);
         return;
       }
 
-      await persistUser(user);
+      if (statusFromResult === GOOGLE_SIGN_IN_STATUS.RECOVERABLE_ERROR) {
+        setStatus(REDIRECT_RECOVERABLE_ISSUE_MESSAGE);
+        return;
+      }
+
+      setError(DEFAULT_LOGIN_ERROR);
     } catch (error) {
       console.error("Erreur lors de la tentative de connexion", error);
 
       if (INVALID_API_KEY_CODES.has(error?.code)) {
         setError("Clé API Firebase invalide ou absente. Vérifiez votre fichier .env.");
-      } else if (RECOVERABLE_ERROR_CODES.has(error?.code)) {
-        setError(
-          "Impossible de contacter Google. Vérifiez votre connexion internet et autorisez les popups puis réessayez."
-        );
       } else {
         setError(DEFAULT_LOGIN_ERROR);
       }
