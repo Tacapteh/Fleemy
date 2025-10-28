@@ -51,6 +51,24 @@ async function parseResponseBody(response: Response) {
   }
 }
 
+const FALLBACK_STATUS_CODES = new Set([401, 403, 404, 405]);
+
+function shouldFallbackToNextBase(status: number, totalBases: number): boolean {
+  if (totalBases <= 1) {
+    return false;
+  }
+
+  if (FALLBACK_STATUS_CODES.has(status)) {
+    return true;
+  }
+
+  if (status >= 500 && status < 600) {
+    return true;
+  }
+
+  return false;
+}
+
 async function performAuthorizedRequest<T>(config: RequestConfig): Promise<T> {
   const { path, body, token, accept, responseType } = config;
   const baseUrls = getApiBaseUrls();
@@ -120,10 +138,7 @@ async function performAuthorizedRequest<T>(config: RequestConfig): Promise<T> {
             statusText: response.statusText,
             data: errorBody,
           };
-          if (
-            (response.status === 404 || response.status === 405) &&
-            baseUrls.length > 1
-          ) {
+          if (shouldFallbackToNextBase(response.status, baseUrls.length)) {
             lastNetworkErrorForBase = error as Error;
             break;
           }
