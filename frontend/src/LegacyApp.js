@@ -1274,7 +1274,10 @@ const EventModal = ({
 
     const params = new URLSearchParams();
     params.set("tab", targetTab);
-    params.set("client", normalizedClientIdForDocs);
+    if (normalizedClientIdForDocs) {
+      params.set("client", normalizedClientIdForDocs);
+    }
+    params.set("create", "true");
 
     if (typeof onClose === "function") {
       onClose();
@@ -4746,7 +4749,14 @@ const Clients = () => (
 );
 
 // Quote modal with dynamic lines and automatic calculations
-const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
+const QuoteModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  quote,
+  clients,
+  defaultClientId,
+}) => {
   const [formData, setFormData] = useState({
     client_id: "",
     client_name: "",
@@ -4764,6 +4774,13 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
+    const normalizedDefaultClientId = defaultClientId
+      ? String(defaultClientId)
+      : "";
+    const defaultClient = normalizedDefaultClientId
+      ? clients.find((c) => String(c.id) === normalizedDefaultClientId)
+      : null;
+
     if (quote) {
       setFormData({
         client_id: quote.client_id ? String(quote.client_id) : "",
@@ -4785,8 +4802,11 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
       });
     } else {
       setFormData({
-        client_id: "",
-        client_name: "",
+        client_id: normalizedDefaultClientId,
+        client_name:
+          defaultClient?.display_name ||
+          defaultClient?.name ||
+          "",
         title: "",
         items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
         tax_rate: 20.0,
@@ -4799,7 +4819,7 @@ const QuoteModal = ({ isOpen, onClose, onSave, quote, clients }) => {
       });
     }
     setErrors({});
-  }, [quote, isOpen]);
+  }, [quote, isOpen, defaultClientId, clients]);
 
   const handleClientChange = (clientId) => {
     const normalizedClientId = clientId ? String(clientId) : "";
@@ -5148,7 +5168,7 @@ const getInitialQuotesState = () => {
   }
   return { quotes: [], clients: [], loading: true };
 };
-const Quotes = ({ user }) => {
+const Quotes = ({ user, clientId, onRegisterCreateHandler }) => {
   const initialQuotesState = useMemo(() => getInitialQuotesState(), []);
   const [quotes, setQuotes] = useState(() => initialQuotesState.quotes);
   const [clients, setClients] = useState(() => initialQuotesState.clients);
@@ -5156,6 +5176,7 @@ const Quotes = ({ user }) => {
   const [showQuoteModal, setShowQuoteModal] = useState(false);
   const [editingQuote, setEditingQuote] = useState(null);
   const [quoteTemplates, setQuoteTemplates] = useState([]);
+  const [pendingClientId, setPendingClientId] = useState('');
 
   const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
@@ -5230,15 +5251,32 @@ const Quotes = ({ user }) => {
     }
   }, [apiCall, persistQuotesCache]);
 
-  const handleCreateQuote = () => {
-    setEditingQuote(null);
-    setShowQuoteModal(true);
-  };
+  const openQuoteCreation = useCallback(
+    ({ clientId: requestedClientId } = {}) => {
+      const normalizedRequestedId = requestedClientId
+        ? String(requestedClientId)
+        : '';
+      const fallbackClientId = clientId ? String(clientId) : '';
+      const resolvedClientId = normalizedRequestedId || fallbackClientId;
+
+      setPendingClientId(resolvedClientId);
+      setEditingQuote(null);
+      setShowQuoteModal(true);
+    },
+    [clientId],
+  );
 
   const handleEditQuote = (quote) => {
     setEditingQuote(quote);
+    setPendingClientId('');
     setShowQuoteModal(true);
   };
+
+  const handleCloseQuoteModal = useCallback(() => {
+    setShowQuoteModal(false);
+    setEditingQuote(null);
+    setPendingClientId('');
+  }, []);
 
   const handleSaveQuote = async (quoteData) => {
     try {
@@ -5270,6 +5308,7 @@ const Quotes = ({ user }) => {
         });
       }
       setShowQuoteModal(false);
+      setPendingClientId('');
     } catch (error) {
       console.error("Error saving quote:", error);
       showToast(
@@ -5354,6 +5393,22 @@ const Quotes = ({ user }) => {
     loadQuotes();
   }, [loadQuotes]);
 
+  useEffect(() => {
+    if (typeof onRegisterCreateHandler !== 'function') {
+      return undefined;
+    }
+
+    const handler = ({ clientId: requestedClientId } = {}) => {
+      openQuoteCreation({ clientId: requestedClientId });
+    };
+
+    onRegisterCreateHandler(handler);
+
+    return () => {
+      onRegisterCreateHandler(null);
+    };
+  }, [onRegisterCreateHandler, openQuoteCreation]);
+
   const getStatusColor = (status) => {
     switch (status) {
       case "draft":
@@ -5432,7 +5487,7 @@ const Quotes = ({ user }) => {
             Gérez vos devis et propositions commerciales
           </p>
         </div>
-        <button onClick={handleCreateQuote} className="btn btn-primary">
+        <button onClick={() => openQuoteCreation()} className="btn btn-primary">
           + Nouveau devis
         </button>
       </div>
@@ -5476,7 +5531,7 @@ const Quotes = ({ user }) => {
             <p className="text-gray-500 mb-4 dark:text-slate-400">
               Commencez par créer votre premier devis !
             </p>
-            <button onClick={handleCreateQuote} className="btn btn-primary">
+            <button onClick={() => openQuoteCreation()} className="btn btn-primary">
               Créer un devis
             </button>
           </div>
@@ -5586,10 +5641,11 @@ const Quotes = ({ user }) => {
       {showQuoteModal && (
         <QuoteModal
           isOpen={showQuoteModal}
-          onClose={() => setShowQuoteModal(false)}
+          onClose={handleCloseQuoteModal}
           onSave={handleSaveQuote}
           quote={editingQuote}
           clients={clients}
+          defaultClientId={pendingClientId}
         />
       )}
     </div>
@@ -5604,6 +5660,7 @@ const InvoiceModal = ({
   invoice,
   clients,
   quotes,
+  defaultClientId,
 }) => {
   const [formData, setFormData] = useState({
     quote_id: "",
@@ -5623,6 +5680,13 @@ const InvoiceModal = ({
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
+    const normalizedDefaultClientId = defaultClientId
+      ? String(defaultClientId)
+      : "";
+    const defaultClient = normalizedDefaultClientId
+      ? clients.find((c) => String(c.id) === normalizedDefaultClientId)
+      : null;
+
     if (invoice) {
       setFormData({
         quote_id: invoice.quote_id ? String(invoice.quote_id) : "",
@@ -5645,8 +5709,11 @@ const InvoiceModal = ({
     } else {
       setFormData({
         quote_id: "",
-        client_id: "",
-        client_name: "",
+        client_id: normalizedDefaultClientId,
+        client_name:
+          defaultClient?.display_name ||
+          defaultClient?.name ||
+          "",
         title: "",
         items: [{ description: "", quantity: 1, unit_price: 0, total: 0 }],
         tax_rate: 20.0,
@@ -5659,7 +5726,7 @@ const InvoiceModal = ({
       });
     }
     setErrors({});
-  }, [invoice, isOpen]);
+  }, [invoice, isOpen, defaultClientId, clients]);
 
   const handleQuoteSelection = (quoteId) => {
     const normalizedQuoteId = quoteId ? String(quoteId) : "";
@@ -6067,7 +6134,7 @@ const getInitialInvoicesState = () => {
   }
   return { invoices: [], clients: [], quotes: [], loading: true };
 };
-const Invoices = ({ user }) => {
+const Invoices = ({ user, clientId, onRegisterCreateHandler }) => {
   const initialInvoicesState = useMemo(() => getInitialInvoicesState(), []);
   const [invoices, setInvoices] = useState(() => initialInvoicesState.invoices);
   const [clients, setClients] = useState(() => initialInvoicesState.clients);
@@ -6075,6 +6142,7 @@ const Invoices = ({ user }) => {
   const [loading, setLoading] = useState(initialInvoicesState.loading);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
+  const [pendingClientId, setPendingClientId] = useState('');
 
   const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
@@ -6159,15 +6227,32 @@ const Invoices = ({ user }) => {
     }
   }, [apiCall, persistInvoicesCache]);
 
-  const handleCreateInvoice = () => {
-    setEditingInvoice(null);
-    setShowInvoiceModal(true);
-  };
+  const openInvoiceCreation = useCallback(
+    ({ clientId: requestedClientId } = {}) => {
+      const normalizedRequestedId = requestedClientId
+        ? String(requestedClientId)
+        : '';
+      const fallbackClientId = clientId ? String(clientId) : '';
+      const resolvedClientId = normalizedRequestedId || fallbackClientId;
+
+      setPendingClientId(resolvedClientId);
+      setEditingInvoice(null);
+      setShowInvoiceModal(true);
+    },
+    [clientId],
+  );
 
   const handleEditInvoice = (invoice) => {
     setEditingInvoice(invoice);
+    setPendingClientId('');
     setShowInvoiceModal(true);
   };
+
+  const handleCloseInvoiceModal = useCallback(() => {
+    setShowInvoiceModal(false);
+    setEditingInvoice(null);
+    setPendingClientId('');
+  }, []);
 
   const handleSaveInvoice = async (invoiceData) => {
     try {
@@ -6201,6 +6286,7 @@ const Invoices = ({ user }) => {
         });
       }
       setShowInvoiceModal(false);
+      setPendingClientId('');
     } catch (error) {
       console.error("Error saving invoice:", error);
       showToast(
@@ -6259,6 +6345,22 @@ const Invoices = ({ user }) => {
   useEffect(() => {
     loadInvoices();
   }, [loadInvoices]);
+
+  useEffect(() => {
+    if (typeof onRegisterCreateHandler !== 'function') {
+      return undefined;
+    }
+
+    const handler = ({ clientId: requestedClientId } = {}) => {
+      openInvoiceCreation({ clientId: requestedClientId });
+    };
+
+    onRegisterCreateHandler(handler);
+
+    return () => {
+      onRegisterCreateHandler(null);
+    };
+  }, [onRegisterCreateHandler, openInvoiceCreation]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -6342,7 +6444,7 @@ const Invoices = ({ user }) => {
             Gérez vos factures et suivez les paiements
           </p>
         </div>
-        <button onClick={handleCreateInvoice} className="btn btn-primary">
+        <button onClick={() => openInvoiceCreation()} className="btn btn-primary">
           + Nouvelle facture
         </button>
       </div>
@@ -6386,7 +6488,7 @@ const Invoices = ({ user }) => {
             <p className="text-gray-500 mb-4 dark:text-slate-400">
               Commencez par créer votre première facture !
             </p>
-            <button onClick={handleCreateInvoice} className="btn btn-primary">
+            <button onClick={() => openInvoiceCreation()} className="btn btn-primary">
               Créer une facture
             </button>
           </div>
@@ -6486,11 +6588,12 @@ const Invoices = ({ user }) => {
       {showInvoiceModal && (
         <InvoiceModal
           isOpen={showInvoiceModal}
-          onClose={() => setShowInvoiceModal(false)}
+          onClose={handleCloseInvoiceModal}
           onSave={handleSaveInvoice}
           invoice={editingInvoice}
           clients={clients}
           quotes={quotes}
+          defaultClientId={pendingClientId}
         />
       )}
     </div>
