@@ -86,6 +86,7 @@ import {
   Trash2,
   Save,
   Download,
+  FileDown,
   Upload,
   LogOut,
   
@@ -198,6 +199,7 @@ export const ActionIcons = {
   Trash2,
   Save,
   Download,
+  FileDown,
   Upload,
   LogOut,
 };
@@ -305,6 +307,7 @@ export {
   Trash2,
   Save,
   Download,
+  FileDown,
   Upload,
   LogOut,
   

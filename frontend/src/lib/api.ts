@@ -69,6 +69,18 @@ const wait = (delay: number) =>
     setTimeout(resolve, delay);
   });
 
+export const API_RETRY_DELAYS = [...RETRY_DELAYS];
+
+export const waitForApiRetry = wait;
+
+export function getApiBaseUrls(): string[] {
+  return [...API_BASE_URLS];
+}
+
+export function buildApiUrlFromBase(path: string, baseApiUrl: string) {
+  return buildApiUrl(path, baseApiUrl);
+}
+
 function buildApiUrl(path: string, baseApiUrl: string) {
   const baseUrl = baseApiUrl.replace(/\/$/, "");
   const rootUrl = baseUrl.endsWith("/api") ? baseUrl.slice(0, -4) : baseUrl;

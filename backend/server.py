@@ -12,7 +12,7 @@ from dotenv import load_dotenv, find_dotenv
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, EmailStr
 from typing import List, Optional, Dict, Any, Tuple, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -23,6 +23,7 @@ import httpx
 import re
 import secrets
 import string
+from io import BytesIO
 
 # Firebase Admin
 import firebase_admin
@@ -716,6 +717,14 @@ class InvoiceCreateRequest(BaseModel):
 
 class InvoiceStatusUpdate(BaseModel):
     status: str
+
+
+class DocumentPdfRequest(BaseModel):
+    type: Literal["quote", "invoice"]
+
+
+class DocumentEmailRequest(DocumentPdfRequest):
+    to: EmailStr
 
 
 class TeamCreateRequest(BaseModel):
@@ -2789,6 +2798,71 @@ async def update_invoice_status(
         user_col(user["uid"], "invoices").document(invoice_id).get
     )
     return updated.to_dict()
+
+
+@api_router.post("/documents/{doc_id}/pdf")
+async def export_document_pdf(
+    doc_id: str,
+    payload: DocumentPdfRequest,
+    request: Request,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    document_type = payload.type
+    collection_name = "quotes" if document_type == "quote" else "invoices"
+    doc_ref = user_col(user["uid"], collection_name).document(doc_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+
+    if not getattr(snap, "exists", False):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document_data = snap.to_dict() or {}
+    owner_uid = document_data.get("uid")
+    if owner_uid and owner_uid != user["uid"]:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this document"
+        )
+
+    # TODO: generate the actual PDF content from document_data
+    buffer = BytesIO()
+    buffer.write(b"%PDF-1.4\n")
+    buffer.write(b"% Fleemy placeholder PDF\n")
+    buffer.write(f"Document ID: {doc_id}\\n".encode("utf-8"))
+    buffer.write(f"Type: {document_type}\\n".encode("utf-8"))
+    buffer.write(b"%%EOF")
+
+    filename_prefix = "devis" if document_type == "quote" else "facture"
+    filename = f"{filename_prefix}-{doc_id}.pdf"
+
+    response = Response(content=buffer.getvalue(), media_type="application/pdf")
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{filename}"'
+    )
+    return _apply_cors_headers(request, response)
+
+
+@api_router.post("/documents/{doc_id}/email")
+async def email_document_endpoint(
+    doc_id: str,
+    payload: DocumentEmailRequest,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    document_type = payload.type
+    collection_name = "quotes" if document_type == "quote" else "invoices"
+    doc_ref = user_col(user["uid"], collection_name).document(doc_id)
+    snap = await asyncio.to_thread(doc_ref.get)
+
+    if not getattr(snap, "exists", False):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    document_data = snap.to_dict() or {}
+    owner_uid = document_data.get("uid")
+    if owner_uid and owner_uid != user["uid"]:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this document"
+        )
+
+    # TODO: generate the real PDF and send the e-mail via the selected provider (SendGrid, Mailgun, ...)
+    return {"ok": True, "sentTo": payload.to}
 
 
 # Teams endpoints
