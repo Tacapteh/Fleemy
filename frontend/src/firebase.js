@@ -27,14 +27,40 @@ import {
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
 
+const sanitizeConfigValue = (value) => {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const lower = trimmed.toLowerCase();
+  if (lower === "undefined" || lower === "null") {
+    return null;
+  }
+
+  if (trimmed.startsWith("${") && trimmed.endsWith("}")) {
+    return null;
+  }
+
+  return trimmed;
+};
+
 const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  measurementId: process.env.REACT_APP_FIREBASE_MEASUREMENT_ID,
+  apiKey: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_API_KEY),
+  authDomain: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_AUTH_DOMAIN),
+  projectId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_PROJECT_ID),
+  appId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_APP_ID),
+  messagingSenderId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID),
+  storageBucket: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_STORAGE_BUCKET),
+  measurementId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_MEASUREMENT_ID),
 };
 
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
