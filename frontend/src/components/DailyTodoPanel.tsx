@@ -232,30 +232,30 @@ export default function DailyTodoPanel({
 
   if (loading) {
     return (
-      <div
+      <CardSection
+        variant="note"
+        icon={<Clock className="h-5 w-5" />}
+        title="À ne pas oublier"
         data-testid="daily-todo-loading"
-        className={`rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50 to-yellow-50/50 p-4 shadow-sm dark:border-amber-900/30 dark:from-amber-950/40 dark:to-yellow-950/20 ${
-          compact ? 'p-3' : 'p-6'
-        }`}
       >
         <div className="flex items-center gap-2">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-          <p className="text-sm text-amber-700 dark:text-amber-300">Chargement...</p>
+          <p className="text-sm text-amber-300">Chargement...</p>
         </div>
-      </div>
+      </CardSection>
     );
   }
 
   if (error) {
     return (
-      <div
+      <CardSection
+        variant="warning"
+        icon={<Clock className="h-5 w-5" />}
+        title="À ne pas oublier"
         data-testid="daily-todo-error"
-        className={`rounded-xl border border-red-200/70 bg-gradient-to-br from-red-50 to-rose-50/50 p-4 shadow-sm dark:border-red-900/30 dark:from-red-950/40 dark:to-rose-950/20 ${
-          compact ? 'p-3' : 'p-6'
-        }`}
       >
-        <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-      </div>
+        <p className="text-sm text-red-300">{error}</p>
+      </CardSection>
     );
   }
 
