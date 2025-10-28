@@ -1121,7 +1121,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                             </div>
                           </React.Fragment>
                         ))}
-                        <div className="hour-label-final sticky left-0 bg-[#1a2235] flex items-start justify-end pr-2 pt-1 pb-1 mt-1 text-xs text-gray-400 dark:text-slate-300">
+                        <div className={`hour-label-final sticky left-0 ${surface.base} flex items-start justify-end pr-2 pt-1 pb-1 mt-1 text-xs text-gray-400 dark:text-slate-300`}>
                           <span>{finalHourLabel}</span>
                         </div>
                       </div>
