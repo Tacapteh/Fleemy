@@ -4,17 +4,17 @@ import { contextStore } from '../stores/contextStore';
 import { useSettings } from '../context/SettingsContext';
 import useUserWeekSlots from '../hooks/useUserWeekSlots';
 import {
-  Calendar,
-  DollarSign,
-  Clock,
-  Users,
-  FileText,
-  Settings,
-  TrendingUp,
-  CheckCircle2,
-  AlertCircle,
-  HelpCircle,
-} from 'lucide-react';
+  CardSection,
+  SectionHeaderRow,
+  StatusChip,
+  text,
+  surface,
+  radius,
+  WorkIcons,
+  DailyLifeIcons,
+  StatusIcons,
+  WellbeingIcons,
+} from '../ui';
 
 const toDateSafe = (value) => {
   if (!value) {
@@ -616,91 +616,146 @@ export default function Dashboard() {
     >
       <div className="mx-auto max-w-7xl space-y-8">
         {/* En-tête de bienvenue */}
-        <div className="space-y-2">
-          <h1
+        <div className="space-y-3">
+          <SectionHeaderRow
             data-testid="dashboard-welcome-title"
-            className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100 md:text-4xl"
-          >
-            Bienvenue, {user?.displayName || user?.email?.split('@')[0] || 'Utilisateur'} ✨
-          </h1>
-          <p className="text-base text-slate-600 dark:text-slate-400">
+            icon={
+              <WellbeingIcons.Smile
+                aria-hidden="true"
+                className="h-6 w-6 text-slate-200"
+              />
+            }
+            title={`Bienvenue, ${
+              user?.displayName || user?.email?.split('@')[0] || 'Utilisateur'
+            }`}
+            titleClassName="text-2xl md:text-3xl font-semibold"
+          />
+          <p className={`text-sm md:text-base ${text.secondary}`}>
             Voici un aperçu de votre activité {isTeamMode ? 'd\'équipe' : 'personnelle'}
           </p>
           {slotsError && (
-            <p className="text-sm text-red-600 dark:text-red-400">{slotsError}</p>
+            <p className="text-sm text-red-400 dark:text-red-400">{slotsError}</p>
           )}
         </div>
 
         {/* Grille de widgets */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Widget: Cette semaine - Cliquable pour naviguer vers Planning */}
-          <div 
+          <div
             data-testid="dashboard-week-widget"
             onClick={() => navigate(isTeamMode ? `/team/${teamId}` : '/me')}
-            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-blue-200/50 bg-gradient-to-br from-blue-50 to-cyan-50/50 p-6 shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg dark:border-blue-900/30 dark:from-blue-950/40 dark:to-cyan-950/20"
+            className="group cursor-pointer"
           >
-            <div className="flex items-start justify-between">
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-blue-500/10 p-2 dark:bg-blue-500/20">
-                    <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">Cette semaine</h3>
-                </div>
+            <CardSection
+              variant="planning"
+              icon={
+                <WorkIcons.Clock aria-hidden="true" className="h-5 w-5" />
+              }
+              title="Cette semaine"
+              subtitle={isTeamMode ? 'Vue équipe' : 'Vue personnelle'}
+              className="h-full transition-transform group-hover:scale-[1.01]"
+            >
+              <div className="flex items-center justify-between gap-6">
                 <div className="space-y-1">
-                  <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                  <p className={`text-4xl font-semibold leading-tight ${text.primary}`}>
                     {weeklyHoursDisplay}h
                   </p>
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                  <p className={`text-sm ${text.secondary}`}>
                     {weeklyEarningsDisplay} estimés
                   </p>
                 </div>
+                <WorkIcons.TrendingUp
+                  aria-hidden="true"
+                  className="h-10 w-10 text-blue-400/40"
+                />
               </div>
-              <TrendingUp className="h-8 w-8 text-blue-400/20 transition-transform group-hover:scale-110 dark:text-blue-600/20" />
-            </div>
+            </CardSection>
           </div>
 
           {/* Widget: Paiements - Consolidé et Cliquable */}
-          <div 
+          <div
             data-testid="dashboard-payments-widget"
             onClick={() => navigate('/invoices')}
-            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-green-200/50 bg-gradient-to-br from-green-50 to-emerald-50/50 p-6 shadow-sm transition-all hover:scale-[1.02] hover:shadow-lg dark:border-green-900/30 dark:from-green-950/40 dark:to-emerald-950/20"
+            className="group cursor-pointer"
           >
-            <div className="flex items-start justify-between">
-              <div className="w-full space-y-4">
-                <div className="flex items-center gap-2">
-                  <div className="rounded-lg bg-green-500/10 p-2 dark:bg-green-500/20">
-                    <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <h3 className="text-sm font-semibold text-green-900 dark:text-green-200">Paiements</h3>
-                </div>
-                
-                {/* Montant principal - Payé */}
+            <CardSection
+              variant="money"
+              icon={
+                <DailyLifeIcons.DollarSign
+                  aria-hidden="true"
+                  className="h-5 w-5"
+                />
+              }
+              title="Paiements"
+              subtitle="Suivi des règlements"
+              className="h-full transition-transform group-hover:scale-[1.01]"
+            >
+              <div className="space-y-5">
                 <div className="text-center">
-                  <p className="text-4xl font-bold text-green-900 dark:text-green-100">
+                  <p className={`text-4xl font-semibold ${text.primary}`}>
                     {paymentsDisplay.confirmed}
                   </p>
-                  <p className="text-sm text-green-700 dark:text-green-300">Revenus confirmés</p>
+                  <p className={`text-sm ${text.secondary}`}>Revenus confirmés</p>
                 </div>
 
-                {/* Montants secondaires */}
-                <div className="flex items-center justify-between gap-4 border-t border-green-200/50 pt-3 dark:border-green-800/30">
-                  <div className="flex-1 text-center">
-                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">
+                <div className="space-y-3">
+                  <div
+                    className={`${radius.card} ${surface.base} ${surface.border} flex items-center justify-between gap-3 px-3 py-2`}
+                  >
+                    <StatusChip
+                      statusKey="done"
+                      label="Payé"
+                      srLabel="Paiements confirmés"
+                      icon={
+                        <StatusIcons.CheckCircle
+                          aria-hidden="true"
+                          className="h-3 w-3"
+                        />
+                      }
+                    />
+                    <p className={`text-lg font-semibold ${text.primary}`}>
+                      {paymentsDisplay.confirmed}
+                    </p>
+                  </div>
+                  <div
+                    className={`${radius.card} ${surface.base} ${surface.border} flex items-center justify-between gap-3 px-3 py-2`}
+                  >
+                    <StatusChip
+                      statusKey="doing"
+                      label="En attente"
+                      srLabel="Paiements en attente"
+                      icon={
+                        <StatusIcons.Loader
+                          aria-hidden="true"
+                          className="h-3 w-3"
+                        />
+                      }
+                    />
+                    <p className={`text-lg font-semibold ${text.primary}`}>
                       {paymentsDisplay.pending}
                     </p>
-                    <p className="text-xs text-amber-600 dark:text-amber-500">En attente</p>
                   </div>
-                  <div className="h-8 w-px bg-green-200 dark:bg-green-800" />
-                  <div className="flex-1 text-center">
-                    <p className="text-lg font-semibold text-red-700 dark:text-red-400">
+                  <div
+                    className={`${radius.card} ${surface.base} ${surface.border} flex items-center justify-between gap-3 px-3 py-2`}
+                  >
+                    <StatusChip
+                      statusKey="todo"
+                      label="À facturer"
+                      srLabel="Montants à facturer"
+                      icon={
+                        <DailyLifeIcons.CreditCard
+                          aria-hidden="true"
+                          className="h-3 w-3"
+                        />
+                      }
+                    />
+                    <p className={`text-lg font-semibold ${text.primary}`}>
                       {paymentsDisplay.toInvoice}
                     </p>
-                    <p className="text-xs text-red-600 dark:text-red-500">À facturer</p>
                   </div>
                 </div>
               </div>
-            </div>
+            </CardSection>
           </div>
 
           {/* Widget: Prochains créneaux */}
@@ -711,45 +766,65 @@ export default function Dashboard() {
             aria-label="Ouvrir la vue mensuelle du planning"
             onClick={handleUpcomingWidgetClick}
             onKeyDown={handleUpcomingWidgetKeyDown}
-            className="group relative cursor-pointer overflow-hidden rounded-2xl border border-purple-200/50 bg-gradient-to-br from-purple-50 to-violet-50/50 p-6 shadow-sm transition-all hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-purple-900/30 dark:from-purple-950/40 dark:to-violet-950/20 md:col-span-2"
+            className="group cursor-pointer md:col-span-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 rounded-xl"
           >
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-purple-500/10 p-2 dark:bg-purple-500/20">
-                  <Calendar className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-200">
-                  Prochains créneaux
-                </h3>
-              </div>
+            <CardSection
+              variant="planning"
+              icon={
+                <WorkIcons.Calendar aria-hidden="true" className="h-5 w-5" />
+              }
+              title="Prochains créneaux"
+              subtitle={
+                upcomingWithDetails.length === 0
+                  ? 'Aucun créneau imminent'
+                  : 'Vos rendez-vous à venir'
+              }
+              className="h-full transition-transform group-hover:scale-[1.01]"
+            >
               <div className="space-y-3">
                 {upcomingWithDetails.length === 0 ? (
-                  <p className="py-4 text-center text-sm text-purple-600 dark:text-purple-400">
-                    Rien de prévu bientôt ✌
-                  </p>
+                  <div
+                    className={`${radius.card} ${surface.base} ${surface.border} flex flex-col items-center gap-2 px-4 py-6 text-center`}
+                  >
+                    <StatusIcons.Info
+                      aria-hidden="true"
+                      className="h-5 w-5 text-blue-300"
+                    />
+                    <p className={`text-sm ${text.secondary}`}>
+                      Aucun créneau prévu pour le moment
+                    </p>
+                  </div>
                 ) : (
                   upcomingWithDetails.map((slot, idx) => (
                     <div
                       key={slot.id || idx}
                       data-testid={`upcoming-event-${idx}`}
-                      className="flex items-center justify-between rounded-lg border border-purple-200/50 bg-white/50 p-3 transition-colors hover:bg-white/80 dark:border-purple-800/30 dark:bg-purple-950/20 dark:hover:bg-purple-950/30"
+                      className={`${radius.card} ${surface.base} ${surface.border} flex items-center justify-between gap-3 px-4 py-3 transition-colors`}
                     >
                       <div className="flex-1">
-                        <p className="font-medium text-purple-900 dark:text-purple-100">
+                        <p className={`font-medium ${text.primary}`}>
                           {slot.label}
                         </p>
-                        <p className="text-xs text-purple-600 dark:text-purple-400">
+                        <p className={`text-xs ${text.secondary}`}>
                           {slot.detail}
                         </p>
                       </div>
-                      <span className="rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                        Créneau
-                      </span>
+                      <StatusChip
+                        statusKey="doing"
+                        label="Planifié"
+                        srLabel="Créneau planifié"
+                        icon={
+                          <WorkIcons.Clock
+                            aria-hidden="true"
+                            className="h-3 w-3"
+                          />
+                        }
+                      />
                     </div>
                   ))
                 )}
               </div>
-            </div>
+            </CardSection>
           </div>
 
         </div>
