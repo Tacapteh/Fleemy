@@ -8,6 +8,10 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -87,6 +91,74 @@ export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
+const PERSISTENCE_FALLBACK_ERROR_CODES = new Set([
+  "auth/invalid-persistence-type",
+  "auth/unsupported-persistence-type",
+  "auth/web-storage-unsupported",
+]);
+
+const AUTH_PERSISTENCE_STRATEGIES = [
+  { key: "local", persistence: browserLocalPersistence },
+  { key: "session", persistence: browserSessionPersistence },
+  { key: "memory", persistence: inMemoryPersistence },
+];
+
+let persistenceInitializationPromise = null;
+
+const ensureAuthPersistence = () => {
+  if (persistenceInitializationPromise) {
+    return persistenceInitializationPromise;
+  }
+
+  if (typeof window === "undefined") {
+    persistenceInitializationPromise = Promise.resolve(null);
+    return persistenceInitializationPromise;
+  }
+
+  persistenceInitializationPromise = (async () => {
+    for (const strategy of AUTH_PERSISTENCE_STRATEGIES) {
+      try {
+        await setPersistence(auth, strategy.persistence);
+        if (strategy.key !== "memory") {
+          console.info(`Firebase auth persistence set to ${strategy.key}`);
+        } else {
+          console.info(
+            "Firebase auth using in-memory persistence fallback",
+          );
+        }
+        return strategy.key;
+      } catch (error) {
+        if (error && PERSISTENCE_FALLBACK_ERROR_CODES.has(error.code)) {
+          console.warn(
+            `Unable to use Firebase auth ${strategy.key} persistence, trying next option`,
+            error,
+          );
+          continue;
+        }
+
+        console.error("Failed to configure Firebase auth persistence", error);
+        throw error;
+      }
+    }
+
+    console.warn(
+      "All Firebase auth persistence strategies failed, continuing without persistence",
+    );
+    return null;
+  })().catch((error) => {
+    persistenceInitializationPromise = null;
+    throw error;
+  });
+
+  return persistenceInitializationPromise;
+};
+
+if (typeof window !== "undefined") {
+  ensureAuthPersistence().catch((error) => {
+    console.error("Firebase auth persistence bootstrap failed", error);
+  });
+}
+
 const REDIRECT_IN_PROGRESS_ERROR_CODE = "auth/redirect-in-progress";
 
 const POPUP_FALLBACK_ERROR_CODES = new Set([
@@ -140,6 +212,7 @@ const buildSignInResult = ({ user = null, status, error = null }) => ({
 
 export const signInWithGoogle = async () => {
   try {
+    await ensureAuthPersistence();
     const popupResult = await signInWithPopup(auth, googleProvider);
     return buildSignInResult({
       user: popupResult?.user || null,
