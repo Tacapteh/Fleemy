@@ -132,13 +132,10 @@ export const WorkIcons = {
 };
 
 export const MaintenanceIcons = {
-  Broom,
   Leaf,
-  TreePine,
   Droplets,
   Sun,
   Hammer,
-  Paintbrush,
   Home,
   Building,
   Zap,
