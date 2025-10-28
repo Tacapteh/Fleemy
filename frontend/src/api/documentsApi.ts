@@ -120,6 +120,13 @@ async function performAuthorizedRequest<T>(config: RequestConfig): Promise<T> {
             statusText: response.statusText,
             data: errorBody,
           };
+          if (
+            (response.status === 404 || response.status === 405) &&
+            baseUrls.length > 1
+          ) {
+            lastNetworkErrorForBase = error as Error;
+            break;
+          }
           throw error;
         }
 
