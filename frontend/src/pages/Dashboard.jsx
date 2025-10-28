@@ -592,7 +592,7 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 p-4 md:p-8 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
         <div className="mx-auto max-w-7xl space-y-6">
           {/* Header Skeleton */}
-          <div className="h-12 w-64 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+          <div className={`h-12 w-64 animate-pulse ${radius.card} bg-slate-200 dark:bg-slate-800`} />
           
           {/* Widgets Grid Skeleton */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -600,7 +600,7 @@ export default function Dashboard() {
               <div 
                 key={i} 
                 data-testid={`dashboard-skeleton-${i}`}
-                className="h-40 animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-800" 
+                className={`h-40 animate-pulse ${radius.card} bg-slate-200 dark:bg-slate-800`}
               />
             ))}
           </div>
