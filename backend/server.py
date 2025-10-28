@@ -53,13 +53,13 @@ try:
             db = firestore.client()
         else:
             # Use in-memory database for testing
-            from firebase import InMemoryFirestore
+            from .firebase import InMemoryFirestore
             db = InMemoryFirestore()
             logger.info("Using in-memory Firestore for testing")
 except Exception as e:
     logger.error(f"Firebase initialization failed: {e}")
     # Fallback to in-memory database
-    from firebase import InMemoryFirestore
+    from .firebase import InMemoryFirestore
     db = InMemoryFirestore()
     logger.info("Using in-memory Firestore fallback")
 

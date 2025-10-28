@@ -31,6 +31,16 @@ def _sender_address() -> str:
     )
 
 
+def _env_first(*names: str) -> Optional[str]:
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            stripped = value.strip()
+            if stripped:
+                return stripped
+    return None
+
+
 def _parse_datetime(value: Any) -> Optional[datetime]:
     if isinstance(value, datetime):
         return value
@@ -120,6 +130,63 @@ def build_document_email(
     return message
 
 
+def _resolve_smtp_host() -> str:
+    host = _env_first(
+        "SMTP_HOST",
+        "SMTP_SERVER",
+        "MAIL_HOST",
+        "MAIL_SERVER",
+        "EMAIL_HOST",
+        "MAILGUN_SMTP_SERVER",
+        "SENDGRID_SMTP_HOST",
+    )
+    if host:
+        return host
+    raise RuntimeError(
+        "SMTP_HOST n'est pas configuré. Définissez SMTP_HOST pour activer l'envoi d'e-mails."
+    )
+
+
+def _resolve_smtp_port(default_port: int) -> int:
+    port_value = _env_first(
+        "SMTP_PORT",
+        "MAIL_PORT",
+        "EMAIL_PORT",
+        "MAIL_SERVER_PORT",
+        "MAILGUN_SMTP_PORT",
+        "SENDGRID_SMTP_PORT",
+    )
+    if not port_value:
+        return default_port
+    try:
+        return int(port_value)
+    except ValueError:
+        logger.warning("Invalid SMTP port '%s', falling back to %s", port_value, default_port)
+        return default_port
+
+
+def _resolve_smtp_credentials() -> Dict[str, Optional[str]]:
+    username = _env_first(
+        "SMTP_USERNAME",
+        "SMTP_USER",
+        "MAIL_USERNAME",
+        "MAIL_USER",
+        "EMAIL_USERNAME",
+        "MAILGUN_SMTP_LOGIN",
+        "SENDGRID_USERNAME",
+    )
+    password = _env_first(
+        "SMTP_PASSWORD",
+        "SMTP_PASS",
+        "MAIL_PASSWORD",
+        "MAIL_PASS",
+        "EMAIL_PASSWORD",
+        "MAILGUN_SMTP_PASSWORD",
+        "SENDGRID_PASSWORD",
+    )
+    return {"username": username, "password": password}
+
+
 def send_document_email(
     *,
     document: Dict[str, Any],
@@ -128,20 +195,15 @@ def send_document_email(
     document_id: str,
     pdf_bytes: bytes,
 ) -> None:
-    host = os.getenv("SMTP_HOST")
-    if not host:
-        raise RuntimeError(
-            "SMTP_HOST n'est pas configuré. Définissez SMTP_HOST pour activer l'envoi d'e-mails."
-        )
+    host = _resolve_smtp_host()
 
     use_ssl = _bool_env("SMTP_USE_SSL", False)
     use_tls = _bool_env("SMTP_USE_TLS", not use_ssl)
     default_port = 465 if use_ssl else 587 if use_tls else 25
-    port = int(os.getenv("SMTP_PORT", str(default_port)))
+    port = _resolve_smtp_port(default_port)
 
     timeout = float(os.getenv("SMTP_TIMEOUT", "10"))
-    username = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS")
+    creds = _resolve_smtp_credentials()
 
     message = build_document_email(document, document_type, recipient, document_id)
     message.add_attachment(
@@ -155,10 +217,12 @@ def send_document_email(
 
     try:
         with smtp_class(host, port, timeout=timeout) as smtp:
+            smtp.ehlo()
             if use_tls and not use_ssl:
                 smtp.starttls()
-            if username and password:
-                smtp.login(username, password)
+                smtp.ehlo()
+            if creds["username"] and creds["password"]:
+                smtp.login(creds["username"], creds["password"])
             smtp.send_message(message)
     except Exception as exc:  # pragma: no cover - safety net
         logger.error("Failed to send %s %s by email: %s", document_type, document_id, exc)
