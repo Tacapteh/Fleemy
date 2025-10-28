@@ -6,7 +6,6 @@ import { getTaskColor } from '../constants/colors';
 import { getIcon } from '../icons/registry';
 import { useSettings } from '../context/SettingsContext';
 import PriorityNumberBadge from './PriorityNumberBadge';
-import { TaskTodoIcon, TaskDoingIcon, TaskDoneIcon } from './icons/TaskStatusIcons';
 import { getPriorityDisplay } from '../utils/priorityDisplay';
 import {
   selectDisplayModel,
@@ -17,6 +16,12 @@ import {
   AttachedTaskBadge,
 } from '../selectors/planningSelectors';
 import EventCard from './EventCard';
+import {
+  TASK_STATUS_DISPLAY,
+  TASK_STATUS_INDICATOR_STYLES,
+  resolveEffectiveTaskStatus,
+  type TaskStatusKey,
+} from '../constants/taskStatusDisplay';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const SLOT_HEIGHT = 64;
@@ -84,43 +89,6 @@ const resolveDayEventConflicts = (eventsForDay: DisplayEvent[]): DisplayEvent[] 
   });
 
   return resolved.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-};
-
-type StatusKey = 'todo' | 'doing' | 'done';
-
-interface StatusDisplayConfig {
-  label: string;
-  srLabel: string;
-  iconComponent: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  iconClass: string;
-  chipClass: string;
-}
-
-const TASK_STATUS_DISPLAY: Record<StatusKey, StatusDisplayConfig> = {
-  todo: {
-    label: 'À faire',
-    srLabel: 'Tâche à faire',
-    iconComponent: TaskTodoIcon,
-    iconClass: 'text-slate-400 dark:text-slate-300',
-    chipClass:
-      'bg-slate-500/10 text-slate-300 border border-slate-500/30 dark:bg-slate-500/20 dark:text-slate-200 dark:border-slate-500/40',
-  },
-  doing: {
-    label: 'En cours',
-    srLabel: 'Tâche en cours',
-    iconComponent: TaskDoingIcon,
-    iconClass: 'text-amber-300',
-    chipClass:
-      'bg-amber-500/10 text-amber-300 border border-amber-500/30 dark:bg-amber-500/20 dark:text-amber-200 dark:border-amber-500/40',
-  },
-  done: {
-    label: 'Terminé',
-    srLabel: 'Tâche terminée',
-    iconComponent: TaskDoneIcon,
-    iconClass: 'text-emerald-400',
-    chipClass:
-      'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40',
-  },
 };
 
 interface PlannerGridProps {
@@ -924,6 +892,21 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                   const priorityDisplay = showPriorityBadges
                                     ? getPriorityDisplay(badge.priority)
                                     : null;
+                                  const statusKey: TaskStatusKey = resolveEffectiveTaskStatus(
+                                    badge.status,
+                                    badge.done,
+                                  );
+                                  const statusDisplay = TASK_STATUS_DISPLAY[statusKey];
+                                  const statusIndicatorStyle = TASK_STATUS_INDICATOR_STYLES[statusKey];
+
+                                  const badgeAriaLabelParts: string[] = [badge.label];
+                                  if (statusDisplay) {
+                                    badgeAriaLabelParts.push(statusDisplay.label);
+                                  }
+                                  if (priorityDisplay) {
+                                    badgeAriaLabelParts.push(priorityDisplay.ariaLabel);
+                                  }
+                                  const badgeAriaLabel = badgeAriaLabelParts.join(' — ');
 
                                   return (
                                     <span
@@ -934,8 +917,19 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                         color: badgeColors.color,
                                         borderColor: badgeColors.borderColor,
                                       }}
+                                      aria-label={badgeAriaLabel}
                                     >
                                       <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
+                                      <span className="sr-only">{statusDisplay?.srLabel}</span>
+                                      <span
+                                        aria-hidden="true"
+                                        className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-full border"
+                                        style={{
+                                          backgroundColor: statusIndicatorStyle.backgroundColor,
+                                          borderColor: statusIndicatorStyle.borderColor,
+                                          boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.35)',
+                                        }}
+                                      />
                                       {priorityDisplay ? (
                                         <span
                                           className={`pointer-events-none absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70 ${priorityDisplay.bgClass}`}
@@ -981,12 +975,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               ? task.status.trim().toLowerCase()
                               : slotStatusRaw;
                           const slotDone = slot.done === true;
-                          let statusKey: StatusKey = 'todo';
-                          if (rawStatus === 'todo' || rawStatus === 'doing' || rawStatus === 'done') {
-                            statusKey = rawStatus;
-                          } else if (task.done === true || slotDone) {
-                            statusKey = 'done';
-                          }
+                          const statusKey: TaskStatusKey = resolveEffectiveTaskStatus(
+                            rawStatus,
+                            task.done === true || slotDone,
+                          );
                           const statusDisplay =
                             showStatusBadges && !isAbsenceTask ? TASK_STATUS_DISPLAY[statusKey] : null;
                           const StatusIcon = statusDisplay?.iconComponent;

@@ -144,6 +144,8 @@ export interface AttachedTaskBadge {
   price?: number;
   color?: string;
   priority?: 'high' | 'medium' | 'low';
+  status?: 'todo' | 'doing' | 'done';
+  done?: boolean;
 }
 
 export interface DisplayEvent extends PlannerEventInput {
@@ -631,6 +633,11 @@ export const computeDisplayBlocks = (
         price,
         color: typeof occurrence.color === 'string' ? occurrence.color : undefined,
         priority: normalizeTaskPriority(occurrence.priority),
+        status:
+          occurrence.status === 'todo' || occurrence.status === 'doing' || occurrence.status === 'done'
+            ? occurrence.status
+            : undefined,
+        done: occurrence.done === true,
       });
     });
 
