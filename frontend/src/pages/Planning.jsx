@@ -1488,21 +1488,26 @@ export default function Planning() {
             </p>
           )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {summaryCards.map((card) => (
-              <div
-                key={card.key}
-                className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition-colors ${card.border} ${card.background}`}
-              >
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                  {card.label}
-                </p>
-                <p className={`mt-1 text-lg font-semibold ${card.accent}`}>
-                  {currencyFormatter.format(card.amount)}
-                </p>
-              </div>
-            ))}
+            <StatusSummaryCard
+              variant="success"
+              label="Payé"
+              amount={currencyFormatter.format(recapTotals.totalPaye)}
+              data-testid="planning-recap-paid"
+            />
+            <StatusSummaryCard
+              variant="warning"
+              label="En attente"
+              amount={currencyFormatter.format(recapTotals.totalEnAttente)}
+              data-testid="planning-recap-pending"
+            />
+            <StatusSummaryCard
+              variant="danger"
+              label="Non payé"
+              amount={currencyFormatter.format(recapTotals.totalNonPaye)}
+              data-testid="planning-recap-unpaid"
+            />
             <div
-              className={`rounded-lg border px-4 py-3 text-sm shadow-sm transition-colors ${
+              className={`rounded-xl border px-4 py-3 text-sm shadow-sm transition-colors ${
                 tasksSummary.items.length > 0
                   ? 'border-sky-200/70 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10'
                   : 'border-slate-200/70 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
