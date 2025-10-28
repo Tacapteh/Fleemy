@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import ClientCard from '../components/clients/ClientCard';
 import ClientForm from '../components/clients/ClientForm';
 import useClients from '../hooks/useClients';
+import { SectionHeaderRow, Users as UsersIcon } from '../ui';
 import { showToast } from '../utils/toast';
 
 export default function Clients() {
