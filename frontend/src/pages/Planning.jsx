@@ -24,7 +24,7 @@ import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
 import { readTeamsCache } from '../utils/teamCache';
-import { SectionHeaderRow, Calendar } from '../ui';
+import { SectionHeaderRow, Calendar, StatusSummaryCard } from '../ui';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const DEFAULT_START = '09:00';
