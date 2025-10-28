@@ -876,7 +876,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                           <div
                             key={`${slot.key}-event`}
                             onClick={() => onEventClick?.(event)}
-                            className={`${bgColorClass} ${borderColorClass} relative border rounded p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
+                            className={`${bgColorClass} ${borderColorClass} relative border ${radius.button} p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
                           >
                             <div className="font-medium text-gray-900 dark:text-white">
                               {startTime} - {endTime}
