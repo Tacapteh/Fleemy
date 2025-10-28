@@ -260,26 +260,13 @@ export default function DailyTodoPanel({
   }
 
   return (
-    <div
+    <CardSection
+      variant="note"
+      icon={<Clock className="h-5 w-5" />}
+      title="À ne pas oublier"
+      subtitle={effectiveReadOnly ? 'Lecture seule' : undefined}
       data-testid="daily-todo-panel"
-      className={`rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50 to-yellow-50/50 shadow-sm transition-colors dark:border-amber-900/30 dark:from-amber-950/40 dark:to-yellow-950/20 ${
-        compact ? 'p-3' : 'p-6'
-      }`}
     >
-      <div className="mb-4 flex items-center gap-2">
-        <div className="rounded-lg bg-amber-500/10 p-2 dark:bg-amber-500/20">
-          <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-        </div>
-        <h3 className="text-base font-semibold text-amber-900 dark:text-amber-200">
-          À ne pas oublier
-        </h3>
-        {effectiveReadOnly && (
-          <span className="ml-auto inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-            Lecture seule
-          </span>
-        )}
-      </div>
-
       {/* Add new item form */}
       {!effectiveReadOnly && (
         <form onSubmit={handleAdd} className="mb-4 space-y-2">
@@ -289,7 +276,7 @@ export default function DailyTodoPanel({
             onChange={(e) => setNewText(e.target.value)}
             placeholder="Nouvelle note..."
             data-testid="todo-input-text"
-            className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-amber-800 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
+            className="w-full rounded-md border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
           />
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex-1 min-w-[140px] sm:flex-none">
@@ -302,12 +289,12 @@ export default function DailyTodoPanel({
                 onChange={(event) =>
                   setNewPriority(event.target.value as 'high' | 'medium' | 'low')
                 }
-                className="w-full rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-amber-800 dark:bg-slate-800 dark:text-slate-100"
+                className="w-full rounded-md border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-100 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
                 aria-label="Priorité"
               >
-                <option value="high">Importante 🔥</option>
-                <option value="medium">Moyenne 🙂</option>
-                <option value="low">Faible 💤</option>
+                <option value="high">Importante</option>
+                <option value="medium">Moyenne</option>
+                <option value="low">Faible</option>
               </select>
             </div>
             <input
@@ -315,14 +302,14 @@ export default function DailyTodoPanel({
               value={newTime}
               onChange={(e) => setNewTime(e.target.value)}
               data-testid="todo-input-time"
-              className="rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:border-amber-800 dark:bg-slate-800 dark:text-slate-100"
+              className="rounded-md border border-slate-600/50 bg-slate-800/50 px-3 py-2 text-sm text-slate-100 shadow-sm transition-colors focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50"
               aria-label="Heure limite (optionnel)"
             />
             <button
               type="submit"
               disabled={!newText.trim()}
               data-testid="todo-add-button"
-              className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed disabled:bg-amber-300 dark:bg-amber-600 dark:hover:bg-amber-500 dark:disabled:bg-amber-900"
+              className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed disabled:bg-amber-900/40 disabled:text-slate-500"
               aria-label="Ajouter une note"
             >
               <Plus className="h-4 w-4" />
@@ -335,8 +322,8 @@ export default function DailyTodoPanel({
       {/* Items list */}
       <div className="space-y-2">
         {sortedItems.length === 0 ? (
-          <p className="py-4 text-center text-sm text-amber-600 dark:text-amber-400">
-            Rien à noter pour le moment 👍
+          <p className="py-4 text-center text-sm text-slate-400">
+            Rien à noter pour le moment
           </p>
         ) : (
           sortedItems.map((item) => {
@@ -353,10 +340,10 @@ export default function DailyTodoPanel({
               <div
                 key={item.id}
                 data-testid={`todo-item-${item.id}`}
-                className={`flex items-center gap-3 rounded-lg border bg-white/70 p-3 shadow-sm transition-colors dark:bg-amber-950/20 ${
+                className={`flex items-center gap-3 rounded-lg border bg-slate-800/40 p-3 shadow-sm transition-colors ${
                   item.done
-                    ? 'border-amber-200/30 opacity-60 dark:border-amber-800/20'
-                    : 'border-amber-200/50 dark:border-amber-800/30'
+                    ? 'border-slate-700/30 opacity-60'
+                    : 'border-slate-700/50'
                 }`}
               >
                 <div className="flex-1 min-w-0">
@@ -367,7 +354,7 @@ export default function DailyTodoPanel({
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
                       data-testid={`todo-edit-text-${item.id}`}
-                      className="w-full rounded border border-amber-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-amber-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="w-full rounded border border-slate-600 bg-slate-800/50 px-2 py-1 text-sm text-slate-100"
                       autoFocus
                     />
                     <div className="flex gap-2">
@@ -376,7 +363,7 @@ export default function DailyTodoPanel({
                         value={editTime}
                         onChange={(e) => setEditTime(e.target.value)}
                         data-testid={`todo-edit-time-${item.id}`}
-                        className="rounded border border-amber-300 bg-white px-2 py-1 text-sm text-slate-900 dark:border-amber-700 dark:bg-slate-800 dark:text-slate-100"
+                        className="rounded border border-slate-600 bg-slate-800/50 px-2 py-1 text-sm text-slate-100"
                       />
                       <button
                         type="button"
@@ -388,7 +375,7 @@ export default function DailyTodoPanel({
                       <button
                         type="button"
                         onClick={cancelEdit}
-                        className="rounded bg-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-400 dark:bg-slate-700 dark:text-slate-300"
+                        className="rounded bg-slate-600 px-3 py-1 text-xs text-slate-200 hover:bg-slate-500"
                       >
                         Annuler
                       </button>
@@ -401,7 +388,7 @@ export default function DailyTodoPanel({
                         type="button"
                         onClick={() => toggleTaskDone(item.id, statusKey)}
                         disabled={effectiveReadOnly}
-                        className="inline-flex items-center gap-1 rounded-md bg-transparent p-0 text-xs font-medium text-slate-500 transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center gap-1 rounded-md bg-transparent p-0 text-xs font-medium transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
                         aria-label={
                           statusKey === 'done'
                             ? 'Marquer la tâche comme à faire'
@@ -410,17 +397,12 @@ export default function DailyTodoPanel({
                         aria-pressed={statusKey === 'done'}
                         data-testid={`todo-status-toggle-${item.id}`}
                       >
-                        <StatusIcon
-                          className={`h-4 w-4 ${statusDisplay.iconClass}`}
-                          aria-hidden="true"
+                        <StatusChip
+                          statusKey={statusKey}
+                          label={statusDisplay.label}
+                          srLabel={statusDisplay.srLabel}
+                          icon={<StatusIcon className="h-3 w-3" />}
                         />
-                        <span
-                          className={`ml-1 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium leading-none ${statusDisplay.chipClass}`}
-                          aria-hidden="true"
-                        >
-                          {statusDisplay.label}
-                        </span>
-                        <span className="sr-only">{statusDisplay.srLabel}</span>
                       </button>
                     )}
                     <button
@@ -431,15 +413,16 @@ export default function DailyTodoPanel({
                     >
                       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                         {item.time && (
-                          <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 border border-amber-500/30">
+                            <Clock className="h-3 w-3" />
                             {item.time}
                           </span>
                         )}
                         <span
                           className={`min-w-0 text-sm ${
                             item.done
-                              ? 'flex-1 text-slate-300 line-through opacity-60 dark:text-slate-400'
-                              : 'flex-1 text-slate-900 dark:text-slate-100'
+                              ? 'flex-1 text-slate-400 line-through opacity-60'
+                              : 'flex-1 text-slate-100'
                           }`}
                         >
                           {item.text}
@@ -461,7 +444,7 @@ export default function DailyTodoPanel({
                   type="button"
                   onClick={() => handleDelete(item.id)}
                   data-testid={`todo-delete-${item.id}`}
-                  className="mt-1 rounded p-1 text-red-500 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-400 dark:hover:bg-red-950/30"
+                  className="mt-1 rounded p-1 text-red-400 transition-colors hover:bg-red-500/10 focus:outline-none focus:ring-2 focus:ring-red-500"
                   aria-label={`Supprimer "${item.text}"`}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -472,6 +455,6 @@ export default function DailyTodoPanel({
           })
         )}
       </div>
-    </div>
+    </CardSection>
   );
 }
