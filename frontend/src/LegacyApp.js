@@ -3,7 +3,6 @@ import useTeam from "./hooks/useTeam";
 import "./App.css";
 import { apiFetch } from "./lib/api";
 import { showToast } from "./utils/toast";
-import { generateQuotePDF, generateInvoicePDF } from "./utils/pdf";
 import WeekNavigationHeader from "./components/WeekNavigationHeader";
 import Combobox from "./components/Combobox";
 import useClients from "./hooks/useClients";
@@ -5168,7 +5167,12 @@ const getInitialQuotesState = () => {
   }
   return { quotes: [], clients: [], loading: true };
 };
-const Quotes = ({ user, clientId, onRegisterCreateHandler }) => {
+const Quotes = ({
+  user,
+  clientId,
+  onRegisterCreateHandler,
+  renderDocumentActions,
+}) => {
   const initialQuotesState = useMemo(() => getInitialQuotesState(), []);
   const [quotes, setQuotes] = useState(() => initialQuotesState.quotes);
   const [clients, setClients] = useState(() => initialQuotesState.clients);
@@ -5177,6 +5181,16 @@ const Quotes = ({ user, clientId, onRegisterCreateHandler }) => {
   const [editingQuote, setEditingQuote] = useState(null);
   const [quoteTemplates, setQuoteTemplates] = useState([]);
   const [pendingClientId, setPendingClientId] = useState('');
+
+  const clientEmailMap = useMemo(() => {
+    const map = new Map();
+    clients.forEach((client) => {
+      if (client?.id != null) {
+        map.set(String(client.id), client);
+      }
+    });
+    return map;
+  }, [clients]);
 
   const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
@@ -5537,103 +5551,115 @@ const Quotes = ({ user, clientId, onRegisterCreateHandler }) => {
           </div>
         ) : (
           <div className="divide-y divide-gray-200 dark:divide-slate-700">
-            {quotes.map((quote) => (
-              <div
-                key={quote.id}
-                className="p-6 transition-all hover:bg-gray-50 dark:hover:bg-slate-700/60"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="font-semibold text-gray-800 dark:text-slate-100">
-                        {quote.quote_number}
-                      </h3>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          quote.status,
-                        )}`}
-                      >
-                        {getStatusText(quote.status)}
-                      </span>
-                    </div>
-                    <p className="text-gray-900 font-medium dark:text-slate-100">{quote.title}</p>
-                    <p className="text-gray-600 text-sm dark:text-slate-400">
-                      Client: {quote?.client_name ?? ""}
-                    </p>
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500 dark:text-slate-400">
-                      <span>💰 {formatCurrency(quote.total)}</span>
-                      <span>📅 {formatDate(quote.created_at)}</span>
-                      <span>
-                        ⏰ Valide jusqu'au {formatDate(quote.valid_until)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleEditQuote(quote)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                      title="Modifier"
-                    >
-                      ✏️
-                    </button>
-                    {quote.status === "sent" && (
-                      <>
-                        <button
-                          onClick={() =>
-                            updateQuoteStatus(quote.id, "accepted")
-                          }
-                          className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                          title="Marquer comme accepté"
+            {quotes.map((quote) => {
+              const normalizedClientId =
+                quote?.client_id != null ? String(quote.client_id) : '';
+              const clientEntry =
+                normalizedClientId && clientEmailMap.has(normalizedClientId)
+                  ? clientEmailMap.get(normalizedClientId)
+                  : null;
+              const defaultEmail = clientEntry?.email || '';
+              const customActions =
+                typeof renderDocumentActions === 'function'
+                  ? renderDocumentActions({
+                      document: quote,
+                      defaultEmail,
+                      client: clientEntry,
+                    })
+                  : null;
+
+              return (
+                <div
+                  key={quote.id}
+                  className="p-6 transition-all hover:bg-gray-50 dark:hover:bg-slate-700/60"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center space-x-3">
+                        <h3 className="font-semibold text-gray-800 dark:text-slate-100">
+                          {quote.quote_number}
+                        </h3>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                            quote.status,
+                          )}`}
                         >
-                          ✅
-                        </button>
+                          {getStatusText(quote.status)}
+                        </span>
+                      </div>
+                      <p className="text-gray-900 font-medium dark:text-slate-100">{quote.title}</p>
+                      <p className="text-gray-600 text-sm dark:text-slate-400">
+                        Client: {quote?.client_name ?? ''}
+                      </p>
+                      <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500 dark:text-slate-400">
+                        <span>💰 {formatCurrency(quote.total)}</span>
+                        <span>📅 {formatDate(quote.created_at)}</span>
+                        <span>⏰ Valide jusqu'au {formatDate(quote.valid_until)}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-3">
+                      {customActions && (
+                        <div className="flex items-center justify-end">{customActions}</div>
+                      )}
+                      <div className="flex items-center space-x-2">
                         <button
-                          onClick={() =>
-                            updateQuoteStatus(quote.id, "rejected")
-                          }
+                          onClick={() => handleEditQuote(quote)}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                          title="Modifier"
+                        >
+                          ✏️
+                        </button>
+                        {quote.status === 'sent' && (
+                          <>
+                            <button
+                              onClick={() => updateQuoteStatus(quote.id, 'accepted')}
+                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                              title="Marquer comme accepté"
+                            >
+                              ✅
+                            </button>
+                            <button
+                              onClick={() => updateQuoteStatus(quote.id, 'rejected')}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                              title="Marquer comme refusé"
+                            >
+                              ❌
+                            </button>
+                          </>
+                        )}
+                        {quote.status === 'accepted' && (
+                          <button
+                            onClick={() => convertToInvoice(quote)}
+                            className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                            title="Convertir en facture"
+                          >
+                            🧾
+                          </button>
+                        )}
+                        {(quote.status === 'draft' || quote.status === 'sent') && (
+                          <button
+                            onClick={() => updateQuoteStatus(quote.id, 'sent')}
+                            className="btn btn-outline btn-sm"
+                            disabled={quote.status === 'sent'}
+                          >
+                            {quote.status === 'sent' ? 'Envoyé' : 'Envoyer'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteQuote(quote.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                          title="Marquer comme refusé"
+                          title="Supprimer"
                         >
-                          ❌
+                          🗑️
                         </button>
-                      </>
-                    )}
-                    {quote.status === "accepted" && (
-                      <button
-                        onClick={() => convertToInvoice(quote)}
-                        className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                        title="Convertir en facture"
-                      >
-                        🧾
-                      </button>
-                    )}
-                    {(quote.status === "draft" || quote.status === "sent") && (
-                      <button
-                        onClick={() => updateQuoteStatus(quote.id, "sent")}
-                        className="btn btn-outline btn-sm"
-                        disabled={quote.status === "sent"}
-                      >
-                        {quote.status === "sent" ? "Envoyé" : "Envoyer"}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => generateQuotePDF(quote)}
-                      className="btn btn-outline btn-sm"
-                    >
-                      📄 PDF
-                    </button>
-                    <button
-                      onClick={() => handleDeleteQuote(quote.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                      title="Supprimer"
-                    >
-                      🗑️
-                    </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
         )}
       </div>
 
@@ -6134,7 +6160,12 @@ const getInitialInvoicesState = () => {
   }
   return { invoices: [], clients: [], quotes: [], loading: true };
 };
-const Invoices = ({ user, clientId, onRegisterCreateHandler }) => {
+const Invoices = ({
+  user,
+  clientId,
+  onRegisterCreateHandler,
+  renderDocumentActions,
+}) => {
   const initialInvoicesState = useMemo(() => getInitialInvoicesState(), []);
   const [invoices, setInvoices] = useState(() => initialInvoicesState.invoices);
   const [clients, setClients] = useState(() => initialInvoicesState.clients);
@@ -6143,6 +6174,16 @@ const Invoices = ({ user, clientId, onRegisterCreateHandler }) => {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [pendingClientId, setPendingClientId] = useState('');
+
+  const clientEmailMap = useMemo(() => {
+    const map = new Map();
+    clients.forEach((client) => {
+      if (client?.id != null) {
+        map.set(String(client.id), client);
+      }
+    });
+    return map;
+  }, [clients]);
 
   const apiCall = useCallback(async (url, options = {}) => {
     // ✅ FIXED for production
@@ -6494,93 +6535,107 @@ const Invoices = ({ user, clientId, onRegisterCreateHandler }) => {
           </div>
         ) : (
           <div className="divide-y divide-gray-200 dark:divide-slate-700">
-            {invoices.map((invoice) => (
-              <div
-                key={invoice.id}
-                className={`p-6 transition-all ${
-                  isOverdue(invoice)
-                    ? "bg-red-50 border-l-4 border-red-400 dark:bg-red-900/40 dark:border-red-500"
-                    : "hover:bg-gray-50 dark:hover:bg-slate-700/60"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="font-semibold text-gray-800 dark:text-slate-100">
-                        {invoice.invoice_number}
-                      </h3>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                          invoice.status,
-                        )}`}
-                      >
-                        {getStatusText(invoice.status)}
-                      </span>
-                      {isOverdue(invoice) && (
-                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
-                          ⏰ En retard
+            {invoices.map((invoice) => {
+              const normalizedClientId =
+                invoice?.client_id != null ? String(invoice.client_id) : '';
+              const clientEntry =
+                normalizedClientId && clientEmailMap.has(normalizedClientId)
+                  ? clientEmailMap.get(normalizedClientId)
+                  : null;
+              const defaultEmail = clientEntry?.email || '';
+              const customActions =
+                typeof renderDocumentActions === 'function'
+                  ? renderDocumentActions({
+                      document: invoice,
+                      defaultEmail,
+                      client: clientEntry,
+                    })
+                  : null;
+
+              return (
+                <div
+                  key={invoice.id}
+                  className={`p-6 transition-all ${
+                    isOverdue(invoice)
+                      ? 'bg-red-50 border-l-4 border-red-400 dark:bg-red-900/40 dark:border-red-500'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-700/60'
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex-1">
+                      <div className="mb-2 flex items-center space-x-3">
+                        <h3 className="font-semibold text-gray-800 dark:text-slate-100">
+                          {invoice.invoice_number}
+                        </h3>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                            invoice.status,
+                          )}`}
+                        >
+                          {getStatusText(invoice.status)}
                         </span>
-                      )}
+                        {isOverdue(invoice) && (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200">
+                            ⏰ En retard
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-900 font-medium dark:text-slate-100">{invoice.title}</p>
+                      <p className="text-gray-600 text-sm dark:text-slate-400">
+                        Client: {invoice?.client_name ?? ''}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-slate-400">
+                        <span>💰 {formatCurrency(invoice.total)}</span>
+                        <span>📅 Créée le {formatDate(invoice.created_at)}</span>
+                        <span>📋 Échéance: {formatDate(invoice.due_date)}</span>
+                        {invoice.paid_date && <span>✅ Payée le {formatDate(invoice.paid_date)}</span>}
+                      </div>
                     </div>
-                    <p className="text-gray-900 font-medium dark:text-slate-100">{invoice.title}</p>
-                    <p className="text-gray-600 text-sm dark:text-slate-400">
-                      Client: {invoice?.client_name ?? ""}
-                    </p>
-                    <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500 dark:text-slate-400">
-                      <span>💰 {formatCurrency(invoice.total)}</span>
-                      <span>📅 Créée le {formatDate(invoice.created_at)}</span>
-                      <span>📋 Échéance: {formatDate(invoice.due_date)}</span>
-                      {invoice.paid_date && (
-                        <span>✅ Payée le {formatDate(invoice.paid_date)}</span>
+                    <div className="flex flex-col items-end gap-3">
+                      {customActions && (
+                        <div className="flex items-center justify-end">{customActions}</div>
                       )}
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEditInvoice(invoice)}
+                          className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                          title="Voir/Modifier"
+                        >
+                          ✏️
+                        </button>
+                        {invoice.status === 'sent' && (
+                          <button
+                            onClick={() => updateInvoiceStatus(invoice.id, 'paid')}
+                            className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                            title="Marquer comme payée"
+                          >
+                            ✅
+                          </button>
+                        )}
+                        {invoice.status !== 'paid' && (
+                          <button
+                            onClick={() => updateInvoiceStatus(invoice.id, 'cancelled')}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                            title="Annuler"
+                          >
+                            ❌
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteInvoice(invoice.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
+                          title="Supprimer"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleEditInvoice(invoice)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                      title="Voir/Modifier"
-                    >
-                      ✏️
-                    </button>
-                    {invoice.status === "sent" && (
-                      <button
-                        onClick={() => updateInvoiceStatus(invoice.id, "paid")}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                        title="Marquer comme payée"
-                      >
-                        ✅
-                      </button>
-                    )}
-                    {invoice.status !== "paid" && (
-                      <button
-                        onClick={() =>
-                          updateInvoiceStatus(invoice.id, "cancelled")
-                        }
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                        title="Annuler"
-                      >
-                        ❌
-                      </button>
-                    )}
-                    <button
-                      onClick={() => generateInvoicePDF(invoice)}
-                      className="btn btn-outline btn-sm"
-                    >
-                      📄 PDF
-                    </button>
-                    <button
-                      onClick={() => handleDeleteInvoice(invoice.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all dark:text-slate-400 dark:hover:bg-slate-700/60"
-                      title="Supprimer"
-                    >
-                      🗑️
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
         )}
       </div>
 
