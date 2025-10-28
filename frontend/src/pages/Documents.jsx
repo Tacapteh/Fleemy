@@ -1,14 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   useLocation,
   useNavigate,
   useOutletContext,
 } from 'react-router-dom';
-import {
-  CardSection,
-  SectionHeaderRow,
-  FileText as FileTextIcon,
-} from '../ui';
+import { CardSection, SectionHeaderRow, FileText as FileTextIcon } from '../ui';
 import QuotesContent from '../components/documents/QuotesContent';
 import InvoicesContent from '../components/documents/InvoicesContent';
 
@@ -53,15 +49,48 @@ export default function Documents() {
     const value = params.get('client');
     return value ? String(value) : '';
   });
+  const [createIntentEnabled, setCreateIntentEnabled] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('create') === 'true';
+  });
+
+  const [quoteCreateHandler, setQuoteCreateHandler] = useState(null);
+  const [invoiceCreateHandler, setInvoiceCreateHandler] = useState(null);
+
+  const registerQuoteCreateHandler = useCallback((handler) => {
+    setQuoteCreateHandler(() => (typeof handler === 'function' ? handler : null));
+  }, []);
+
+  const registerInvoiceCreateHandler = useCallback((handler) => {
+    setInvoiceCreateHandler(() => (typeof handler === 'function' ? handler : null));
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const nextTab = mapSearchParamToTab(params.get('tab'));
-    const nextClient = params.get('client') ? String(params.get('client')) : '';
+    const normalizedTab = mapSearchParamToTab(params.get('tab'));
+    const expectedTabParam = TAB_QUERY_VALUE[normalizedTab];
 
-    setActiveTab((current) => (current === nextTab ? current : nextTab));
+    if (params.get('tab') !== expectedTabParam) {
+      params.set('tab', expectedTabParam);
+      navigate(
+        {
+          pathname: location.pathname,
+          search: params.toString() ? `?${params.toString()}` : '',
+        },
+        { replace: true },
+      );
+      return;
+    }
+
+    const nextClient = params.get('client') ? String(params.get('client')) : '';
+    const hasCreateIntent = params.get('create') === 'true';
+
+    setActiveTab((current) => (current === normalizedTab ? current : normalizedTab));
     setClientFilter((current) => (current === nextClient ? current : nextClient));
-  }, [location.search]);
+    setCreateIntentEnabled((current) =>
+      current === hasCreateIntent ? current : hasCreateIntent,
+    );
+  }, [location.pathname, location.search, navigate]);
 
   const basePillButton =
     'inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900';
@@ -83,6 +112,12 @@ export default function Documents() {
       params.delete('client');
     }
 
+    if (createIntentEnabled) {
+      params.set('create', 'true');
+    } else {
+      params.delete('create');
+    }
+
     navigate({
       pathname: location.pathname,
       search: params.toString() ? `?${params.toString()}` : '',
@@ -92,6 +127,59 @@ export default function Documents() {
 
   const currentClientFilter = clientFilter || undefined;
   const activeTabButtonId = `${CONTENT_DOM_IDS[activeTab]}-tab`;
+  const createIntent = createIntentEnabled;
+  const activeCreateHandler = activeTab === 'quotes' ? quoteCreateHandler : invoiceCreateHandler;
+  const hasClientSelection = Boolean(currentClientFilter);
+
+  const handleLaunchCreateIntent = useCallback(() => {
+    if (!activeCreateHandler) {
+      return;
+    }
+
+    activeCreateHandler({
+      clientId: hasClientSelection ? currentClientFilter : undefined,
+    });
+  }, [activeCreateHandler, currentClientFilter, hasClientSelection]);
+
+  const handleDismissCreateIntent = useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    params.delete('create');
+    if (clientFilter) {
+      params.set('client', clientFilter);
+    } else {
+      params.delete('client');
+    }
+    params.set('tab', TAB_QUERY_VALUE[activeTab]);
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : '',
+      },
+      { replace: true },
+    );
+    setCreateIntentEnabled(false);
+  }, [activeTab, clientFilter, location.pathname, location.search, navigate]);
+
+  const createButtonLabel =
+    activeTab === 'quotes'
+      ? hasClientSelection
+        ? 'Créer un devis pour ce client'
+        : 'Créer un nouveau devis'
+      : hasClientSelection
+        ? 'Créer une facture pour ce client'
+        : 'Créer une nouvelle facture';
+
+  const createButtonAriaLabel = createButtonLabel;
+
+  const createIntentDescription =
+    activeTab === 'quotes'
+      ? hasClientSelection
+        ? 'Vous êtes prêt à créer un nouveau devis pour ce client.'
+        : 'Vous êtes prêt à créer un nouveau devis.'
+      : hasClientSelection
+        ? 'Vous êtes prêt à créer une nouvelle facture pour ce client.'
+        : 'Vous êtes prêt à créer une nouvelle facture.';
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 text-slate-900 dark:text-slate-100">
@@ -107,15 +195,59 @@ export default function Documents() {
 
       <CardSection
         title="Documents"
-        subtitle={
-          currentClientFilter
-            ? `Client ciblé : ${currentClientFilter}`
-            : undefined
-        }
         icon={<FileTextIcon aria-hidden="true" className="h-6 w-6" />}
         className="w-full"
       >
         <div className="flex flex-col gap-4">
+          {currentClientFilter && (
+            <div
+              className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+              aria-live="polite"
+            >
+              <span className="font-semibold">Client sélectionné : </span>
+              <span>
+                {/* TODO: remplacer par le nom du client lorsque disponible dans ce composant. */}
+                Client sélectionné (ID: {currentClientFilter})
+              </span>
+            </div>
+          )}
+
+          {createIntent && (
+            <div
+              className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900 shadow-sm dark:border-blue-500/40 dark:bg-blue-500/10 dark:text-blue-100"
+              aria-live="polite"
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <p className="font-semibold">{createIntentDescription}</p>
+                  {hasClientSelection && (
+                    <p className="text-sm">
+                      Client ciblé : <span className="font-medium">{currentClientFilter}</span>
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleLaunchCreateIntent}
+                    className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-blue-300 dark:bg-blue-500 dark:hover:bg-blue-400 dark:focus-visible:ring-offset-slate-900"
+                    aria-label={createButtonAriaLabel}
+                    disabled={!activeCreateHandler}
+                  >
+                    {createButtonLabel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissCreateIntent}
+                    className="inline-flex items-center justify-center rounded-lg border border-transparent px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:text-blue-200 dark:hover:bg-blue-500/20 dark:focus-visible:ring-offset-slate-900"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             role="tablist"
             aria-label="Documents clients"
@@ -132,6 +264,7 @@ export default function Documents() {
                   aria-selected={isActive}
                   aria-controls={CONTENT_DOM_IDS[tabKey]}
                   id={tabButtonId}
+                  tabIndex={isActive ? 0 : -1}
                   className={`${basePillButton} ${
                     isActive ? activePillClasses : neutralPillClasses
                   }`}
@@ -150,9 +283,17 @@ export default function Documents() {
             className="mt-2"
           >
             {activeTab === 'quotes' ? (
-              <QuotesContent user={user} clientId={currentClientFilter} />
+              <QuotesContent
+                user={user}
+                clientId={currentClientFilter}
+                onRegisterCreateHandler={registerQuoteCreateHandler}
+              />
             ) : (
-              <InvoicesContent user={user} clientId={currentClientFilter} />
+              <InvoicesContent
+                user={user}
+                clientId={currentClientFilter}
+                onRegisterCreateHandler={registerInvoiceCreateHandler}
+              />
             )}
           </div>
         </div>

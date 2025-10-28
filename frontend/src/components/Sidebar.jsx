@@ -6,7 +6,6 @@ import {
   Calendar,
   Book,
   FileText,
-  Receipt,
   Users as UsersIcon,
   Settings as SettingsIcon,
   LogOut,
@@ -18,8 +17,7 @@ const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, to: '/' },
   { id: 'planning', name: 'Planning', icon: Calendar },
   { id: 'todo', name: 'Notes du jour', icon: Book, to: '/todo' },
-  { id: 'quotes', name: 'Devis', icon: FileText, to: '/quotes' },
-  { id: 'invoices', name: 'Factures', icon: Receipt, to: '/invoices' },
+  { id: 'documents', name: 'Documents', icon: FileText, to: '/documents' },
   { id: 'clients', name: 'Clients', icon: UsersIcon, to: '/clients' },
   { id: 'settings', name: 'Paramètres', icon: SettingsIcon, to: '/settings' },
 ];
