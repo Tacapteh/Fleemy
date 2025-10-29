@@ -173,6 +173,10 @@ type ApiFetchOptions = RequestInit & {
   suppressErrorLog?: boolean;
 };
 
+const shouldFallbackToNextBase = (status: number) => {
+  return status === 404 || status === 405 || status === 501 || status === 502;
+};
+
 export async function apiFetch(
   path: string,
   options: ApiFetchOptions = {},
@@ -203,10 +207,14 @@ export async function apiFetch(
   };
 
   let lastNetworkError: Error | null = null;
+  let lastFallbackError: Error | null = null;
 
-  for (const baseApiUrl of API_BASE_URLS) {
+  for (let baseIndex = 0; baseIndex < API_BASE_URLS.length; baseIndex += 1) {
+    const baseApiUrl = API_BASE_URLS[baseIndex];
+    const isLastBase = baseIndex === API_BASE_URLS.length - 1;
     const url = buildApiUrl(path, baseApiUrl);
     let lastNetworkErrorForBase: Error | null = null;
+    let shouldTryNextBase = false;
 
     for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt += 1) {
       const delay = RETRY_DELAYS[attempt];
@@ -254,6 +262,11 @@ export async function apiFetch(
             statusText: response.statusText,
             data,
           };
+          if (!isLastBase && shouldFallbackToNextBase(response.status)) {
+            shouldTryNextBase = true;
+            lastFallbackError = error;
+            break;
+          }
           throw error;
         }
 
@@ -278,10 +291,18 @@ export async function apiFetch(
       }
     }
 
+    if (shouldTryNextBase) {
+      continue;
+    }
+
     if (lastNetworkErrorForBase) {
       lastNetworkError = lastNetworkErrorForBase;
       continue;
     }
+  }
+
+  if (lastFallbackError) {
+    throw lastFallbackError;
   }
 
   const unreachableError = new Error("API unreachable (CORS or network)") as ApiError;
