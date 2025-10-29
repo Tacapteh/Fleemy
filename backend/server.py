@@ -3129,8 +3129,18 @@ async def create_team(
             invite_code=invite_code,
         )
 
+        team_data = team.dict()
+        team_data.update(
+            {
+                "members": [user["uid"]],
+                "owner_uid": user["uid"],
+                "created_at": firestore.SERVER_TIMESTAMP,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+            }
+        )
+
         await asyncio.to_thread(
-            db.collection("teams").document(team.team_id).set, team.dict()
+            db.collection("teams").document(team.team_id).set, team_data
         )
 
         await ensure_membership_documents(
@@ -3203,11 +3213,10 @@ async def join_team(
             }
         
         # Add user to members
-        current_members.append(user["uid"])
         await asyncio.to_thread(
             db.collection("teams").document(team_id).update,
             {
-                "members": current_members,
+                "members": firestore.ArrayUnion([user["uid"]]),
                 "updated_at": firestore.SERVER_TIMESTAMP,
             }
         )
