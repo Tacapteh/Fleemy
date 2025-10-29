@@ -988,10 +988,15 @@ export default function Planning() {
       teamPlanningSubscriptionRef.current = null;
     }
 
-    teamPlanningSubscriptionRef.current = listenToTeamPlanningEntries(sharedTeamId, {
-      onData: applyEntries,
-      onError: handleSnapshotError,
-    });
+    try {
+      teamPlanningSubscriptionRef.current = listenToTeamPlanningEntries(sharedTeamId, {
+        onData: applyEntries,
+        onError: handleSnapshotError,
+      });
+    } catch (subscriptionError) {
+      teamPlanningSubscriptionRef.current = null;
+      handleSnapshotError(subscriptionError);
+    }
 
     return () => {
       cancelled = true;
