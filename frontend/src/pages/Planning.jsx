@@ -342,6 +342,8 @@ export default function Planning() {
   useEffect(() => {
     if (isTeamContext) {
       setPlanningTab(TEAM_PLANNING_TAB_SHARED);
+    } else {
+      setPlanningTab(TEAM_PLANNING_TAB_PERSONAL);
     }
   }, [isTeamContext]);
 
@@ -413,7 +415,10 @@ export default function Planning() {
   }, [availableTeams, isTeamContext, teamId]);
 
   const sharedTeamId = useMemo(() => {
-    if (isTeamContext && teamId) {
+    if (!isTeamContext) {
+      return null;
+    }
+    if (teamId) {
       return teamId;
     }
     if (resolvedTeamFromList) {
@@ -428,7 +433,10 @@ export default function Planning() {
   }, [isTeamContext, teamId, resolvedTeamFromList]);
 
   const sharedTeamName = useMemo(() => {
-    if (isTeamContext && resolvedTeamName) {
+    if (!isTeamContext) {
+      return null;
+    }
+    if (resolvedTeamName) {
       return resolvedTeamName;
     }
     if (!resolvedTeamFromList) {
@@ -2005,21 +2013,23 @@ export default function Planning() {
             >
               Mon planning
             </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={planningTab === TEAM_PLANNING_TAB_SHARED}
-              onClick={() => setPlanningTab(TEAM_PLANNING_TAB_SHARED)}
-              disabled={!sharedTeamId}
-              aria-disabled={!sharedTeamId}
-              className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
-                planningTab === TEAM_PLANNING_TAB_SHARED
-                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-                  : 'bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40'
-              } ${sharedTeamId ? '' : 'cursor-not-allowed opacity-60'}`}
-            >
-              Planning d'équipe
-            </button>
+            {sharedTeamId && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={planningTab === TEAM_PLANNING_TAB_SHARED}
+                onClick={() => setPlanningTab(TEAM_PLANNING_TAB_SHARED)}
+                disabled={!sharedTeamId}
+                aria-disabled={!sharedTeamId}
+                className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
+                  planningTab === TEAM_PLANNING_TAB_SHARED
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                    : 'bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40'
+                } ${sharedTeamId ? '' : 'cursor-not-allowed opacity-60'}`}
+              >
+                Planning d'équipe
+              </button>
+            )}
           </div>
         )}
 
