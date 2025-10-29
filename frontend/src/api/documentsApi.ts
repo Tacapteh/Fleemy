@@ -23,6 +23,11 @@ interface EmailDocumentParams {
 
 type ResponseKind = 'blob' | 'json';
 
+export type DocumentPdfDownload = {
+  blob: Blob;
+  filename?: string;
+};
+
 type RequestConfig = {
   path: string;
   body?: Record<string, unknown>;
@@ -30,6 +35,40 @@ type RequestConfig = {
   accept?: string;
   responseType: ResponseKind;
 };
+
+const CONTENT_DISPOSITION_FILENAME = /filename\*?=([^;]+)/i;
+
+function decodeFilename(value: string): string {
+  let sanitized = value.trim();
+  if (sanitized.startsWith("\"") && sanitized.endsWith("\"")) {
+    sanitized = sanitized.slice(1, -1);
+  }
+
+  if (sanitized.toLowerCase().startsWith("utf-8''")) {
+    sanitized = sanitized.slice("utf-8''".length);
+  }
+
+  try {
+    return decodeURIComponent(sanitized);
+  } catch (error) {
+    return sanitized;
+  }
+}
+
+function extractFilenameFromDisposition(
+  contentDisposition: string | null,
+): string | undefined {
+  if (!contentDisposition) {
+    return undefined;
+  }
+
+  const match = contentDisposition.match(CONTENT_DISPOSITION_FILENAME);
+  if (!match) {
+    return undefined;
+  }
+
+  return decodeFilename(match[1]);
+}
 
 const JSON_CONTENT_TYPE = 'application/json';
 const REQUESTED_WITH_HEADER = 'X-Requested-With';
@@ -125,8 +164,12 @@ async function performAuthorizedRequest<T>(config: RequestConfig): Promise<T> {
         if (!response.ok) {
           const errorBody = await parseResponseBody(response);
           const message =
-            (errorBody && typeof errorBody === 'object' && 'detail' in errorBody
-              ? String((errorBody as { detail?: unknown }).detail)
+            (errorBody && typeof errorBody === 'object'
+              ? 'detail' in errorBody && errorBody.detail
+                ? String((errorBody as { detail?: unknown }).detail)
+                : 'error' in errorBody && (errorBody as { error?: unknown }).error
+                  ? String((errorBody as { error?: unknown }).error)
+                  : undefined
               : undefined) ||
             (typeof errorBody === 'string' && errorBody.trim().length > 0
               ? errorBody
@@ -146,7 +189,11 @@ async function performAuthorizedRequest<T>(config: RequestConfig): Promise<T> {
         }
 
         if (responseType === 'blob') {
-          return (await response.blob()) as unknown as T;
+          const blob = await response.blob();
+          const filename = extractFilenameFromDisposition(
+            response.headers.get('content-disposition'),
+          );
+          return { blob, filename } as unknown as T;
         }
 
         if (response.status === 204) {
@@ -192,14 +239,14 @@ export async function fetchDocumentPdf({
   id,
   type,
   token,
-}: FetchDocumentPdfParams): Promise<Blob> {
+}: FetchDocumentPdfParams): Promise<DocumentPdfDownload> {
   if (!id) {
     throw new Error('Missing document identifier');
   }
 
   const normalizedType: DocumentType = type === 'invoice' ? 'invoice' : 'quote';
 
-  return performAuthorizedRequest<Blob>({
+  return performAuthorizedRequest<DocumentPdfDownload>({
     path: `/documents/${encodeURIComponent(String(id))}/pdf`,
     body: { type: normalizedType },
     token,
