@@ -70,11 +70,31 @@ const firebaseConfig = {
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
 const missingConfig = requiredKeys.filter((key) => !firebaseConfig[key]);
 
+const fallbackFirebaseConfig = {
+  apiKey: "demo-api-key",
+  authDomain: "localhost",
+  projectId: "demo-project",
+  appId: "demo-app-id",
+  messagingSenderId: "demo-sender",
+  storageBucket: "demo-project.appspot.com",
+  measurementId: "G-DEMO",
+};
+
 if (missingConfig.length) {
-  throw new Error(
+  const message =
     `Missing Firebase configuration: ${missingConfig.join(", ")}. ` +
-      "Set the corresponding REACT_APP_FIREBASE_* values in your .env file (see .env.example)."
-  );
+    "Set the corresponding REACT_APP_FIREBASE_* values in your .env file (see .env.example).";
+
+  console.error(`${message} Falling back to a local mock configuration.`);
+  missingConfig.forEach((key) => {
+    firebaseConfig[key] = fallbackFirebaseConfig[key];
+  });
+
+  Object.keys(fallbackFirebaseConfig).forEach((key) => {
+    if (!firebaseConfig[key]) {
+      firebaseConfig[key] = fallbackFirebaseConfig[key];
+    }
+  });
 }
 
 Object.keys(firebaseConfig).forEach((key) => {
