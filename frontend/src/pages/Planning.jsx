@@ -345,12 +345,6 @@ export default function Planning() {
     }
   }, [isTeamContext]);
 
-  useEffect(() => {
-    if (planningTab === TEAM_PLANNING_TAB_SHARED && !sharedTeamId) {
-      setPlanningTab(TEAM_PLANNING_TAB_PERSONAL);
-    }
-  }, [planningTab, sharedTeamId]);
-
   const handleViewChange = useCallback(
     (nextView) => {
       const normalized = nextView === 'month' ? 'month' : 'week';
@@ -447,6 +441,12 @@ export default function Planning() {
       null
     );
   }, [isTeamContext, resolvedTeamName, resolvedTeamFromList]);
+
+  useEffect(() => {
+    if (planningTab === TEAM_PLANNING_TAB_SHARED && !sharedTeamId) {
+      setPlanningTab(TEAM_PLANNING_TAB_PERSONAL);
+    }
+  }, [planningTab, sharedTeamId]);
 
   const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
   const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
