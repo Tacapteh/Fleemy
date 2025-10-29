@@ -13,6 +13,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, validator, EmailStr
+from pydantic import field_validator
 from typing import List, Optional, Dict, Any, Tuple, Literal
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -366,6 +367,64 @@ class DailyTodoUpdateRequest(BaseModel):
     time: Optional[str] = None
     priority: Optional[Literal['high', 'medium', 'low']] = None
     status: Optional[Literal['todo', 'doing', 'done']] = None
+
+
+def _parse_team_planning_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if value is None:
+        raise ValueError('datetime value is required')
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            raise ValueError('datetime value is required')
+        if raw.endswith('Z'):
+            raw = raw[:-1] + '+00:00'
+        try:
+            parsed = datetime.fromisoformat(raw)
+        except ValueError as exc:  # pragma: no cover - defensive
+            raise ValueError('Invalid datetime value') from exc
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    if isinstance(value, (int, float)):
+        dt = datetime.fromtimestamp(float(value), tz=timezone.utc)
+        return dt
+    raise ValueError('Invalid datetime value')
+
+
+class TeamPlanningEntry(BaseModel):
+    id: Optional[str] = None
+    title: str
+    type: Literal['event', 'task']
+    start: datetime
+    end: datetime
+    color: Optional[str] = None
+    status: Optional[str] = None
+    price: Optional[float] = None
+    createdBy: Optional[str] = None
+    createdByName: Optional[str] = None
+    createdByInitials: Optional[str] = None
+    teamId: Optional[str] = None
+    synced: bool = False
+    personalEventId: Optional[str] = None
+
+    @field_validator('title')
+    @classmethod
+    def _validate_title(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError('title is required')
+        return value.strip()
+
+    @validator('start', 'end', pre=True)
+    def _parse_datetime(cls, value):
+        return _parse_team_planning_datetime(value)
+
+    @validator('end')
+    def _ensure_end_after_start(cls, end_value, values):
+        start_value = values.get('start')
+        if isinstance(start_value, datetime) and isinstance(end_value, datetime):
+            if end_value <= start_value:
+                raise ValueError('end must be after start')
+        return end_value
 
 
 PRIORITY_VALUES = {'high', 'medium', 'low'}
@@ -993,6 +1052,92 @@ def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
         return dt
     except Exception:
         return None
+
+
+def _normalize_firestore_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    to_datetime = getattr(value, 'to_datetime', None)
+    if callable(to_datetime):
+        try:
+            dt = to_datetime()
+            if isinstance(dt, datetime):
+                return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:  # pragma: no cover - defensive
+            return None
+    return None
+
+
+def _compute_member_initials(name: Optional[str], email: Optional[str]) -> str:
+    if name:
+        parts = [part for part in re.split(r"\s+", name.strip()) if part]
+        if parts:
+            initials = ''.join(part[0] for part in parts[:2]).upper()
+            if initials:
+                return initials
+    if email:
+        prefix = email.split('@', 1)[0]
+        prefix = prefix.strip()
+        if prefix:
+            return prefix[:2].upper()
+    return '??'
+
+
+def _serialize_team_planning_doc(doc_snap) -> Dict[str, Any]:
+    data = doc_snap.to_dict() if getattr(doc_snap, 'exists', False) else {}
+    start_dt = _normalize_firestore_datetime(data.get('start'))
+    end_dt = _normalize_firestore_datetime(data.get('end'))
+    timestamp_dt = _normalize_firestore_datetime(data.get('timestamp'))
+
+    return {
+        'id': doc_snap.id,
+        'title': data.get('title', ''),
+        'type': data.get('type', 'event'),
+        'start': start_dt.isoformat() if start_dt else None,
+        'end': end_dt.isoformat() if end_dt else None,
+        'color': data.get('color'),
+        'status': data.get('status'),
+        'price': data.get('price'),
+        'createdBy': data.get('createdBy'),
+        'createdByName': data.get('createdByName'),
+        'createdByInitials': data.get('createdByInitials'),
+        'teamId': data.get('teamId'),
+        'synced': bool(data.get('synced')), 
+        'personalEventId': data.get('personalEventId'),
+        'timestamp': timestamp_dt.isoformat() if timestamp_dt else None,
+    }
+
+
+def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, str]) -> Dict[str, Any]:
+    start_dt = entry.start if entry.start.tzinfo else entry.start.replace(tzinfo=timezone.utc)
+    end_dt = entry.end if entry.end.tzinfo else entry.end.replace(tzinfo=timezone.utc)
+    if end_dt <= start_dt:
+        raise HTTPException(status_code=400, detail='La date de fin doit être après la date de début')
+
+    created_by = entry.createdBy or creator.get('uid')
+    created_name = entry.createdByName or creator.get('name')
+    created_initials = entry.createdByInitials or creator.get('initials')
+
+    payload: Dict[str, Any] = {
+        'title': entry.title,
+        'type': entry.type,
+        'start': firestore.Timestamp.from_datetime(start_dt),
+        'end': firestore.Timestamp.from_datetime(end_dt),
+        'color': entry.color or None,
+        'status': entry.status or None,
+        'price': float(entry.price) if entry.price is not None else None,
+        'createdBy': created_by,
+        'createdByName': created_name,
+        'createdByInitials': created_initials,
+        'teamId': entry.teamId,
+        'synced': bool(entry.synced),
+        'personalEventId': entry.personalEventId or None,
+        'timestamp': firestore.SERVER_TIMESTAMP,
+    }
+
+    return payload
 
 
 async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
@@ -3114,6 +3259,125 @@ async def get_team_memberships(
     except Exception as e:
         logger.error("get_team_memberships error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Impossible de récupérer les membres")
+
+
+@api_router.get("/teams/{team_id}/planning")
+async def get_team_planning(
+    team_id: str,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    await ensure_team_membership(team_id, user["uid"])
+
+    def _load_entries():
+        planning_ref = (
+            db.collection("teams")
+            .document(team_id)
+            .collection("teamPlanning")
+            .order_by("start")
+        )
+        return list(planning_ref.stream())
+
+    try:
+        snapshots = await asyncio.to_thread(_load_entries)
+        entries = [_serialize_team_planning_doc(snap) for snap in snapshots]
+        return {"success": True, "entries": entries}
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("team planning fetch error: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de charger le planning d'équipe",
+        )
+
+
+@api_router.post("/teams/{team_id}/planning")
+async def upsert_team_planning_entry(
+    team_id: str,
+    payload: TeamPlanningEntry,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    await ensure_team_membership(team_id, user["uid"])
+
+    creator_name = user.get("name") or user.get("displayName") or user.get("email") or "Membre"
+    creator_defaults = {
+        "uid": user.get("uid"),
+        "name": creator_name,
+        "email": user.get("email"),
+        "initials": _compute_member_initials(creator_name, user.get("email")),
+    }
+    if not creator_defaults["uid"]:
+        raise HTTPException(status_code=400, detail="Utilisateur non authentifié")
+
+    entry_data = payload.model_dump()
+    entry_data.setdefault("teamId", team_id)
+    if entry_data.get("teamId") != team_id:
+        raise HTTPException(status_code=400, detail="Identifiant d'équipe invalide")
+
+    planning_ref = db.collection("teams").document(team_id).collection("teamPlanning")
+    existing_data: Optional[Dict[str, Any]] = None
+
+    if entry_data.get("id"):
+        doc_ref = planning_ref.document(entry_data["id"])
+
+        def _fetch_existing():
+            snap = doc_ref.get()
+            return snap.to_dict() if getattr(snap, "exists", False) else None
+
+        existing_data = await asyncio.to_thread(_fetch_existing)
+        if existing_data:
+            entry_data.setdefault("createdBy", existing_data.get("createdBy"))
+            entry_data.setdefault("createdByName", existing_data.get("createdByName"))
+            entry_data.setdefault("createdByInitials", existing_data.get("createdByInitials"))
+
+    entry = TeamPlanningEntry(**entry_data)
+    payload_data = _build_team_planning_payload(entry, creator_defaults)
+
+    def _persist():
+        if entry.id:
+            ref = planning_ref.document(entry.id)
+            ref.set(payload_data, merge=True)
+            return ref
+        ref, _ = planning_ref.add(payload_data)
+        return ref
+
+    try:
+        doc_ref = await asyncio.to_thread(_persist)
+        snapshot = await asyncio.to_thread(doc_ref.get)
+        serialized = _serialize_team_planning_doc(snapshot)
+        return {"success": True, "entry": serialized}
+    except HTTPException:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("team planning upsert error: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible d'enregistrer le bloc d'équipe",
+        )
+
+
+@api_router.delete("/teams/{team_id}/planning/{entry_id}")
+async def delete_team_planning_entry(
+    team_id: str,
+    entry_id: str,
+    user: Dict[str, Any] = Depends(verify_token),
+):
+    await ensure_team_membership(team_id, user["uid"])
+
+    planning_ref = (
+        db.collection("teams")
+        .document(team_id)
+        .collection("teamPlanning")
+        .document(entry_id)
+    )
+
+    try:
+        await asyncio.to_thread(planning_ref.delete)
+        return {"success": True, "entry_id": entry_id}
+    except Exception as exc:  # pragma: no cover - defensive logging
+        logger.error("team planning delete error: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Impossible de supprimer le bloc d'équipe",
+        )
 
 
 @api_router.get("/teams/my")

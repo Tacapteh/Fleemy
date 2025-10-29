@@ -68,6 +68,15 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
   const eventType = normalizeOptionalString((event as { type?: string }).type).toLowerCase();
   const isAbsence = eventType === 'absence';
 
+  const teamParticipants = Array.isArray((event as { teamParticipants?: any[] }).teamParticipants)
+    ? (event as { teamParticipants?: any[] }).teamParticipants.slice(0, 3)
+    : [];
+  const hasTeamParticipants = teamParticipants.length > 0;
+  const mergedTooltip = normalizeOptionalString((event as { teamMergedTooltip?: string }).teamMergedTooltip);
+  const additionalBadgeCount = Array.isArray((event as { teamParticipants?: any[] }).teamParticipants)
+    ? Math.max(0, (event as { teamParticipants?: any[] }).teamParticipants.length - teamParticipants.length)
+    : 0;
+
   const explicitTitle = !isAbsence ? normalizeOptionalString(event.title) : '';
   const clientLabel = isAbsence ? '' : resolveClientLabel(event);
   const description = normalizeOptionalString(event.description);
@@ -113,6 +122,7 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       role={isInteractive ? 'button' : 'group'}
       tabIndex={isInteractive ? 0 : -1}
       aria-label={`Événement : ${title}`}
+      title={mergedTooltip || undefined}
       data-testid={`event-${event.id}`}
     >
       <div className="event-chip-content relative flex h-full min-h-[3rem] w-full flex-col justify-center gap-1 pr-8 pb-5 text-[13px] leading-tight sm:text-[14px] md:leading-normal">
@@ -122,6 +132,31 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
           </div>
         )}
         <div className="title truncate break-words leading-tight md:leading-normal">{title}</div>
+
+        {hasTeamParticipants && (
+          <div className="absolute bottom-1 left-1 flex items-center gap-1">
+            {teamParticipants.map((participant, index) => (
+              <span
+                key={`${participant.id || participant.initials || index}`}
+                className="flex h-6 w-6 items-center justify-center rounded-full border text-[0.65rem] font-semibold"
+                style={{
+                  backgroundColor: participant.background || 'var(--event-color, #2563eb)',
+                  borderColor: participant.border || 'transparent',
+                  color: participant.text || '#ffffff',
+                }}
+                title={participant.name ? `Créé par ${participant.name}` : undefined}
+                aria-label={participant.name ? `Créé par ${participant.name}` : 'Créateur inconnu'}
+              >
+                {normalizeOptionalString(participant.initials) || '??'}
+              </span>
+            ))}
+            {additionalBadgeCount > 0 && (
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-300" aria-hidden="true">
+                +{additionalBadgeCount}
+              </span>
+            )}
+          </div>
+        )}
 
         {!isAbsence && event.attachedTaskBadges.length > 0 && (
           <div className="event-chip-badge absolute bottom-1 right-1 flex items-center justify-end gap-1">
