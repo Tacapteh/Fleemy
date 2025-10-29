@@ -957,21 +957,7 @@ export default function Planning() {
       }
     };
 
-    const handleSnapshotError = async (error) => {
-      console.error('team planning realtime error', error);
-      if (cancelled) {
-        return;
-      }
-
-      cleanupSubscription();
-
-      if (isPermissionDeniedError(error)) {
-        setTeamPlanningEntries([]);
-        setTeamPlanningLoading(false);
-        setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
-        return;
-      }
-
+    const loadFallbackEntries = async () => {
       try {
         const fallback = await fetchTeamPlanningEntries(sharedTeamId);
         applyEntries(fallback);
@@ -991,6 +977,22 @@ export default function Planning() {
         setTeamPlanningLoading(false);
         setTeamPlanningError("Impossible de charger le planning d'équipe");
       }
+    };
+
+    const handleSnapshotError = async (error) => {
+      console.error('team planning realtime error', error);
+      if (cancelled) {
+        return;
+      }
+
+      cleanupSubscription();
+
+      if (isPermissionDeniedError(error)) {
+        await loadFallbackEntries();
+        return;
+      }
+
+      await loadFallbackEntries();
     };
 
     cleanupSubscription();
