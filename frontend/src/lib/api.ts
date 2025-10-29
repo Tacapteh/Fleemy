@@ -169,14 +169,19 @@ const ensureAuthHeaders = async (
   }
 };
 
+type ApiFetchOptions = RequestInit & {
+  suppressErrorLog?: boolean;
+};
+
 export async function apiFetch(
   path: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
 ): Promise<any> {
-  const method = (options.method || "GET").toUpperCase();
-  const headersInit = options.headers as HeadersInit | undefined;
+  const { suppressErrorLog = false, ...requestOptions } = options;
+  const method = (requestOptions.method || "GET").toUpperCase();
+  const headersInit = requestOptions.headers as HeadersInit | undefined;
   const baseOptions: RequestInit = {
-    ...options,
+    ...requestOptions,
     method,
   };
 
@@ -231,11 +236,13 @@ export async function apiFetch(
         }
 
         if (!response.ok) {
-          console.error(
-            "apiFetch error",
-            { method, url, status: response.status },
-            data,
-          );
+          if (!suppressErrorLog) {
+            console.error(
+              "apiFetch error",
+              { method, url, status: response.status },
+              data,
+            );
+          }
           const message =
             (typeof data === "object" && data && (data as any).detail) ||
             (typeof data === "string" && data) ||
@@ -254,15 +261,17 @@ export async function apiFetch(
       } catch (error: any) {
         if (error instanceof TypeError || error?.name === "TypeError") {
           lastNetworkErrorForBase = error as Error;
-          console.error(
-            "apiFetch network error",
-            {
-              method,
-              url,
-              attempt: attempt + 1,
-            },
-            error,
-          );
+          if (!suppressErrorLog) {
+            console.error(
+              "apiFetch network error",
+              {
+                method,
+                url,
+                attempt: attempt + 1,
+              },
+              error,
+            );
+          }
           continue;
         }
         throw error;

@@ -25,6 +25,11 @@ import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
 import { ensureTeamsCache, readTeamsCache } from '../utils/teamCache';
+import {
+  shouldUseTeamPlanningApi,
+  markTeamPlanningApiSupported,
+  markTeamPlanningApiUnsupported,
+} from '../utils/teamPlanningApiSupport';
 import { SectionHeaderRow, Calendar, StatusSummaryCard } from '../ui';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -886,15 +891,46 @@ export default function Planning() {
     setTeamPlanningLoading(true);
     setTeamPlanningError(null);
 
-    const loadPlanning = async () => {
+    const loadFallbackPlanning = async () => {
       try {
-        const response = await apiFetch(`/teams/${sharedTeamId}/planning`);
+        const fallbackEntries = await fetchTeamPlanningEntries(sharedTeamId);
+        if (cancelled) {
+          return true;
+        }
+        const normalizedFallback = normalizeTeamPlanningEntries(fallbackEntries);
+        setTeamPlanningEntries(normalizedFallback);
+        setTeamPlanningLoading(false);
+        setTeamPlanningError(null);
+        return true;
+      } catch (fallbackError) {
+        if (cancelled) {
+          return false;
+        }
+        console.error('team planning fallback load error', fallbackError);
+        setTeamPlanningEntries([]);
+        setTeamPlanningLoading(false);
+        setTeamPlanningError("Impossible de charger le planning d'équipe");
+        return false;
+      }
+    };
+
+    const loadPlanning = async () => {
+      if (!shouldUseTeamPlanningApi()) {
+        await loadFallbackPlanning();
+        return;
+      }
+
+      try {
+        const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
+          suppressErrorLog: true,
+        });
         if (cancelled) {
           return;
         }
         const normalized = normalizeTeamPlanningEntries(response?.entries);
         setTeamPlanningEntries(normalized);
         setTeamPlanningLoading(false);
+        markTeamPlanningApiSupported();
       } catch (error) {
         if (cancelled) {
           return;
@@ -913,15 +949,11 @@ export default function Planning() {
             message,
           });
           try {
-            const fallbackEntries = await fetchTeamPlanningEntries(sharedTeamId);
-            if (cancelled) {
+            markTeamPlanningApiUnsupported();
+            const handled = await loadFallbackPlanning();
+            if (handled) {
               return;
             }
-            const normalizedFallback = normalizeTeamPlanningEntries(fallbackEntries);
-            setTeamPlanningEntries(normalizedFallback);
-            setTeamPlanningLoading(false);
-            setTeamPlanningError(null);
-            return;
           } catch (fallbackError) {
             if (!cancelled) {
               console.error('team planning fallback load error', fallbackError);
