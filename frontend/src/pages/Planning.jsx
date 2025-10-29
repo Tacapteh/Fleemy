@@ -203,6 +203,8 @@ const generateMemberColor = (seed) => {
 
 const TEAM_PLANNING_TAB_PERSONAL = 'personal';
 const TEAM_PLANNING_TAB_SHARED = 'team';
+const TEAM_PLANNING_ACCESS_DENIED_MESSAGE =
+  "Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.";
 
 const toIsoDate = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
@@ -416,6 +418,7 @@ export default function Planning() {
   const [membersError, setMembersError] = useState(null);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [teamMembershipReady, setTeamMembershipReady] = useState(!isTeamContext);
+  const [teamMembershipAllowed, setTeamMembershipAllowed] = useState(!isTeamContext);
   const [availableTeams, setAvailableTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamsError, setTeamsError] = useState(null);
@@ -732,16 +735,19 @@ export default function Planning() {
   useEffect(() => {
     if (!isTeamContext) {
       setTeamMembershipReady(true);
+      setTeamMembershipAllowed(true);
       return;
     }
 
     if (!user?.uid || !teamId) {
       setTeamMembershipReady(false);
+      setTeamMembershipAllowed(false);
       return;
     }
 
     let cancelled = false;
     setTeamMembershipReady(false);
+    setTeamMembershipAllowed(false);
 
     const ensureMembership = async () => {
       try {
@@ -750,14 +756,32 @@ export default function Planning() {
           body: JSON.stringify({ include_joined_at: false }),
         });
         if (!cancelled) {
+          setTeamMembershipAllowed(true);
           setTeamMembershipReady(true);
+          setTeamPlanningError(null);
         }
       } catch (error) {
         console.error('ensureTeamMembership error', error);
-        if (!cancelled) {
-          showToast("Impossible de vérifier votre appartenance à l'équipe", true);
-          setTeamMembershipReady(true);
+        if (cancelled) {
+          return;
         }
+
+        const status = error?.status ?? error?.response?.status ?? null;
+        const code = error?.code;
+        const denied =
+          status === 403 || code === 'permission-denied' || isPermissionDeniedError(error);
+
+        if (denied) {
+          setTeamMembershipAllowed(false);
+          setTeamPlanningEntries([]);
+          setTeamPlanningLoading(false);
+          setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
+        } else {
+          showToast("Impossible de vérifier votre appartenance à l'équipe", true);
+          setTeamMembershipAllowed(true);
+        }
+
+        setTeamMembershipReady(true);
       }
     };
 
@@ -766,7 +790,14 @@ export default function Planning() {
     return () => {
       cancelled = true;
     };
-  }, [isTeamContext, teamId, user?.uid]);
+  }, [
+    isTeamContext,
+    teamId,
+    user?.uid,
+    setTeamPlanningEntries,
+    setTeamPlanningError,
+    setTeamPlanningLoading,
+  ]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -792,6 +823,14 @@ export default function Planning() {
 
     if (!teamId) {
       return;
+    }
+
+    if (!teamMembershipAllowed) {
+      setMembers([]);
+      setMembersLoading(false);
+      setMembersError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
+      setSelectedMemberId(null);
+      return () => {};
     }
 
     if (!teamMembershipReady) {
@@ -866,6 +905,7 @@ export default function Planning() {
     isTeamContext,
     teamId,
     teamMembershipReady,
+    teamMembershipAllowed,
     user?.uid,
     user?.displayName,
     user?.email,
@@ -883,14 +923,16 @@ export default function Planning() {
       return;
     }
 
-    if (!sharedTeamId) {
+    if (!sharedTeamId || (isTeamContext && !teamMembershipAllowed)) {
       if (teamPlanningSubscriptionRef.current) {
         teamPlanningSubscriptionRef.current();
         teamPlanningSubscriptionRef.current = null;
       }
       setTeamPlanningEntries([]);
       setTeamPlanningLoading(false);
-      setTeamPlanningError(null);
+      setTeamPlanningError(
+        isTeamContext && !teamMembershipAllowed ? TEAM_PLANNING_ACCESS_DENIED_MESSAGE : null,
+      );
       return;
     }
 
@@ -917,7 +959,7 @@ export default function Planning() {
       if (isPermissionDeniedError(error)) {
         setTeamPlanningEntries([]);
         setTeamPlanningLoading(false);
-        setTeamPlanningError("Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.");
+        setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
         return;
       }
 
@@ -932,7 +974,7 @@ export default function Planning() {
         if (isPermissionDeniedError(fallbackError)) {
           setTeamPlanningEntries([]);
           setTeamPlanningLoading(false);
-          setTeamPlanningError("Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.");
+          setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
           return;
         }
         setTeamPlanningEntries([]);
@@ -958,7 +1000,13 @@ export default function Planning() {
         teamPlanningSubscriptionRef.current = null;
       }
     };
-  }, [planningTab, sharedTeamId, teamPlanningRefreshToken]);
+  }, [
+    planningTab,
+    sharedTeamId,
+    teamPlanningRefreshToken,
+    isTeamContext,
+    teamMembershipAllowed,
+  ]);
 
   const planningContext = useMemo(() => {
     if (!user?.uid) {
@@ -968,9 +1016,15 @@ export default function Planning() {
       if (!sharedTeamId) {
         return null;
       }
+      if (isTeamContext && !teamMembershipAllowed) {
+        return null;
+      }
       return { type: 'team-shared', teamId: sharedTeamId, userId: user.uid };
     }
     if (isTeamContext) {
+      if (!teamMembershipAllowed) {
+        return null;
+      }
       if (!teamMembershipReady || !teamId || !selectedMemberId) {
         return null;
       }
@@ -982,12 +1036,16 @@ export default function Planning() {
     sharedTeamId,
     isTeamContext,
     teamMembershipReady,
+    teamMembershipAllowed,
     teamId,
     selectedMemberId,
     user?.uid,
   ]);
 
   const readOnly = useMemo(() => {
+    if (isTeamContext && !teamMembershipAllowed) {
+      return true;
+    }
     if (planningTab === TEAM_PLANNING_TAB_SHARED) {
       return false;
     }
@@ -998,9 +1056,12 @@ export default function Planning() {
       return true;
     }
     return selectedMemberId !== user.uid;
-  }, [planningTab, isTeamContext, selectedMemberId, user?.uid]);
+  }, [planningTab, isTeamContext, teamMembershipAllowed, selectedMemberId, user?.uid]);
 
-  const shouldDelayEvents = planningTab !== TEAM_PLANNING_TAB_SHARED && isTeamContext && !teamMembershipReady;
+  const shouldDelayEvents =
+    planningTab !== TEAM_PLANNING_TAB_SHARED &&
+    isTeamContext &&
+    (!teamMembershipReady || !teamMembershipAllowed);
 
   const {
     slots: events,
@@ -2003,6 +2064,9 @@ export default function Planning() {
     if (!teamId) {
       return;
     }
+    if (!teamMembershipAllowed) {
+      return;
+    }
     if (!teamMembershipReady) {
       return;
     }
@@ -2016,6 +2080,7 @@ export default function Planning() {
     isTeamContext,
     teamId,
     teamMembershipReady,
+    teamMembershipAllowed,
     members,
     membersLoading,
     membersError,
