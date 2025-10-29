@@ -950,11 +950,20 @@ export default function Planning() {
       setTeamPlanningError(null);
     };
 
+    const cleanupSubscription = () => {
+      if (teamPlanningSubscriptionRef.current) {
+        teamPlanningSubscriptionRef.current();
+        teamPlanningSubscriptionRef.current = null;
+      }
+    };
+
     const handleSnapshotError = async (error) => {
       console.error('team planning realtime error', error);
       if (cancelled) {
         return;
       }
+
+      cleanupSubscription();
 
       if (isPermissionDeniedError(error)) {
         setTeamPlanningEntries([]);
@@ -972,6 +981,7 @@ export default function Planning() {
         }
         console.error('team planning fallback load error', fallbackError);
         if (isPermissionDeniedError(fallbackError)) {
+          cleanupSubscription();
           setTeamPlanningEntries([]);
           setTeamPlanningLoading(false);
           setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
@@ -983,10 +993,7 @@ export default function Planning() {
       }
     };
 
-    if (teamPlanningSubscriptionRef.current) {
-      teamPlanningSubscriptionRef.current();
-      teamPlanningSubscriptionRef.current = null;
-    }
+    cleanupSubscription();
 
     try {
       teamPlanningSubscriptionRef.current = listenToTeamPlanningEntries(sharedTeamId, {
