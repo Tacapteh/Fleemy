@@ -2857,13 +2857,23 @@ async def email_document_endpoint(
     snap = await asyncio.to_thread(doc_ref.get)
 
     if not getattr(snap, "exists", False):
-        raise HTTPException(status_code=404, detail="Document not found")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": "Document not found",
+            },
+        )
 
     document_data = snap.to_dict() or {}
     owner_uid = document_data.get("uid")
     if owner_uid and owner_uid != user["uid"]:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to access this document"
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "error": "Not authorized to access this document",
+            },
         )
 
     try:
@@ -2873,10 +2883,16 @@ async def email_document_endpoint(
             else await invoice_pdf_bytes(document_data)
         )
     except Exception as exc:  # pragma: no cover - defensive
-        logger.error("PDF generation failed for email %s %s: %s", document_type, doc_id, exc)
-        raise HTTPException(
-            status_code=500, detail="Impossible de générer le PDF pour l'envoi"
-        ) from exc
+        logger.error(
+            "PDF generation failed for email %s %s: %s", document_type, doc_id, exc
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Impossible de générer le PDF pour l'envoi",
+            },
+        )
 
     try:
         await asyncio.to_thread(
@@ -2888,10 +2904,16 @@ async def email_document_endpoint(
             pdf_bytes=pdf_bytes,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        logger.error(
+            "Failed to send %s %s by email: %s", document_type, doc_id, exc
+        )
+        return JSONResponse(
+            status_code=502,
+            content={"success": False, "error": str(exc)},
+        )
 
     logger.info("Document %s %s sent to %s", document_type, doc_id, payload.to)
-    return {"ok": True, "sentTo": payload.to}
+    return {"success": True, "ok": True, "sentTo": payload.to}
 
 
 # Teams endpoints
