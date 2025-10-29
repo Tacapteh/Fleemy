@@ -1164,7 +1164,8 @@ def _normalize_member_ids(raw_members: Any) -> List[str]:
 
 
 async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
-    team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
+    team_ref = db.collection("teams").document(team_id)
+    team_snap = await asyncio.to_thread(team_ref.get)
     team = team_snap.to_dict() if team_snap.exists else None
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -1174,9 +1175,20 @@ async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
     if owner_uid:
         member_ids.add(str(owner_uid))
 
-    if user_uid not in member_ids:
-        raise HTTPException(status_code=403, detail="Not authorized for this team")
-    return team
+    if user_uid in member_ids:
+        return team
+
+    membership_ref = team_ref.collection("memberships").document(user_uid)
+    member_ref = team_ref.collection("members").document(user_uid)
+    membership_snap, member_snap = await asyncio.gather(
+        asyncio.to_thread(membership_ref.get),
+        asyncio.to_thread(member_ref.get),
+    )
+
+    if membership_snap.exists or member_snap.exists:
+        return team
+
+    raise HTTPException(status_code=403, detail="Not authorized for this team")
 
 
 async def ensure_membership_documents(
