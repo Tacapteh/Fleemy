@@ -1140,10 +1140,41 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
     return payload
 
 
+def _normalize_member_ids(raw_members: Any) -> List[str]:
+    """Return a list of member identifiers extracted from a team document."""
+
+    if not raw_members:
+        return []
+
+    if isinstance(raw_members, list):
+        return [str(value) for value in raw_members if isinstance(value, (str, int))]
+
+    if isinstance(raw_members, dict):
+        normalized: List[str] = []
+        for key, value in raw_members.items():
+            if not value:
+                continue
+            normalized.append(str(key))
+        return normalized
+
+    if isinstance(raw_members, (str, int)):
+        return [str(raw_members)]
+
+    return []
+
+
 async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
     team_snap = await asyncio.to_thread(db.collection("teams").document(team_id).get)
     team = team_snap.to_dict() if team_snap.exists else None
-    if not team or user_uid not in (team.get("members", []) + [team.get("owner_uid")]):
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    owner_uid = team.get("owner_uid") or team.get("ownerUid")
+    member_ids = set(_normalize_member_ids(team.get("members")))
+    if owner_uid:
+        member_ids.add(str(owner_uid))
+
+    if user_uid not in member_ids:
         raise HTTPException(status_code=403, detail="Not authorized for this team")
     return team
 
