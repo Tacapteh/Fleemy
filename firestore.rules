@@ -26,10 +26,36 @@ service cloud.firestore {
         return false;
       }
 
-      let teamDoc = get(/databases/$(database)/documents/teams/$(teamId));
-      return teamDoc.exists() &&
-        teamDoc.data.members is list &&
-        teamDoc.data.members.hasAny([request.auth.uid]);
+      let teamPath = /databases/$(database)/documents/teams/$(teamId);
+      let teamDoc = get(teamPath);
+      if (!teamDoc.exists()) {
+        return false;
+      }
+
+      // Accept direct members list from the team document when present.
+      if (teamDoc.data.members is list &&
+          teamDoc.data.members.hasAny([request.auth.uid])) {
+        return true;
+      }
+
+      // Allow team owners stored with either camelCase or snake_case keys.
+      if (teamDoc.data.owner_uid == request.auth.uid ||
+          teamDoc.data.ownerUid == request.auth.uid) {
+        return true;
+      }
+
+      // Fallback to dedicated membership/member documents used by the backend.
+      let membershipDoc = get(
+        /databases/$(database)/documents/teams/$(teamId)/memberships/$(request.auth.uid)
+      );
+      if (membershipDoc.exists()) {
+        return true;
+      }
+
+      let memberDoc = get(
+        /databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid)
+      );
+      return memberDoc.exists();
     }
 
     function normalizeIdentifier(value) {
