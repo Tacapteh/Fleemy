@@ -980,11 +980,13 @@ const parsePlanningDate = (value) => {
   return null;
 };
 
-const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
-  if (!docSnap) {
+const normalizeTeamPlanningRecord = (
+  data,
+  { id = null, fallbackTeamId = null } = {},
+) => {
+  if (!data) {
     return null;
   }
-  const data = docSnap.data() || {};
   const startDate = parsePlanningDate(data.start);
   const endDate = parsePlanningDate(data.end);
 
@@ -995,7 +997,7 @@ const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
   const priceValue = Number(data.price);
 
   return {
-    id: docSnap.id,
+    id: typeof id === 'string' ? id : null,
     title: typeof data.title === 'string' ? data.title : '',
     type: typeof data.type === 'string' ? data.type : 'event',
     start: startDate,
@@ -1018,6 +1020,17 @@ const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
         : null,
     timestamp: data.timestamp || null,
   };
+};
+
+const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
+  if (!docSnap) {
+    return null;
+  }
+  const data = typeof docSnap.data === 'function' ? docSnap.data() : {};
+  return normalizeTeamPlanningRecord(data, {
+    id: docSnap.id,
+    fallbackTeamId,
+  });
 };
 
 export const fetchTeamPlanningEntries = async (teamId) => {
@@ -1047,7 +1060,42 @@ export const fetchTeamPlanningEntries = async (teamId) => {
     return entries;
   } catch (error) {
     if (isPermissionDeniedError(error)) {
-      return [];
+      try {
+        const apiFetch = await getApiFetch();
+        const response = await apiFetch(`/teams/${teamId}/planning`);
+        const entries = Array.isArray(response?.entries)
+          ? response.entries
+          : [];
+        const normalized = entries
+          .map((entry) =>
+            normalizeTeamPlanningRecord(entry, {
+              id: entry?.id,
+              fallbackTeamId: teamId,
+            }),
+          )
+          .filter(Boolean);
+
+        normalized.sort((a, b) => {
+          const startDiff = a.start.getTime() - b.start.getTime();
+          if (startDiff !== 0) {
+            return startDiff;
+          }
+          if (a.id && b.id) {
+            return a.id.localeCompare(b.id);
+          }
+          return 0;
+        });
+
+        return normalized;
+      } catch (apiError) {
+        if (!isPermissionDeniedError(apiError)) {
+          console.error(
+            'fetchTeamPlanningEntries api fallback error',
+            apiError,
+          );
+        }
+        return [];
+      }
     }
 
     console.error('fetchTeamPlanningEntries error', error);
