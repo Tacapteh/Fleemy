@@ -1994,7 +1994,8 @@ export default function Planning() {
           )}
         </header>
 
-        {(sharedTeamId || (Array.isArray(availableTeams) && availableTeams.length > 0)) && (
+        {isTeamContext &&
+          (sharedTeamId || (Array.isArray(availableTeams) && availableTeams.length > 0)) && (
           <div
             role="tablist"
             aria-label="Mode de planning"
