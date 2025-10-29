@@ -20,6 +20,7 @@ import {
   listenTeamMemberships,
   listenToTeamPlanningEntries,
   fetchTeamPlanningEntries,
+  isPermissionDeniedError,
 } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { showToast } from '../utils/toast';
@@ -913,6 +914,13 @@ export default function Planning() {
         return;
       }
 
+      if (isPermissionDeniedError(error)) {
+        setTeamPlanningEntries([]);
+        setTeamPlanningLoading(false);
+        setTeamPlanningError("Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.");
+        return;
+      }
+
       try {
         const fallback = await fetchTeamPlanningEntries(sharedTeamId);
         applyEntries(fallback);
@@ -921,6 +929,12 @@ export default function Planning() {
           return;
         }
         console.error('team planning fallback load error', fallbackError);
+        if (isPermissionDeniedError(fallbackError)) {
+          setTeamPlanningEntries([]);
+          setTeamPlanningLoading(false);
+          setTeamPlanningError("Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.");
+          return;
+        }
         setTeamPlanningEntries([]);
         setTeamPlanningLoading(false);
         setTeamPlanningError("Impossible de charger le planning d'équipe");

@@ -536,7 +536,7 @@ const DAY_KEYS = [
 const DEFAULT_EVENT_START = "09:00";
 const DEFAULT_EVENT_END = "10:00";
 
-const isPermissionDeniedError = (error) => {
+export const isPermissionDeniedError = (error) => {
   if (!error) return false;
   const code = error.code || error.status;
   if (code === "permission-denied" || code === "unauthenticated") {
