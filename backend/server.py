@@ -3273,13 +3273,19 @@ async def get_team_planning(
             db.collection("teams")
             .document(team_id)
             .collection("teamPlanning")
-            .order_by("start")
         )
         return list(planning_ref.stream())
 
     try:
         snapshots = await asyncio.to_thread(_load_entries)
         entries = [_serialize_team_planning_doc(snap) for snap in snapshots]
+        entries.sort(
+            key=lambda entry: (
+                _parse_iso_datetime(entry.get("start"))
+                or datetime.max.replace(tzinfo=timezone.utc),
+                entry.get("id") or "",
+            )
+        )
         return {"success": True, "entries": entries}
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning fetch error: %s", exc, exc_info=True)
