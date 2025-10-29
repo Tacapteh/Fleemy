@@ -958,6 +958,97 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
   };
 };
 
+export const fetchTeamPlanningEntries = async (teamId) => {
+  if (!teamId) {
+    return [];
+  }
+
+  const parseDate = (value) => {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : new Date(value);
+    }
+    if (value instanceof Timestamp) {
+      const dateValue = value.toDate();
+      return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      const dateValue = new Date(value);
+      return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+    }
+    if (typeof value === 'object' && typeof value.toDate === 'function') {
+      const dateValue = value.toDate();
+      return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+    }
+    return null;
+  };
+
+  try {
+    const planningRef = collection(db, 'teams', teamId, 'teamPlanning');
+    const snapshot = await getDocs(planningRef);
+
+    const entries = snapshot.docs
+      .map((docSnap) => {
+        const data = docSnap.data() || {};
+        const startDate = parseDate(data.start);
+        const endDate = parseDate(data.end);
+
+        if (!startDate || !endDate) {
+          return null;
+        }
+
+        const priceValue = Number(data.price);
+
+        return {
+          id: docSnap.id,
+          title: typeof data.title === 'string' ? data.title : '',
+          type: typeof data.type === 'string' ? data.type : 'event',
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+          color: typeof data.color === 'string' && data.color ? data.color : null,
+          status: typeof data.status === 'string' ? data.status : null,
+          price: Number.isFinite(priceValue) ? priceValue : null,
+          createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
+          createdByName:
+            typeof data.createdByName === 'string' ? data.createdByName : null,
+          createdByInitials:
+            typeof data.createdByInitials === 'string'
+              ? data.createdByInitials
+              : null,
+          teamId: typeof data.teamId === 'string' ? data.teamId : teamId,
+          synced: Boolean(data.synced),
+          personalEventId:
+            typeof data.personalEventId === 'string'
+              ? data.personalEventId
+              : null,
+        };
+      })
+      .filter(Boolean);
+
+    entries.sort((a, b) => {
+      const startDiff = new Date(a.start).getTime() - new Date(b.start).getTime();
+      if (startDiff !== 0) {
+        return startDiff;
+      }
+      if (a.id && b.id) {
+        return a.id.localeCompare(b.id);
+      }
+      return 0;
+    });
+
+    return entries;
+  } catch (error) {
+    if (isPermissionDeniedError(error)) {
+      return [];
+    }
+
+    console.error('fetchTeamPlanningEntries error', error);
+    throw error;
+  }
+};
+
 // Utilitaire pour normaliser les dates
 const normalizeDate = (date) => {
   if (!date) return null;

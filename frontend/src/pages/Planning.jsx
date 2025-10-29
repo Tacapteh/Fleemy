@@ -18,6 +18,7 @@ import {
   deleteWeeklyTask,
   setTeamContext,
   listenTeamMemberships,
+  fetchTeamPlanningEntries,
 } from '../firebase';
 import { apiFetch } from '../lib/api';
 import { showToast } from '../utils/toast';
@@ -136,6 +137,41 @@ const computeInitials = (name, email) => {
   }
 
   return '??';
+};
+
+const normalizeTeamPlanningEntries = (entries) => {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+
+  return entries
+    .map((entry) => {
+      if (!entry) {
+        return null;
+      }
+
+      const startDate = entry.start ? new Date(entry.start) : null;
+      const endDate = entry.end ? new Date(entry.end) : null;
+
+      if (
+        !startDate ||
+        Number.isNaN(startDate.getTime()) ||
+        !endDate ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        return null;
+      }
+
+      return {
+        ...entry,
+        start: startDate,
+        end: endDate,
+        createdByInitials:
+          entry?.createdByInitials ||
+          computeInitials(entry?.createdByName, entry?.createdBy),
+      };
+    })
+    .filter(Boolean);
 };
 
 const MEMBER_COLOR_CACHE = new Map();
@@ -856,29 +892,43 @@ export default function Planning() {
         if (cancelled) {
           return;
         }
-        const entries = Array.isArray(response?.entries) ? response.entries : [];
-        const normalized = entries
-          .map((entry) => {
-            const startDate = entry?.start ? new Date(entry.start) : null;
-            const endDate = entry?.end ? new Date(entry.end) : null;
-            if (!startDate || Number.isNaN(startDate.getTime()) || !endDate || Number.isNaN(endDate.getTime())) {
-              return null;
-            }
-            return {
-              ...entry,
-              start: startDate,
-              end: endDate,
-              createdByInitials:
-                entry?.createdByInitials || computeInitials(entry?.createdByName, entry?.createdBy),
-            };
-          })
-          .filter(Boolean);
+        const normalized = normalizeTeamPlanningEntries(response?.entries);
         setTeamPlanningEntries(normalized);
         setTeamPlanningLoading(false);
       } catch (error) {
         if (cancelled) {
           return;
         }
+
+        const status = error?.response?.status || null;
+        const message = typeof error?.message === 'string' ? error.message : '';
+        const shouldAttemptFallback =
+          status === 405 ||
+          status === 404 ||
+          (typeof message === 'string' && message.toLowerCase().includes('method not allowed'));
+
+        if (shouldAttemptFallback) {
+          console.warn('team planning API unavailable, attempting Firestore fallback', {
+            status,
+            message,
+          });
+          try {
+            const fallbackEntries = await fetchTeamPlanningEntries(sharedTeamId);
+            if (cancelled) {
+              return;
+            }
+            const normalizedFallback = normalizeTeamPlanningEntries(fallbackEntries);
+            setTeamPlanningEntries(normalizedFallback);
+            setTeamPlanningLoading(false);
+            setTeamPlanningError(null);
+            return;
+          } catch (fallbackError) {
+            if (!cancelled) {
+              console.error('team planning fallback load error', fallbackError);
+            }
+          }
+        }
+
         console.error('team planning load error', error);
         setTeamPlanningEntries([]);
         setTeamPlanningLoading(false);
