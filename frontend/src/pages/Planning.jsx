@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import PlannerGrid from '../components/PlannerGrid';
 import MonthGrid from '../components/MonthGrid';
@@ -18,6 +18,7 @@ import {
   deleteWeeklyTask,
   setTeamContext,
   listenTeamMemberships,
+  listenToTeamPlanningEntries,
   fetchTeamPlanningEntries,
 } from '../firebase';
 import { apiFetch } from '../lib/api';
@@ -25,11 +26,6 @@ import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
 import { ensureTeamsCache, readTeamsCache } from '../utils/teamCache';
-import {
-  shouldUseTeamPlanningApi,
-  markTeamPlanningApiSupported,
-  markTeamPlanningApiUnsupported,
-} from '../utils/teamPlanningApiSupport';
 import { SectionHeaderRow, Calendar, StatusSummaryCard } from '../ui';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -426,6 +422,7 @@ export default function Planning() {
   const [teamPlanningLoading, setTeamPlanningLoading] = useState(false);
   const [teamPlanningError, setTeamPlanningError] = useState(null);
   const [teamPlanningRefreshToken, setTeamPlanningRefreshToken] = useState(0);
+  const teamPlanningSubscriptionRef = useRef(null);
   const requestTeamPlanningRefresh = useCallback(() => {
     setTeamPlanningRefreshToken((token) => token + 1);
   }, []);
@@ -875,12 +872,21 @@ export default function Planning() {
 
   useEffect(() => {
     if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+      if (teamPlanningSubscriptionRef.current) {
+        teamPlanningSubscriptionRef.current();
+        teamPlanningSubscriptionRef.current = null;
+      }
+      setTeamPlanningEntries([]);
       setTeamPlanningLoading(false);
       setTeamPlanningError(null);
       return;
     }
 
     if (!sharedTeamId) {
+      if (teamPlanningSubscriptionRef.current) {
+        teamPlanningSubscriptionRef.current();
+        teamPlanningSubscriptionRef.current = null;
+      }
       setTeamPlanningEntries([]);
       setTeamPlanningLoading(false);
       setTeamPlanningError(null);
@@ -891,89 +897,54 @@ export default function Planning() {
     setTeamPlanningLoading(true);
     setTeamPlanningError(null);
 
-    const loadFallbackPlanning = async () => {
+    const applyEntries = (entries) => {
+      if (cancelled) {
+        return;
+      }
+      const normalized = normalizeTeamPlanningEntries(entries);
+      setTeamPlanningEntries(normalized);
+      setTeamPlanningLoading(false);
+      setTeamPlanningError(null);
+    };
+
+    const handleSnapshotError = async (error) => {
+      console.error('team planning realtime error', error);
+      if (cancelled) {
+        return;
+      }
+
       try {
-        const fallbackEntries = await fetchTeamPlanningEntries(sharedTeamId);
-        if (cancelled) {
-          return true;
-        }
-        const normalizedFallback = normalizeTeamPlanningEntries(fallbackEntries);
-        setTeamPlanningEntries(normalizedFallback);
-        setTeamPlanningLoading(false);
-        setTeamPlanningError(null);
-        return true;
+        const fallback = await fetchTeamPlanningEntries(sharedTeamId);
+        applyEntries(fallback);
       } catch (fallbackError) {
         if (cancelled) {
-          return false;
+          return;
         }
         console.error('team planning fallback load error', fallbackError);
         setTeamPlanningEntries([]);
         setTeamPlanningLoading(false);
         setTeamPlanningError("Impossible de charger le planning d'équipe");
-        return false;
       }
     };
 
-    const loadPlanning = async () => {
-      if (!shouldUseTeamPlanningApi()) {
-        await loadFallbackPlanning();
-        return;
-      }
+    if (teamPlanningSubscriptionRef.current) {
+      teamPlanningSubscriptionRef.current();
+      teamPlanningSubscriptionRef.current = null;
+    }
 
-      try {
-        const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
-          suppressErrorLog: true,
-        });
-        if (cancelled) {
-          return;
-        }
-        const normalized = normalizeTeamPlanningEntries(response?.entries);
-        setTeamPlanningEntries(normalized);
-        setTeamPlanningLoading(false);
-        markTeamPlanningApiSupported();
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        const status = error?.response?.status || null;
-        const message = typeof error?.message === 'string' ? error.message : '';
-        const shouldAttemptFallback =
-          status === 405 ||
-          status === 404 ||
-          (typeof message === 'string' && message.toLowerCase().includes('method not allowed'));
-
-        if (shouldAttemptFallback) {
-          console.warn('team planning API unavailable, attempting Firestore fallback', {
-            status,
-            message,
-          });
-          try {
-            markTeamPlanningApiUnsupported();
-            const handled = await loadFallbackPlanning();
-            if (handled) {
-              return;
-            }
-          } catch (fallbackError) {
-            if (!cancelled) {
-              console.error('team planning fallback load error', fallbackError);
-            }
-          }
-        }
-
-        console.error('team planning load error', error);
-        setTeamPlanningEntries([]);
-        setTeamPlanningLoading(false);
-        setTeamPlanningError("Impossible de charger le planning d'équipe");
-      }
-    };
-
-    loadPlanning();
+    teamPlanningSubscriptionRef.current = listenToTeamPlanningEntries(sharedTeamId, {
+      onData: applyEntries,
+      onError: handleSnapshotError,
+    });
 
     return () => {
       cancelled = true;
+      if (teamPlanningSubscriptionRef.current) {
+        teamPlanningSubscriptionRef.current();
+        teamPlanningSubscriptionRef.current = null;
+      }
     };
-  }, [planningTab, sharedTeamId, teamPlanningRefreshToken, weekStartISO]);
+  }, [planningTab, sharedTeamId, teamPlanningRefreshToken]);
 
   const planningContext = useMemo(() => {
     if (!user?.uid) {
@@ -1437,7 +1408,10 @@ export default function Planning() {
           return null;
         }
         const rawDayIndex = Math.floor((startDate.getTime() - weekStartMs) / msInDay);
-        const dayIndex = Math.min(6, Math.max(0, rawDayIndex));
+        if (rawDayIndex < 0 || rawDayIndex > 6) {
+          return null;
+        }
+        const dayIndex = rawDayIndex;
         const color = generateMemberColor(task.createdBy || task.createdByName || task.id);
         return {
           taskId: task.id,
