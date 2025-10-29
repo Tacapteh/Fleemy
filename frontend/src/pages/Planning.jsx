@@ -23,7 +23,7 @@ import { apiFetch } from '../lib/api';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
-import { readTeamsCache } from '../utils/teamCache';
+import { ensureTeamsCache, readTeamsCache } from '../utils/teamCache';
 import { SectionHeaderRow, Calendar, StatusSummaryCard } from '../ui';
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -110,6 +110,61 @@ const resolveCachedTeamName = (teamId) => {
 
   return null;
 };
+
+const computeInitials = (name, email) => {
+  if (typeof name === 'string' && name.trim()) {
+    const parts = name
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (parts.length) {
+      const initials = parts
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join('');
+      if (initials) {
+        return initials;
+      }
+    }
+  }
+
+  if (typeof email === 'string' && email.trim()) {
+    const prefix = email.split('@')[0] || '';
+    if (prefix) {
+      return prefix.slice(0, 2).toUpperCase();
+    }
+  }
+
+  return '??';
+};
+
+const MEMBER_COLOR_CACHE = new Map();
+
+const generateMemberColor = (seed) => {
+  const cacheKey = seed || 'member';
+  if (MEMBER_COLOR_CACHE.has(cacheKey)) {
+    return MEMBER_COLOR_CACHE.get(cacheKey);
+  }
+
+  const value = cacheKey.toString();
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = value.charCodeAt(index) + ((hash << 5) - hash);
+    hash |= 0;
+  }
+
+  const hue = Math.abs(hash) % 360;
+  const saturation = 62;
+  const lightness = 45;
+  const background = `hsl(${hue}deg ${saturation}% ${lightness}%)`;
+  const border = `hsl(${hue}deg ${saturation}% ${Math.min(72, lightness + 18)}%)`;
+  const color = { background, border, text: '#ffffff' };
+  MEMBER_COLOR_CACHE.set(cacheKey, color);
+  return color;
+};
+
+const TEAM_PLANNING_TAB_PERSONAL = 'personal';
+const TEAM_PLANNING_TAB_SHARED = 'team';
 
 const toIsoDate = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
@@ -268,12 +323,33 @@ export default function Planning() {
   const rawViewParam = (searchParams.get('view') || '').toLowerCase();
   const viewParam = rawViewParam === 'month' ? 'month' : 'week';
   const [view, setView] = useState(viewParam);
+  const [planningTab, setPlanningTab] = useState(
+    isTeamContext ? TEAM_PLANNING_TAB_SHARED : TEAM_PLANNING_TAB_PERSONAL,
+  );
 
   useEffect(() => {
     if (view !== viewParam) {
       setView(viewParam);
     }
   }, [viewParam, view]);
+
+  useEffect(() => {
+    if (planningTab === TEAM_PLANNING_TAB_SHARED && view !== 'week') {
+      setView('week');
+    }
+  }, [planningTab, view]);
+
+  useEffect(() => {
+    if (isTeamContext) {
+      setPlanningTab(TEAM_PLANNING_TAB_SHARED);
+    }
+  }, [isTeamContext]);
+
+  useEffect(() => {
+    if (planningTab === TEAM_PLANNING_TAB_SHARED && !sharedTeamId) {
+      setPlanningTab(TEAM_PLANNING_TAB_PERSONAL);
+    }
+  }, [planningTab, sharedTeamId]);
 
   const handleViewChange = useCallback(
     (nextView) => {
@@ -306,6 +382,16 @@ export default function Planning() {
   const [membersError, setMembersError] = useState(null);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [teamMembershipReady, setTeamMembershipReady] = useState(!isTeamContext);
+  const [availableTeams, setAvailableTeams] = useState([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState(null);
+  const [teamPlanningEntries, setTeamPlanningEntries] = useState([]);
+  const [teamPlanningLoading, setTeamPlanningLoading] = useState(false);
+  const [teamPlanningError, setTeamPlanningError] = useState(null);
+  const [teamPlanningRefreshToken, setTeamPlanningRefreshToken] = useState(0);
+  const requestTeamPlanningRefresh = useCallback(() => {
+    setTeamPlanningRefreshToken((token) => token + 1);
+  }, []);
 
   const { team } = useTeam(isTeamContext ? routeTeamId : null);
   const teamName = team?.name || null;
@@ -318,6 +404,49 @@ export default function Planning() {
   }, [isTeamContext, teamId]);
 
   const resolvedTeamName = teamName || cachedTeamName || null;
+
+  const resolvedTeamFromList = useMemo(() => {
+    if (!Array.isArray(availableTeams) || availableTeams.length === 0) {
+      return null;
+    }
+    if (isTeamContext && teamId) {
+      const matched = availableTeams.find((candidate) => matchTeamId(candidate, teamId));
+      if (matched) {
+        return matched;
+      }
+    }
+    return availableTeams[0] || null;
+  }, [availableTeams, isTeamContext, teamId]);
+
+  const sharedTeamId = useMemo(() => {
+    if (isTeamContext && teamId) {
+      return teamId;
+    }
+    if (resolvedTeamFromList) {
+      return (
+        resolvedTeamFromList.team_id ||
+        resolvedTeamFromList.teamId ||
+        resolvedTeamFromList.id ||
+        null
+      );
+    }
+    return null;
+  }, [isTeamContext, teamId, resolvedTeamFromList]);
+
+  const sharedTeamName = useMemo(() => {
+    if (isTeamContext && resolvedTeamName) {
+      return resolvedTeamName;
+    }
+    if (!resolvedTeamFromList) {
+      return null;
+    }
+    return (
+      resolvedTeamFromList.name ||
+      resolvedTeamFromList.displayName ||
+      resolvedTeamFromList.label ||
+      null
+    );
+  }, [isTeamContext, resolvedTeamName, resolvedTeamFromList]);
 
   const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
   const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
@@ -425,6 +554,42 @@ export default function Planning() {
       setTeamContext(null);
     }
   }, [isTeamContext, teamId, resolvedTeamName, user?.uid]);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setAvailableTeams([]);
+      setTeamsLoading(false);
+      setTeamsError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setTeamsLoading(true);
+    setTeamsError(null);
+
+    ensureTeamsCache(() => apiFetch('/teams/my'))
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        const teamsList = Array.isArray(result?.teams) ? result.teams : [];
+        setAvailableTeams(teamsList);
+        setTeamsLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        console.error('Planning: unable to load teams', error);
+        setAvailableTeams([]);
+        setTeamsError("Impossible de charger les équipes");
+        setTeamsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -659,9 +824,76 @@ export default function Planning() {
     user?.email,
   ]);
 
+  useEffect(() => {
+    if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+      setTeamPlanningLoading(false);
+      setTeamPlanningError(null);
+      return;
+    }
+
+    if (!sharedTeamId) {
+      setTeamPlanningEntries([]);
+      setTeamPlanningLoading(false);
+      setTeamPlanningError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setTeamPlanningLoading(true);
+    setTeamPlanningError(null);
+
+    const loadPlanning = async () => {
+      try {
+        const response = await apiFetch(`/teams/${sharedTeamId}/planning`);
+        if (cancelled) {
+          return;
+        }
+        const entries = Array.isArray(response?.entries) ? response.entries : [];
+        const normalized = entries
+          .map((entry) => {
+            const startDate = entry?.start ? new Date(entry.start) : null;
+            const endDate = entry?.end ? new Date(entry.end) : null;
+            if (!startDate || Number.isNaN(startDate.getTime()) || !endDate || Number.isNaN(endDate.getTime())) {
+              return null;
+            }
+            return {
+              ...entry,
+              start: startDate,
+              end: endDate,
+              createdByInitials:
+                entry?.createdByInitials || computeInitials(entry?.createdByName, entry?.createdBy),
+            };
+          })
+          .filter(Boolean);
+        setTeamPlanningEntries(normalized);
+        setTeamPlanningLoading(false);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        console.error('team planning load error', error);
+        setTeamPlanningEntries([]);
+        setTeamPlanningLoading(false);
+        setTeamPlanningError("Impossible de charger le planning d'équipe");
+      }
+    };
+
+    loadPlanning();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planningTab, sharedTeamId, teamPlanningRefreshToken, weekStartISO]);
+
   const planningContext = useMemo(() => {
     if (!user?.uid) {
       return null;
+    }
+    if (planningTab === TEAM_PLANNING_TAB_SHARED) {
+      if (!sharedTeamId) {
+        return null;
+      }
+      return { type: 'team-shared', teamId: sharedTeamId, userId: user.uid };
     }
     if (isTeamContext) {
       if (!teamMembershipReady || !teamId || !selectedMemberId) {
@@ -670,9 +902,20 @@ export default function Planning() {
       return { type: 'team', teamId, memberUid: selectedMemberId };
     }
     return { type: 'personal', userId: user.uid };
-  }, [isTeamContext, teamId, selectedMemberId, teamMembershipReady, user?.uid]);
+  }, [
+    planningTab,
+    sharedTeamId,
+    isTeamContext,
+    teamMembershipReady,
+    teamId,
+    selectedMemberId,
+    user?.uid,
+  ]);
 
   const readOnly = useMemo(() => {
+    if (planningTab === TEAM_PLANNING_TAB_SHARED) {
+      return false;
+    }
     if (!isTeamContext) {
       return false;
     }
@@ -680,9 +923,9 @@ export default function Planning() {
       return true;
     }
     return selectedMemberId !== user.uid;
-  }, [isTeamContext, selectedMemberId, user?.uid]);
+  }, [planningTab, isTeamContext, selectedMemberId, user?.uid]);
 
-  const shouldDelayEvents = isTeamContext && !teamMembershipReady;
+  const shouldDelayEvents = planningTab !== TEAM_PLANNING_TAB_SHARED && isTeamContext && !teamMembershipReady;
 
   const {
     slots: events,
@@ -692,7 +935,7 @@ export default function Planning() {
     context: planningContext,
     weekStart,
     weekEnd,
-    enabled: !shouldDelayEvents,
+    enabled: planningTab !== TEAM_PLANNING_TAB_SHARED && !shouldDelayEvents,
   });
 
   const calculateRecapTotals = useCallback(
@@ -980,16 +1223,176 @@ export default function Planning() {
     [clientMap, clients, resolveStatusCategory],
   );
 
+  const effectiveTasksContext = planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext;
+
   const {
     tasks: weeklyTasks,
     occurrences: taskOccurrences,
     loading: tasksLoading,
     error: tasksError,
-  } = useTasks(planningContext, weekStartISO);
+  } = useTasks(effectiveTasksContext, weekStartISO);
 
+  const teamEntriesForWeek = useMemo(() => {
+    if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+      return [];
+    }
+    if (!Array.isArray(teamPlanningEntries) || teamPlanningEntries.length === 0) {
+      return [];
+    }
+    const startTime = weekStart.getTime();
+    const endTime = weekEnd.getTime();
+
+    return teamPlanningEntries
+      .map((entry) => {
+        const startDate = entry.start instanceof Date ? entry.start : new Date(entry.start);
+        const endDate = entry.end instanceof Date ? entry.end : new Date(entry.end);
+        if (!startDate || Number.isNaN(startDate.getTime()) || !endDate || Number.isNaN(endDate.getTime())) {
+          return null;
+        }
+        return {
+          ...entry,
+          start: startDate,
+          end: endDate,
+          createdByInitials: entry.createdByInitials || computeInitials(entry.createdByName, entry.createdBy),
+        };
+      })
+      .filter((entry) => {
+        if (!entry) {
+          return false;
+        }
+        const startDate = entry.start;
+        const time = startDate.getTime();
+        return time >= startTime && time <= endTime;
+      });
+  }, [planningTab, teamPlanningEntries, weekStart, weekEnd]);
+
+  const teamEventBlocks = useMemo(() => {
+    if (!teamEntriesForWeek.length) {
+      return [];
+    }
+    return teamEntriesForWeek.filter((entry) => (entry?.type || 'event').toLowerCase() !== 'task');
+  }, [teamEntriesForWeek]);
+
+  const teamTaskBlocks = useMemo(() => {
+    if (!teamEntriesForWeek.length) {
+      return [];
+    }
+    return teamEntriesForWeek.filter((entry) => (entry?.type || '').toLowerCase() === 'task');
+  }, [teamEntriesForWeek]);
+
+  const teamEventsMerged = useMemo(() => {
+    if (!teamEventBlocks.length) {
+      return [];
+    }
+    const groups = new Map();
+    teamEventBlocks.forEach((entry) => {
+      const startKey = entry.start.toISOString();
+      const endKey = entry.end.toISOString();
+      const key = `${startKey}|${endKey}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key).push(entry);
+    });
+
+    const merged = [];
+    groups.forEach((list) => {
+      const sorted = [...list].sort((a, b) => {
+        const diff = a.start.getTime() - b.start.getTime();
+        if (diff !== 0) {
+          return diff;
+        }
+        return (a.createdByName || '').localeCompare(b.createdByName || '');
+      });
+      const base = sorted[0];
+      const participants = sorted.map((item) => {
+        const color = generateMemberColor(item.createdBy || item.createdByName || item.createdByInitials || 'member');
+        return {
+          id: item.createdBy || item.id,
+          name: item.createdByName || 'Membre',
+          initials: item.createdByInitials || computeInitials(item.createdByName, item.createdBy),
+          background: color.background,
+          border: color.border,
+          text: color.text,
+        };
+      });
+      const tooltipDetails = sorted.map((item) => `${item.title || 'Bloc'} — ${item.createdByName || 'Membre'}`);
+      merged.push({
+        ...base,
+        teamParticipants: participants,
+        teamMerged: sorted.length > 1,
+        teamMergedEntries: sorted,
+        teamMergedTooltip: tooltipDetails.join('\n'),
+      });
+    });
+
+    return merged;
+  }, [teamEventBlocks]);
+
+  const teamTaskOccurrences = useMemo(() => {
+    if (!teamTaskBlocks.length) {
+      return [];
+    }
+    const weekStartMs = weekStart.getTime();
+    const msInDay = 24 * 60 * 60 * 1000;
+
+    return teamTaskBlocks
+      .map((task) => {
+        const startDate = task.start;
+        const endDate = task.end;
+        if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime())) {
+          return null;
+        }
+        if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+          return null;
+        }
+        const rawDayIndex = Math.floor((startDate.getTime() - weekStartMs) / msInDay);
+        const dayIndex = Math.min(6, Math.max(0, rawDayIndex));
+        const color = generateMemberColor(task.createdBy || task.createdByName || task.id);
+        return {
+          taskId: task.id,
+          occurrenceId: task.id,
+          dayIndex,
+          startDate,
+          endDate,
+          label: task.title || 'Tâche',
+          color: task.color || color.background,
+          price: typeof task.price === 'number' ? task.price : null,
+          icon: task.icon || null,
+          readOnly: false,
+          teamParticipants: [
+            {
+              id: task.createdBy || task.id,
+              name: task.createdByName || 'Membre',
+              initials: task.createdByInitials || computeInitials(task.createdByName, task.createdBy),
+              background: color.background,
+              border: color.border,
+              text: color.text,
+            },
+          ],
+        };
+      })
+      .filter(Boolean);
+  }, [teamTaskBlocks, weekStart]);
+
+  const activeEvents = useMemo(() => {
+    if (planningTab === TEAM_PLANNING_TAB_SHARED) {
+      return teamEventsMerged;
+    }
+    return events;
+  }, [planningTab, teamEventsMerged, events]);
+
+  const activeTaskOccurrences = useMemo(() => {
+    if (planningTab === TEAM_PLANNING_TAB_SHARED) {
+      return teamTaskOccurrences;
+    }
+    return taskOccurrences;
+  }, [planningTab, teamTaskOccurrences, taskOccurrences]);
+
+  const activeWeeklyTasks = planningTab === TEAM_PLANNING_TAB_SHARED ? [] : weeklyTasks;
   const recapTotals = useMemo(
-    () => calculateRecapTotals(events, taskOccurrences, hourlyRateGlobal),
-    [calculateRecapTotals, events, taskOccurrences, hourlyRateGlobal],
+    () => calculateRecapTotals(activeEvents, activeTaskOccurrences, hourlyRateGlobal),
+    [calculateRecapTotals, activeEvents, activeTaskOccurrences, hourlyRateGlobal],
   );
 
   const summaryCards = useMemo(
@@ -1023,11 +1426,11 @@ export default function Planning() {
   );
 
   const tasksSummary = useMemo(() => {
-    if (!Array.isArray(taskOccurrences) || taskOccurrences.length === 0) {
+    if (!Array.isArray(activeTaskOccurrences) || activeTaskOccurrences.length === 0) {
       return { total: 0, items: [] };
     }
 
-    const items = taskOccurrences
+    const items = activeTaskOccurrences
       .map((occurrence) => {
         const rawPrice = occurrence?.price;
         const priceNumber = Number(rawPrice);
@@ -1070,11 +1473,14 @@ export default function Planning() {
       total,
       items: items.map(({ id, icon, label, price }) => ({ id, icon, label, price })),
     };
-  }, [taskOccurrences]);
+  }, [activeTaskOccurrences]);
 
   const handleDeleteWeeklyTask = useCallback(
     async (taskId) => {
       if (readOnly) {
+        return;
+      }
+      if (planningTab === TEAM_PLANNING_TAB_SHARED) {
         return;
       }
       if (!planningContext) {
@@ -1089,7 +1495,7 @@ export default function Planning() {
         setWeeklyTaskModal({ open: false, task: null });
       }
     },
-    [planningContext, readOnly]
+    [planningContext, planningTab, readOnly]
   );
 
   useEffect(() => {
@@ -1100,7 +1506,7 @@ export default function Planning() {
         return;
       }
       if (!taskId) return;
-      const original = weeklyTasks.find((task) => task.id === taskId);
+      const original = activeWeeklyTasks.find((task) => task.id === taskId);
       if (original) {
         setWeeklyTaskModal({ open: true, task: original });
       }
@@ -1110,7 +1516,7 @@ export default function Planning() {
       if (readOnly) {
         return;
       }
-      const original = weeklyTasks.find((task) => task.id === taskId);
+      const original = activeWeeklyTasks.find((task) => task.id === taskId);
       if (!original) {
         return;
       }
@@ -1128,7 +1534,7 @@ export default function Planning() {
         if (typeof fn === 'function') fn();
       });
     };
-  }, [weeklyTasks, readOnly, handleDeleteWeeklyTask]);
+  }, [activeWeeklyTasks, planningTab, readOnly, handleDeleteWeeklyTask]);
 
   const openCreateModal = useCallback(
     (date) => {
@@ -1157,9 +1563,9 @@ export default function Planning() {
   }, []);
 
   const openWeeklyTaskModal = useCallback(() => {
-    if (readOnly || !planningContext) return;
+    if (readOnly || !planningContext || planningTab === TEAM_PLANNING_TAB_SHARED) return;
     setWeeklyTaskModal({ open: true, task: null });
-  }, [readOnly, planningContext]);
+  }, [readOnly, planningContext, planningTab]);
 
   const closeWeeklyTaskModal = useCallback(() => {
     setWeeklyTaskModal({ open: false, task: null });
@@ -1181,52 +1587,154 @@ export default function Planning() {
 
   const handleSaveEvent = useCallback(
     async (data) => {
-      if (!planningContext || readOnly || modal.readOnly) {
+      if (!data) {
         return;
       }
-      try {
-        const dayIndex = data.day ?? data.dayIndex ?? 0;
-        const eventDate = new Date(weekStart);
-        eventDate.setDate(weekStart.getDate() + dayIndex);
-        const [startHour, startMinute] = toTimeString(data.start || DEFAULT_START).split(':').map(Number);
-        const [endHour, endMinute] = toTimeString(data.end || DEFAULT_END).split(':').map(Number);
 
-        const start = new Date(eventDate);
-        start.setHours(startHour, startMinute, 0, 0);
-        const end = new Date(eventDate);
-        end.setHours(endHour, endMinute, 0, 0);
+      const dayIndex = data.day ?? data.dayIndex ?? 0;
+      const eventDate = new Date(weekStart);
+      eventDate.setDate(weekStart.getDate() + dayIndex);
+      const [startHour, startMinute] = toTimeString(data.start || DEFAULT_START).split(':').map(Number);
+      const [endHour, endMinute] = toTimeString(data.end || DEFAULT_END).split(':').map(Number);
 
-        if (end <= start) {
-          showToast("L'heure de fin doit être après l'heure de début", true);
+      const start = new Date(eventDate);
+      start.setHours(startHour, startMinute, 0, 0);
+      const end = new Date(eventDate);
+      end.setHours(endHour, endMinute, 0, 0);
+
+      if (end <= start) {
+        showToast("L'heure de fin doit être après l'heure de début", true);
+        return;
+      }
+
+      const rawType = typeof data.type === 'string' ? data.type.trim().toLowerCase() : '';
+      const eventType = rawType === 'absence' ? 'absence' : 'normal';
+
+      const paymentStatusCandidates = [data.payment_status, data.status, data.paymentStatus];
+      let resolvedStatus = eventType === 'absence' ? 'not_worked' : 'unpaid';
+      for (const candidate of paymentStatusCandidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+          resolvedStatus = candidate.trim();
+          break;
+        }
+      }
+
+      const shouldClearClient = eventType === 'absence';
+      const sanitizedClientId = shouldClearClient ? '' : data.client_id || '';
+      const sanitizedClientName = shouldClearClient ? '' : data.client_name || '';
+      const resolvedTitle = data.description || data.title || sanitizedClientName || 'Bloc';
+
+      if (planningTab === TEAM_PLANNING_TAB_SHARED) {
+        if (!user?.uid || !sharedTeamId) {
+          closeModal();
           return;
         }
 
-        const rawType = typeof data.type === 'string' ? data.type.trim().toLowerCase() : '';
-        const eventType = rawType === 'absence' ? 'absence' : 'normal';
+        try {
+          const teamPayload = {
+            id: data.id || data.teamPlanningId || data.team_planning_id || null,
+            title: resolvedTitle,
+            type: 'event',
+            start: start.toISOString(),
+            end: end.toISOString(),
+            status: resolvedStatus,
+            color: data.color || '#2563eb',
+            price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
+            createdBy: user.uid,
+            createdByName: user.displayName || user.email || 'Moi',
+            createdByInitials: computeInitials(user.displayName, user.email),
+            teamId: sharedTeamId,
+            synced: Boolean(data.synced),
+            personalEventId: data.personalEventId || data.id || null,
+          };
 
-        const paymentStatusCandidates = [
-          data.payment_status,
-          data.status,
-          data.paymentStatus,
-        ];
-        let resolvedStatus = eventType === 'absence' ? 'not_worked' : 'unpaid';
-        for (const candidate of paymentStatusCandidates) {
-          if (typeof candidate === 'string' && candidate.trim()) {
-            resolvedStatus = candidate.trim();
-            break;
+          const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
+            method: 'POST',
+            body: JSON.stringify(teamPayload),
+          });
+
+          requestTeamPlanningRefresh();
+
+          if (!data.synced) {
+            const personalPayload = {
+              id: data.personalEventId || data.id || null,
+              start: start.toISOString(),
+              end: end.toISOString(),
+              type: eventType,
+              client: shouldClearClient ? '' : sanitizedClientName || resolvedTitle,
+              status: resolvedStatus,
+              payment_status: resolvedStatus,
+              hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
+              duration: Math.round((end - start) / (60 * 1000)),
+              task_id: shouldClearClient ? null : data.task_id || null,
+              description: data.description || '',
+              client_id: sanitizedClientId,
+              client_name: sanitizedClientName,
+              day: DAY_KEYS[dayIndex] || 'monday',
+              team_planning_id: response?.entry?.id || teamPayload.id || null,
+              synced: true,
+            };
+
+            let syncedPersonalId = personalPayload.id || null;
+            try {
+              const syncedEvent = await saveEventNew(
+                { type: 'personal', userId: user.uid },
+                personalPayload,
+              );
+              syncedPersonalId = syncedEvent?.id || personalPayload.id || null;
+              requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
+            } catch (syncError) {
+              console.warn('Unable to synchronise personal planning from team event', syncError);
+            }
+
+            if (syncedPersonalId && response?.entry?.id) {
+              try {
+                await apiFetch(`/teams/${sharedTeamId}/planning`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    id: response.entry.id,
+                    title: resolvedTitle,
+                    type: 'event',
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                    status: resolvedStatus,
+                    color: data.color || '#2563eb',
+                    price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
+                    createdBy: user.uid,
+                    createdByName: user.displayName || user.email || 'Moi',
+                    createdByInitials: computeInitials(user.displayName, user.email),
+                    teamId: sharedTeamId,
+                    synced: true,
+                    personalEventId: syncedPersonalId,
+                  }),
+                });
+              } catch (linkError) {
+                console.warn('Unable to associer le bloc équipe à votre événement personnel', linkError);
+              }
+            }
           }
+
+          showToast("Bloc d'équipe enregistré avec succès");
+        } catch (error) {
+          console.error('team planning save error', error);
+          showToast("Impossible d'enregistrer le bloc d'équipe", true);
+        } finally {
+          closeModal();
         }
+        return;
+      }
 
-        const shouldClearClient = eventType === 'absence';
-        const sanitizedClientId = shouldClearClient ? '' : data.client_id || '';
-        const sanitizedClientName = shouldClearClient ? '' : data.client_name || '';
+      if (!planningContext || readOnly || modal.readOnly) {
+        return;
+      }
 
+      try {
         const payload = {
           id: data.id,
           start: start.toISOString(),
           end: end.toISOString(),
           type: eventType,
-          client: shouldClearClient ? '' : sanitizedClientName || data.description || '',
+          client: shouldClearClient ? '' : sanitizedClientName || resolvedTitle,
           status: resolvedStatus,
           payment_status: resolvedStatus,
           hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
@@ -1236,10 +1744,56 @@ export default function Planning() {
           client_id: sanitizedClientId,
           client_name: sanitizedClientName,
           day: DAY_KEYS[dayIndex] || 'monday',
+          team_planning_id: data.teamPlanningId || data.team_planning_id || null,
+          synced: Boolean(data.synced),
         };
 
-        await saveEventNew(planningContext, payload);
+        const savedEvent = await saveEventNew(planningContext, payload);
         requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
+        const savedPersonalId = savedEvent?.id || payload.id || null;
+
+        if (sharedTeamId && !data.synced) {
+          try {
+            const teamPayload = {
+              id: data.teamPlanningId || data.team_planning_id || null,
+              title: resolvedTitle,
+              type: 'event',
+              start: start.toISOString(),
+              end: end.toISOString(),
+              status: resolvedStatus,
+              color: data.color || '#2563eb',
+              price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
+              createdBy: user?.uid || null,
+              createdByName: user?.displayName || user?.email || 'Moi',
+              createdByInitials: computeInitials(user?.displayName, user?.email),
+              teamId: sharedTeamId,
+              synced: true,
+              personalEventId: savedPersonalId || data.id || null,
+            };
+
+            const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
+              method: 'POST',
+              body: JSON.stringify(teamPayload),
+            });
+
+            if (response?.entry?.id && savedPersonalId) {
+              try {
+                await saveEventNew(planningContext, {
+                  id: savedPersonalId,
+                  team_planning_id: response.entry.id,
+                  synced: true,
+                });
+              } catch (attachError) {
+                console.warn('Unable to attach team planning identifier to event', attachError);
+              }
+            }
+
+            requestTeamPlanningRefresh();
+          } catch (teamSyncError) {
+            console.error('team planning sync error', teamSyncError);
+          }
+        }
+
         showToast('Événement sauvegardé avec succès');
       } catch (error) {
         console.error('saveEventNew error', error);
@@ -1250,17 +1804,56 @@ export default function Planning() {
     },
     [
       planningContext,
+      planningTab,
       readOnly,
       modal.readOnly,
       weekStart,
       weekEnd,
       requestWeekSlotsRefresh,
+      requestTeamPlanningRefresh,
       closeModal,
+      sharedTeamId,
+      user?.uid,
+      user?.displayName,
+      user?.email,
     ]
   );
 
   const handleDeleteEvent = useCallback(
     async (id) => {
+      if (!id) {
+        return;
+      }
+
+      if (planningTab === TEAM_PLANNING_TAB_SHARED) {
+        if (!sharedTeamId) {
+          closeModal();
+          return;
+        }
+        try {
+          await apiFetch(`/teams/${sharedTeamId}/planning/${id}`, { method: 'DELETE' });
+          requestTeamPlanningRefresh();
+
+          const personalId = modal.event?.personalEventId || modal.event?.team_planning_id || null;
+          if (personalId && user?.uid) {
+            try {
+              await deleteEventNew({ type: 'personal', userId: user.uid }, personalId);
+              requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
+            } catch (personalError) {
+              console.warn('Unable to delete personal event linked to team block', personalError);
+            }
+          }
+
+          showToast("Bloc d'équipe supprimé");
+        } catch (error) {
+          console.error('team planning delete error', error);
+          showToast("Impossible de supprimer le bloc d'équipe", true);
+        } finally {
+          closeModal();
+        }
+        return;
+      }
+
       if (!planningContext || readOnly || modal.readOnly) {
         return;
       }
@@ -1277,12 +1870,17 @@ export default function Planning() {
     },
     [
       planningContext,
+      planningTab,
       readOnly,
       modal.readOnly,
+      modal.event,
       weekStart,
       weekEnd,
       requestWeekSlotsRefresh,
+      requestTeamPlanningRefresh,
       closeModal,
+      sharedTeamId,
+      user?.uid,
     ]
   );
 
@@ -1313,9 +1911,12 @@ export default function Planning() {
 
   const currentLabel = view === 'week' ? formatWeekLabel(currentDate) : formatMonthLabel(currentDate);
 
-  const taskSources = taskOccurrences;
+  const taskSources = activeTaskOccurrences;
 
-  const showSkeleton = eventsLoading || tasksLoading;
+  const showSkeleton =
+    planningTab === TEAM_PLANNING_TAB_SHARED
+      ? teamPlanningLoading
+      : eventsLoading || tasksLoading;
 
   useEffect(() => {
     if (!isTeamContext) {
@@ -1342,15 +1943,19 @@ export default function Planning() {
     membersError,
   ]);
 
-  const pageTitle = isTeamContext
-    ? resolvedTeamName
+  const pageTitle = planningTab === TEAM_PLANNING_TAB_SHARED
+    ? sharedTeamName
+      ? `Planning ${sharedTeamName}`
+      : 'Planning d’équipe'
+    : isTeamContext && resolvedTeamName
       ? `Planning ${resolvedTeamName}`
-      : 'Planning équipe'
-    : 'Mon planning';
+      : 'Mon planning';
 
-  const subtitle = isTeamContext
-    ? 'Consultez et organisez les plannings de votre équipe'
-    : 'Gérez vos événements et vos tâches hebdomadaires';
+  const subtitle = planningTab === TEAM_PLANNING_TAB_SHARED
+    ? 'Planifiez les créneaux partagés de votre équipe en temps réel'
+    : isTeamContext
+      ? 'Consultez et organisez les plannings de votre équipe'
+      : 'Gérez vos événements et vos tâches hebdomadaires';
 
   return (
     <div className="space-y-6 text-slate-900 dark:text-slate-100">
@@ -1367,16 +1972,60 @@ export default function Planning() {
             className="items-start gap-3"
           />
           <p className="text-sm text-gray-600 dark:text-slate-300">{subtitle}</p>
-          {eventsError && (
+          {eventsError && planningTab !== TEAM_PLANNING_TAB_SHARED && (
             <p className="text-sm text-red-600">{eventsError}</p>
           )}
-          {tasksError && (
+          {tasksError && planningTab !== TEAM_PLANNING_TAB_SHARED && (
             <p className="text-sm text-red-600">{tasksError}</p>
+          )}
+          {teamPlanningError && planningTab === TEAM_PLANNING_TAB_SHARED && (
+            <p className="text-sm text-red-600">{teamPlanningError}</p>
           )}
           {membersError && (
             <p className="text-sm text-red-600">{membersError}</p>
           )}
         </header>
+
+        {(sharedTeamId || (Array.isArray(availableTeams) && availableTeams.length > 0)) && (
+          <div
+            role="tablist"
+            aria-label="Mode de planning"
+            className="mt-3 flex w-full flex-wrap gap-2 rounded-lg bg-slate-100 p-1 dark:bg-slate-800/60 sm:w-auto"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={planningTab === TEAM_PLANNING_TAB_PERSONAL}
+              onClick={() => setPlanningTab(TEAM_PLANNING_TAB_PERSONAL)}
+              className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
+                planningTab === TEAM_PLANNING_TAB_PERSONAL
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                  : 'bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40'
+              }`}
+            >
+              Mon planning
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={planningTab === TEAM_PLANNING_TAB_SHARED}
+              onClick={() => setPlanningTab(TEAM_PLANNING_TAB_SHARED)}
+              disabled={!sharedTeamId}
+              aria-disabled={!sharedTeamId}
+              className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
+                planningTab === TEAM_PLANNING_TAB_SHARED
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                  : 'bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40'
+              } ${sharedTeamId ? '' : 'cursor-not-allowed opacity-60'}`}
+            >
+              Planning d'équipe
+            </button>
+          </div>
+        )}
+
+        {teamsError && (
+          <p className="mt-2 text-sm text-red-600">{teamsError}</p>
+        )}
 
         {isTeamContext && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
@@ -1427,8 +2076,12 @@ export default function Planning() {
           </button>
           <button
             type="button"
-            onClick={!readOnly ? openWeeklyTaskModal : undefined}
-            disabled={readOnly || !planningContext}
+            onClick={!readOnly && planningTab !== TEAM_PLANNING_TAB_SHARED ? openWeeklyTaskModal : undefined}
+            disabled={
+              readOnly ||
+              !planningContext ||
+              planningTab === TEAM_PLANNING_TAB_SHARED
+            }
             className={PRIMARY_ACTION_BUTTON_CLASSES}
           >
             + Tâche hebdo
@@ -1439,7 +2092,7 @@ export default function Planning() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
         {view === 'week' ? (
           <PlannerGrid
-            events={events}
+            events={activeEvents}
             tasks={taskSources}
             weekStart={weekStart}
             onSlotSelect={(date) => openCreateModal(date)}
@@ -1464,7 +2117,7 @@ export default function Planning() {
             }}
             onEventClick={openEventModal}
             onCreateEvent={openCreateModal}
-            context={planningContext}
+            context={planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext}
           />
         )}
 
@@ -1531,7 +2184,7 @@ export default function Planning() {
         </div>
 
         {/* Daily Todo Section - Only visible in week view */}
-        {view === 'week' && selectedMemberId && (
+        {view === 'week' && planningTab !== TEAM_PLANNING_TAB_SHARED && selectedMemberId && (
           <div className="mt-6">
             <DailyTodoPanel
               selectedDate={currentDate}

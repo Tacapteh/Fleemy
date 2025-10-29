@@ -127,6 +127,10 @@ service cloud.firestore {
         allow write: if isAuthenticated() && request.auth.uid == uid;
       }
 
+      match /teamPlanning/{entryId} {
+        allow read, write: if isTeamMember(teamId);
+      }
+
       match /members/{memberUid} {
         allow read: if isTeamMember(teamId) || (isAuthenticated() && request.auth.uid == memberUid);
         allow write: if isAuthenticated() && request.auth.uid == memberUid;
