@@ -864,7 +864,7 @@ export const setTeamContext = (teamId) => {
   currentTeamId = teamId;
 };
 
-export const listenTeamMemberships = (teamId, onData, onError) => {
+export const listenTeamMemberships = (teamId, { onData, onError } = {}) => {
   if (!teamId) {
     onData?.([]);
     return () => {};
@@ -958,77 +958,83 @@ export const listenTeamMemberships = (teamId, onData, onError) => {
   };
 };
 
+const parsePlanningDate = (value) => {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value);
+  }
+  if (value instanceof Timestamp) {
+    const dateValue = value.toDate();
+    return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const dateValue = new Date(value);
+    return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    const dateValue = value.toDate();
+    return Number.isNaN(dateValue.getTime()) ? null : dateValue;
+  }
+  return null;
+};
+
+const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
+  if (!docSnap) {
+    return null;
+  }
+  const data = docSnap.data() || {};
+  const startDate = parsePlanningDate(data.start);
+  const endDate = parsePlanningDate(data.end);
+
+  if (!startDate || !endDate) {
+    return null;
+  }
+
+  const priceValue = Number(data.price);
+
+  return {
+    id: docSnap.id,
+    title: typeof data.title === 'string' ? data.title : '',
+    type: typeof data.type === 'string' ? data.type : 'event',
+    start: startDate,
+    end: endDate,
+    color: typeof data.color === 'string' && data.color ? data.color : null,
+    status: typeof data.status === 'string' ? data.status : null,
+    price: Number.isFinite(priceValue) ? priceValue : null,
+    createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
+    createdByName:
+      typeof data.createdByName === 'string' ? data.createdByName : null,
+    createdByInitials:
+      typeof data.createdByInitials === 'string'
+        ? data.createdByInitials
+        : null,
+    teamId: typeof data.teamId === 'string' ? data.teamId : fallbackTeamId,
+    synced: Boolean(data.synced),
+    personalEventId:
+      typeof data.personalEventId === 'string'
+        ? data.personalEventId
+        : null,
+    timestamp: data.timestamp || null,
+  };
+};
+
 export const fetchTeamPlanningEntries = async (teamId) => {
   if (!teamId) {
     return [];
   }
-
-  const parseDate = (value) => {
-    if (!value) {
-      return null;
-    }
-    if (value instanceof Date) {
-      return Number.isNaN(value.getTime()) ? null : new Date(value);
-    }
-    if (value instanceof Timestamp) {
-      const dateValue = value.toDate();
-      return Number.isNaN(dateValue.getTime()) ? null : dateValue;
-    }
-    if (typeof value === 'string' || typeof value === 'number') {
-      const dateValue = new Date(value);
-      return Number.isNaN(dateValue.getTime()) ? null : dateValue;
-    }
-    if (typeof value === 'object' && typeof value.toDate === 'function') {
-      const dateValue = value.toDate();
-      return Number.isNaN(dateValue.getTime()) ? null : dateValue;
-    }
-    return null;
-  };
 
   try {
     const planningRef = collection(db, 'teams', teamId, 'teamPlanning');
     const snapshot = await getDocs(planningRef);
 
     const entries = snapshot.docs
-      .map((docSnap) => {
-        const data = docSnap.data() || {};
-        const startDate = parseDate(data.start);
-        const endDate = parseDate(data.end);
-
-        if (!startDate || !endDate) {
-          return null;
-        }
-
-        const priceValue = Number(data.price);
-
-        return {
-          id: docSnap.id,
-          title: typeof data.title === 'string' ? data.title : '',
-          type: typeof data.type === 'string' ? data.type : 'event',
-          start: startDate.toISOString(),
-          end: endDate.toISOString(),
-          color: typeof data.color === 'string' && data.color ? data.color : null,
-          status: typeof data.status === 'string' ? data.status : null,
-          price: Number.isFinite(priceValue) ? priceValue : null,
-          createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
-          createdByName:
-            typeof data.createdByName === 'string' ? data.createdByName : null,
-          createdByInitials:
-            typeof data.createdByInitials === 'string'
-              ? data.createdByInitials
-              : null,
-          teamId: typeof data.teamId === 'string' ? data.teamId : teamId,
-          synced: Boolean(data.synced),
-          personalEventId:
-            typeof data.personalEventId === 'string'
-              ? data.personalEventId
-              : null,
-        };
-      })
+      .map((docSnap) => normalizeTeamPlanningDoc(docSnap, teamId))
       .filter(Boolean);
 
     entries.sort((a, b) => {
-      const startDiff = new Date(a.start).getTime() - new Date(b.start).getTime();
+      const startDiff = a.start.getTime() - b.start.getTime();
       if (startDiff !== 0) {
         return startDiff;
       }
@@ -1047,6 +1053,61 @@ export const fetchTeamPlanningEntries = async (teamId) => {
     console.error('fetchTeamPlanningEntries error', error);
     throw error;
   }
+};
+
+export const listenToTeamPlanningEntries = (
+  teamId,
+  { onData, onError } = {},
+) => {
+  if (!teamId) {
+    onData?.([]);
+    return () => {};
+  }
+
+  let active = true;
+  let unsubscribe = null;
+
+  const cleanup = () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+      unsubscribe = null;
+    }
+  };
+
+  const start = () => {
+    try {
+      const planningRef = collection(db, 'teams', teamId, 'teamPlanning');
+      unsubscribe = onSnapshot(
+        planningRef,
+        (snapshot) => {
+          if (!active) {
+            return;
+          }
+          const entries = snapshot.docs
+            .map((docSnap) => normalizeTeamPlanningDoc(docSnap, teamId))
+            .filter(Boolean)
+            .sort((a, b) => a.start.getTime() - b.start.getTime());
+          onData?.(entries);
+        },
+        (error) => {
+          if (!active) {
+            return;
+          }
+          cleanup();
+          onError?.(error);
+        },
+      );
+    } catch (error) {
+      onError?.(error);
+    }
+  };
+
+  start();
+
+  return () => {
+    active = false;
+    cleanup();
+  };
 };
 
 // Utilitaire pour normaliser les dates
