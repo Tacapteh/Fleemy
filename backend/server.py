@@ -1202,12 +1202,17 @@ async def ensure_team_membership(team_id: str, user_uid: str) -> Dict[str, Any]:
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    owner_uid = team.get("owner_uid") or team.get("ownerUid")
+    owner_uid = (
+        team.get("owner_uid")
+        or team.get("ownerUid")
+        or team.get("ownerId")
+        or (team.get("owner") or {}).get("uid")
+    )
     member_ids = set(_normalize_member_ids(team.get("members")))
     if owner_uid:
         member_ids.add(str(owner_uid))
 
-    if user_uid in member_ids:
+    if str(user_uid) in member_ids:
         return team
 
     membership_ref = team_ref.collection("memberships").document(user_uid)
