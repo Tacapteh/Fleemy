@@ -1147,7 +1147,39 @@ def _normalize_member_ids(raw_members: Any) -> List[str]:
         return []
 
     if isinstance(raw_members, list):
-        return [str(value) for value in raw_members if isinstance(value, (str, int))]
+        normalized: List[str] = []
+        for value in raw_members:
+            if isinstance(value, (str, int)):
+                normalized.append(str(value))
+                continue
+
+            if isinstance(value, dict):
+                candidate = None
+                for key in (
+                    "uid",
+                    "user_uid",
+                    "userUid",
+                    "user_id",
+                    "userId",
+                    "id",
+                    "member_id",
+                    "memberId",
+                ):
+                    candidate = value.get(key)
+                    if isinstance(candidate, (str, int)) and candidate:
+                        normalized.append(str(candidate))
+                        break
+
+                if candidate:
+                    continue
+
+                # Some legacy structures store members as {"uid": True}
+                for key, flag in value.items():
+                    if isinstance(flag, bool) and flag:
+                        normalized.append(str(key))
+                        break
+
+        return normalized
 
     if isinstance(raw_members, dict):
         normalized: List[str] = []

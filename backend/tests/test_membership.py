@@ -121,3 +121,31 @@ async def test_ensure_team_membership_raises_without_any_membership(monkeypatch)
 
     assert exc.value.status_code == 403
     assert "Not authorized" in exc.value.detail
+
+
+@pytest.mark.anyio("asyncio")
+async def test_ensure_team_membership_accepts_member_dicts(monkeypatch):
+    team_id = "team-dicts"
+    members_payload = [
+        {"uid": "user-uid"},
+        {"userId": "user-alt"},
+        {"memberId": "user-member"},
+        {"legacy-user": True},
+    ]
+
+    team_doc = DummyTeamDocRef(
+        data={"members": members_payload},
+        subcollections={"memberships": {}, "members": {}},
+    )
+
+    dummy_db = DummyDB({team_id: team_doc})
+    monkeypatch.setattr(server, "db", dummy_db)
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(server.asyncio, "to_thread", fake_to_thread)
+
+    for uid in ("user-uid", "user-alt", "user-member", "legacy-user"):
+        team = await server.ensure_team_membership(team_id, uid)
+        assert team == {"members": members_payload}
