@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2, Trash2 } from 'lucide-react';
-import { auth, db } from '../firebase';
+import { auth, db, isPermissionDeniedError } from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
@@ -162,11 +162,15 @@ const ProfilePickerPage = () => {
             if (!active) {
               return;
             }
-            console.error('Firestore team subscription error', snapshotError);
-            if (snapshotError?.code === 'permission-denied') {
-              fetchTeamsViaApi({ skipStartLoading: true });
+
+            if (isPermissionDeniedError(snapshotError)) {
+              console.warn('Firestore team subscription permission denied', snapshotError);
+              stopTeamsListener();
+              fetchTeamsViaApi({ skipStartLoading: true, silent: true });
               return;
             }
+
+            console.error('Firestore team subscription error', snapshotError);
             setTeams([]);
             setLoading(false);
             setError("Impossible de charger vos équipes pour l'instant");
@@ -174,6 +178,12 @@ const ProfilePickerPage = () => {
           },
         );
       } catch (subscriptionError) {
+        if (isPermissionDeniedError(subscriptionError)) {
+          console.warn('Skipping Firestore teams subscription (permission denied)');
+          fetchTeamsViaApi({ skipStartLoading: true, silent: true });
+          return;
+        }
+
         console.error('Failed to subscribe to teams', subscriptionError);
         fetchTeamsViaApi({ skipStartLoading: true });
       }
