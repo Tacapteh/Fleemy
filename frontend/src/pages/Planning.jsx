@@ -912,27 +912,34 @@ export default function Planning() {
   ]);
 
   useEffect(() => {
-    if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+    const cleanupSubscription = () => {
       if (teamPlanningSubscriptionRef.current) {
         teamPlanningSubscriptionRef.current();
         teamPlanningSubscriptionRef.current = null;
       }
+    };
+
+    if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+      cleanupSubscription();
       setTeamPlanningEntries([]);
       setTeamPlanningLoading(false);
       setTeamPlanningError(null);
       return;
     }
 
-    if (!sharedTeamId || (isTeamContext && !teamMembershipAllowed)) {
-      if (teamPlanningSubscriptionRef.current) {
-        teamPlanningSubscriptionRef.current();
-        teamPlanningSubscriptionRef.current = null;
-      }
+    if (!sharedTeamId) {
+      cleanupSubscription();
       setTeamPlanningEntries([]);
       setTeamPlanningLoading(false);
-      setTeamPlanningError(
-        isTeamContext && !teamMembershipAllowed ? TEAM_PLANNING_ACCESS_DENIED_MESSAGE : null,
-      );
+      setTeamPlanningError(null);
+      return;
+    }
+
+    if (isTeamContext && !teamMembershipAllowed) {
+      cleanupSubscription();
+      setTeamPlanningEntries([]);
+      setTeamPlanningLoading(false);
+      setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
       return;
     }
 
@@ -950,13 +957,6 @@ export default function Planning() {
       setTeamPlanningError(null);
     };
 
-    const cleanupSubscription = () => {
-      if (teamPlanningSubscriptionRef.current) {
-        teamPlanningSubscriptionRef.current();
-        teamPlanningSubscriptionRef.current = null;
-      }
-    };
-
     const loadFallbackEntries = async () => {
       try {
         const fallback = await fetchTeamPlanningEntries(sharedTeamId);
@@ -966,32 +966,30 @@ export default function Planning() {
           return;
         }
         console.error('team planning fallback load error', fallbackError);
-        if (isPermissionDeniedError(fallbackError)) {
-          cleanupSubscription();
-          setTeamPlanningEntries([]);
-          setTeamPlanningLoading(false);
-          setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
-          return;
-        }
         setTeamPlanningEntries([]);
+        if (isPermissionDeniedError(fallbackError)) {
+          setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
+        } else {
+          setTeamPlanningError("Impossible de charger le planning d'équipe");
+        }
         setTeamPlanningLoading(false);
-        setTeamPlanningError("Impossible de charger le planning d'équipe");
       }
     };
 
     const handleSnapshotError = async (error) => {
-      console.error('team planning realtime error', error);
       if (cancelled) {
         return;
       }
-
+      console.error('team planning realtime error', error);
       cleanupSubscription();
-
       if (isPermissionDeniedError(error)) {
-        await loadFallbackEntries();
+        setTeamPlanningEntries([]);
+        setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
+        setTeamPlanningLoading(false);
         return;
       }
 
+      setTeamPlanningLoading(false);
       await loadFallbackEntries();
     };
 
@@ -1009,10 +1007,7 @@ export default function Planning() {
 
     return () => {
       cancelled = true;
-      if (teamPlanningSubscriptionRef.current) {
-        teamPlanningSubscriptionRef.current();
-        teamPlanningSubscriptionRef.current = null;
-      }
+      cleanupSubscription();
     };
   }, [
     planningTab,
@@ -1824,7 +1819,7 @@ export default function Planning() {
               client_id: sanitizedClientId,
               client_name: sanitizedClientName,
               day: DAY_KEYS[dayIndex] || 'monday',
-              team_planning_id: response?.entry?.id || teamPayload.id || null,
+          team_planning_id: response?.item?.id || teamPayload.id || null,
               synced: true,
             };
 
@@ -1840,12 +1835,12 @@ export default function Planning() {
               console.warn('Unable to synchronise personal planning from team event', syncError);
             }
 
-            if (syncedPersonalId && response?.entry?.id) {
+            if (syncedPersonalId && response?.item?.id) {
               try {
                 await apiFetch(`/teams/${sharedTeamId}/planning`, {
                   method: 'POST',
                   body: JSON.stringify({
-                    id: response.entry.id,
+                    id: response.item.id,
                     title: resolvedTitle,
                     type: 'event',
                     start: start.toISOString(),
@@ -1929,11 +1924,11 @@ export default function Planning() {
               body: JSON.stringify(teamPayload),
             });
 
-            if (response?.entry?.id && savedPersonalId) {
+            if (response?.item?.id && savedPersonalId) {
               try {
                 await saveEventNew(planningContext, {
                   id: savedPersonalId,
-                  team_planning_id: response.entry.id,
+                  team_planning_id: response.item.id,
                   synced: true,
                 });
               } catch (attachError) {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2, Trash2 } from 'lucide-react';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
@@ -10,7 +11,7 @@ import TeamInviteCodeDialog from '../components/profiles/TeamInviteCodeDialog';
 import {
   readTeamsCache,
   clearTeamsCache,
-  ensureTeamsCache,
+  writeTeamsCache,
 } from '../utils/teamCache';
 import { showToast } from '../utils/toast';
 
@@ -36,62 +37,119 @@ const ProfilePickerPage = () => {
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
 
-  const loadTeams = useCallback(
-    async ({ skipSpinner = false, forceRefresh = false } = {}) => {
-      if (!skipSpinner) {
-        setLoading(true);
-      }
-
-      try {
-        const user = auth.currentUser;
-        if (!user) {
-          navigate('/');
-          return null;
-        }
-
-        setError('');
-
-        const result = await ensureTeamsCache(
-          () => apiFetch('/teams/my'),
-          { forceRefresh },
-        );
-
-        if (result.success) {
-          setTeams(Array.isArray(result.teams) ? result.teams : []);
-        } else {
-          console.error('Error loading teams:', result.raw?.error || result.raw);
-          setTeams([]);
-          setError(result.raw?.error || 'Erreur lors du chargement des équipes');
-          clearTeamsCache();
-        }
-
-        return result;
-      } catch (err) {
-        console.error('Error loading teams:', err);
-        setError('Erreur lors du chargement des équipes');
-        clearTeamsCache();
-        return null;
-      } finally {
-        if (!skipSpinner) {
-          setLoading(false);
-        }
-      }
-    },
-    [navigate],
-  );
-
   useEffect(() => {
-    let usedCache = false;
-
     const cachedTeams = readTeamsCache();
-    if (cachedTeams) {
+    if (Array.isArray(cachedTeams) && cachedTeams.length > 0) {
       setTeams(cachedTeams);
-      setLoading(false);
-      usedCache = true;
     }
 
-    loadTeams({ skipSpinner: usedCache, forceRefresh: true });
-  }, [loadTeams]);
+    setLoading(true);
+
+    let active = true;
+    let unsubscribeTeams = null;
+
+    const stopTeamsListener = () => {
+      if (typeof unsubscribeTeams === 'function') {
+        unsubscribeTeams();
+        unsubscribeTeams = null;
+      }
+    };
+
+    const subscribeToTeams = (user) => {
+      stopTeamsListener();
+
+      if (!user) {
+        if (!active) {
+          return;
+        }
+        setTeams([]);
+        setLoading(false);
+        setError('');
+        navigate('/');
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+
+      try {
+        const teamsQuery = query(
+          collection(db, 'teams'),
+          where('members', 'array-contains', user.uid),
+        );
+
+        unsubscribeTeams = onSnapshot(
+          teamsQuery,
+          (snapshot) => {
+            if (!active) {
+              return;
+            }
+
+            const nextTeams = snapshot.docs
+              .map((docSnap) => {
+                const data = typeof docSnap.data === 'function' ? docSnap.data() : {};
+                const members = Array.isArray(data.members) ? data.members : [];
+                const fallbackCount =
+                  typeof data.members_count === 'number'
+                    ? data.members_count
+                    : typeof data.membersCount === 'number'
+                    ? data.membersCount
+                    : members.length;
+
+                return {
+                  team_id: docSnap.id,
+                  name: data.name || 'Équipe sans nom',
+                  owner_uid: data.owner_uid || data.ownerUid || null,
+                  invite_code: data.invite_code || data.inviteCode || null,
+                  members_count: fallbackCount,
+                };
+              })
+              .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+
+            setTeams(nextTeams);
+            setLoading(false);
+            setError('');
+            writeTeamsCache(nextTeams);
+          },
+          (snapshotError) => {
+            if (!active) {
+              return;
+            }
+            console.error('Firestore team subscription error', snapshotError);
+            setTeams([]);
+            setLoading(false);
+            setError("Impossible de charger vos équipes pour l'instant");
+            clearTeamsCache();
+          },
+        );
+      } catch (subscriptionError) {
+        console.error('Failed to subscribe to teams', subscriptionError);
+        setTeams([]);
+        setLoading(false);
+        setError("Impossible de charger vos équipes pour l'instant");
+        clearTeamsCache();
+      }
+    };
+
+    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (!active) {
+        return;
+      }
+      subscribeToTeams(user);
+    });
+
+    if (auth.currentUser) {
+      subscribeToTeams(auth.currentUser);
+    }
+
+    return () => {
+      active = false;
+      stopTeamsListener();
+      if (typeof unsubscribeAuth === 'function') {
+        unsubscribeAuth();
+      }
+    };
+  }, [navigate]);
 
   const updateLastContext = useCallback(async (contextData) => {
     try {
@@ -190,7 +248,6 @@ const ProfilePickerPage = () => {
           await updateLastContext(soloContext);
         }
 
-        await loadTeams({ skipSpinner: true, forceRefresh: true });
       } catch (err) {
         console.error('Error deleting team:', err);
         const message = err?.message || "Impossible de supprimer l'équipe";
@@ -200,7 +257,7 @@ const ProfilePickerPage = () => {
         setDeletingTeamId(null);
       }
     },
-    [loadTeams, updateLastContext],
+    [updateLastContext],
   );
 
   const handleCreateTeam = async (teamName) => {
@@ -220,23 +277,12 @@ const ProfilePickerPage = () => {
       await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
 
       clearTeamsCache();
-      // Reload teams
-      const result = await loadTeams({ forceRefresh: true });
-
-      const createdTeam =
-        (Array.isArray(result?.teams)
-          ? result.teams.find((team) => team.team_id === data.team_id)
-          : null) || {
-          team_id: data.team_id,
-          name: data.name,
-          invite_code: data.invite_code,
-          owner_uid: user.uid,
-          members_count: 1,
-        };
-
       setInviteDialogTeam({
-        ...createdTeam,
-        invite_code: createdTeam.invite_code || data.invite_code,
+        team_id: data.team_id,
+        name: data.name || teamName,
+        invite_code: data.invite_code,
+        owner_uid: user.uid,
+        members_count: 1,
       });
     } catch (err) {
       throw err;
@@ -262,18 +308,10 @@ const ProfilePickerPage = () => {
       });
 
       clearTeamsCache();
-      // Reload teams
-      const result = await loadTeams({ forceRefresh: true });
-
-      const joinedTeam =
-        (Array.isArray(result?.teams)
-          ? result.teams.find((team) => team.team_id === data.team_id)
-          : null) || {
-          team_id: data.team_id,
-          name: data.name,
-        };
-
-      await handleSelectTeam(joinedTeam);
+      await handleSelectTeam({
+        team_id: data.team_id,
+        name: data.name,
+      });
     } catch (err) {
       throw err;
     }
