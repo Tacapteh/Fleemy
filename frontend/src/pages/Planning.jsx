@@ -957,17 +957,21 @@ export default function Planning() {
       setTeamPlanningError(null);
     };
 
-    const loadFallbackEntries = async () => {
+    const loadFallbackEntries = async ({ preferApi = false } = {}) => {
       try {
-        const fallback = await fetchTeamPlanningEntries(sharedTeamId);
+        const fallback = await fetchTeamPlanningEntries(sharedTeamId, {
+          preferApi,
+        });
         applyEntries(fallback);
       } catch (fallbackError) {
         if (cancelled) {
           return;
         }
-        console.error('team planning fallback load error', fallbackError);
+        const permissionIssue = isPermissionDeniedError(fallbackError);
+        const logMethod = permissionIssue ? console.warn : console.error;
+        logMethod('team planning fallback load error', fallbackError);
         setTeamPlanningEntries([]);
-        if (isPermissionDeniedError(fallbackError)) {
+        if (permissionIssue) {
           setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
         } else {
           setTeamPlanningError("Impossible de charger le planning d'équipe");
@@ -980,17 +984,14 @@ export default function Planning() {
       if (cancelled) {
         return;
       }
-      console.error('team planning realtime error', error);
-      cleanupSubscription();
-      if (isPermissionDeniedError(error)) {
-        setTeamPlanningEntries([]);
-        setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
-        setTeamPlanningLoading(false);
-        return;
+      const permissionDenied = isPermissionDeniedError(error);
+      if (permissionDenied) {
+        console.warn('team planning realtime permission error', error);
+      } else {
+        console.error('team planning realtime error', error);
       }
-
-      setTeamPlanningLoading(false);
-      await loadFallbackEntries();
+      cleanupSubscription();
+      await loadFallbackEntries({ preferApi: permissionDenied });
     };
 
     cleanupSubscription();
