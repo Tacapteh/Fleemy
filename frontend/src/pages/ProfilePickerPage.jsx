@@ -37,6 +37,53 @@ const ProfilePickerPage = () => {
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
 
+  const fetchTeamsViaApi = useCallback(
+    async (options = {}) => {
+      const { skipStartLoading = false, silent = false } = options;
+
+      if (!skipStartLoading) {
+        setLoading(true);
+      }
+
+      try {
+        const response = await apiFetch('/teams/my');
+
+        if (response?.success !== true || !Array.isArray(response?.teams)) {
+          throw new Error('Invalid response');
+        }
+
+        const nextTeams = response.teams
+          .map((team) => ({
+            team_id: team.team_id || team.id || null,
+            name: team.name || 'Équipe sans nom',
+            owner_uid: team.owner_uid || team.ownerUid || null,
+            invite_code: team.invite_code || team.inviteCode || null,
+            members_count: typeof team.members_count === 'number'
+              ? team.members_count
+              : Array.isArray(team.members)
+              ? team.members.length
+              : 0,
+          }))
+          .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
+          .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+
+        setTeams(nextTeams);
+        setError('');
+        writeTeamsCache(nextTeams);
+      } catch (apiError) {
+        console.error('Failed to fetch teams via API', apiError);
+        if (!silent) {
+          setTeams([]);
+          setError("Impossible de charger vos équipes pour l'instant");
+          clearTeamsCache();
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     const cachedTeams = readTeamsCache();
     if (Array.isArray(cachedTeams) && cachedTeams.length > 0) {
@@ -116,6 +163,10 @@ const ProfilePickerPage = () => {
               return;
             }
             console.error('Firestore team subscription error', snapshotError);
+            if (snapshotError?.code === 'permission-denied') {
+              fetchTeamsViaApi({ skipStartLoading: true });
+              return;
+            }
             setTeams([]);
             setLoading(false);
             setError("Impossible de charger vos équipes pour l'instant");
@@ -124,10 +175,7 @@ const ProfilePickerPage = () => {
         );
       } catch (subscriptionError) {
         console.error('Failed to subscribe to teams', subscriptionError);
-        setTeams([]);
-        setLoading(false);
-        setError("Impossible de charger vos équipes pour l'instant");
-        clearTeamsCache();
+        fetchTeamsViaApi({ skipStartLoading: true });
       }
     };
 
@@ -149,7 +197,7 @@ const ProfilePickerPage = () => {
         unsubscribeAuth();
       }
     };
-  }, [navigate]);
+  }, [fetchTeamsViaApi, navigate]);
 
   const updateLastContext = useCallback(async (contextData) => {
     try {
