@@ -38,6 +38,24 @@ service cloud.firestore {
         return true;
       }
 
+      // Support historical team documents storing the members in a map
+      // (``{ uid: true }`` or ``{ uid: { active: true } }``).
+      if (teamDoc.data.members is map) {
+        if (teamDoc.data.members.keys().hasAny([request.auth.uid])) {
+          return true;
+        }
+
+        let memberEntry = teamDoc.data.members[request.auth.uid];
+        if (memberEntry is map) {
+          if (memberEntry.active == true) {
+            return true;
+          }
+          if (memberEntry.uid == request.auth.uid) {
+            return true;
+          }
+        }
+      }
+
       // Allow team owners stored with either camelCase or snake_case keys.
       if (teamDoc.data.owner_uid == request.auth.uid ||
           teamDoc.data.ownerUid == request.auth.uid) {
