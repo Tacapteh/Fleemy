@@ -1044,9 +1044,9 @@ export const fetchTeamPlanningEntries = async (
   const { preferApi = false } = options;
 
   const fetchFromApi = async () => {
-    try {
-      const apiFetch = await getApiFetch();
-      const response = await apiFetch(`/teams/${teamId}/planning`);
+    const apiFetch = await getApiFetch();
+
+    const normalizeResponse = (response) => {
       const entries = Array.isArray(response?.items) ? response.items : [];
       const normalized = entries
         .map((entry) =>
@@ -1069,6 +1069,36 @@ export const fetchTeamPlanningEntries = async (
       });
 
       return normalized;
+    };
+
+    const attemptFetch = async (path, { suppressErrorLog = false } = {}) => {
+      return apiFetch(path, { suppressErrorLog });
+    };
+
+    const loadEntries = async () => {
+      try {
+        const response = await attemptFetch(`/teams/${teamId}/planning`, {
+          suppressErrorLog: true,
+        });
+        return normalizeResponse(response);
+      } catch (error) {
+        const status = error?.response?.status;
+        if (status === 405) {
+          try {
+            const response = await attemptFetch(`/teams/${teamId}/planning/`, {
+              suppressErrorLog: true,
+            });
+            return normalizeResponse(response);
+          } catch (retryError) {
+            throw retryError;
+          }
+        }
+        throw error;
+      }
+    };
+
+    try {
+      return await loadEntries();
     } catch (apiError) {
       const permissionError = toPermissionDeniedError(apiError);
       if (!permissionError && !isPermissionDeniedError(apiError)) {
