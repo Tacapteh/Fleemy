@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://fleemy.onrender.com/api/$1"
+      "destination": "https://visual-harmony-4.preview.emergentagent.com/api/$1"
     },
     {
       "source": "/(.*)",

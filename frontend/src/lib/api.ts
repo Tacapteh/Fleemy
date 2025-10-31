@@ -47,7 +47,7 @@ const ENV_API_URL =
 const SAME_ORIGIN_OVERRIDE = resolveSameOriginOverride();
 const BROWSER_FALLBACK_URL = resolveBrowserFallback();
 
-const DEFAULT_API_URL = "https://fleemy.onrender.com";
+const DEFAULT_API_URL = "https://visual-harmony-4.preview.emergentagent.com";
 
 const API_BASE_URLS: string[] = [];
 
