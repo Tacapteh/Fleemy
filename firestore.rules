@@ -157,6 +157,7 @@ service cloud.firestore {
 
     match /teams/{teamId} {
       allow read: if isTeamMember(teamId);
+      allow write: if isTeamMember(teamId) || (isAuthenticated() && get(/databases/$(database)/documents/teams/$(teamId)).data.owner_uid == request.auth.uid);
 
       match /memberships/{uid} {
         allow read: if isTeamMember(teamId) || (isAuthenticated() && request.auth.uid == uid);
