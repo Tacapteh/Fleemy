@@ -1063,8 +1063,8 @@ export const fetchTeamPlanningEntries = async (teamId) => {
       try {
         const apiFetch = await getApiFetch();
         const response = await apiFetch(`/teams/${teamId}/planning`);
-        const entries = Array.isArray(response?.entries)
-          ? response.entries
+        const entries = Array.isArray(response?.items)
+          ? response.items
           : [];
         const normalized = entries
           .map((entry) =>

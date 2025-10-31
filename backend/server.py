@@ -3166,25 +3166,17 @@ async def create_team(
             invite_code=invite_code,
         )
 
-        team_data = team.dict()
-        team_data.update(
-            {
-                "members": [user["uid"]],
-                "owner_uid": user["uid"],
-                "created_at": firestore.SERVER_TIMESTAMP,
-                "updated_at": firestore.SERVER_TIMESTAMP,
-            }
-        )
+        team_data = {
+            **team.dict(),
+            "members": [user["uid"]],
+            "owner_uid": user["uid"],
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        }
 
         await asyncio.to_thread(
             db.collection("teams").document(team.team_id).set,
-            {
-                **team_data,
-                "members": [user["uid"]],
-                "owner_uid": user["uid"],
-                "created_at": firestore.SERVER_TIMESTAMP,
-                "updated_at": firestore.SERVER_TIMESTAMP,
-            },
+            team_data,
         )
 
         await ensure_membership_documents(
@@ -3382,7 +3374,7 @@ async def get_team_planning(
                 entry.get("id") or "",
             )
         )
-        return {"success": True, "entries": entries}
+        return {"success": True, "items": entries}
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning fetch error: %s", exc, exc_info=True)
         raise HTTPException(
@@ -3445,7 +3437,7 @@ async def upsert_team_planning_entry(
         doc_ref = await asyncio.to_thread(_persist)
         snapshot = await asyncio.to_thread(doc_ref.get)
         serialized = _serialize_team_planning_doc(snapshot)
-        return {"success": True, "entry": serialized}
+        return {"success": True, "item": serialized}
     except HTTPException:
         raise
     except Exception as exc:  # pragma: no cover - defensive logging
