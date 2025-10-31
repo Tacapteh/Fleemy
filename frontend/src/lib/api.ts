@@ -68,8 +68,8 @@ const appendBaseUrl = (candidate: string | null) => {
   API_BASE_URLS.push(candidate);
 };
 
-appendBaseUrl(ENV_API_URL);
 appendBaseUrl(SAME_ORIGIN_OVERRIDE);
+appendBaseUrl(ENV_API_URL);
 appendBaseUrl(DEFAULT_API_URL);
 appendBaseUrl(BROWSER_FALLBACK_URL);
 const RETRY_DELAYS = [0, 250, 500, 1000];
