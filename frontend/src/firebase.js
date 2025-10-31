@@ -1033,9 +1033,53 @@ const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
   });
 };
 
-export const fetchTeamPlanningEntries = async (teamId) => {
+export const fetchTeamPlanningEntries = async (
+  teamId,
+  options = {},
+) => {
   if (!teamId) {
     return [];
+  }
+
+  const { preferApi = false } = options;
+
+  const fetchFromApi = async () => {
+    try {
+      const apiFetch = await getApiFetch();
+      const response = await apiFetch(`/teams/${teamId}/planning`);
+      const entries = Array.isArray(response?.items) ? response.items : [];
+      const normalized = entries
+        .map((entry) =>
+          normalizeTeamPlanningRecord(entry, {
+            id: entry?.id,
+            fallbackTeamId: teamId,
+          }),
+        )
+        .filter(Boolean);
+
+      normalized.sort((a, b) => {
+        const startDiff = a.start.getTime() - b.start.getTime();
+        if (startDiff !== 0) {
+          return startDiff;
+        }
+        if (a.id && b.id) {
+          return a.id.localeCompare(b.id);
+        }
+        return 0;
+      });
+
+      return normalized;
+    } catch (apiError) {
+      const permissionError = toPermissionDeniedError(apiError);
+      if (!permissionError && !isPermissionDeniedError(apiError)) {
+        console.error('fetchTeamPlanningEntries api fallback error', apiError);
+      }
+      throw permissionError || apiError;
+    }
+  };
+
+  if (preferApi) {
+    return fetchFromApi();
   }
 
   try {
@@ -1059,46 +1103,14 @@ export const fetchTeamPlanningEntries = async (teamId) => {
 
     return entries;
   } catch (error) {
-    if (isPermissionDeniedError(error)) {
-      try {
-        const apiFetch = await getApiFetch();
-        const response = await apiFetch(`/teams/${teamId}/planning`);
-        const entries = Array.isArray(response?.items)
-          ? response.items
-          : [];
-        const normalized = entries
-          .map((entry) =>
-            normalizeTeamPlanningRecord(entry, {
-              id: entry?.id,
-              fallbackTeamId: teamId,
-            }),
-          )
-          .filter(Boolean);
-
-        normalized.sort((a, b) => {
-          const startDiff = a.start.getTime() - b.start.getTime();
-          if (startDiff !== 0) {
-            return startDiff;
-          }
-          if (a.id && b.id) {
-            return a.id.localeCompare(b.id);
-          }
-          return 0;
-        });
-
-        return normalized;
-      } catch (apiError) {
-        if (!isPermissionDeniedError(apiError)) {
-          console.error(
-            'fetchTeamPlanningEntries api fallback error',
-            apiError,
-          );
-        }
-        return [];
-      }
+    const permissionError = toPermissionDeniedError(error);
+    if (permissionError) {
+      return fetchFromApi();
     }
 
-    console.error('fetchTeamPlanningEntries error', error);
+    if (!isPermissionDeniedError(error)) {
+      console.error('fetchTeamPlanningEntries error', error);
+    }
     throw error;
   }
 };
