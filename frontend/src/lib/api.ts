@@ -174,7 +174,14 @@ type ApiFetchOptions = RequestInit & {
 };
 
 const shouldFallbackToNextBase = (status: number) => {
-  return status === 404 || status === 405 || status === 501 || status === 502;
+  return (
+    status === 404 ||
+    status === 405 ||
+    status === 501 ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  );
 };
 
 export async function apiFetch(
