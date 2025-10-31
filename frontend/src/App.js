@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { Suspense, lazy, useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -12,25 +12,32 @@ import { auth, logout, waitForAuth } from "./firebase";
 import { contextStore } from "./stores/contextStore";
 import { SettingsProvider, useSettings } from "./context/SettingsContext";
 
-import Login from "./Login";
-import Dashboard from "./pages/Dashboard";
-import Planning from "./pages/Planning";
-import Quotes from "./pages/Quotes";
-import Invoices from "./pages/Invoices";
-import Documents from "./pages/Documents";
-import Clients from "./pages/Clients";
-import SettingsPage from "./pages/SettingsPage";
-import ProfilePickerPage from "./pages/ProfilePickerPage";
-import Todo from "./pages/Todo";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
-import NotFound from "./pages/NotFound";
 import { apiFetch } from "./lib/api";
 import {
   hasFreshTeamsCache,
   ensureTeamsCache,
   clearTeamsCache,
 } from "./utils/teamCache";
+
+const Login = lazy(() => import("./Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Planning = lazy(() => import("./pages/Planning"));
+const Quotes = lazy(() => import("./pages/Quotes"));
+const Invoices = lazy(() => import("./pages/Invoices"));
+const Documents = lazy(() => import("./pages/Documents"));
+const Clients = lazy(() => import("./pages/Clients"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const ProfilePickerPage = lazy(() => import("./pages/ProfilePickerPage"));
+const Todo = lazy(() => import("./pages/Todo"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+
+const PageLoader = ({ message = "Chargement..." }) => (
+  <div className="flex min-h-[40vh] items-center justify-center text-slate-900 dark:text-slate-100">
+    {message}
+  </div>
+);
 
 // Composant qui gère la mise en page commune (Sidebar + Outlet)
 function Layout({ user, onLogout }) {
@@ -252,68 +259,134 @@ function AppWithSettings() {
     }
 
     if (!user) {
-      return <Login onLogin={setUser} />;
+      return (
+        <Suspense fallback={<PageLoader message="Chargement de l'authentification..." />}>
+          <Login onLogin={setUser} />
+        </Suspense>
+      );
     }
 
     return (
       <Router>
         <Routes>
           {/* Route de sélection de profil (sans sidebar) */}
-          <Route path="/profiles" element={<ProfilePickerPage />} />
+          <Route
+            path="/profiles"
+            element={(
+              <Suspense fallback={<PageLoader message="Chargement des profils..." />}>
+                <ProfilePickerPage />
+              </Suspense>
+            )}
+          />
 
           {/* Layout englobe les autres pages et passe user via context */}
           <Route element={<Layout user={user} onLogout={handleLogout} />}>
-            <Route path="/" element={
-              <AuthGuard user={user}>
-                <Navigate to="/dashboard" />
-              </AuthGuard>
-            } />
-            <Route path="/me" element={
-              <AuthGuard user={user}>
-                <Planning />
-              </AuthGuard>
-            } />
-            <Route path="/team/:teamId" element={
-              <AuthGuard user={user}>
-                <Planning />
-              </AuthGuard>
-            } />
-            <Route path="/dashboard" element={
-              <AuthGuard user={user}>
-                <Dashboard />
-              </AuthGuard>
-            } />
-            <Route path="/documents" element={
-              <AuthGuard user={user}>
-                <Documents />
-              </AuthGuard>
-            } />
-            <Route path="/quotes" element={
-              <AuthGuard user={user}>
-                <Quotes />
-              </AuthGuard>
-            } />
-            <Route path="/invoices" element={
-              <AuthGuard user={user}>
-                <Invoices />
-              </AuthGuard>
-            } />
-            <Route path="/clients" element={
-              <AuthGuard user={user}>
-                <Clients />
-              </AuthGuard>
-            } />
-            <Route path="/todo" element={
-              <AuthGuard user={user}>
-                <Todo />
-              </AuthGuard>
-            } />
-            <Route path="/settings" element={
-              <AuthGuard user={user}>
-                <SettingsPage />
-              </AuthGuard>
-            } />
-            <Route path="*" element={<NotFound />} />
+            <Route
+              path="/"
+              element={
+                <AuthGuard user={user}>
+                  <Navigate to="/dashboard" />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/me"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement du planning..." />}>
+                    <Planning />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/team/:teamId"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement du planning..." />}>
+                    <Planning />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement du tableau de bord..." />}>
+                    <Dashboard />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement des documents..." />}>
+                    <Documents />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/quotes"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement des devis..." />}>
+                    <Quotes />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/invoices"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement des factures..." />}>
+                    <Invoices />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/clients"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement des clients..." />}>
+                    <Clients />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/todo"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement des tâches..." />}>
+                    <Todo />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement des paramètres..." />}>
+                    <SettingsPage />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="*"
+              element={
+                <Suspense fallback={<PageLoader message="Chargement de la page..." />}>
+                  <NotFound />
+                </Suspense>
+              }
+            />
           </Route>
         </Routes>
       </Router>
