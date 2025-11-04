@@ -16,6 +16,7 @@ import {
 import {
   getFirestore,
   collection,
+  collectionGroup,
   doc,
   addDoc,
   deleteDoc,
@@ -28,6 +29,7 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
+  documentId,
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
 
@@ -1370,14 +1372,35 @@ const ensureTeamMemberContainer = async (teamId, memberUid, options = {}) => {
 
 const normalizeTeamSnapshot = (docSnap) => {
   const data = docSnap?.data?.() || {};
-  const members = Array.isArray(data.members) ? data.members : [];
+  const rawMembers = data.members;
+
+  let members = [];
+  let membersCount = 0;
+
+  if (Array.isArray(rawMembers)) {
+    members = rawMembers;
+    membersCount = rawMembers.length;
+  } else if (rawMembers && typeof rawMembers === 'object') {
+    members = Object.entries(rawMembers).map(([uid, value]) => {
+      if (value && typeof value === "object") {
+        return { uid, ...value };
+      }
+      return { uid, active: Boolean(value) };
+    });
+    membersCount = members.length;
+  }
+
+  if (!membersCount && typeof data.members_count === 'number') {
+    membersCount = data.members_count;
+  }
 
   return {
     team_id: docSnap.id,
     name: data.name || 'Équipe sans nom',
-    owner_uid: data.owner_uid || null,
+    owner_uid:
+      data.owner_uid || data.ownerUid || data.ownerId || (data.owner || {}).uid || null,
     invite_code: data.invite_code || null,
-    members_count: members.length,
+    members_count: membersCount,
     members,
   };
 };
@@ -1404,14 +1427,66 @@ export async function fetchUserTeamsFromFirestore() {
     const teamsCollection = collection(db, 'teams');
     const memberQuery = query(teamsCollection, where('members', 'array-contains', uid));
     const ownerQuery = query(teamsCollection, where('owner_uid', '==', uid));
+    const membershipQuery = query(
+      collectionGroup(db, 'memberships'),
+      where(documentId(), "==", uid),
+    );
 
-    const [memberSnapshot, ownerSnapshot] = await Promise.all([
+    const membershipPromise = getDocs(membershipQuery).catch((membershipError) => {
+      if (isPermissionDeniedError(membershipError)) {
+        return null;
+      }
+      logPermissionError("teams memberships", uid, membershipError, {
+        level: "warn",
+        toast: false,
+      });
+      return null;
+    });
+
+    const [memberSnapshot, ownerSnapshot, membershipSnapshot] = await Promise.all([
       getDocs(memberQuery),
       getDocs(ownerQuery),
+      membershipPromise,
     ]);
 
     collect(memberSnapshot);
     collect(ownerSnapshot);
+
+    const missingTeamRefs = new Map();
+
+    if (membershipSnapshot) {
+      membershipSnapshot.forEach((docSnap) => {
+        const teamRef = docSnap?.ref?.parent?.parent;
+        const teamId = teamRef?.id;
+        if (teamId && !uniqueTeams.has(teamId)) {
+          missingTeamRefs.set(teamId, teamRef);
+        }
+      });
+    }
+
+    if (missingTeamRefs.size > 0) {
+      const resolved = await Promise.all(
+        Array.from(missingTeamRefs.entries()).map(async ([teamId, teamRef]) => {
+          try {
+            const teamSnap = await getDoc(teamRef);
+            return { teamId, teamSnap };
+          } catch (error) {
+            logPermissionError(`teams/${teamId}`, uid, error, {
+              level: "warn",
+              toast: false,
+            });
+            return null;
+          }
+        }),
+      );
+
+      resolved.forEach((entry) => {
+        if (entry?.teamSnap?.exists()) {
+          const normalized = normalizeTeamSnapshot(entry.teamSnap);
+          uniqueTeams.set(entry.teamId, { ...normalized, source: "firestore-membership" });
+        }
+      });
+    }
 
     return Array.from(uniqueTeams.values());
   } catch (error) {
