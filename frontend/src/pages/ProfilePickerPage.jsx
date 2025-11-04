@@ -411,13 +411,7 @@ const ProfilePickerPage = () => {
     }
   };
 
-  if (loading && teams.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Chargement...</div>
-      </div>
-    );
-  }
+  const isInitialLoading = loading && teams.length === 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
@@ -440,6 +434,13 @@ const ProfilePickerPage = () => {
       {contextError && (
         <div className="mb-6 p-4 bg-amber-500/20 border border-amber-400 rounded-lg text-amber-100 max-w-md">
           {contextError}
+        </div>
+      )}
+
+      {isInitialLoading && !error && (
+        <div className="mb-8 flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-medium text-white shadow-lg">
+          <span className="h-2 w-2 animate-ping rounded-full bg-white/70" aria-hidden />
+          <span>Chargement des profils…</span>
         </div>
       )}
 
@@ -555,6 +556,13 @@ const ProfilePickerPage = () => {
             </button>
           );
         })}
+
+        {isInitialLoading && (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/30 bg-white/10 p-6 text-center text-white/80">
+            <div className="mb-3 h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden />
+            <p className="text-sm">Chargement des équipes…</p>
+          </div>
+        )}
 
         {/* Create Team */}
         <button
