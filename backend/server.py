@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, validator, EmailStr
 from pydantic import field_validator
-from typing import List, Optional, Dict, Any, Tuple, Literal
+from typing import List, Optional, Dict, Any, Tuple, Literal, Set
 import uuid
 from datetime import datetime, timezone, timedelta
 import asyncio
@@ -83,21 +83,36 @@ DEFAULT_ALLOWED_ORIGINS = [
 
 
 def _parse_allowed_origins() -> List[str]:
-    raw = os.getenv("CORS_ORIGINS", "")
-    if raw:
-        parsed = [origin.strip() for origin in raw.split(",") if origin.strip()]
-        if parsed:
-            return parsed
+    """Return the list of allowed origins including defaults.
 
-    # Fall back to our default list while keeping the order stable and removing
-    # any potential duplicates.
-    seen = set()
-    defaults: List[str] = []
+    Deployments may provide a custom ``CORS_ORIGINS`` environment variable. In
+    practice those overrides sometimes forget newer domains (for instance the
+    Vercel preview URL). The previous implementation *replaced* the defaults
+    whenever the variable was defined which meant legitimate origins could lose
+    access and trigger CORS failures in production.
+
+    To make the configuration resilient we now merge the custom entries with the
+    defaults while preserving order and removing duplicates.
+    """
+
+    raw = os.getenv("CORS_ORIGINS", "")
+    seen: Set[str] = set()
+    origins: List[str] = []
+
+    def _add(origin: str) -> None:
+        cleaned = origin.strip()
+        if cleaned and cleaned not in seen:
+            origins.append(cleaned)
+            seen.add(cleaned)
+
+    if raw:
+        for origin in raw.split(","):
+            _add(origin)
+
     for origin in DEFAULT_ALLOWED_ORIGINS:
-        if origin not in seen:
-            defaults.append(origin)
-            seen.add(origin)
-    return defaults
+        _add(origin)
+
+    return origins
 
 
 ALLOWED_ORIGINS = _parse_allowed_origins()
