@@ -3479,24 +3479,46 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
     """Get all teams where the user is a member."""
     logger.info("/teams/my called for %s", user.get("uid"))
     try:
-        # Query all teams where user is in members array
+        # Query teams where user is a member or the owner
         teams_ref = db.collection("teams")
-        query = teams_ref.where("members", "array_contains", user["uid"])
-        teams_docs = await asyncio.to_thread(lambda: list(query.stream()))
-        
-        teams = []
-        for team_doc in teams_docs:
-            team_data = team_doc.to_dict()
-            teams.append({
+
+        def fetch_member_teams():
+            member_query = teams_ref.where("members", "array_contains", user["uid"])
+            return list(member_query.stream())
+
+        def fetch_owner_teams():
+            owner_query = teams_ref.where("owner_uid", "==", user["uid"])
+            return list(owner_query.stream())
+
+        member_docs, owner_docs = await asyncio.gather(
+            asyncio.to_thread(fetch_member_teams),
+            asyncio.to_thread(fetch_owner_teams),
+        )
+
+        teams_map: Dict[str, Dict[str, Any]] = {}
+
+        for team_doc in [*member_docs, *owner_docs]:
+            team_data = team_doc.to_dict() or {}
+            members = team_data.get("members")
+            members_count = len(members) if isinstance(members, list) else 0
+
+            if not members_count:
+                stored_count = team_data.get("members_count")
+                if isinstance(stored_count, int):
+                    members_count = stored_count
+
+            teams_map[team_doc.id] = {
                 "team_id": team_doc.id,
                 "name": team_data.get("name"),
                 "owner_uid": team_data.get("owner_uid"),
                 "invite_code": team_data.get("invite_code"),
-                "members_count": len(team_data.get("members", [])),
-            })
-        
+                "members_count": members_count,
+            }
+
+        teams = list(teams_map.values())
+
         logger.info("Found %d teams for user %s", len(teams), user["uid"])
-        
+
         return {"success": True, "teams": teams}
     except Exception as e:
         logger.error("get_my_teams error: %s", e, exc_info=True)
