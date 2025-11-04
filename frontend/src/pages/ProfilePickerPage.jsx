@@ -39,9 +39,13 @@ const ProfilePickerPage = () => {
 
   const fetchTeamsViaApi = useCallback(
     async (options = {}) => {
-      const { skipStartLoading = false, silent = false } = options;
+      const {
+        skipStartLoading = false,
+        silent = false,
+        shouldUpdate = () => true,
+      } = options;
 
-      if (!skipStartLoading) {
+      if (!skipStartLoading && shouldUpdate()) {
         setLoading(true);
       }
 
@@ -67,18 +71,22 @@ const ProfilePickerPage = () => {
           .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
           .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
-        setTeams(nextTeams);
-        setError('');
-        writeTeamsCache(nextTeams);
+        if (shouldUpdate()) {
+          setTeams(nextTeams);
+          setError('');
+          writeTeamsCache(nextTeams);
+        }
       } catch (apiError) {
         console.error('Failed to fetch teams via API', apiError);
-        if (!silent) {
+        if (!silent && shouldUpdate()) {
           setTeams([]);
           setError("Impossible de charger vos équipes pour l'instant");
           clearTeamsCache();
         }
       } finally {
-        setLoading(false);
+        if (shouldUpdate()) {
+          setLoading(false);
+        }
       }
     },
     [],
@@ -86,7 +94,9 @@ const ProfilePickerPage = () => {
 
   useEffect(() => {
     const cachedTeams = readTeamsCache();
-    if (Array.isArray(cachedTeams) && cachedTeams.length > 0) {
+    const hasCachedTeams = Array.isArray(cachedTeams) && cachedTeams.length > 0;
+
+    if (hasCachedTeams) {
       setTeams(cachedTeams);
       setLoading(false);
     } else {
@@ -117,8 +127,18 @@ const ProfilePickerPage = () => {
         return;
       }
 
-      setLoading(true);
-      setError('');
+      if (active) {
+        if (!hasCachedTeams) {
+          setLoading(true);
+        }
+        setError('');
+      }
+
+      fetchTeamsViaApi({
+        skipStartLoading: true,
+        silent: true,
+        shouldUpdate: () => active,
+      });
 
       try {
         const teamsQuery = query(
@@ -154,6 +174,10 @@ const ProfilePickerPage = () => {
               })
               .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
+            if (!active) {
+              return;
+            }
+
             setTeams(nextTeams);
             setLoading(false);
             setError('');
@@ -167,7 +191,11 @@ const ProfilePickerPage = () => {
             if (isPermissionDeniedError(snapshotError)) {
               console.warn('Firestore team subscription permission denied', snapshotError);
               stopTeamsListener();
-              fetchTeamsViaApi({ skipStartLoading: true, silent: true });
+              fetchTeamsViaApi({
+                skipStartLoading: true,
+                silent: true,
+                shouldUpdate: () => active,
+              });
               return;
             }
 
@@ -181,12 +209,19 @@ const ProfilePickerPage = () => {
       } catch (subscriptionError) {
         if (isPermissionDeniedError(subscriptionError)) {
           console.warn('Skipping Firestore teams subscription (permission denied)');
-          fetchTeamsViaApi({ skipStartLoading: true, silent: true });
+          fetchTeamsViaApi({
+            skipStartLoading: true,
+            silent: true,
+            shouldUpdate: () => active,
+          });
           return;
         }
 
         console.error('Failed to subscribe to teams', subscriptionError);
-        fetchTeamsViaApi({ skipStartLoading: true });
+        fetchTeamsViaApi({
+          skipStartLoading: true,
+          shouldUpdate: () => active,
+        });
       }
     };
 
