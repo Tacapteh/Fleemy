@@ -32,6 +32,11 @@ from .email_utils import send_document_email
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
 
+try:  # pragma: no cover - optional import when google client available
+    from google.cloud.firestore_v1 import FieldPath as FirestoreFieldPath
+except Exception:  # pragma: no cover - fallback when dependency missing
+    FirestoreFieldPath = None
+
 # Charger les variables d'environnement AVANT toute config
 ENV_PATH = find_dotenv()
 load_dotenv(ENV_PATH)
@@ -63,6 +68,10 @@ except Exception as e:
     from .firebase import InMemoryFirestore
     db = InMemoryFirestore()
     logger.info("Using in-memory Firestore fallback")
+
+DOCUMENT_ID_FIELD = (
+    FirestoreFieldPath.document_id() if FirestoreFieldPath else "__name__"
+)
 
 # Créer l'application FastAPI
 app = FastAPI()
@@ -3505,30 +3514,85 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             owner_query = teams_ref.where("owner_uid", "==", user["uid"])
             return list(owner_query.stream())
 
-        member_docs, owner_docs = await asyncio.gather(
+        async def fetch_membership_docs() -> List[Any]:
+            if not hasattr(db, "collection_group"):
+                return []
+
+            def _run_query():
+                membership_query = (
+                    db.collection_group("memberships")
+                    .where(DOCUMENT_ID_FIELD, "==", user["uid"])
+                )
+                return list(membership_query.stream())
+
+            try:
+                return await asyncio.to_thread(_run_query)
+            except Exception:  # pragma: no cover - defensive
+                logger.exception("Failed to fetch membership collection group")
+                return []
+
+        member_docs, owner_docs, membership_docs = await asyncio.gather(
             asyncio.to_thread(fetch_member_teams),
             asyncio.to_thread(fetch_owner_teams),
+            fetch_membership_docs(),
         )
 
         teams_map: Dict[str, Dict[str, Any]] = {}
 
-        for team_doc in [*member_docs, *owner_docs]:
+        def _store_team(team_doc) -> None:
+            team_id = getattr(team_doc, "id", None)
+            if not team_id:
+                return
+
             team_data = team_doc.to_dict() or {}
             members = team_data.get("members")
-            members_count = len(members) if isinstance(members, list) else 0
+            members_count = 0
+            if isinstance(members, list):
+                members_count = len(members)
+            elif isinstance(members, dict):
+                members_count = len(members)
 
             if not members_count:
                 stored_count = team_data.get("members_count")
                 if isinstance(stored_count, int):
                     members_count = stored_count
 
-            teams_map[team_doc.id] = {
-                "team_id": team_doc.id,
+            teams_map[team_id] = {
+                "team_id": team_id,
                 "name": team_data.get("name"),
-                "owner_uid": team_data.get("owner_uid"),
+                "owner_uid": team_data.get("owner_uid")
+                or team_data.get("ownerUid")
+                or team_data.get("ownerId"),
                 "invite_code": team_data.get("invite_code"),
                 "members_count": members_count,
             }
+
+        for team_doc in [*member_docs, *owner_docs]:
+            _store_team(team_doc)
+
+        membership_team_refs: Dict[str, Any] = {}
+        for membership_doc in membership_docs:
+            doc_ref = getattr(membership_doc, "reference", None)
+            parent = getattr(doc_ref, "parent", None)
+            team_ref = getattr(parent, "parent", None)
+            team_id = getattr(team_ref, "id", None)
+            if not team_id or team_id in teams_map:
+                continue
+            membership_team_refs[team_id] = team_ref
+
+        if membership_team_refs:
+            team_snapshots = await asyncio.gather(
+                *[
+                    asyncio.to_thread(team_ref.get)
+                    for team_ref in membership_team_refs.values()
+                ]
+            )
+
+            for team_id, team_snap in zip(
+                membership_team_refs.keys(), team_snapshots
+            ):
+                if getattr(team_snap, "exists", True):
+                    _store_team(team_snap)
 
         teams = list(teams_map.values())
 
