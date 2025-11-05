@@ -33,6 +33,27 @@ import re
 import secrets
 import string
 
+try:  # pragma: no cover - optional google exceptions import
+    from google.api_core.exceptions import ServiceUnavailable as GoogleServiceUnavailable
+except Exception:  # pragma: no cover - fallback when dependency missing
+    class GoogleServiceUnavailable(Exception):  # type: ignore
+        pass
+
+try:  # pragma: no cover - optional google exceptions import
+    from google.api_core.exceptions import DeadlineExceeded as GoogleDeadlineExceeded
+except Exception:  # pragma: no cover - fallback when dependency missing
+    class GoogleDeadlineExceeded(Exception):  # type: ignore
+        pass
+
+try:  # pragma: no cover - optional google exceptions import
+    from google.api_core.exceptions import Internal as GoogleInternal
+except Exception:  # pragma: no cover - fallback when dependency missing
+    try:  # pragma: no cover - secondary fallback when Internal missing
+        from google.api_core.exceptions import InternalServerError as GoogleInternal  # type: ignore
+    except Exception:  # pragma: no cover - fallback when dependency missing
+        class GoogleInternal(Exception):  # type: ignore
+            pass
+
 from .pdf_utils import document_filename, invoice_pdf_bytes, quote_pdf_bytes
 from .email_utils import send_document_email
 
@@ -3348,6 +3369,47 @@ def _serialize_timestamp(value: Any) -> Optional[str]:
     return None
 
 
+class MembershipsUnavailableError(Exception):
+    """Raised when memberships cannot be retrieved after retries."""
+
+
+_MEMBERSHIPS_RETRY_DELAYS = (0.2, 0.8, 2.0)
+
+
+async def _stream_memberships_with_retry(memberships_ref):
+    """Stream team memberships with small exponential backoff retries."""
+
+    last_exception: Optional[BaseException] = None
+    total_attempts = len(_MEMBERSHIPS_RETRY_DELAYS)
+
+    for attempt_index, delay in enumerate(_MEMBERSHIPS_RETRY_DELAYS, start=1):
+        try:
+            return await asyncio.to_thread(lambda: list(memberships_ref.stream()))
+        except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal) as exc:
+            last_exception = exc
+            logger.warning(
+                "Memberships stream attempt %s/%s failed: %s",
+                attempt_index,
+                total_attempts,
+                exc,
+                exc_info=True,
+            )
+        except Exception as exc:  # pragma: no cover - defensive catch-all
+            last_exception = exc
+            logger.warning(
+                "Memberships stream unexpected failure on attempt %s/%s: %s",
+                attempt_index,
+                total_attempts,
+                exc,
+                exc_info=True,
+            )
+
+        if attempt_index < total_attempts:
+            await asyncio.sleep(delay)
+
+    raise MembershipsUnavailableError("Memberships temporarily unavailable") from last_exception
+
+
 @api_router.get("/teams/{team_id}/memberships")
 async def get_team_memberships(
     team_id: str,
@@ -3358,7 +3420,7 @@ async def get_team_memberships(
         await ensure_team_membership(team_id, user["uid"])
 
         memberships_ref = team_col(team_id, "memberships")
-        membership_docs = await asyncio.to_thread(lambda: list(memberships_ref.stream()))
+        membership_docs = await _stream_memberships_with_retry(memberships_ref)
 
         members: List[Dict[str, Any]] = []
         for membership_doc in membership_docs:
@@ -3374,6 +3436,20 @@ async def get_team_memberships(
             )
 
         return {"success": True, "members": members}
+    except MembershipsUnavailableError as exc:
+        logger.warning(
+            "get_team_memberships unavailable after retries: %s",
+            exc,
+            exc_info=True,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "code": "MEMBERSHIPS_UNAVAILABLE",
+                "message": "Memberships temporarily unavailable",
+            },
+        )
     except HTTPException:
         raise
     except Exception as e:

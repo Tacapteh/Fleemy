@@ -22,7 +22,7 @@ import {
   fetchTeamPlanningEntries,
   isPermissionDeniedError,
 } from '../firebase';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ServiceUnavailableError } from '../lib/api';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
@@ -199,6 +199,23 @@ const generateMemberColor = (seed) => {
   const color = { background, border, text: '#ffffff' };
   MEMBER_COLOR_CACHE.set(cacheKey, color);
   return color;
+};
+
+const isMembershipServiceUnavailableError = (error) => {
+  if (!error) {
+    return false;
+  }
+
+  if (error instanceof ServiceUnavailableError) {
+    return true;
+  }
+
+  if (typeof error === 'object') {
+    const code = error?.code || error?.response?.data?.code;
+    return code === 'MEMBERSHIPS_UNAVAILABLE';
+  }
+
+  return false;
 };
 
 const TEAM_PLANNING_TAB_PERSONAL = 'personal';
@@ -981,11 +998,14 @@ export default function Planning() {
           return;
         }
         const permissionIssue = isPermissionDeniedError(fallbackError);
-        const logMethod = permissionIssue ? console.warn : console.error;
+        const serviceUnavailable = isMembershipServiceUnavailableError(fallbackError);
+        const logMethod = permissionIssue || serviceUnavailable ? console.warn : console.error;
         logMethod('team planning fallback load error', fallbackError);
         setTeamPlanningEntries([]);
         if (permissionIssue) {
           setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
+        } else if (serviceUnavailable) {
+          setTeamPlanningError(fallbackError);
         } else {
           setTeamPlanningError("Impossible de charger le planning d'équipe");
         }
@@ -2135,6 +2155,50 @@ export default function Planning() {
     membersError,
   ]);
 
+  const teamPlanningServiceUnavailable = isMembershipServiceUnavailableError(teamPlanningError);
+
+  const teamPlanningErrorMessage = (() => {
+    if (!teamPlanningError) {
+      return null;
+    }
+
+    if (teamPlanningServiceUnavailable) {
+      return 'Service d\'équipe momentanément indisponible — nouvelle tentative…';
+    }
+
+    if (typeof teamPlanningError === 'string') {
+      return teamPlanningError;
+    }
+
+    if (
+      typeof teamPlanningError?.message === 'string' &&
+      teamPlanningError.message.trim().length > 0
+    ) {
+      return teamPlanningError.message;
+    }
+
+    const responseData = teamPlanningError?.response?.data;
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      typeof responseData.message === 'string' &&
+      responseData.message.trim().length > 0
+    ) {
+      return responseData.message;
+    }
+
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      typeof responseData.detail === 'string' &&
+      responseData.detail.trim().length > 0
+    ) {
+      return responseData.detail;
+    }
+
+    return "Impossible de charger le planning d'équipe";
+  })();
+
   const pageTitle = planningTab === TEAM_PLANNING_TAB_SHARED
     ? sharedTeamName
       ? `Planning ${sharedTeamName}`
@@ -2170,8 +2234,16 @@ export default function Planning() {
           {tasksError && planningTab !== TEAM_PLANNING_TAB_SHARED && (
             <p className="text-sm text-red-600">{tasksError}</p>
           )}
-          {teamPlanningError && planningTab === TEAM_PLANNING_TAB_SHARED && (
-            <p className="text-sm text-red-600">{teamPlanningError}</p>
+          {teamPlanningErrorMessage && planningTab === TEAM_PLANNING_TAB_SHARED && (
+            <p
+              className={
+                teamPlanningServiceUnavailable
+                  ? 'text-sm text-slate-500 italic'
+                  : 'text-sm text-red-600'
+              }
+            >
+              {teamPlanningErrorMessage}
+            </p>
           )}
           {membersError && (
             <p className="text-sm text-red-600">{membersError}</p>
