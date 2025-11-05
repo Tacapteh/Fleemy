@@ -14,6 +14,14 @@ import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, validator, EmailStr
 from pydantic import field_validator
+
+# Fallback local si EmailStr venait à ne pas valider faute de dépendance email-validator (environnements edge).
+# Ne modifie pas le comportement standard quand email-validator est présent.
+from typing import Annotated
+from pydantic import StringConstraints
+LocalEmailStr = Annotated[str, StringConstraints(pattern=r'^[^@\s]+@[^@\s]+.[^@\s]+$')]
+# À l'usage, on continue d'utiliser EmailStr partout. LocalEmailStr est juste disponible si besoin ponctuel.
+
 from typing import List, Optional, Dict, Any, Tuple, Literal, Set
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -4075,6 +4083,11 @@ from fastapi.responses import JSONResponse
 from fastapi.requests import Request
 from fastapi.exception_handlers import RequestValidationError
 from fastapi.exceptions import RequestValidationError as FastAPIRequestValidationError
+
+
+@app.get("/health")
+async def health() -> Dict[str, bool]:
+    return {"ok": True}
 
 
 @app.exception_handler(FastAPIRequestValidationError)
