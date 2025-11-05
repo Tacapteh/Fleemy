@@ -1793,6 +1793,27 @@ export default function Planning() {
         }
 
         try {
+          const resolvePersonalEventId = () => {
+            const candidateKeys = [
+              'personalEventId',
+              'personal_event_id',
+              'personalEventID',
+              'personal_eventID',
+              'personalEvent',
+              'personal_event',
+            ];
+            for (const key of candidateKeys) {
+              const value = data?.[key];
+              if (typeof value === 'string' && value.trim()) {
+                return value.trim();
+              }
+            }
+            if (typeof data?.id === 'string' && data.id.trim()) {
+              return data.id.trim();
+            }
+            return null;
+          };
+
           const teamPayload = {
             id: data.id || data.teamPlanningId || data.team_planning_id || null,
             title: resolvedTitle,
@@ -1815,28 +1836,30 @@ export default function Planning() {
             body: JSON.stringify(teamPayload),
           });
 
+          const teamEntryId = response?.item?.id || teamPayload.id || null;
+
           requestTeamPlanningRefresh();
 
-          if (!data.synced) {
-            const personalPayload = {
-              id: data.personalEventId || data.id || null,
-              start: start.toISOString(),
-              end: end.toISOString(),
-              type: eventType,
-              client: shouldClearClient ? '' : sanitizedClientName || resolvedTitle,
-              status: resolvedStatus,
-              payment_status: resolvedStatus,
-              hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
-              duration: Math.round((end - start) / (60 * 1000)),
-              task_id: shouldClearClient ? null : data.task_id || null,
-              description: data.description || '',
-              client_id: sanitizedClientId,
-              client_name: sanitizedClientName,
-              day: DAY_KEYS[dayIndex] || 'monday',
-          team_planning_id: response?.item?.id || teamPayload.id || null,
-              synced: true,
-            };
+          const personalPayload = {
+            id: resolvePersonalEventId(),
+            start: start.toISOString(),
+            end: end.toISOString(),
+            type: eventType,
+            client: shouldClearClient ? '' : sanitizedClientName || resolvedTitle,
+            status: resolvedStatus,
+            payment_status: resolvedStatus,
+            hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
+            duration: Math.round((end - start) / (60 * 1000)),
+            task_id: shouldClearClient ? null : data.task_id || null,
+            description: data.description || '',
+            client_id: sanitizedClientId,
+            client_name: sanitizedClientName,
+            day: DAY_KEYS[dayIndex] || 'monday',
+            team_planning_id: teamEntryId,
+            synced: true,
+          };
 
+          if (!data.synced && user?.uid) {
             let syncedPersonalId = personalPayload.id || null;
             try {
               const syncedEvent = await saveEventNew(
@@ -1844,28 +1867,21 @@ export default function Planning() {
                 personalPayload,
               );
               syncedPersonalId = syncedEvent?.id || personalPayload.id || null;
+              if (syncedPersonalId) {
+                personalPayload.id = syncedPersonalId;
+              }
               requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
             } catch (syncError) {
               console.warn('Unable to synchronise personal planning from team event', syncError);
             }
 
-            if (syncedPersonalId && response?.item?.id) {
+            if (syncedPersonalId && teamEntryId) {
               try {
                 await apiFetch(`/teams/${sharedTeamId}/planning`, {
                   method: 'POST',
                   body: JSON.stringify({
-                    id: response.item.id,
-                    title: resolvedTitle,
-                    type: 'event',
-                    start: start.toISOString(),
-                    end: end.toISOString(),
-                    status: resolvedStatus,
-                    color: data.color || '#2563eb',
-                    price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
-                    createdBy: user.uid,
-                    createdByName: user.displayName || user.email || 'Moi',
-                    createdByInitials: computeInitials(user.displayName, user.email),
-                    teamId: sharedTeamId,
+                    ...teamPayload,
+                    id: teamEntryId,
                     synced: true,
                     personalEventId: syncedPersonalId,
                   }),
@@ -1873,6 +1889,16 @@ export default function Planning() {
               } catch (linkError) {
                 console.warn('Unable to associer le bloc équipe à votre événement personnel', linkError);
               }
+            }
+          } else if (personalPayload.id && user?.uid) {
+            try {
+              await saveEventNew(
+                { type: 'personal', userId: user.uid },
+                personalPayload,
+              );
+              requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
+            } catch (updateError) {
+              console.warn('Unable to update personal event linked to team block', updateError);
             }
           }
 
