@@ -73,6 +73,10 @@ appendBaseUrl(DEFAULT_API_URL);
 appendBaseUrl(SAME_ORIGIN_OVERRIDE);
 appendBaseUrl(BROWSER_FALLBACK_URL);
 const RETRY_DELAYS = [0, 250, 500, 1000];
+const TEMPORARY_RETRY_DELAYS = [0, 300, 1000];
+const TEMPORARY_FINAL_BACKOFF = 2500;
+const TEMPORARY_STATUS_CODES = new Set([502, 503, 504]);
+const NON_JSON_RESPONSE_PLACEHOLDER = "[non-json response omitted]";
 
 const wait = (delay: number) =>
   new Promise((resolve) => {
@@ -146,6 +150,24 @@ type ApiError = Error & {
     data: unknown;
   };
 };
+
+export class ServiceUnavailableError extends Error {
+  code?: string;
+  response?: ApiError["response"];
+
+  constructor(
+    message: string,
+    options: { code?: string; response?: ApiError["response"]; cause?: unknown } = {},
+  ) {
+    super(message);
+    this.name = "ServiceUnavailableError";
+    this.code = options.code;
+    this.response = options.response;
+    if (options.cause !== undefined) {
+      (this as any).cause = options.cause;
+    }
+  }
+}
 
 const ensureAuthHeaders = async (
   headers: Headers,
@@ -223,6 +245,67 @@ export async function apiFetch(
     let lastNetworkErrorForBase: Error | null = null;
     let shouldTryNextBase = false;
 
+    type TemporaryReason = "status" | "non-json" | "memberships-unavailable";
+    type FetchAttemptResult = {
+      response: Response;
+      data: unknown;
+      isJson: boolean;
+      temporaryReason?: TemporaryReason;
+    };
+
+    const executeFetchAttempt = async (): Promise<FetchAttemptResult> => {
+      let response = await attemptFetch(false, url);
+
+      if (response.status === 401 && auth.currentUser) {
+        response = await attemptFetch(true, url);
+      }
+
+      const status = response.status;
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+
+      if (TEMPORARY_STATUS_CODES.has(status)) {
+        return {
+          response,
+          data: null,
+          isJson,
+          temporaryReason: "status",
+        };
+      }
+
+      if (!isJson) {
+        return {
+          response,
+          data: NON_JSON_RESPONSE_PLACEHOLDER,
+          isJson: false,
+          temporaryReason: "non-json",
+        };
+      }
+
+      let data: unknown = null;
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        data = null;
+      }
+
+      if (
+        data &&
+        typeof data === "object" &&
+        (data as any).success === false &&
+        (data as any).code === "MEMBERSHIPS_UNAVAILABLE"
+      ) {
+        return {
+          response,
+          data,
+          isJson: true,
+          temporaryReason: "memberships-unavailable",
+        };
+      }
+
+      return { response, data, isJson: true };
+    };
+
     for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt += 1) {
       const delay = RETRY_DELAYS[attempt];
       if (delay > 0) {
@@ -230,27 +313,86 @@ export async function apiFetch(
       }
 
       try {
-        let response = await attemptFetch(false, url);
+        let lastTemporaryResult: FetchAttemptResult | null = null;
 
-        if (response.status === 401 && auth.currentUser) {
-          response = await attemptFetch(true, url);
-        }
-
-        const contentType = response.headers.get("content-type") || "";
-        const isJson = contentType.includes("application/json");
-        let data: unknown = null;
-
-        if (isJson) {
-          try {
-            data = await response.json();
-          } catch (parseError) {
-            data = null;
+        for (let tempAttempt = 0; tempAttempt < TEMPORARY_RETRY_DELAYS.length; tempAttempt += 1) {
+          const retryDelay = TEMPORARY_RETRY_DELAYS[tempAttempt];
+          if (retryDelay > 0) {
+            await wait(retryDelay);
           }
-        } else {
-          data = await response.text();
+
+          const result = await executeFetchAttempt();
+          lastTemporaryResult = result;
+
+          if (result.temporaryReason === "memberships-unavailable") {
+            if (tempAttempt === TEMPORARY_RETRY_DELAYS.length - 1) {
+              const response = result.response;
+              const responseInfo = {
+                status: response.status,
+                statusText: response.statusText,
+                data: result.data,
+              };
+              throw new ServiceUnavailableError("Memberships temporarily unavailable", {
+                code: "MEMBERSHIPS_UNAVAILABLE",
+                response: responseInfo,
+              });
+            }
+            continue;
+          }
+
+          if (
+            result.temporaryReason === "status" ||
+            result.temporaryReason === "non-json"
+          ) {
+            if (tempAttempt === TEMPORARY_RETRY_DELAYS.length - 1) {
+              if (TEMPORARY_FINAL_BACKOFF > 0) {
+                await wait(TEMPORARY_FINAL_BACKOFF);
+              }
+              break;
+            }
+            continue;
+          }
+
+          const response = result.response;
+          const data = result.data;
+
+          if (!response.ok) {
+            if (!suppressErrorLog) {
+              console.error(
+                "apiFetch error",
+                { method, url, status: response.status },
+                data,
+              );
+            }
+            const message =
+              (typeof data === "object" && data && (data as any).detail) ||
+              (typeof data === "string" && data) ||
+              response.statusText ||
+              "Request failed";
+            const error = new Error(message) as ApiError;
+            error.response = {
+              status: response.status,
+              statusText: response.statusText,
+              data,
+            };
+            if (!isLastBase && shouldFallbackToNextBase(response.status)) {
+              shouldTryNextBase = true;
+              lastFallbackError = error;
+              break;
+            }
+            throw error;
+          }
+
+          return data;
         }
 
-        if (!response.ok) {
+        if (shouldTryNextBase) {
+          break;
+        }
+
+        if (lastTemporaryResult && lastTemporaryResult.temporaryReason) {
+          const response = lastTemporaryResult.response;
+          const data = lastTemporaryResult.data;
           if (!suppressErrorLog) {
             console.error(
               "apiFetch error",
@@ -258,11 +400,17 @@ export async function apiFetch(
               data,
             );
           }
-          const message =
+          let message =
             (typeof data === "object" && data && (data as any).detail) ||
-            (typeof data === "string" && data) ||
+            (typeof data === "string" && data !== NON_JSON_RESPONSE_PLACEHOLDER && data) ||
             response.statusText ||
             "Request failed";
+          if (
+            typeof data === "string" &&
+            data === NON_JSON_RESPONSE_PLACEHOLDER
+          ) {
+            message = "Service temporarily unavailable";
+          }
           const error = new Error(message) as ApiError;
           error.response = {
             status: response.status,
@@ -276,8 +424,6 @@ export async function apiFetch(
           }
           throw error;
         }
-
-        return data;
       } catch (error: any) {
         if (error instanceof TypeError || error?.name === "TypeError") {
           lastNetworkErrorForBase = error as Error;
