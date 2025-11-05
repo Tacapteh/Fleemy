@@ -844,9 +844,8 @@ export default function Planning() {
     setMembersLoading(true);
     setMembersError(null);
 
-    const unsubscribe = listenTeamMemberships(
-      teamId,
-      (rawMembers = []) => {
+    const unsubscribe = listenTeamMemberships(teamId, {
+      onData: (rawMembers = []) => {
         const seen = new Set();
         const resolvedMembers = [];
 
@@ -854,26 +853,36 @@ export default function Planning() {
           if (!member || !member.uid || seen.has(member.uid)) {
             return;
           }
+
+          const displayNameCandidate =
+            member.displayName ||
+            member.name ||
+            member.label ||
+            member.email ||
+            member.uid;
+
           seen.add(member.uid);
           resolvedMembers.push({
             ...member,
             uid: member.uid,
             displayName:
-              member.displayName ||
-              (member.uid === user.uid ? user.displayName || null : null),
+              member.uid === user.uid
+                ? user.displayName || user.email || displayNameCandidate
+                : displayNameCandidate,
             email:
-              member.email || (member.uid === user.uid ? user.email || null : null),
+              member.uid === user.uid
+                ? user.email || member.email || null
+                : member.email || null,
           });
         };
 
         const membershipEntries = Array.isArray(rawMembers) ? rawMembers : [];
         membershipEntries.forEach(appendMember);
 
-        if (!seen.has(user.uid)) {
-          seen.add(user.uid);
-          resolvedMembers.unshift({
+        if (user?.uid && !seen.has(user.uid)) {
+          appendMember({
             uid: user.uid,
-            displayName: user.displayName || null,
+            displayName: user.displayName || user.email || user.uid,
             email: user.email || null,
           });
         }
@@ -883,24 +892,28 @@ export default function Planning() {
         setMembersError(null);
 
         setSelectedMemberId((current) => {
-          if (current && seen.has(current)) {
+          if (current) {
             return current;
           }
-          if (seen.has(user.uid)) {
+          if (user?.uid) {
             return user.uid;
           }
           return resolvedMembers[0]?.uid || null;
         });
       },
-      (error) => {
+      onError: (error) => {
         console.error('listenTeamMemberships error', error);
         setMembers([]);
-        setMembersError("Impossible de charger les membres de l'équipe");
+        setMembersError(error);
         setMembersLoading(false);
-      }
-    );
+      },
+    });
 
-    return () => unsubscribe();
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, [
     isTeamContext,
     teamId,
