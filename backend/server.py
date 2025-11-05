@@ -4085,9 +4085,14 @@ from fastapi.exception_handlers import RequestValidationError
 from fastapi.exceptions import RequestValidationError as FastAPIRequestValidationError
 
 
+@app.get("/healthz")
+async def healthz() -> Dict[str, Any]:
+    return {"ok": True, "service": "fleemy", "status": "healthy"}
+
+
 @app.get("/health")
-async def health() -> Dict[str, bool]:
-    return {"ok": True}
+async def health() -> Dict[str, Any]:
+    return {"ok": True, "service": "fleemy", "status": "healthy"}
 
 
 @app.exception_handler(FastAPIRequestValidationError)
