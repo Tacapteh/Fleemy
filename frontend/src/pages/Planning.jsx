@@ -22,7 +22,7 @@ import {
   fetchTeamPlanningEntries,
   isPermissionDeniedError,
 } from '../firebase';
-import { apiFetch } from '../lib/api';
+import { apiFetch, ServiceUnavailableError } from '../lib/api';
 import { showToast } from '../utils/toast';
 import { subscribeToUIEvent } from '../store/uiStore';
 import { contextStore } from '../stores/contextStore';
@@ -205,6 +205,8 @@ const TEAM_PLANNING_TAB_PERSONAL = 'personal';
 const TEAM_PLANNING_TAB_SHARED = 'team';
 const TEAM_PLANNING_ACCESS_DENIED_MESSAGE =
   "Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.";
+const TEAM_SERVICE_UNAVAILABLE_MESSAGE =
+  'Service d’équipe momentanément indisponible — nouvelle tentative…';
 
 const toIsoDate = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
@@ -987,7 +989,15 @@ export default function Planning() {
         if (permissionIssue) {
           setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
         } else {
-          setTeamPlanningError("Impossible de charger le planning d'équipe");
+          const serviceUnavailable =
+            fallbackError instanceof ServiceUnavailableError ||
+            fallbackError?.name === 'ServiceUnavailable' ||
+            fallbackError?.code === 'MEMBERSHIPS_UNAVAILABLE';
+          if (serviceUnavailable) {
+            setTeamPlanningError(TEAM_SERVICE_UNAVAILABLE_MESSAGE);
+          } else {
+            setTeamPlanningError("Impossible de charger le planning d'équipe");
+          }
         }
         setTeamPlanningLoading(false);
       }
@@ -2109,6 +2119,47 @@ export default function Planning() {
     membersError,
   ]);
 
+  const membersNotice = useMemo(() => {
+    if (!membersError) {
+      return null;
+    }
+
+    if (membersError instanceof ServiceUnavailableError) {
+      return { tone: 'info', message: TEAM_SERVICE_UNAVAILABLE_MESSAGE };
+    }
+
+    const isObjectError = typeof membersError === 'object' && membersError !== null;
+    const errorCode = isObjectError
+      ? membersError.code || membersError?.response?.data?.code || null
+      : null;
+    const errorName = isObjectError ? membersError.name : null;
+
+    if (errorCode === 'MEMBERSHIPS_UNAVAILABLE' || errorName === 'ServiceUnavailable') {
+      return { tone: 'info', message: TEAM_SERVICE_UNAVAILABLE_MESSAGE };
+    }
+
+    if (typeof membersError === 'string') {
+      return { tone: 'error', message: membersError };
+    }
+
+    const derivedMessage =
+      membersError?.message || membersError?.response?.statusText ||
+      "Impossible de charger le planning d'équipe";
+
+    return { tone: 'error', message: derivedMessage };
+  }, [membersError]);
+
+  const teamPlanningNotice = useMemo(() => {
+    if (!teamPlanningError) {
+      return null;
+    }
+
+    const tone =
+      teamPlanningError === TEAM_SERVICE_UNAVAILABLE_MESSAGE ? 'info' : 'error';
+
+    return { tone, message: teamPlanningError };
+  }, [teamPlanningError]);
+
   const pageTitle = planningTab === TEAM_PLANNING_TAB_SHARED
     ? sharedTeamName
       ? `Planning ${sharedTeamName}`
@@ -2144,11 +2195,23 @@ export default function Planning() {
           {tasksError && planningTab !== TEAM_PLANNING_TAB_SHARED && (
             <p className="text-sm text-red-600">{tasksError}</p>
           )}
-          {teamPlanningError && planningTab === TEAM_PLANNING_TAB_SHARED && (
-            <p className="text-sm text-red-600">{teamPlanningError}</p>
+          {teamPlanningNotice && planningTab === TEAM_PLANNING_TAB_SHARED && (
+            <p
+              className={`text-sm ${
+                teamPlanningNotice.tone === 'info' ? 'text-amber-600' : 'text-red-600'
+              }`}
+            >
+              {teamPlanningNotice.message}
+            </p>
           )}
-          {membersError && (
-            <p className="text-sm text-red-600">{membersError}</p>
+          {membersNotice && (
+            <p
+              className={`text-sm ${
+                membersNotice.tone === 'info' ? 'text-amber-600' : 'text-red-600'
+              }`}
+            >
+              {membersNotice.message}
+            </p>
           )}
         </header>
 

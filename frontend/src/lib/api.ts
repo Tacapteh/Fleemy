@@ -73,6 +73,9 @@ appendBaseUrl(DEFAULT_API_URL);
 appendBaseUrl(SAME_ORIGIN_OVERRIDE);
 appendBaseUrl(BROWSER_FALLBACK_URL);
 const RETRY_DELAYS = [0, 250, 500, 1000];
+const TRANSIENT_RETRY_DELAYS = [0, 300, 1000];
+const TRANSIENT_FINAL_DELAY = 2500;
+const TRANSIENT_MAX_ATTEMPTS = TRANSIENT_RETRY_DELAYS.length;
 
 const wait = (delay: number) =>
   new Promise((resolve) => {
@@ -147,6 +150,24 @@ type ApiError = Error & {
   };
 };
 
+export class ServiceUnavailableError extends Error {
+  code?: string;
+  response?: ApiError["response"];
+
+  constructor(
+    message: string,
+    options: { code?: string; response?: ApiError["response"] } = {},
+  ) {
+    super(message);
+    this.name = "ServiceUnavailable";
+    this.code = options.code;
+    if (options.response) {
+      this.response = options.response;
+    }
+    Object.setPrototypeOf(this, ServiceUnavailableError.prototype);
+  }
+}
+
 const ensureAuthHeaders = async (
   headers: Headers,
   forceRefresh: boolean,
@@ -182,6 +203,78 @@ const shouldFallbackToNextBase = (status: number) => {
     status === 503 ||
     status === 504
   );
+};
+
+const NO_BODY_STATUS = new Set([204, 205, 304]);
+
+const parseApiResponse = async (response: Response) => {
+  const contentType = response.headers.get("content-type") || "";
+  const expectsJson = contentType.includes("application/json");
+  const status = response.status;
+  const noBody = NO_BODY_STATUS.has(status);
+  let rawBody = "";
+
+  if (!noBody) {
+    try {
+      rawBody = await response.text();
+    } catch (error) {
+      rawBody = "";
+    }
+  }
+
+  const preview = rawBody.trimStart().slice(0, 32).toLowerCase();
+  const isHtml = Boolean(
+    rawBody &&
+      (preview.startsWith("<!doctype") ||
+        preview.startsWith("<html") ||
+        preview.startsWith("<body")),
+  );
+
+  if (expectsJson && !isHtml) {
+    if (!rawBody) {
+      return {
+        data: null,
+        rawBody,
+        parsedJson: true,
+        isHtml,
+        contentType,
+      };
+    }
+    try {
+      return {
+        data: JSON.parse(rawBody),
+        rawBody,
+        parsedJson: true,
+        isHtml,
+        contentType,
+      };
+    } catch (parseError) {
+      return {
+        data: null,
+        rawBody,
+        parsedJson: false,
+        isHtml,
+        contentType,
+      };
+    }
+  }
+
+  return {
+    data: rawBody,
+    rawBody,
+    parsedJson: false,
+    isHtml,
+    contentType,
+  };
+};
+
+const isMembershipsUnavailablePayload = (payload: unknown) => {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+  const code = (payload as any).code;
+  const success = (payload as any).success;
+  return success === false && code === "MEMBERSHIPS_UNAVAILABLE";
 };
 
 export async function apiFetch(
@@ -230,54 +323,120 @@ export async function apiFetch(
       }
 
       try {
-        let response = await attemptFetch(false, url);
+        for (
+          let transientAttempt = 0;
+          transientAttempt < TRANSIENT_MAX_ATTEMPTS;
+          transientAttempt += 1
+        ) {
+          const transientDelay =
+            TRANSIENT_RETRY_DELAYS[transientAttempt] ?? 0;
+          if (transientDelay > 0) {
+            await wait(transientDelay);
+          }
 
-        if (response.status === 401 && auth.currentUser) {
-          response = await attemptFetch(true, url);
+          let response = await attemptFetch(false, url);
+
+          if (response.status === 401 && auth.currentUser) {
+            response = await attemptFetch(true, url);
+          }
+
+          const parsed = await parseApiResponse(response);
+          const status = response.status;
+          const statusText = response.statusText;
+          const shouldRetryStatus =
+            status === 502 || status === 503 || status === 504;
+          const membershipUnavailable =
+            parsed.parsedJson && isMembershipsUnavailablePayload(parsed.data);
+          const shouldRetryTemporary =
+            shouldRetryStatus || parsed.isHtml || membershipUnavailable;
+
+          if (shouldRetryTemporary) {
+            if (transientAttempt === TRANSIENT_MAX_ATTEMPTS - 1) {
+              if (TRANSIENT_FINAL_DELAY > 0) {
+                await wait(TRANSIENT_FINAL_DELAY);
+              }
+              const logPayload = membershipUnavailable
+                ? parsed.data
+                : parsed.isHtml
+                  ? "[html-response]"
+                  : parsed.data;
+              const error = new ServiceUnavailableError(
+                membershipUnavailable
+                  ? "Memberships temporarily unavailable"
+                  : "Service temporarily unavailable",
+                {
+                  code: membershipUnavailable
+                    ? "MEMBERSHIPS_UNAVAILABLE"
+                    : undefined,
+                  response: {
+                    status,
+                    statusText,
+                    data: membershipUnavailable ? parsed.data : null,
+                  },
+                },
+              );
+              if (!suppressErrorLog) {
+                console.error(
+                  "apiFetch error",
+                  { method, url, status },
+                  logPayload,
+                );
+              }
+              if (!isLastBase && shouldFallbackToNextBase(status)) {
+                shouldTryNextBase = true;
+                lastFallbackError = error;
+              } else {
+                throw error;
+              }
+              break;
+            }
+            continue;
+          }
+
+          if (!response.ok) {
+            const logPayload = parsed.isHtml
+              ? "[html-response]"
+              : parsed.parsedJson
+                ? parsed.data
+                : parsed.rawBody;
+            if (!suppressErrorLog) {
+              console.error(
+                "apiFetch error",
+                { method, url, status },
+                logPayload,
+              );
+            }
+            const message =
+              (typeof parsed.data === "object" &&
+                parsed.data &&
+                (parsed.data as any).detail) ||
+              (typeof parsed.data === "string" && parsed.data) ||
+              statusText ||
+              "Request failed";
+            const error = new Error(message) as ApiError;
+            error.response = {
+              status,
+              statusText,
+              data: parsed.isHtml
+                ? null
+                : parsed.parsedJson
+                  ? parsed.data
+                  : parsed.rawBody,
+            };
+            if (!isLastBase && shouldFallbackToNextBase(status)) {
+              shouldTryNextBase = true;
+              lastFallbackError = error;
+              break;
+            }
+            throw error;
+          }
+
+          return parsed.data;
         }
 
-        const contentType = response.headers.get("content-type") || "";
-        const isJson = contentType.includes("application/json");
-        let data: unknown = null;
-
-        if (isJson) {
-          try {
-            data = await response.json();
-          } catch (parseError) {
-            data = null;
-          }
-        } else {
-          data = await response.text();
+        if (shouldTryNextBase) {
+          break;
         }
-
-        if (!response.ok) {
-          if (!suppressErrorLog) {
-            console.error(
-              "apiFetch error",
-              { method, url, status: response.status },
-              data,
-            );
-          }
-          const message =
-            (typeof data === "object" && data && (data as any).detail) ||
-            (typeof data === "string" && data) ||
-            response.statusText ||
-            "Request failed";
-          const error = new Error(message) as ApiError;
-          error.response = {
-            status: response.status,
-            statusText: response.statusText,
-            data,
-          };
-          if (!isLastBase && shouldFallbackToNextBase(response.status)) {
-            shouldTryNextBase = true;
-            lastFallbackError = error;
-            break;
-          }
-          throw error;
-        }
-
-        return data;
       } catch (error: any) {
         if (error instanceof TypeError || error?.name === "TypeError") {
           lastNetworkErrorForBase = error as Error;

@@ -8,6 +8,7 @@ from fastapi import (
     Request,
     Body,
 )
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv, find_dotenv
 import os
 import logging
@@ -44,6 +45,22 @@ try:  # pragma: no cover - optional import when google client available
     from google.cloud.firestore_v1 import FieldPath as FirestoreFieldPath
 except Exception:  # pragma: no cover - fallback when dependency missing
     FirestoreFieldPath = None
+
+try:  # pragma: no cover - optional import when google client available
+    from google.api_core import exceptions as google_exceptions
+
+    ServiceUnavailable = getattr(google_exceptions, "ServiceUnavailable", Exception)
+    DeadlineExceeded = getattr(google_exceptions, "DeadlineExceeded", Exception)
+    InternalServerError = getattr(
+        google_exceptions,
+        "InternalServerError",
+        getattr(google_exceptions, "InternalError", Exception),
+    )
+except Exception:  # pragma: no cover - fallback when dependency missing
+    class _FallbackFirestoreException(Exception):
+        """Fallback Firestore exception type when google.api_core is unavailable."""
+
+    ServiceUnavailable = DeadlineExceeded = InternalServerError = _FallbackFirestoreException
 
 # Charger les variables d'environnement AVANT toute config
 ENV_PATH = find_dotenv()
@@ -3348,6 +3365,42 @@ def _serialize_timestamp(value: Any) -> Optional[str]:
     return None
 
 
+async def _stream_team_memberships_with_retry(memberships_ref) -> List[Any]:
+    """Stream team memberships with a short exponential backoff."""
+
+    delays = [0.2, 0.8, 2.0]
+    last_error: Optional[Exception] = None
+
+    for attempt, delay in enumerate(delays, start=1):
+        try:
+            return await asyncio.to_thread(lambda: list(memberships_ref.stream()))
+        except (ServiceUnavailable, DeadlineExceeded, InternalServerError) as error:
+            last_error = error
+            logger.warning(
+                "Failed to fetch team memberships from Firestore (attempt %s/%s): %s",
+                attempt,
+                len(delays),
+                error,
+            )
+        except Exception as error:  # pragma: no cover - defensive fallback
+            last_error = error
+            logger.warning(
+                "Unexpected error while fetching team memberships (attempt %s/%s): %s",
+                attempt,
+                len(delays),
+                error,
+            )
+
+        if attempt < len(delays):
+            await asyncio.sleep(delays[attempt - 1])
+        else:
+            await asyncio.sleep(delay)
+
+    if last_error:
+        raise last_error
+    raise RuntimeError("Failed to stream team memberships")
+
+
 @api_router.get("/teams/{team_id}/memberships")
 async def get_team_memberships(
     team_id: str,
@@ -3358,7 +3411,7 @@ async def get_team_memberships(
         await ensure_team_membership(team_id, user["uid"])
 
         memberships_ref = team_col(team_id, "memberships")
-        membership_docs = await asyncio.to_thread(lambda: list(memberships_ref.stream()))
+        membership_docs = await _stream_team_memberships_with_retry(memberships_ref)
 
         members: List[Dict[str, Any]] = []
         for membership_doc in membership_docs:
@@ -3376,6 +3429,16 @@ async def get_team_memberships(
         return {"success": True, "members": members}
     except HTTPException:
         raise
+    except (ServiceUnavailable, DeadlineExceeded, InternalServerError) as error:
+        logger.warning("Memberships unavailable after retries: %s", error)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "code": "MEMBERSHIPS_UNAVAILABLE",
+                "message": "Memberships temporarily unavailable",
+            },
+        )
     except Exception as e:
         logger.error("get_team_memberships error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail="Impossible de récupérer les membres")
