@@ -1164,6 +1164,22 @@ def _serialize_team_planning_doc(doc_snap) -> Dict[str, Any]:
 
 
 def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, str]) -> Dict[str, Any]:
+    def _firestore_datetime(value: datetime) -> Any:
+        timestamp_cls = getattr(firestore, "Timestamp", None)
+        from_datetime = getattr(timestamp_cls, "from_datetime", None)
+        if callable(from_datetime):
+            try:
+                return from_datetime(value)
+            except Exception:  # pragma: no cover - defensive fallback
+                pass
+        return value
+
+    def _firestore_server_timestamp() -> Any:
+        sentinel = getattr(firestore, "SERVER_TIMESTAMP", None)
+        if sentinel is not None:
+            return sentinel
+        return datetime.now(timezone.utc)
+
     start_dt = entry.start if entry.start.tzinfo else entry.start.replace(tzinfo=timezone.utc)
     end_dt = entry.end if entry.end.tzinfo else entry.end.replace(tzinfo=timezone.utc)
     if end_dt <= start_dt:
@@ -1176,8 +1192,8 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
     payload: Dict[str, Any] = {
         'title': entry.title,
         'type': entry.type,
-        'start': firestore.Timestamp.from_datetime(start_dt),
-        'end': firestore.Timestamp.from_datetime(end_dt),
+        'start': _firestore_datetime(start_dt),
+        'end': _firestore_datetime(end_dt),
         'color': entry.color or None,
         'status': entry.status or None,
         'price': float(entry.price) if entry.price is not None else None,
@@ -1187,7 +1203,7 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
         'teamId': entry.teamId,
         'synced': bool(entry.synced),
         'personalEventId': entry.personalEventId or None,
-        'timestamp': firestore.SERVER_TIMESTAMP,
+        'timestamp': _firestore_server_timestamp(),
     }
 
     return payload
