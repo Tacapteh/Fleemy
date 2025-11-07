@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -121,8 +122,42 @@ class InMemoryCollection:
         
         # Apply ordering
         if self._order_field:
-            reverse = self._order_direction and hasattr(self._order_direction, 'DESCENDING')
-            results.sort(key=lambda x: x.to_dict().get(self._order_field, ''), reverse=reverse)
+            reverse = False
+            direction = self._order_direction
+
+            if isinstance(direction, str):
+                reverse = direction.upper() == "DESCENDING"
+            elif direction is not None:
+                # Firestore exposes direction constants as objects which can be compared
+                reverse = (
+                    getattr(direction, "name", "").upper() == "DESCENDING"
+                    or direction == getattr(Query, "DESCENDING", None)
+                    or direction == getattr(getattr(firestore, "Query", object), "DESCENDING", None)
+                )
+
+            def _normalize_order_value(value):
+                if value is None:
+                    return (4, "")
+
+                if isinstance(value, datetime):
+                    return (0, value.timestamp())
+
+                if isinstance(value, (int, float)):
+                    return (1, float(value))
+
+                iso_formatter = getattr(value, "isoformat", None)
+                if callable(iso_formatter):
+                    try:
+                        return (2, iso_formatter())
+                    except Exception:  # pragma: no cover - defensive fallback
+                        pass
+
+                return (3, str(value))
+
+            results.sort(
+                key=lambda x: _normalize_order_value(x.to_dict().get(self._order_field)),
+                reverse=reverse,
+            )
         
         # Apply limit
         if self._limit_count:
