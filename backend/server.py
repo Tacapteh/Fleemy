@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, validator, EmailStr
 from pydantic import field_validator
+from pydantic import ValidationError
 
 # Fallback local si EmailStr venait à ne pas valider faute de dépendance email-validator (environnements edge).
 # Ne modifie pas le comportement standard quand email-validator est présent.
@@ -3526,9 +3527,15 @@ async def upsert_team_planning_entry(
         raise HTTPException(status_code=400, detail="Utilisateur non authentifié")
 
     entry_data = payload.model_dump()
-    entry_data.setdefault("teamId", team_id)
-    if entry_data.get("teamId") != team_id:
-        raise HTTPException(status_code=400, detail="Identifiant d'équipe invalide")
+
+    payload_team_id_raw = entry_data.get("teamId")
+    if payload_team_id_raw is None or (isinstance(payload_team_id_raw, str) and not payload_team_id_raw.strip()):
+        entry_data["teamId"] = team_id
+    else:
+        payload_team_id = str(payload_team_id_raw).strip()
+        if payload_team_id != team_id:
+            raise HTTPException(status_code=400, detail="Identifiant d'équipe invalide")
+        entry_data["teamId"] = payload_team_id
 
     planning_ref = db.collection("teams").document(team_id).collection("teamPlanning")
     existing_data: Optional[Dict[str, Any]] = None
@@ -3546,7 +3553,16 @@ async def upsert_team_planning_entry(
             entry_data.setdefault("createdByName", existing_data.get("createdByName"))
             entry_data.setdefault("createdByInitials", existing_data.get("createdByInitials"))
 
-    entry = TeamPlanningEntry(**entry_data)
+    try:
+        entry = TeamPlanningEntry(**entry_data)
+    except ValidationError as validation_error:
+        logger.warning(
+            "team planning payload validation error: %s", validation_error
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Données invalides pour le bloc d'équipe",
+        ) from validation_error
     payload_data = _build_team_planning_payload(entry, creator_defaults)
 
     def _persist():
