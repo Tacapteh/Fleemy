@@ -54,14 +54,16 @@ class InMemoryDocument(dict):
         data = self._ref()
 
         class Snap:
-            def __init__(self, d):
+            def __init__(self, doc_id, d):
+                self.id = doc_id
                 self._d = dict(d)
                 self.exists = bool(d)
 
             def to_dict(self):
                 return dict(self._d)
 
-        return Snap(data)
+        doc_id = self.path[-1] if self.path else None
+        return Snap(doc_id, data)
 
     def delete(self):
         self._ref().clear()
