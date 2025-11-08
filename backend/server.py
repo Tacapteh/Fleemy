@@ -3390,7 +3390,12 @@ class MembershipsUnavailableError(Exception):
     """Raised when memberships cannot be retrieved after retries."""
 
 
+class TeamPlanningOperationUnavailableError(Exception):
+    """Raised when team planning operations temporarily fail."""
+
+
 _MEMBERSHIPS_RETRY_DELAYS = (0.2, 0.8, 2.0)
+_TEAM_PLANNING_RETRY_DELAYS = (0.2, 0.8, 2.0)
 
 
 async def _stream_memberships_with_retry(memberships_ref):
@@ -3425,6 +3430,36 @@ async def _stream_memberships_with_retry(memberships_ref):
             await asyncio.sleep(delay)
 
     raise MembershipsUnavailableError("Memberships temporarily unavailable") from last_exception
+
+
+async def _run_team_planning_with_retry(operation_name: str, func):
+    """Execute a Firestore team planning operation with transient retries."""
+
+    total_attempts = len(_TEAM_PLANNING_RETRY_DELAYS)
+    last_exception: Optional[BaseException] = None
+
+    for attempt_index, delay in enumerate(_TEAM_PLANNING_RETRY_DELAYS, start=1):
+        try:
+            return await asyncio.to_thread(func)
+        except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal) as exc:
+            last_exception = exc
+            logger.warning(
+                "team planning %s attempt %s/%s failed: %s",
+                operation_name,
+                attempt_index,
+                total_attempts,
+                exc,
+                exc_info=True,
+            )
+        except Exception:
+            raise
+
+        if attempt_index < total_attempts:
+            await asyncio.sleep(delay)
+
+    raise TeamPlanningOperationUnavailableError(
+        f"team planning {operation_name} temporarily unavailable"
+    ) from last_exception
 
 
 @api_router.get("/teams/{team_id}/memberships")
@@ -3547,7 +3582,20 @@ async def upsert_team_planning_entry(
             snap = doc_ref.get()
             return snap.to_dict() if getattr(snap, "exists", False) else None
 
-        existing_data = await asyncio.to_thread(_fetch_existing)
+        try:
+            existing_data = await _run_team_planning_with_retry(
+                "fetch-existing", _fetch_existing
+            )
+        except TeamPlanningOperationUnavailableError as exc:
+            logger.warning(
+                "team planning existing document temporarily unavailable: %s",
+                exc,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Service planning temporairement indisponible, veuillez réessayer.",
+            ) from exc
         if existing_data:
             entry_data.setdefault("createdBy", existing_data.get("createdBy"))
             entry_data.setdefault("createdByName", existing_data.get("createdByName"))
@@ -3574,12 +3622,22 @@ async def upsert_team_planning_entry(
         return ref
 
     try:
-        doc_ref = await asyncio.to_thread(_persist)
-        snapshot = await asyncio.to_thread(doc_ref.get)
+        doc_ref = await _run_team_planning_with_retry("persist", _persist)
+        snapshot = await _run_team_planning_with_retry("fetch", doc_ref.get)
         serialized = _serialize_team_planning_doc(snapshot)
         return {"success": True, "item": serialized}
     except HTTPException:
         raise
+    except TeamPlanningOperationUnavailableError as exc:
+        logger.warning(
+            "team planning upsert temporarily unavailable: %s",
+            exc,
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Service planning temporairement indisponible, veuillez réessayer.",
+        ) from exc
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning upsert error: %s", exc, exc_info=True)
         raise HTTPException(
