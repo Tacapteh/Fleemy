@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import uuid
 from datetime import datetime
 from pathlib import Path
 import firebase_admin
@@ -38,10 +39,13 @@ class InMemoryDocument(dict):
             d = d.setdefault(p, {})
         return d
 
-    def set(self, data):
+    def set(self, data, merge=False):
         r = self._ref()
-        r.clear()
-        r.update(data)
+        if merge:
+            r.update(dict(data))
+        else:
+            r.clear()
+            r.update(dict(data))
 
     def update(self, data):
         self._ref().update(data)
@@ -77,6 +81,12 @@ class InMemoryCollection:
 
     def document(self, doc_id):
         return InMemoryDocument(self.store, self.path + [doc_id])
+
+    def add(self, data, document_id=None):
+        doc_id = document_id or uuid.uuid4().hex
+        doc = self.document(doc_id)
+        doc.set(dict(data) if isinstance(data, dict) else data)
+        return doc, None
 
     # Simplified query helpers
     def where(self, field, op, value):
