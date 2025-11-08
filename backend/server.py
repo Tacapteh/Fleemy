@@ -1210,6 +1210,58 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
     return payload
 
 
+_TEAM_PLANNING_ID_SANITIZE_PATTERN = re.compile(r"[^0-9A-Za-z_-]+")
+
+
+def _normalize_team_planning_entry_id(value: Any) -> Optional[str]:
+    """Return a Firestore-compatible identifier for a team planning entry.
+
+    Some clients (notably older web builds) stored the identifier of the
+    personal event associated with the block. Those identifiers could include
+    path-like strings such as ``users/<uid>/planningEvents/<eventId>`` which are
+    rejected by Firestore when used as document identifiers. The production
+    backend therefore raised a ``ValueError`` when trying to persist the block,
+    resulting in a 500 response while the in-memory test implementation silently
+    accepted the value.
+
+    To keep backwards compatibility we now keep only the last segment of the
+    provided identifier and strip unsupported characters so the resulting value
+    can be safely used as a Firestore document id.
+    """
+
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        candidate = value.strip()
+    else:
+        candidate = str(value).strip()
+
+    if not candidate:
+        return None
+
+    # Normalise any path-style identifiers coming from legacy clients
+    candidate = candidate.replace("\\", "/")
+    if "/" in candidate:
+        segments = [segment for segment in candidate.split("/") if segment]
+        candidate = segments[-1] if segments else ""
+
+    if not candidate:
+        return None
+
+    sanitized = _TEAM_PLANNING_ID_SANITIZE_PATTERN.sub("-", candidate)
+    sanitized = re.sub(r"-{2,}", "-", sanitized).strip("-")
+
+    if not sanitized:
+        return None
+
+    # Avoid excessively long identifiers while keeping determinism
+    if len(sanitized) > 120:
+        sanitized = sanitized[:120]
+
+    return sanitized
+
+
 def _normalize_member_ids(raw_members: Any) -> List[str]:
     """Return a list of member identifiers extracted from a team document."""
 
@@ -3562,6 +3614,17 @@ async def upsert_team_planning_entry(
         raise HTTPException(status_code=400, detail="Utilisateur non authentifié")
 
     entry_data = payload.model_dump()
+
+    raw_entry_id = entry_data.get("id")
+    normalized_entry_id = _normalize_team_planning_entry_id(raw_entry_id)
+    if raw_entry_id and normalized_entry_id != raw_entry_id:
+        logger.info(
+            "Normalized team planning entry id from %r to %r for team %s",
+            raw_entry_id,
+            normalized_entry_id,
+            team_id,
+        )
+    entry_data["id"] = normalized_entry_id
 
     payload_team_id_raw = entry_data.get("teamId")
     if payload_team_id_raw is None or (isinstance(payload_team_id_raw, str) and not payload_team_id_raw.strip()):
