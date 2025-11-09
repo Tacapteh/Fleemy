@@ -1843,9 +1843,11 @@ export default function Planning() {
             end = new Date(_startMs + 15 * 60 * 1000);
           }
 
+          const teamTitle = (resolvedTitle || '').trim();
+
           const teamPayload = {
             id: data.teamPlanningId || data.team_planning_id || null,
-            title: resolvedTitle,
+            title: teamTitle,
             type: 'event',
             start: start.toISOString(),
             end: end.toISOString(),
@@ -1859,6 +1861,8 @@ export default function Planning() {
             synced: Boolean(data.synced),
             personalEventId: data.personalEventId || data.id || null,
           };
+
+          console.log('[TEAM POST]', teamPayload);
 
           const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
             method: 'POST',
@@ -1933,14 +1937,26 @@ export default function Planning() {
 
           showToast("Bloc d'équipe enregistré avec succès");
         } catch (error) {
-          console.error('team planning save error', error);
+          const readableError =
+            (error &&
+              typeof error === 'object' &&
+              error !== null &&
+              'detail' in error &&
+              error.detail) ||
+            error;
+          console.log('[TEAM ERR]', readableError);
           const msg =
             (error &&
               typeof error === 'object' &&
               error !== null &&
               'detail' in error &&
               error.detail) ||
-            (error && error.message) ||
+            (error &&
+              typeof error === 'object' &&
+              error !== null &&
+              'message' in error &&
+              error.message) ||
+            (typeof error === 'string' ? error : null) ||
             "Échec de l'enregistrement";
           showToast(msg, true);
         } finally {
