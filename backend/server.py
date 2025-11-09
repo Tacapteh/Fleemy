@@ -3750,6 +3750,10 @@ async def upsert_team_planning_entry(
 
     try:
         doc_ref = await _run_team_planning_with_retry("persist", _persist)
+        if isinstance(doc_ref, (tuple, list)) and len(doc_ref) == 2:
+            first_candidate = doc_ref[0]
+            if callable(getattr(first_candidate, "get", None)):
+                doc_ref = first_candidate
         logger.info(
             "doc_ref type: %s.%s",
             getattr(doc_ref.__class__, "__module__", "<unknown>"),
