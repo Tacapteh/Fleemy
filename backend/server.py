@@ -3749,35 +3749,8 @@ async def upsert_team_planning_entry(
         return ref.id
 
     try:
-        doc_ref = await _run_team_planning_with_retry("persist", _persist)
-
-        def _ensure_document_reference(obj: Any, planning_collection):
-            candidate = obj[0] if isinstance(obj, (list, tuple)) and obj else obj
-            if callable(getattr(candidate, "get", None)):
-                return candidate
-
-            _id: Optional[str] = None
-            if isinstance(candidate, str):
-                stripped = candidate.strip()
-                if stripped:
-                    _id = stripped
-            elif hasattr(candidate, "id"):
-                candidate_id = getattr(candidate, "id")
-                if candidate_id is not None:
-                    _id = str(candidate_id)
-
-            if _id:
-                return planning_collection.document(_id)
-
-            logger.error(
-                "cannot coerce %r (type=%s) to DocumentReference", obj, type(obj)
-            )
-            raise HTTPException(
-                status_code=500,
-                detail="Echec d'écriture (référence invalide)",
-            )
-
-        doc_ref = _ensure_document_reference(doc_ref, planning_ref)
+        doc_id = await _run_team_planning_with_retry("persist", _persist)
+        doc_ref = planning_ref.document(doc_id)
         logger.info(
             "doc_ref type: %s.%s",
             getattr(doc_ref.__class__, "__module__", "<unknown>"),
