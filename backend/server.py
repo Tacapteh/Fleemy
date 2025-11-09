@@ -3836,8 +3836,8 @@ async def upsert_team_planning_entry(
             ref = planning_ref.document(entry.id)
             ref.set(payload_data, merge=True)
             return ref.id
-        ref, _ = planning_ref.add(payload_data)
-        return ref.id
+        _write_time, doc_ref = planning_ref.add(payload_data)
+        return doc_ref.id
 
     try:
         doc_id = await _run_team_planning_with_retry("persist", _persist)
