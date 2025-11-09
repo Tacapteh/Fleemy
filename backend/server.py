@@ -3751,13 +3751,10 @@ async def upsert_team_planning_entry(
     try:
         doc_id = await _run_team_planning_with_retry("persist", _persist)
         doc_ref = planning_ref.document(doc_id)
-        logger.info(
-            "doc_ref type: %s.%s",
-            getattr(doc_ref.__class__, "__module__", "<unknown>"),
-            getattr(doc_ref.__class__, "__name__", "<unknown>"),
-        )
         snapshot = await _run_team_planning_with_retry("fetch", doc_ref.get)
         serialized = _serialize_team_planning_doc(snapshot)
+        if not serialized.get("id"):
+            serialized["id"] = doc_id
         return {"success": True, "item": serialized}
     except HTTPException:
         raise
