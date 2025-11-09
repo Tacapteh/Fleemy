@@ -1186,6 +1186,13 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
     if end_dt <= start_dt:
         raise HTTPException(status_code=400, detail='La date de fin doit être après la date de début')
 
+    normalized_title = (entry.title or '').strip()
+    if not normalized_title:
+        raise HTTPException(status_code=400, detail='Le titre est requis')
+
+    if entry.type not in {'event', 'task'}:
+        raise HTTPException(status_code=400, detail="Type invalide pour le bloc (event|task)")
+
     created_by = entry.createdBy or creator.get('uid')
     created_name = entry.createdByName or creator.get('name')
     created_initials = entry.createdByInitials or creator.get('initials')
@@ -3703,6 +3710,11 @@ async def upsert_team_planning_entry(
         ) from exc
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning upsert error: %s", exc, exc_info=True)
+        if os.getenv("FLEEMY_DEBUG_ERRORS", "0") == "1":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Impossible d'enregistrer le bloc d'équipe — {type(exc).name}: {str(exc)}",
+            )
         raise HTTPException(
             status_code=500,
             detail="Impossible d'enregistrer le bloc d'équipe",
