@@ -3750,28 +3750,33 @@ async def upsert_team_planning_entry(
 
     try:
         doc_ref = await _run_team_planning_with_retry("persist", _persist)
+        logger.info(
+            "doc_ref type: %s.%s",
+            getattr(doc_ref.__class__, "__module__", "<unknown>"),
+            getattr(doc_ref.__class__, "__name__", "<unknown>"),
+        )
         from google.cloud.firestore import DocumentReference as V2DocumentReference  # inline import for runtime guard
         try:
             from google.cloud.firestore_v1.document import DocumentReference as V1DocumentReference
         except Exception:
-            V1DocumentReference = tuple()
+            V1DocumentReference = None
 
         accepted_types = tuple(t for t in (V2DocumentReference, V1DocumentReference) if t)
-        is_accepted_instance = bool(accepted_types) and isinstance(doc_ref, accepted_types)
-
-        if not is_accepted_instance:
-            has_get = callable(getattr(doc_ref, "get", None))
-            has_id = hasattr(doc_ref, "id")
-            if not (has_get and has_id):
-                logger.error(
-                    "team planning upsert: persist returned %r (type=%s)",
-                    doc_ref,
-                    type(doc_ref),
-                )
-                raise HTTPException(
-                    status_code=500,
-                    detail="Echec d'écriture (référence invalide)",
-                )
+        has_get = callable(getattr(doc_ref, "get", None))
+        has_id = hasattr(doc_ref, "id")
+        if not (
+            (accepted_types and isinstance(doc_ref, accepted_types))
+            or (has_get and has_id)
+        ):
+            logger.error(
+                "team planning upsert: persist returned %r (type=%s)",
+                doc_ref,
+                type(doc_ref),
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Echec d'écriture (référence invalide)",
+            )
         snapshot = await _run_team_planning_with_retry("fetch", doc_ref.get)
         serialized = _serialize_team_planning_doc(snapshot)
         return {"success": True, "item": serialized}
