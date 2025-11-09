@@ -3744,43 +3744,45 @@ async def upsert_team_planning_entry(
         if entry.id:
             ref = planning_ref.document(entry.id)
             ref.set(payload_data, merge=True)
-            return ref
+            return ref.id
         ref, _ = planning_ref.add(payload_data)
-        return ref
+        return ref.id
 
     try:
         doc_ref = await _run_team_planning_with_retry("persist", _persist)
-        if isinstance(doc_ref, (tuple, list)) and len(doc_ref) == 2:
-            first_candidate = doc_ref[0]
-            if callable(getattr(first_candidate, "get", None)):
-                doc_ref = first_candidate
-        logger.info(
-            "doc_ref type: %s.%s",
-            getattr(doc_ref.__class__, "__module__", "<unknown>"),
-            getattr(doc_ref.__class__, "__name__", "<unknown>"),
-        )
-        from google.cloud.firestore import DocumentReference as V2DocumentReference  # inline import for runtime guard
-        try:
-            from google.cloud.firestore_v1.document import DocumentReference as V1DocumentReference
-        except Exception:
-            V1DocumentReference = None
 
-        accepted_types = tuple(t for t in (V2DocumentReference, V1DocumentReference) if t)
-        has_get = callable(getattr(doc_ref, "get", None))
-        has_id = hasattr(doc_ref, "id")
-        if not (
-            (accepted_types and isinstance(doc_ref, accepted_types))
-            or (has_get and has_id)
-        ):
+        def _ensure_document_reference(obj: Any, planning_collection):
+            candidate = obj[0] if isinstance(obj, (list, tuple)) and obj else obj
+            if callable(getattr(candidate, "get", None)):
+                return candidate
+
+            _id: Optional[str] = None
+            if isinstance(candidate, str):
+                stripped = candidate.strip()
+                if stripped:
+                    _id = stripped
+            elif hasattr(candidate, "id"):
+                candidate_id = getattr(candidate, "id")
+                if candidate_id is not None:
+                    _id = str(candidate_id)
+
+            if _id:
+                return planning_collection.document(_id)
+
             logger.error(
-                "team planning upsert: persist returned %r (type=%s)",
-                doc_ref,
-                type(doc_ref),
+                "cannot coerce %r (type=%s) to DocumentReference", obj, type(obj)
             )
             raise HTTPException(
                 status_code=500,
                 detail="Echec d'écriture (référence invalide)",
             )
+
+        doc_ref = _ensure_document_reference(doc_ref, planning_ref)
+        logger.info(
+            "doc_ref type: %s.%s",
+            getattr(doc_ref.__class__, "__module__", "<unknown>"),
+            getattr(doc_ref.__class__, "__name__", "<unknown>"),
+        )
         snapshot = await _run_team_planning_with_retry("fetch", doc_ref.get)
         serialized = _serialize_team_planning_doc(snapshot)
         return {"success": True, "item": serialized}
