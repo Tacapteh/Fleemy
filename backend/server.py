@@ -3750,6 +3750,18 @@ async def upsert_team_planning_entry(
 
     try:
         doc_ref = await _run_team_planning_with_retry("persist", _persist)
+        from google.cloud.firestore import DocumentReference  # inline import for runtime guard
+
+        if not isinstance(doc_ref, DocumentReference):
+            logger.error(
+                "team planning upsert: persist returned %r (type=%s)",
+                doc_ref,
+                type(doc_ref),
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Echec d'écriture (référence invalide)",
+            )
         snapshot = await _run_team_planning_with_retry("fetch", doc_ref.get)
         serialized = _serialize_team_planning_doc(snapshot)
         return {"success": True, "item": serialized}
