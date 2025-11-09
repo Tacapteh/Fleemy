@@ -357,15 +357,18 @@ export async function apiFetch(
           const data = result.data;
 
           if (!response.ok) {
+            const detail =
+              (typeof data === "object" && data && (data as any).detail) ||
+              undefined;
             if (!suppressErrorLog) {
               console.error(
                 "apiFetch error",
-                { method, url, status: response.status },
+                { method, url, status: response.status, detail },
                 data,
               );
             }
             const message =
-              (typeof data === "object" && data && (data as any).detail) ||
+              detail ||
               (typeof data === "string" && data) ||
               response.statusText ||
               "Request failed";
@@ -375,6 +378,7 @@ export async function apiFetch(
               statusText: response.statusText,
               data,
             };
+            (error as any).detail = detail;
             if (!isLastBase && shouldFallbackToNextBase(response.status)) {
               shouldTryNextBase = true;
               lastFallbackError = error;
@@ -393,15 +397,18 @@ export async function apiFetch(
         if (lastTemporaryResult && lastTemporaryResult.temporaryReason) {
           const response = lastTemporaryResult.response;
           const data = lastTemporaryResult.data;
+          const detail =
+            (typeof data === "object" && data && (data as any).detail) ||
+            undefined;
           if (!suppressErrorLog) {
             console.error(
               "apiFetch error",
-              { method, url, status: response.status },
+              { method, url, status: response.status, detail },
               data,
             );
           }
           let message =
-            (typeof data === "object" && data && (data as any).detail) ||
+            detail ||
             (typeof data === "string" && data !== NON_JSON_RESPONSE_PLACEHOLDER && data) ||
             response.statusText ||
             "Request failed";
@@ -417,6 +424,7 @@ export async function apiFetch(
             statusText: response.statusText,
             data,
           };
+          (error as any).detail = detail;
           if (!isLastBase && shouldFallbackToNextBase(response.status)) {
             shouldTryNextBase = true;
             lastFallbackError = error;

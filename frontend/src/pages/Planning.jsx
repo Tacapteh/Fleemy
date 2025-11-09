@@ -1781,7 +1781,7 @@ export default function Planning() {
 
       const start = new Date(eventDate);
       start.setHours(startHour, startMinute, 0, 0);
-      const end = new Date(eventDate);
+      let end = new Date(eventDate);
       end.setHours(endHour, endMinute, 0, 0);
 
       if (end <= start) {
@@ -1834,8 +1834,17 @@ export default function Planning() {
             return null;
           };
 
+          const _startMs = start.getTime();
+          const _endMs = end.getTime();
+          if (!Number.isFinite(_startMs) || !Number.isFinite(_endMs)) {
+            throw new Error('Invalid dates for team event');
+          }
+          if (_endMs <= _startMs) {
+            end = new Date(_startMs + 15 * 60 * 1000);
+          }
+
           const teamPayload = {
-            id: data.id || data.teamPlanningId || data.team_planning_id || null,
+            id: data.teamPlanningId || data.team_planning_id || null,
             title: resolvedTitle,
             type: 'event',
             start: start.toISOString(),
