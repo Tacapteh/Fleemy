@@ -33,6 +33,7 @@ import httpx
 import re
 import secrets
 import string
+import subprocess
 
 try:  # pragma: no cover - optional google exceptions import
     from google.api_core.exceptions import ServiceUnavailable as GoogleServiceUnavailable
@@ -54,6 +55,34 @@ except Exception:  # pragma: no cover - fallback when dependency missing
     except Exception:  # pragma: no cover - fallback when dependency missing
         class GoogleInternal(Exception):  # type: ignore
             pass
+
+try:  # pragma: no cover - optional google exceptions import
+    from google.api_core.exceptions import (
+        NotFound,
+        Forbidden,
+        PermissionDenied,
+        InvalidArgument,
+        AlreadyExists,
+        Aborted,
+    )
+except Exception:  # pragma: no cover - fallback when dependency missing
+    class NotFound(Exception):  # type: ignore
+        pass
+
+    class Forbidden(Exception):  # type: ignore
+        pass
+
+    class PermissionDenied(Exception):  # type: ignore
+        pass
+
+    class InvalidArgument(Exception):  # type: ignore
+        pass
+
+    class AlreadyExists(Exception):  # type: ignore
+        pass
+
+    class Aborted(Exception):  # type: ignore
+        pass
 
 from .pdf_utils import document_filename, invoice_pdf_bytes, quote_pdf_bytes
 from .email_utils import send_document_email
@@ -318,6 +347,26 @@ async def error_handling_middleware(request: Request, call_next):
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+
+@api_router.api_route("/_debug/info", methods=["GET"], include_in_schema=False)
+async def debug_info() -> Dict[str, str]:
+    git_sha = "unknown"
+    try:
+        result = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.STDOUT,
+            text=True,
+        ).strip()
+        if result:
+            git_sha = result
+    except Exception:  # pragma: no cover - best effort only
+        git_sha = "unknown"
+
+    return {
+        "debug_errors": os.getenv("FLEEMY_DEBUG_ERRORS", "0"),
+        "git": git_sha,
+    }
 
 
 # Models
@@ -3718,15 +3767,6 @@ async def upsert_team_planning_entry(
         ) from exc
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning upsert error: %s", exc, exc_info=True)
-        from google.api_core.exceptions import (
-            NotFound,
-            Forbidden,
-            PermissionDenied,
-            InvalidArgument,
-            AlreadyExists,
-            Aborted,
-        )
-
         if isinstance(exc, (PermissionDenied, Forbidden)):
             raise HTTPException(status_code=403, detail="Accès refusé pour cette équipe") from exc
         if isinstance(exc, NotFound):
