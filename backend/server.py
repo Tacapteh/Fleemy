@@ -1184,34 +1184,38 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
     start_dt = entry.start if entry.start.tzinfo else entry.start.replace(tzinfo=timezone.utc)
     end_dt = entry.end if entry.end.tzinfo else entry.end.replace(tzinfo=timezone.utc)
     if end_dt <= start_dt:
-        raise HTTPException(status_code=400, detail='La date de fin doit être après la date de début')
+        raise HTTPException(
+            status_code=400, detail="La date de fin doit être après la date de début"
+        )
 
-    normalized_title = (entry.title or '').strip()
+    normalized_title = (entry.title or "").strip()
     if not normalized_title:
-        raise HTTPException(status_code=400, detail='Le titre est requis')
+        raise HTTPException(status_code=400, detail="Le titre est requis")
 
-    if entry.type not in {'event', 'task'}:
-        raise HTTPException(status_code=400, detail="Type invalide pour le bloc (event|task)")
+    if entry.type not in ("event", "task"):
+        raise HTTPException(
+            status_code=400, detail="Type invalide pour le bloc (event|task)"
+        )
 
     created_by = entry.createdBy or creator.get('uid')
     created_name = entry.createdByName or creator.get('name')
     created_initials = entry.createdByInitials or creator.get('initials')
 
     payload: Dict[str, Any] = {
-        'title': entry.title,
-        'type': entry.type,
-        'start': _firestore_datetime(start_dt),
-        'end': _firestore_datetime(end_dt),
-        'color': entry.color or None,
-        'status': entry.status or None,
-        'price': float(entry.price) if entry.price is not None else None,
-        'createdBy': created_by,
-        'createdByName': created_name,
-        'createdByInitials': created_initials,
-        'teamId': entry.teamId,
-        'synced': bool(entry.synced),
-        'personalEventId': entry.personalEventId or None,
-        'timestamp': _firestore_server_timestamp(),
+        "title": normalized_title,
+        "type": entry.type,
+        "start": _firestore_datetime(start_dt),
+        "end": _firestore_datetime(end_dt),
+        "color": entry.color or None,
+        "status": entry.status or None,
+        "price": float(entry.price) if entry.price is not None else None,
+        "createdBy": created_by,
+        "createdByName": created_name,
+        "createdByInitials": created_initials,
+        "teamId": entry.teamId,
+        "synced": bool(entry.synced),
+        "personalEventId": entry.personalEventId or None,
+        "timestamp": _firestore_server_timestamp(),
     }
 
     return payload
@@ -3642,6 +3646,10 @@ async def upsert_team_planning_entry(
             raise HTTPException(status_code=400, detail="Identifiant d'équipe invalide")
         entry_data["teamId"] = payload_team_id
 
+    team_doc = await asyncio.to_thread(lambda: db.collection("teams").document(team_id).get())
+    if not team_doc.exists:
+        raise HTTPException(status_code=404, detail="Équipe introuvable")
+
     planning_ref = db.collection("teams").document(team_id).collection("teamPlanning")
     existing_data: Optional[Dict[str, Any]] = None
 
@@ -3710,15 +3718,35 @@ async def upsert_team_planning_entry(
         ) from exc
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning upsert error: %s", exc, exc_info=True)
+        from google.api_core.exceptions import (
+            NotFound,
+            Forbidden,
+            PermissionDenied,
+            InvalidArgument,
+            AlreadyExists,
+            Aborted,
+        )
+
+        if isinstance(exc, (PermissionDenied, Forbidden)):
+            raise HTTPException(status_code=403, detail="Accès refusé pour cette équipe") from exc
+        if isinstance(exc, NotFound):
+            raise HTTPException(status_code=404, detail="Équipe introuvable") from exc
+        if isinstance(exc, (InvalidArgument, ValueError, TypeError)):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Payload invalide: {type(exc).__name__}",
+            ) from exc
+        if isinstance(exc, (AlreadyExists, Aborted)):
+            raise HTTPException(status_code=409, detail="Conflit d’écriture, réessayez") from exc
         if os.getenv("FLEEMY_DEBUG_ERRORS", "0") == "1":
             raise HTTPException(
                 status_code=500,
-                detail=f"Impossible d'enregistrer le bloc d'équipe — {type(exc).name}: {str(exc)}",
+                detail=(
+                    "Impossible d'enregistrer le bloc d'équipe — "
+                    f"{type(exc).__name__}: {str(exc)}"
+                ),
             )
-        raise HTTPException(
-            status_code=500,
-            detail="Impossible d'enregistrer le bloc d'équipe",
-        )
+        raise HTTPException(status_code=500, detail="Impossible d'enregistrer le bloc d'équipe")
 
 
 @api_router.delete("/teams/{team_id}/planning/{entry_id}")

@@ -1934,7 +1934,15 @@ export default function Planning() {
           showToast("Bloc d'équipe enregistré avec succès");
         } catch (error) {
           console.error('team planning save error', error);
-          showToast("Impossible d'enregistrer le bloc d'équipe", true);
+          const msg =
+            (error &&
+              typeof error === 'object' &&
+              error !== null &&
+              'detail' in error &&
+              error.detail) ||
+            (error && error.message) ||
+            "Échec de l'enregistrement";
+          showToast(msg, true);
         } finally {
           closeModal();
         }

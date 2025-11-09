@@ -367,11 +367,7 @@ export async function apiFetch(
                 data,
               );
             }
-            const message =
-              detail ||
-              (typeof data === "string" && data) ||
-              response.statusText ||
-              "Request failed";
+            const message = detail || response.statusText || "Request failed";
             const error = new Error(message) as ApiError;
             error.response = {
               status: response.status,
@@ -407,11 +403,7 @@ export async function apiFetch(
               data,
             );
           }
-          let message =
-            detail ||
-            (typeof data === "string" && data !== NON_JSON_RESPONSE_PLACEHOLDER && data) ||
-            response.statusText ||
-            "Request failed";
+          let message = detail || response.statusText || "Request failed";
           if (
             typeof data === "string" &&
             data === NON_JSON_RESPONSE_PLACEHOLDER
