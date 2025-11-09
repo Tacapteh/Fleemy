@@ -1,4 +1,6 @@
-from fastapi import (
+# mypy: disable-error-code=import-not-found
+# pyright: reportMissingImports=false
+from fastapi import (  # type: ignore[import-not-found]
     FastAPI,
     APIRouter,
     HTTPException,
@@ -8,56 +10,56 @@ from fastapi import (
     Request,
     Body,
 )
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv, find_dotenv  # type: ignore[import-not-found]
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, validator, EmailStr
-from pydantic import field_validator
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, validator, EmailStr  # type: ignore[import-not-found]
+from pydantic import field_validator  # type: ignore[import-not-found]
+from pydantic import ValidationError  # type: ignore[import-not-found]
 
 # Fallback local si EmailStr venait à ne pas valider faute de dépendance email-validator (environnements edge).
 # Ne modifie pas le comportement standard quand email-validator est présent.
 from typing import Annotated
-from pydantic import StringConstraints
+from pydantic import StringConstraints  # type: ignore[import-not-found]
 LocalEmailStr = Annotated[str, StringConstraints(pattern=r'^[^@\s]+@[^@\s]+.[^@\s]+$')]
 # À l'usage, on continue d'utiliser EmailStr partout. LocalEmailStr est juste disponible si besoin ponctuel.
 
-from typing import List, Optional, Dict, Any, Tuple, Literal, Set
+from typing import List, Optional, Dict, Any, Tuple, Literal, Set, Mapping
 import uuid
 from datetime import datetime, timezone, timedelta
 import asyncio
 import json
 import calendar
-import httpx
+import httpx  # type: ignore[import-not-found]
 import re
 import secrets
 import string
 import subprocess
 
 try:  # pragma: no cover - optional google exceptions import
-    from google.api_core.exceptions import ServiceUnavailable as GoogleServiceUnavailable
+    from google.api_core.exceptions import ServiceUnavailable as GoogleServiceUnavailable  # type: ignore[import-not-found]
 except Exception:  # pragma: no cover - fallback when dependency missing
     class GoogleServiceUnavailable(Exception):  # type: ignore
         pass
 
 try:  # pragma: no cover - optional google exceptions import
-    from google.api_core.exceptions import DeadlineExceeded as GoogleDeadlineExceeded
+    from google.api_core.exceptions import DeadlineExceeded as GoogleDeadlineExceeded  # type: ignore[import-not-found]
 except Exception:  # pragma: no cover - fallback when dependency missing
     class GoogleDeadlineExceeded(Exception):  # type: ignore
         pass
 
 try:  # pragma: no cover - optional google exceptions import
-    from google.api_core.exceptions import Internal as GoogleInternal
+    from google.api_core.exceptions import Internal as GoogleInternal  # type: ignore[import-not-found]
 except Exception:  # pragma: no cover - fallback when dependency missing
     try:  # pragma: no cover - secondary fallback when Internal missing
-        from google.api_core.exceptions import InternalServerError as GoogleInternal  # type: ignore
+        from google.api_core.exceptions import InternalServerError as GoogleInternal  # type: ignore[import-not-found]
     except Exception:  # pragma: no cover - fallback when dependency missing
         class GoogleInternal(Exception):  # type: ignore
             pass
 
 try:  # pragma: no cover - optional google exceptions import
-    from google.api_core.exceptions import (
+    from google.api_core.exceptions import (  # type: ignore[import-not-found]
         NotFound,
         Forbidden,
         PermissionDenied,
@@ -88,11 +90,11 @@ from .pdf_utils import document_filename, invoice_pdf_bytes, quote_pdf_bytes
 from .email_utils import send_document_email
 
 # Firebase Admin
-import firebase_admin
-from firebase_admin import credentials, firestore, auth
+import firebase_admin  # type: ignore[import-not-found]
+from firebase_admin import credentials, firestore, auth  # type: ignore[import-not-found]
 
 try:  # pragma: no cover - optional import when google client available
-    from google.cloud.firestore_v1 import FieldPath as FirestoreFieldPath
+    from google.cloud.firestore_v1 import FieldPath as FirestoreFieldPath  # type: ignore[import-not-found]
 except Exception:  # pragma: no cover - fallback when dependency missing
     FirestoreFieldPath = None
 
@@ -136,7 +138,7 @@ DOCUMENT_ID_FIELD = (
 app = FastAPI()
 
 # Configurer CORS (après app et après dotenv)
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore[import-not-found]
 
 
 DEFAULT_ALLOWED_ORIGINS = [
@@ -268,8 +270,8 @@ async def verify_token(request: Request):
 
 
 # Global exception handler to always return JSON and keep CORS headers
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse  # type: ignore[import-not-found]
+from fastapi.exceptions import RequestValidationError as FastAPIRequestValidationError  # type: ignore[import-not-found]
 
 
 def _apply_cors_headers(request: Request, response: Response) -> Response:
@@ -315,7 +317,7 @@ async def error_handling_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         return _apply_cors_headers(request, response)
-    except RequestValidationError as exc:
+    except FastAPIRequestValidationError as exc:
         logger.error("Validation error on %s: %s", request.url.path, exc, exc_info=True)
         return _build_cors_error_response(
             request,
@@ -528,6 +530,9 @@ class TeamPlanningEntry(BaseModel):
             if end_value <= start_value:
                 raise ValueError('end must be after start')
         return end_value
+
+
+CreatorDefaults = Mapping[str, Optional[str]]
 
 
 PRIORITY_VALUES = {'high', 'medium', 'low'}
@@ -1189,13 +1194,62 @@ def _compute_member_initials(name: Optional[str], email: Optional[str]) -> str:
 
 
 def _serialize_team_planning_doc(doc_snap) -> Dict[str, Any]:
-    data = doc_snap.to_dict() if getattr(doc_snap, 'exists', False) else {}
+    if doc_snap is None:
+        raise TeamPlanningSerializationError("team planning snapshot is None")
+
+    data: Dict[str, Any] = {}
+    doc_id: Optional[str] = None
+
+    def _safe_document_id(source: Any) -> Optional[str]:
+        candidate = getattr(source, "id", None)
+        if callable(candidate):
+            try:
+                candidate = candidate()
+            except TypeError:
+                return None
+        if candidate is None:
+            return None
+        candidate_str = str(candidate).strip()
+        return candidate_str or None
+
+    if hasattr(doc_snap, "to_dict"):
+        exists_attr = getattr(doc_snap, "exists", True)
+        exists = exists_attr() if callable(exists_attr) else exists_attr
+        if exists:
+            to_dict = getattr(doc_snap, "to_dict", None)
+            if not callable(to_dict):
+                raise TeamPlanningSerializationError("team planning snapshot is missing to_dict()")
+            try:
+                raw_data = to_dict() or {}
+            except Exception as exc:  # pragma: no cover - defensive logging
+                raise TeamPlanningSerializationError("team planning snapshot to_dict() failed") from exc
+            if not isinstance(raw_data, dict):
+                raise TeamPlanningSerializationError(
+                    f"team planning snapshot payload is not a mapping (type={type(raw_data).__name__})"
+                )
+            data = raw_data
+        doc_id = _safe_document_id(doc_snap)
+    elif isinstance(doc_snap, dict):
+        data = dict(doc_snap)
+        candidate_id = data.get("id")
+        if isinstance(candidate_id, str) and candidate_id.strip():
+            doc_id = candidate_id.strip()
+    else:
+        raise TeamPlanningSerializationError(
+            f"Unsupported team planning snapshot type: {type(doc_snap).__name__}"
+        )
+
+    if doc_id is None:
+        candidate_id = data.get("id")
+        if isinstance(candidate_id, str) and candidate_id.strip():
+            doc_id = candidate_id.strip()
+
     start_dt = _normalize_firestore_datetime(data.get('start'))
     end_dt = _normalize_firestore_datetime(data.get('end'))
     timestamp_dt = _normalize_firestore_datetime(data.get('timestamp'))
 
     return {
-        'id': doc_snap.id,
+        'id': doc_id,
         'title': data.get('title', ''),
         'type': data.get('type', 'event'),
         'start': start_dt.isoformat() if start_dt else None,
@@ -1207,13 +1261,13 @@ def _serialize_team_planning_doc(doc_snap) -> Dict[str, Any]:
         'createdByName': data.get('createdByName'),
         'createdByInitials': data.get('createdByInitials'),
         'teamId': data.get('teamId'),
-        'synced': bool(data.get('synced')), 
+        'synced': bool(data.get('synced')),
         'personalEventId': data.get('personalEventId'),
         'timestamp': timestamp_dt.isoformat() if timestamp_dt else None,
     }
 
 
-def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, str]) -> Dict[str, Any]:
+def _build_team_planning_payload(entry: TeamPlanningEntry, creator: CreatorDefaults) -> Dict[str, Any]:
     def _firestore_datetime(value: datetime) -> Any:
         timestamp_cls = getattr(firestore, "Timestamp", None)
         from_datetime = getattr(timestamp_cls, "from_datetime", None)
@@ -1268,6 +1322,39 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: Dict[str, st
     }
 
     return payload
+
+
+def _serialize_team_planning_entry_fallback(
+    entry: TeamPlanningEntry,
+    doc_id: Optional[str],
+    creator: CreatorDefaults,
+) -> Dict[str, Any]:
+    """Serialize a team planning entry when Firestore snapshot serialization fails."""
+
+    def _ensure_timezone(value: datetime) -> datetime:
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    start_dt = _ensure_timezone(entry.start)
+    end_dt = _ensure_timezone(entry.end)
+    timestamp_dt = datetime.now(timezone.utc)
+
+    return {
+        "id": doc_id,
+        "title": entry.title,
+        "type": entry.type,
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
+        "color": entry.color or None,
+        "status": entry.status or None,
+        "price": float(entry.price) if entry.price is not None else None,
+        "createdBy": entry.createdBy or creator.get("uid"),
+        "createdByName": entry.createdByName or creator.get("name"),
+        "createdByInitials": entry.createdByInitials or creator.get("initials"),
+        "teamId": entry.teamId,
+        "synced": bool(entry.synced),
+        "personalEventId": entry.personalEventId or None,
+        "timestamp": timestamp_dt.isoformat(),
+    }
 
 
 _TEAM_PLANNING_ID_SANITIZE_PATTERN = re.compile(r"[^0-9A-Za-z_-]+")
@@ -1329,10 +1416,10 @@ def _normalize_member_ids(raw_members: Any) -> List[str]:
         return []
 
     if isinstance(raw_members, list):
-        normalized: List[str] = []
+        normalized_members: List[str] = []
         for value in raw_members:
             if isinstance(value, (str, int)):
-                normalized.append(str(value))
+                normalized_members.append(str(value))
                 continue
 
             if isinstance(value, dict):
@@ -1349,7 +1436,7 @@ def _normalize_member_ids(raw_members: Any) -> List[str]:
                 ):
                     candidate = value.get(key)
                     if isinstance(candidate, (str, int)) and candidate:
-                        normalized.append(str(candidate))
+                        normalized_members.append(str(candidate))
                         break
 
                 if candidate:
@@ -1358,18 +1445,18 @@ def _normalize_member_ids(raw_members: Any) -> List[str]:
                 # Some legacy structures store members as {"uid": True}
                 for key, flag in value.items():
                     if isinstance(flag, bool) and flag:
-                        normalized.append(str(key))
+                        normalized_members.append(str(key))
                         break
 
-        return normalized
+        return normalized_members
 
     if isinstance(raw_members, dict):
-        normalized: List[str] = []
+        normalized_member_keys: List[str] = []
         for key, value in raw_members.items():
             if not value:
                 continue
-            normalized.append(str(key))
-        return normalized
+            normalized_member_keys.append(str(key))
+        return normalized_member_keys
 
     if isinstance(raw_members, (str, int)):
         return [str(raw_members)]
@@ -3506,6 +3593,10 @@ class TeamPlanningOperationUnavailableError(Exception):
     """Raised when team planning operations temporarily fail."""
 
 
+class TeamPlanningSerializationError(Exception):
+    """Raised when a team planning snapshot cannot be serialized."""
+
+
 _MEMBERSHIPS_RETRY_DELAYS = (0.2, 0.8, 2.0)
 _TEAM_PLANNING_RETRY_DELAYS = (0.2, 0.8, 2.0)
 
@@ -3664,7 +3755,7 @@ async def upsert_team_planning_entry(
     await ensure_team_membership(team_id, user["uid"])
 
     creator_name = user.get("name") or user.get("displayName") or user.get("email") or "Membre"
-    creator_defaults = {
+    creator_defaults: Dict[str, Optional[str]] = {
         "uid": user.get("uid"),
         "name": creator_name,
         "email": user.get("email"),
@@ -3752,7 +3843,17 @@ async def upsert_team_planning_entry(
         doc_id = await _run_team_planning_with_retry("persist", _persist)
         doc_ref = planning_ref.document(doc_id)
         snapshot = await _run_team_planning_with_retry("fetch", doc_ref.get)
-        serialized = _serialize_team_planning_doc(snapshot)
+        try:
+            serialized = _serialize_team_planning_doc(snapshot)
+        except TeamPlanningSerializationError as serialization_error:
+            logger.warning(
+                "team planning snapshot serialization failed for team %s doc %s: %s",
+                team_id,
+                doc_id,
+                serialization_error,
+                exc_info=True,
+            )
+            serialized = _serialize_team_planning_entry_fallback(entry, doc_id, creator_defaults)
         if not serialized.get("id"):
             serialized["id"] = doc_id
         return {"success": True, "item": serialized}
@@ -4341,12 +4442,14 @@ async def create_test_notification(
         doc_id = str(uuid.uuid4())
         doc_ref = notifications_ref.document(doc_id)
         
+        created_at_dt = datetime.now(timezone.utc)
+
         notification_data = {
             "userId": notification_request.userId,
             "title": notification_request.title,
             "message": notification_request.message,
             "type": notification_request.type,
-            "createdAt": datetime.now(timezone.utc),
+            "createdAt": created_at_dt,
             "read": False,
             "relatedResource": notification_request.relatedResource,
         }
@@ -4361,7 +4464,7 @@ async def create_test_notification(
             "title": notification_data["title"],
             "message": notification_data["message"],
             "type": notification_data["type"],
-            "createdAt": notification_data["createdAt"].isoformat(),
+            "createdAt": created_at_dt.isoformat(),
             "read": notification_data["read"],
             "relatedResource": notification_data["relatedResource"],
         }
@@ -4391,11 +4494,6 @@ async def create_test_notification(
 # Include the router in the main app
 app.include_router(api_router)
 
-from fastapi.responses import JSONResponse
-from fastapi.requests import Request
-from fastapi.exception_handlers import RequestValidationError
-from fastapi.exceptions import RequestValidationError as FastAPIRequestValidationError
-
 
 @app.get("/healthz")
 async def healthz() -> Dict[str, Any]:
@@ -4409,11 +4507,24 @@ async def health() -> Dict[str, Any]:
 
 @app.exception_handler(FastAPIRequestValidationError)
 async def validation_exception_handler(
-    request: Request, exc: FastAPIRequestValidationError
+    request: Request,
+    exc: BaseException,
 ):
-    logger.error("Erreur de validation : %s", exc.errors())
+    errors_attr = getattr(exc, "errors", None)
+
+    if callable(errors_attr):
+        try:
+            error_list = errors_attr()
+        except Exception:  # pragma: no cover - defensive fallback
+            error_list = []
+    elif errors_attr is not None:
+        error_list = errors_attr
+    else:
+        error_list = []
+
+    logger.error("Erreur de validation : %s", error_list)
     return JSONResponse(
         status_code=422,
-        content={"errors": exc.errors()},
+        content={"errors": error_list},
         headers={"Access-Control-Allow-Origin": "*"},
     )

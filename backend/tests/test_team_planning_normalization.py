@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
-from backend.server import app, db
+from backend.server import app, db, TeamPlanningSerializationError
 
 
 @pytest.fixture(autouse=True)
@@ -85,3 +85,45 @@ def test_team_planning_empty_id_generates_new_document():
     created_id = body["item"]["id"]
     assert isinstance(created_id, str) and created_id
     assert created_id != "   / / "
+
+
+def test_team_planning_serialization_fallback(monkeypatch):
+    client = TestClient(app)
+    team_id = "team-serialization-fallback"
+    _create_team(team_id)
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "title": "Bloc fallback",
+        "type": "task",
+        "start": now.isoformat(),
+        "end": (now + timedelta(hours=3)).isoformat(),
+        "teamId": team_id,
+        "status": "todo",
+        "color": "#0092ff",
+    }
+
+    call_counter = {"value": 0}
+
+    def _raise_serialization(_snapshot):
+        call_counter["value"] += 1
+        raise TeamPlanningSerializationError("Broken snapshot")
+
+    monkeypatch.setattr("backend.server._serialize_team_planning_doc", _raise_serialization)
+
+    response = client.post(
+        f"/api/teams/{team_id}/planning",
+        json=payload,
+        headers=_make_headers(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    item = body["item"]
+    assert item["title"] == payload["title"]
+    assert item["teamId"] == team_id
+    assert item["start"] == payload["start"]
+    assert item["end"] == payload["end"]
+    assert item["timestamp"] is not None
+    assert call_counter["value"] == 1
