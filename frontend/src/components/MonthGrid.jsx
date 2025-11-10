@@ -3,8 +3,6 @@ import "../styles/MonthCalendar.css";
 import {
   watchPlanningEventsInRange,
   watchWeeklyTasksForContext,
-  fetchWeekEventsOnce,
-  fetchWeeklyTasksOnce,
   getMonthRange,
   useFirebaseUser,
 } from "../firebase";
@@ -235,29 +233,6 @@ export const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
   return occurrences;
 };
 
-const formatIsoDate = (value) => {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
-    return null;
-  }
-  const copy = new Date(value);
-  copy.setHours(0, 0, 0, 0);
-  const year = copy.getFullYear();
-  const month = String(copy.getMonth() + 1).padStart(2, "0");
-  const day = String(copy.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
-
-const startOfWeek = (value) => {
-  const base = new Date(value);
-  if (Number.isNaN(base.getTime())) {
-    return null;
-  }
-  const dayIndex = (base.getDay() + 6) % 7;
-  base.setDate(base.getDate() - dayIndex);
-  base.setHours(0, 0, 0, 0);
-  return base;
-};
-
 const mergeEventsById = (events) => {
   if (!Array.isArray(events)) {
     return [];
@@ -381,14 +356,6 @@ function MonthGrid({
     return byDay;
   }, []);
 
-  const viewingOtherTeamMember = Boolean(
-    context &&
-      context.type === "team" &&
-      context.memberUid &&
-      user?.uid &&
-      context.memberUid !== user.uid
-  );
-
   useEffect(() => {
     if (hasStaticEvents) {
       setEvents(staticEvents);
@@ -409,44 +376,6 @@ function MonthGrid({
     }
 
     let cancelled = false;
-    let stopPrefetch = () => {};
-
-    if (viewingOtherTeamMember) {
-      const startISO = formatIsoDate(monthRange.from);
-      const endISO = formatIsoDate(monthRange.to);
-      if (startISO && endISO) {
-        let active = true;
-        (async () => {
-          try {
-            const fallbackEvents = await fetchWeekEventsOnce(
-              context,
-              startISO,
-              endISO
-            );
-            if (!active || cancelled) {
-              return;
-            }
-            const merged = mergeEventsById(
-              Array.isArray(fallbackEvents) ? fallbackEvents : []
-            );
-            setEvents(merged);
-            setEventsByDay(groupItemsByDay(merged));
-          } catch (error) {
-            if (!active || cancelled) {
-              return;
-            }
-            console.warn("MonthGrid month fetch error", error);
-          }
-        })();
-        stopPrefetch = () => {
-          active = false;
-        };
-      }
-      return () => {
-        cancelled = true;
-        stopPrefetch();
-      };
-    }
 
     const unsubscribe = watchPlanningEventsInRange(
       context,
@@ -471,7 +400,6 @@ function MonthGrid({
 
     return () => {
       cancelled = true;
-      stopPrefetch();
       if (typeof unsubscribe === "function") {
         unsubscribe();
       }
@@ -483,7 +411,6 @@ function MonthGrid({
     contextKey,
     hasStaticEvents,
     staticEvents,
-    viewingOtherTeamMember,
     groupItemsByDay,
   ]);
 
@@ -501,29 +428,6 @@ function MonthGrid({
     if (context.type === "team" && !context.memberUid) {
       setTasksByDay({});
       return () => {};
-    }
-
-    if (viewingOtherTeamMember) {
-      let cancelled = false;
-      const loadTasks = async () => {
-        try {
-          const rawTasks = await fetchWeeklyTasksOnce(context);
-          if (cancelled) {
-            return;
-          }
-          const occurrences = expandWeeklyTasksToMonthRange(rawTasks, monthRange);
-          setTasksByDay(groupItemsByDay(occurrences));
-        } catch (error) {
-          console.warn("MonthGrid tasks fallback error", error);
-          if (!cancelled) {
-            setTasksByDay({});
-          }
-        }
-      };
-      loadTasks();
-      return () => {
-        cancelled = true;
-      };
     }
 
     let active = true;
@@ -561,7 +465,6 @@ function MonthGrid({
     monthRange,
     hasStaticTasks,
     staticTasks,
-    viewingOtherTeamMember,
     groupItemsByDay,
   ]);
 
