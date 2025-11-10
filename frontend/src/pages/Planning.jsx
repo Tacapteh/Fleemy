@@ -412,12 +412,6 @@ export default function Planning() {
   }, [viewParam, view]);
 
   useEffect(() => {
-    if (planningTab === TEAM_PLANNING_TAB_SHARED && view !== "week") {
-      setView("week");
-    }
-  }, [planningTab, view]);
-
-  useEffect(() => {
     if (isTeamContext) {
       setPlanningTab(TEAM_PLANNING_TAB_SHARED);
     } else {
