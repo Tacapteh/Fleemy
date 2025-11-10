@@ -510,8 +510,14 @@ const WeeklyTaskForm = ({
           null,
       );
 
-      const creationDateISO =
-        existingCreationDate || (!isEditing ? formatDateOnly(new Date()) : null);
+      let creationDateISO = existingCreationDate || null;
+      if (!creationDateISO && !isEditing) {
+        if (resolvedWeekStart instanceof Date) {
+          creationDateISO = formatDateOnly(resolvedWeekStart);
+        } else {
+          creationDateISO = formatDateOnly(new Date());
+        }
+      }
 
       let resolvedWeekStart = null;
       if (typeof weekStartISO === 'string' && weekStartISO) {
