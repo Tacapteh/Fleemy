@@ -104,58 +104,25 @@ export default function useTeam(teamId) {
         const rawMembers = Array.isArray(data.members) ? data.members : [];
         const initialMembers = buildMembersList(rawMembers);
 
-        const members = await Promise.all(
-          initialMembers.map(async (member) => {
-            if (!member?.uid) {
-              return null;
-            }
+        const members = initialMembers.map((member) => {
+          if (!member?.uid) {
+            return null;
+          }
 
-            if (member.name) {
-              return member;
-            }
+          if (member.name) {
+            return member;
+          }
 
-            if (member.uid !== currentUser?.uid) {
-              return member;
-            }
-
-            try {
-              const userDoc = await getDoc(doc(db, "users", member.uid));
-              if (userDoc.exists()) {
-                const userData = userDoc.data();
-                const inferredName =
-                  userData?.name ||
-                  userData?.displayName ||
-                  userData?.full_name ||
-                  userData?.fullName ||
-                  null;
-
-                const inferredEmail = userData?.email || null;
-
-                return {
-                  uid: member.uid,
-                  name:
-                    inferredName ||
-                    currentUser?.displayName ||
-                    currentUser?.email ||
-                    null,
-                  email: inferredEmail || currentUser?.email || null,
-                };
-              }
-            } catch (memberError) {
-              console.warn(
-                "useTeam: impossible de charger le membre",
-                member.uid,
-                memberError
-              );
-            }
-
+          if (member.uid === currentUser?.uid) {
             return {
               uid: member.uid,
               name: currentUser?.displayName || currentUser?.email || null,
               email: currentUser?.email || null,
             };
-          })
-        );
+          }
+
+          return member;
+        });
 
         const uniqueMembersMap = new Map();
         members.filter(Boolean).forEach((member) => {
