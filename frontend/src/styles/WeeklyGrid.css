@@ -48,9 +48,9 @@
 
 .time-label-text {
   position: absolute;
-  top: 50%;
+  top: 12px;
   right: 0;
-  transform: translateY(-50%);
+  transform: none;
 }
 
 .week-grid-body {
