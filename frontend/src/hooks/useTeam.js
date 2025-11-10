@@ -114,6 +114,10 @@ export default function useTeam(teamId) {
               return member;
             }
 
+            if (member.uid !== currentUser?.uid) {
+              return member;
+            }
+
             try {
               const userDoc = await getDoc(doc(db, "users", member.uid));
               if (userDoc.exists()) {
@@ -131,10 +135,10 @@ export default function useTeam(teamId) {
                   uid: member.uid,
                   name:
                     inferredName ||
-                    (member.uid === currentUser?.uid
-                      ? currentUser?.displayName || currentUser?.email || null
-                      : null),
-                  email: inferredEmail,
+                    currentUser?.displayName ||
+                    currentUser?.email ||
+                    null,
+                  email: inferredEmail || currentUser?.email || null,
                 };
               }
             } catch (memberError) {
@@ -145,15 +149,11 @@ export default function useTeam(teamId) {
               );
             }
 
-            if (member.uid === currentUser?.uid) {
-              return {
-                uid: member.uid,
-                name: currentUser?.displayName || currentUser?.email || null,
-                email: currentUser?.email || null,
-              };
-            }
-
-            return member;
+            return {
+              uid: member.uid,
+              name: currentUser?.displayName || currentUser?.email || null,
+              email: currentUser?.email || null,
+            };
           })
         );
 
