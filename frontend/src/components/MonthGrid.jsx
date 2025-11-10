@@ -516,11 +516,17 @@ function MonthGrid({
             !isTask && ["paid", "unpaid", "pending"].includes(type)
               ? `status-${type}`
               : "";
+          const taskColor = item.color || "#10b981";
           const style = isTask
-            ? { "--item-color": item.color || "#10b981" }
+            ? {
+                "--item-color": taskColor,
+                backgroundColor: taskColor,
+                color: "#ffffff",
+                borderColor: taskColor,
+              }
             : !statusClass && item.color
-              ? { "--item-color": item.color }
-              : undefined;
+            ? { "--item-color": item.color }
+            : undefined;
           const label = item.client || item.title;
           const IconComponent = isTask ? getIcon(item.icon ?? undefined) : null;
           return (

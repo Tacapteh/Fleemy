@@ -499,6 +499,15 @@ const WeeklyTaskForm = ({
         return;
       }
 
+      let resolvedWeekStart = null;
+      if (typeof weekStartISO === 'string' && weekStartISO) {
+        const parsedWeekStart = new Date(`${weekStartISO}T00:00:00`);
+        if (!Number.isNaN(parsedWeekStart.getTime())) {
+          parsedWeekStart.setHours(0, 0, 0, 0);
+          resolvedWeekStart = parsedWeekStart;
+        }
+      }
+
       const isEditing = Boolean(initialTask?.id);
       const existingCreationDate = normalizeTaskDateInput(
         initialTask?.dateISO ??
@@ -516,15 +525,6 @@ const WeeklyTaskForm = ({
           creationDateISO = formatDateOnly(resolvedWeekStart);
         } else {
           creationDateISO = formatDateOnly(new Date());
-        }
-      }
-
-      let resolvedWeekStart = null;
-      if (typeof weekStartISO === 'string' && weekStartISO) {
-        const parsedWeekStart = new Date(`${weekStartISO}T00:00:00`);
-        if (!Number.isNaN(parsedWeekStart.getTime())) {
-          parsedWeekStart.setHours(0, 0, 0, 0);
-          resolvedWeekStart = parsedWeekStart;
         }
       }
 
