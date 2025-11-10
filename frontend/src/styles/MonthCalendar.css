@@ -155,3 +155,48 @@
   overflow: hidden;
   background: #fff;
 }
+
+/* Dark mode adjustments */
+.dark .month-calendar {
+  color: #e2e8f0;
+}
+
+.dark .calendar-header-cell {
+  color: #cbd5f5;
+}
+
+.dark .calendar-cell {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.dark .calendar-cell:hover,
+.dark .calendar-cell:focus {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.dark .calendar-cell.empty {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.dark .calendar-cell-day {
+  color: #e2e8f0;
+}
+
+.dark .month-item {
+  color: #f8fafc;
+  opacity: 0.9;
+}
+
+.dark .month-item::before {
+  opacity: 0.35;
+}
+
+.dark .month-item-more {
+  color: #cbd5f5;
+}
+
+.dark .month-grid {
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.95);
+}
