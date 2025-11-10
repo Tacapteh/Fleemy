@@ -1646,6 +1646,16 @@ export default function Planning() {
         const color = generateMemberColor(
           task.createdBy || task.createdByName || task.id
         );
+        const participant = {
+          id: task.createdBy || task.id,
+          name: task.createdByName || "Membre",
+          initials:
+            task.createdByInitials ||
+            computeInitials(task.createdByName, task.createdBy),
+          background: color.background,
+          border: color.border,
+          text: color.text,
+        };
         return {
           taskId: task.id,
           occurrenceId: task.id,
@@ -1657,22 +1667,96 @@ export default function Planning() {
           price: typeof task.price === "number" ? task.price : null,
           icon: task.icon || null,
           readOnly: false,
-          teamParticipants: [
-            {
-              id: task.createdBy || task.id,
-              name: task.createdByName || "Membre",
-              initials:
-                task.createdByInitials ||
-                computeInitials(task.createdByName, task.createdBy),
-              background: color.background,
-              border: color.border,
-              text: color.text,
-            },
-          ],
+          teamParticipants: [participant],
         };
       })
       .filter(Boolean);
   }, [teamTaskBlocks, weekStart]);
+
+  const currentMonthRange = useMemo(() => {
+    const start = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1
+    );
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
+      0
+    );
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, [currentDate]);
+
+  const teamMonthEvents = useMemo(() => {
+    if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+      return [];
+    }
+    const { start, end } = currentMonthRange;
+    if (!start || !end) {
+      return [];
+    }
+    return teamPlanningEntries
+      .filter((entry) => {
+        const entryType = (entry?.type || "event").toLowerCase();
+        if (entryType === "task") {
+          return false;
+        }
+        if (!(entry?.start instanceof Date) || !(entry?.end instanceof Date)) {
+          return false;
+        }
+        return entry.start <= end && entry.end >= start;
+      })
+      .map((entry) => ({
+        id: entry.id || `${entry.start.getTime()}-${entry.end.getTime()}`,
+        start: entry.start,
+        end: entry.end,
+        title: entry.title || entry.client || "Bloc partagé",
+        client: entry.createdByName || entry.title || "Membre",
+        color: entry.color || "#2563eb",
+        status: entry.status || entry.type || "event",
+        type: entry.type || "event",
+      }));
+  }, [planningTab, teamPlanningEntries, currentMonthRange]);
+
+  const teamMonthTasks = useMemo(() => {
+    if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
+      return [];
+    }
+    const { start, end } = currentMonthRange;
+    if (!start || !end) {
+      return [];
+    }
+    return teamPlanningEntries
+      .filter((entry) => {
+        const entryType = (entry?.type || "").toLowerCase();
+        if (entryType !== "task") {
+          return false;
+        }
+        if (!(entry?.start instanceof Date) || !(entry?.end instanceof Date)) {
+          return false;
+        }
+        return entry.start <= end && entry.end >= start;
+      })
+      .map((task) => {
+        const palette = generateMemberColor(
+          task.createdBy || task.createdByName || task.id
+        );
+        return {
+          id: task.id || `${task.start.getTime()}-task`,
+          taskId: task.id || undefined,
+          start: task.start,
+          end: task.end,
+          title: task.title || task.label || "Tâche partagée",
+          label: task.label || task.title || "Tâche",
+          icon: task.icon || "🗂",
+          color: task.color || palette.background,
+          status: task.status || "task",
+          type: "task",
+        };
+      });
+  }, [planningTab, teamPlanningEntries, currentMonthRange]);
 
   const activeEvents = useMemo(() => {
     if (planningTab === TEAM_PLANNING_TAB_SHARED) {
@@ -2464,10 +2548,12 @@ export default function Planning() {
     planningTab === TEAM_PLANNING_TAB_SHARED
       ? sharedTeamName
         ? `Planning ${sharedTeamName}`
-        : "Planning d’équipe"
+        : "Planning d'équipe"
       : isTeamContext && resolvedTeamName
         ? `Planning ${resolvedTeamName}`
-        : "Mon planning";
+        : isTeamContext
+          ? "Planning solo"
+          : "Mon planning";
 
   const subtitle =
     planningTab === TEAM_PLANNING_TAB_SHARED
@@ -2533,7 +2619,7 @@ export default function Planning() {
                     : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
                 }`}
               >
-                Mon planning
+                {isTeamContext ? "Planning solo" : "Mon planning"}
               </button>
               {sharedTeamId && (
                 <button
@@ -2666,6 +2752,16 @@ export default function Planning() {
             onCreateEvent={openCreateModal}
             context={
               planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext
+            }
+            staticEvents={
+              planningTab === TEAM_PLANNING_TAB_SHARED
+                ? teamMonthEvents
+                : undefined
+            }
+            staticTasks={
+              planningTab === TEAM_PLANNING_TAB_SHARED
+                ? teamMonthTasks
+                : undefined
             }
           />
         )}

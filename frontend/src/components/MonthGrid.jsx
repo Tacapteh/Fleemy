@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import '../styles/MonthCalendar.css';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import "../styles/MonthCalendar.css";
 import {
   watchPlanningEventsInRange,
   watchWeeklyTasksForContext,
   getMonthRange,
   useFirebaseUser,
-} from '../firebase';
-import { useSettings } from '../context/SettingsContext';
+} from "../firebase";
+import { useSettings } from "../context/SettingsContext";
+import { getIcon } from "../icons/registry";
 
 const DAY_NAME_TO_INDEX = {
   monday: 0,
@@ -34,11 +35,11 @@ const DAY_NAME_TO_INDEX = {
 };
 
 const toDayIndex = (value) => {
-  if (typeof value === 'number' && value >= 0 && value <= 6) {
+  if (typeof value === "number" && value >= 0 && value <= 6) {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim().toLowerCase();
 
     if (/^\d+$/.test(trimmed)) {
@@ -63,12 +64,17 @@ const toDayIndex = (value) => {
 };
 
 const parseTime = (timeStr) => {
-  if (!timeStr || typeof timeStr !== 'string') return null;
+  if (!timeStr || typeof timeStr !== "string") return null;
   const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
   if (!match) return null;
   const hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
-  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes < 0 || minutes > 59) {
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
     return null;
   }
   if (hours === 24) {
@@ -91,7 +97,7 @@ const parseTaskDate = (value) => {
     return clone;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) {
       return null;
@@ -105,7 +111,7 @@ const parseTaskDate = (value) => {
     return parsed;
   }
 
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
       return null;
@@ -114,7 +120,7 @@ const parseTaskDate = (value) => {
     return parsed;
   }
 
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
+  if (typeof value === "object" && typeof value.toDate === "function") {
     return parseTaskDate(value.toDate());
   }
 
@@ -160,13 +166,19 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
         return;
       }
 
-      const taskWeekday = toDayIndex(task.weekday ?? task.week_day ?? task.weekDay);
+      const taskWeekday = toDayIndex(
+        task.weekday ?? task.week_day ?? task.weekDay
+      );
       if (taskWeekday !== null && taskWeekday !== dayIndex) {
         return;
       }
 
       const explicitDate = parseTaskDate(
-        slot?.task_date ?? slot?.taskDate ?? slot?.task_day_iso ?? slot?.taskDayIso ?? null,
+        slot?.task_date ??
+          slot?.taskDate ??
+          slot?.task_day_iso ??
+          slot?.taskDayIso ??
+          null
       );
 
       if (explicitDate) {
@@ -185,16 +197,16 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
         }
 
         occurrences.push({
-          id: `${task.id || 'task'}:${index}:${taskStart.toISOString()}`,
+          id: `${task.id || "task"}:${index}:${taskStart.toISOString()}`,
           taskId: task.id,
           start: taskStart,
           end: taskEnd,
-          title: task.title || task.label || 'Tâche',
-          label: task.label || task.title || 'Tâche',
-          icon: task.icon || '📋',
-          color: task.color || '#10b981',
-          type: task.type || 'task',
-          status: task.status || 'task',
+          title: task.title || task.label || "Tâche",
+          label: task.label || task.title || "Tâche",
+          icon: task.icon || "📋",
+          color: task.color || "#10b981",
+          type: task.type || "task",
+          status: task.status || "task",
           readOnly: Boolean(task.readOnly),
           weekly: true,
           originalTask: task,
@@ -203,7 +215,10 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
       }
 
       const firstOccurrence = new Date(startDate);
-      while ((firstOccurrence.getDay() + 6) % 7 !== dayIndex && firstOccurrence <= endDate) {
+      while (
+        (firstOccurrence.getDay() + 6) % 7 !== dayIndex &&
+        firstOccurrence <= endDate
+      ) {
         firstOccurrence.setDate(firstOccurrence.getDate() + 1);
       }
 
@@ -227,16 +242,16 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
         }
 
         occurrences.push({
-          id: `${task.id || 'task'}:${index}:${taskStart.toISOString()}`,
+          id: `${task.id || "task"}:${index}:${taskStart.toISOString()}`,
           taskId: task.id,
           start: taskStart,
           end: taskEnd,
-          title: task.title || task.label || 'Tâche',
-          label: task.label || task.title || 'Tâche',
-          icon: task.icon || '📋',
-          color: task.color || '#10b981',
-          type: task.type || 'task',
-          status: task.status || 'task',
+          title: task.title || task.label || "Tâche",
+          label: task.label || task.title || "Tâche",
+          icon: task.icon || "📋",
+          color: task.color || "#10b981",
+          type: task.type || "task",
+          status: task.status || "task",
           readOnly: Boolean(task.readOnly),
           weekly: true,
           originalTask: task,
@@ -249,7 +264,14 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
 
   return occurrences;
 };
-function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, context }) {
+function MonthGrid({
+  year,
+  month,
+  onDateSelect,
+  onEventClick,
+  onCreateEvent,
+  context,
+}) {
   const user = useFirebaseUser();
   const { settings, loading } = useSettings();
   const showWeekendsEnabled = useMemo(() => {
@@ -259,7 +281,15 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
     return settings.showWeekends === true;
   }, [loading, settings]);
   const dayNames = useMemo(
-    () => ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'],
+    () => [
+      "Lundi",
+      "Mardi",
+      "Mercredi",
+      "Jeudi",
+      "Vendredi",
+      "Samedi",
+      "Dimanche",
+    ],
     []
   );
   const visibleDayNames = useMemo(
@@ -269,18 +299,21 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
   const monthColumnCount = showWeekendsEnabled ? 7 : 5;
   const monthGridStyle = useMemo(
     () => ({
-      '--month-grid-day-count': String(monthColumnCount),
+      "--month-grid-day-count": String(monthColumnCount),
     }),
     [monthColumnCount]
   );
   const [events, setEvents] = useState([]);
   const [eventsByDay, setEventsByDay] = useState({});
   const [tasksByDay, setTasksByDay] = useState({});
+  const hasStaticEvents =
+    Array.isArray(staticEvents) && staticEvents.length > 0;
+  const hasStaticTasks = Array.isArray(staticTasks) && staticTasks.length > 0;
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
   const offset = (firstDay + 6) % 7; // Monday = 0
-  
+
   const cells = [];
   for (let i = 0; i < offset; i++) {
     cells.push(null);
@@ -302,56 +335,83 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
   // Watch events - seulement si user connecté
   const contextKey = useMemo(() => {
     if (!context) {
-      return 'none';
+      return "none";
     }
-    if (context.type === 'team') {
-      return `team:${context.teamId || ''}:${context.memberUid || ''}`;
+    if (context.type === "team") {
+      return `team:${context.teamId || ""}:${context.memberUid || ""}`;
     }
-    return `personal:${context.userId || ''}`;
+    return `personal:${context.userId || ""}`;
   }, [context?.type, context?.teamId, context?.memberUid, context?.userId]);
 
+  const groupItemsByDay = useCallback((items) => {
+    const byDay = {};
+    items.forEach((entry) => {
+      const eventDate = new Date(entry.start);
+      if (Number.isNaN(eventDate.getTime())) {
+        return;
+      }
+      const dayKey = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
+
+      if (!byDay[dayKey]) {
+        byDay[dayKey] = [];
+      }
+      byDay[dayKey].push(entry);
+    });
+    return byDay;
+  }, []);
+
   useEffect(() => {
+    if (hasStaticEvents) {
+      setEvents(staticEvents);
+      setEventsByDay(groupItemsByDay(staticEvents));
+      return () => {};
+    }
+
     if (!user) {
       setEvents([]);
       setEventsByDay({});
-      return;
+      return () => {};
     }
 
     if (!monthRange?.from || !monthRange?.to) {
       setEvents([]);
       setEventsByDay({});
-      return;
+      return () => {};
     }
 
-    if (context && context.type === 'team' && !context.memberUid) {
+    if (context && context.type === "team" && !context.memberUid) {
       setEvents([]);
       setEventsByDay({});
-      return;
+      return () => {};
     }
 
-    const unsubscribe = watchPlanningEventsInRange(context, monthRange, (newEvents) => {
-      setEvents(newEvents);
-      
-      // Organiser les événements par jour
-      const byDay = {};
-      newEvents.forEach(event => {
-        const eventDate = new Date(event.start);
-        const dayKey = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
-        
-        if (!byDay[dayKey]) {
-          byDay[dayKey] = [];
-        }
-        byDay[dayKey].push(event);
-      });
-      
-      setEventsByDay(byDay);
-    });
+    const unsubscribe = watchPlanningEventsInRange(
+      context,
+      monthRange,
+      (newEvents) => {
+        setEvents(newEvents);
+        setEventsByDay(groupItemsByDay(newEvents));
+      }
+    );
 
     return unsubscribe;
-  }, [user, monthRange, contextKey, context]);
+  }, [
+    user,
+    monthRange,
+    contextKey,
+    context,
+    hasStaticEvents,
+    staticEvents,
+    groupItemsByDay,
+  ]);
 
   // Watch tasks - seulement si user connecté
   useEffect(() => {
+    if (hasStaticTasks) {
+      setTasksByDay(groupItemsByDay(staticTasks));
+      return () => {};
+    }
+
     if (!user || !context) {
       setTasksByDay({});
       return () => {};
@@ -362,7 +422,7 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
       return () => {};
     }
 
-    if (context.type === 'team' && !context.memberUid) {
+    if (context.type === "team" && !context.memberUid) {
       setTasksByDay({});
       return () => {};
     }
@@ -376,49 +436,48 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
           return;
         }
 
-        const occurrences = expandWeeklyTasksToMonthRange(weeklyTasksList, monthRange);
-        const byDay = {};
-        occurrences.forEach((taskItem) => {
-          const taskDate = new Date(taskItem.start);
-          if (Number.isNaN(taskDate.getTime())) {
-            return;
-          }
-          const dayKey = `${taskDate.getFullYear()}-${taskDate.getMonth()}-${taskDate.getDate()}`;
-
-          if (!byDay[dayKey]) {
-            byDay[dayKey] = [];
-          }
-          byDay[dayKey].push(taskItem);
-        });
-
-        setTasksByDay(byDay);
+        const occurrences = expandWeeklyTasksToMonthRange(
+          weeklyTasksList,
+          monthRange
+        );
+        setTasksByDay(groupItemsByDay(occurrences));
       },
       (error) => {
         if (!active) {
           return;
         }
-        console.error('watchWeeklyTasksForContext month view error', error);
+        console.error("watchWeeklyTasksForContext month view error", error);
         setTasksByDay({});
       }
     );
 
     return () => {
       active = false;
-      if (typeof unsubscribe === 'function') {
+      if (typeof unsubscribe === "function") {
         unsubscribe();
       }
     };
-  }, [user, monthRange, contextKey, context]);
+  }, [
+    user,
+    monthRange,
+    contextKey,
+    context,
+    hasStaticTasks,
+    staticTasks,
+    groupItemsByDay,
+  ]);
 
   const handleSelect = (value) => {
     if (!user) {
-      console.warn('Utilisateur non connecté, sélection bloquée');
+      console.warn("Utilisateur non connecté, sélection bloquée");
       return;
     }
 
     if (value) {
       const selectedDate = new Date(year, month, value);
-      const wantsEvent = window.confirm('Créer un événement ?\nAnnuler pour accéder à la semaine');
+      const wantsEvent = window.confirm(
+        "Créer un événement ?\nAnnuler pour accéder à la semaine"
+      );
       if (wantsEvent) {
         onCreateEvent && onCreateEvent(selectedDate);
       } else if (onDateSelect) {
@@ -429,15 +488,15 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
 
   const getDayItems = (value) => {
     if (!value) return { events: [], tasks: [], total: 0 };
-    
+
     const dayKey = `${year}-${month}-${value}`;
     const dayEvents = eventsByDay[dayKey] || [];
     const dayTasks = tasksByDay[dayKey] || [];
-    
+
     return {
       events: dayEvents,
       tasks: dayTasks,
-      total: dayEvents.length + dayTasks.length
+      total: dayEvents.length + dayTasks.length,
     };
   };
 
@@ -451,19 +510,21 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
         {allItems.map((item) => {
           const isTask = !!item.icon;
           const type = item.status || item.type;
-          const statusClass = !isTask && ['paid', 'unpaid', 'pending'].includes(type)
-            ? `status-${type}`
-            : '';
+          const statusClass =
+            !isTask && ["paid", "unpaid", "pending"].includes(type)
+              ? `status-${type}`
+              : "";
           const style = isTask
-            ? { '--item-color': item.color || '#10b981' }
+            ? { "--item-color": item.color || "#10b981" }
             : !statusClass && item.color
-            ? { '--item-color': item.color }
-            : undefined;
+              ? { "--item-color": item.color }
+              : undefined;
           const label = item.client || item.title;
+          const IconComponent = isTask ? getIcon(item.icon ?? undefined) : null;
           return (
             <div
               key={item.id}
-              className={`month-item ${isTask ? 'month-task' : ''} ${statusClass}`.trim()}
+              className={`month-item ${isTask ? "month-task" : ""} ${statusClass}`.trim()}
               style={style}
               onClick={(evt) => {
                 evt.stopPropagation();
@@ -471,16 +532,25 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
               }}
               title={label}
             >
-              {isTask && <span className="month-item-icon">{item.icon}</span>}
+              {isTask && (
+                <span className="month-item-icon" aria-hidden="true">
+                  {IconComponent ? (
+                    <IconComponent
+                      className="h-[14px] w-[14px]"
+                      strokeWidth={2}
+                    />
+                  ) : (
+                    item.icon || "•"
+                  )}
+                </span>
+              )}
               <span className="month-item-title">
                 {label?.length > 12 ? `${label.substring(0, 12)}...` : label}
               </span>
             </div>
           );
         })}
-        {remaining > 0 && (
-          <div className="month-item-more">+{remaining}</div>
-        )}
+        {remaining > 0 && <div className="month-item-more">+{remaining}</div>}
       </>
     );
   };
@@ -490,12 +560,12 @@ function MonthGrid({ year, month, onDateSelect, onEventClick, onCreateEvent, con
     const eventEnd = new Date(event.end);
     const dayStart = new Date(year, month, currentDay);
     const dayEnd = new Date(year, month, currentDay + 1);
-    
+
     return eventStart < dayStart || eventEnd > dayEnd;
   };
 
   return (
-      <div className="month-calendar" style={monthGridStyle}>
+    <div className="month-calendar" style={monthGridStyle}>
       <div className="month-day-header">
         {visibleDayNames.map((day) => (
           <div key={day} className="calendar-header-cell">

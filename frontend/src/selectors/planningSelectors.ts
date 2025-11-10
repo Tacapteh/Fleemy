@@ -121,6 +121,15 @@ export interface WeeklyTaskDefinition {
   [key: string]: unknown;
 }
 
+export interface TeamParticipantBadge {
+  id?: string | null;
+  name?: string | null;
+  initials?: string | null;
+  background?: string | null;
+  border?: string | null;
+  text?: string | null;
+}
+
 export interface TaskOccurrence {
   taskId: string;
   occurrenceId: string;
@@ -137,6 +146,7 @@ export interface TaskOccurrence {
   priority?: "high" | "medium" | "low";
   status?: "todo" | "doing" | "done";
   done?: boolean;
+  teamParticipants?: TeamParticipantBadge[];
   [key: string]: unknown;
 }
 

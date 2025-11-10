@@ -999,6 +999,13 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                               : typeof task.price === 'string'
                               ? task.price.trim()
                               : '';
+                          const participantBadges = Array.isArray(task.teamParticipants)
+                            ? task.teamParticipants.slice(0, 3)
+                            : [];
+                          const hasParticipantBadges = participantBadges.length > 0;
+                          const additionalParticipants = Array.isArray(task.teamParticipants)
+                            ? Math.max(0, task.teamParticipants.length - participantBadges.length)
+                            : 0;
 
                           const isInteractive =
                             !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
@@ -1043,6 +1050,37 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                   </span>
                                   {formattedPrice && <span>{formattedPrice}</span>}
                                 </div>
+                                {hasParticipantBadges && (
+                                  <div className="flex items-center gap-1 text-[11px] pt-1">
+                                    {participantBadges.map((participant, index) => {
+                                      const initials =
+                                        typeof participant?.initials === 'string' &&
+                                        participant.initials.trim().length > 0
+                                          ? participant.initials.trim()
+                                          : '??';
+                                      return (
+                                        <span
+                                          key={`task-participant-${task.occurrenceId}-${participant?.id || index}`}
+                                          className="flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold"
+                                          style={{
+                                            backgroundColor: participant?.background || colors.backgroundColor,
+                                            borderColor: participant?.border || colors.borderColor,
+                                            color: participant?.text || colors.color,
+                                          }}
+                                          title={participant?.name ? `Créé par ${participant.name}` : undefined}
+                                          aria-label={participant?.name ? `Créé par ${participant.name}` : 'Créé par un membre'}
+                                        >
+                                          {initials}
+                                        </span>
+                                      );
+                                    })}
+                                    {additionalParticipants > 0 && (
+                                      <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                                        +{additionalParticipants}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
