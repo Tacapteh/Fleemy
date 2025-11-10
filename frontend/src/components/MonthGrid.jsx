@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import "../styles/MonthCalendar.css";
 import {
   watchPlanningEventsInRange,
   watchWeeklyTasksForContext,
+  fetchWeekEventsOnce,
+  fetchWeeklyTasksOnce,
   getMonthRange,
   useFirebaseUser,
 } from "../firebase";
@@ -39,79 +41,64 @@ const toDayIndex = (value) => {
   if (typeof value === "number" && value >= 0 && value <= 6) {
     return value;
   }
-
-  if (typeof value === "string") {
+  if (typeof value === "string" && value.trim()) {
     const trimmed = value.trim().toLowerCase();
-
     if (/^\d+$/.test(trimmed)) {
       const asNumber = parseInt(trimmed, 10);
       if (!Number.isNaN(asNumber)) {
-        if (asNumber >= 0 && asNumber <= 6) return asNumber;
-        if (asNumber >= 1 && asNumber <= 7) return (asNumber + 6) % 7;
+        if (asNumber >= 0 && asNumber <= 6) {
+          return asNumber;
+        }
+        if (asNumber >= 1 && asNumber <= 7) {
+          return (asNumber + 6) % 7;
+        }
       }
     }
-
     if (Object.prototype.hasOwnProperty.call(DAY_NAME_TO_INDEX, trimmed)) {
       return DAY_NAME_TO_INDEX[trimmed];
     }
-
-    const asDate = new Date(value);
-    if (!Number.isNaN(asDate.getTime())) {
-      return (asDate.getDay() + 6) % 7;
-    }
   }
-
   return null;
 };
 
 const parseTime = (timeStr) => {
-  if (!timeStr || typeof timeStr !== "string") return null;
+  if (!timeStr || typeof timeStr !== "string") {
+    return null;
+  }
   const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
   const hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
   if (
     Number.isNaN(hours) ||
     Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 24 ||
     minutes < 0 ||
     minutes > 59
   ) {
     return null;
   }
-  if (hours === 24) {
-    return minutes === 0 ? { hours: 24, minutes: 0 } : null;
-  }
-  if (hours < 0 || hours > 23) {
+  if (hours === 24 && minutes !== 0) {
     return null;
   }
-  return { hours, minutes };
+  return { hours: hours % 24, minutes };
 };
 
 const parseTaskDate = (value) => {
   if (!value) {
     return null;
   }
-
   if (value instanceof Date) {
-    const clone = new Date(value);
-    clone.setHours(0, 0, 0, 0);
-    return clone;
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) {
+    if (Number.isNaN(value.getTime())) {
       return null;
     }
-    const candidate = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
-    const parsed = new Date(candidate);
-    if (Number.isNaN(parsed.getTime())) {
-      return null;
-    }
-    parsed.setHours(0, 0, 0, 0);
-    return parsed;
+    const copy = new Date(value);
+    copy.setHours(0, 0, 0, 0);
+    return copy;
   }
-
   if (typeof value === "number") {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
@@ -120,35 +107,33 @@ const parseTaskDate = (value) => {
     parsed.setHours(0, 0, 0, 0);
     return parsed;
   }
-
+  if (typeof value === "string" && value.trim()) {
+    const normalized = value.trim().length === 10 ? `${value.trim()}T00:00:00` : value.trim();
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
   if (typeof value === "object" && typeof value.toDate === "function") {
     return parseTaskDate(value.toDate());
   }
-
   return null;
 };
 
 const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
-  if (!Array.isArray(weeklyTasks)) {
-    return [];
-  }
-  if (!range?.from || !range?.to) {
+  if (!Array.isArray(weeklyTasks) || !range?.from || !range?.to) {
     return [];
   }
 
   const startDate = new Date(range.from);
   const endDate = new Date(range.to);
-
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
     return [];
   }
-
   startDate.setHours(0, 0, 0, 0);
   endDate.setHours(23, 59, 59, 999);
-
-  if (startDate > endDate) {
-    return [];
-  }
 
   const occurrences = [];
 
@@ -157,28 +142,21 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
       return;
     }
 
-    task.time_ranges.forEach((slot, index) => {
-      const dayValue = slot?.day ?? slot?.dayIndex ?? slot?.weekday;
-      const dayIndex = toDayIndex(dayValue);
-      const startTime = parseTime(slot?.start);
-      const endTime = parseTime(slot?.end);
-
-      if (dayIndex === null || !startTime || !endTime) {
-        return;
-      }
-
-      const taskWeekday = toDayIndex(
-        task.weekday ?? task.week_day ?? task.weekDay
-      );
-      if (taskWeekday !== null && taskWeekday !== dayIndex) {
+    task.time_ranges.forEach((rangeSlot, index) => {
+      const slotDay = toDayIndex(rangeSlot?.day ?? rangeSlot?.dayIndex ?? rangeSlot?.weekday);
+      const startTime = parseTime(rangeSlot?.start);
+      const endTime = parseTime(rangeSlot?.end);
+      if (slotDay === null || !startTime || !endTime) {
         return;
       }
 
       const explicitDate = parseTaskDate(
-        slot?.task_date ??
-          slot?.taskDate ??
-          slot?.task_day_iso ??
-          slot?.taskDayIso ??
+        rangeSlot?.task_date ??
+          rangeSlot?.taskDate ??
+          rangeSlot?.task_day_iso ??
+          rangeSlot?.taskDayIso ??
+          task?.task_date ??
+          task?.taskDate ??
           null
       );
 
@@ -186,17 +164,13 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
         if (explicitDate < startDate || explicitDate > endDate) {
           return;
         }
-
         const taskStart = new Date(explicitDate);
         taskStart.setHours(startTime.hours, startTime.minutes, 0, 0);
-
         const taskEnd = new Date(explicitDate);
         taskEnd.setHours(endTime.hours, endTime.minutes, 0, 0);
-
         if (taskEnd <= taskStart) {
           return;
         }
-
         occurrences.push({
           id: `${task.id || "task"}:${index}:${taskStart.toISOString()}`,
           taskId: task.id,
@@ -204,7 +178,7 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
           end: taskEnd,
           title: task.title || task.label || "Tâche",
           label: task.label || task.title || "Tâche",
-          icon: task.icon || "📋",
+          icon: task.icon || null,
           color: task.color || "#10b981",
           type: task.type || "task",
           status: task.status || "task",
@@ -217,12 +191,11 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
 
       const firstOccurrence = new Date(startDate);
       while (
-        (firstOccurrence.getDay() + 6) % 7 !== dayIndex &&
+        (firstOccurrence.getDay() + 6) % 7 !== slotDay &&
         firstOccurrence <= endDate
       ) {
         firstOccurrence.setDate(firstOccurrence.getDate() + 1);
       }
-
       if (firstOccurrence > endDate) {
         return;
       }
@@ -234,14 +207,11 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
       ) {
         const taskStart = new Date(current);
         taskStart.setHours(startTime.hours, startTime.minutes, 0, 0);
-
         const taskEnd = new Date(current);
         taskEnd.setHours(endTime.hours, endTime.minutes, 0, 0);
-
         if (taskEnd <= taskStart) {
           continue;
         }
-
         occurrences.push({
           id: `${task.id || "task"}:${index}:${taskStart.toISOString()}`,
           taskId: task.id,
@@ -249,7 +219,7 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
           end: taskEnd,
           title: task.title || task.label || "Tâche",
           label: task.label || task.title || "Tâche",
-          icon: task.icon || "📋",
+          icon: task.icon || null,
           color: task.color || "#10b981",
           type: task.type || "task",
           status: task.status || "task",
@@ -262,9 +232,81 @@ const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
   });
 
   occurrences.sort((a, b) => a.start - b.start);
-
   return occurrences;
 };
+
+const formatIsoDate = (value) => {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return null;
+  }
+  const copy = new Date(value);
+  copy.setHours(0, 0, 0, 0);
+  const year = copy.getFullYear();
+  const month = String(copy.getMonth() + 1).padStart(2, "0");
+  const day = String(copy.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const startOfWeek = (value) => {
+  const base = new Date(value);
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+  const dayIndex = (base.getDay() + 6) % 7;
+  base.setDate(base.getDate() - dayIndex);
+  base.setHours(0, 0, 0, 0);
+  return base;
+};
+
+const buildWeekRangesForMonth = (range) => {
+  if (!range?.from || !range?.to) {
+    return [];
+  }
+  const firstWeekStart = startOfWeek(range.from);
+  if (!firstWeekStart) {
+    return [];
+  }
+  const limit = new Date(range.to);
+  limit.setHours(23, 59, 59, 999);
+  const segments = [];
+  const cursor = new Date(firstWeekStart);
+  while (cursor <= limit) {
+    const weekStart = new Date(cursor);
+    const weekEnd = new Date(cursor);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    if (weekEnd > limit) {
+      weekEnd.setTime(limit.getTime());
+    }
+    segments.push({ start: weekStart, end: weekEnd });
+    cursor.setDate(cursor.getDate() + 7);
+  }
+  return segments;
+};
+
+const mergeEventsById = (events) => {
+  if (!Array.isArray(events)) {
+    return [];
+  }
+  const map = new Map();
+  events.forEach((event) => {
+    if (!event) {
+      return;
+    }
+    const startMs = event?.start instanceof Date ? event.start.getTime() : 0;
+    const endMs = event?.end instanceof Date ? event.end.getTime() : startMs;
+    const key =
+      event.id || `${startMs}-${endMs}-${event.client || event.title || "evt"}`;
+    if (!map.has(key)) {
+      map.set(key, event);
+    }
+  });
+  return Array.from(map.values()).sort((a, b) => {
+    const aTime = a?.start instanceof Date ? a.start.getTime() : 0;
+    const bTime = b?.start instanceof Date ? b.start.getTime() : 0;
+    return aTime - bTime;
+  });
+};
+
 function MonthGrid({
   year,
   month,
@@ -277,51 +319,45 @@ function MonthGrid({
 }) {
   const user = useFirebaseUser();
   const { settings, loading } = useSettings();
+
   const showWeekendsEnabled = useMemo(() => {
     if (loading || !settings) {
       return true;
     }
     return settings.showWeekends === true;
   }, [loading, settings]);
+
   const dayNames = useMemo(
-    () => [
-      "Lundi",
-      "Mardi",
-      "Mercredi",
-      "Jeudi",
-      "Vendredi",
-      "Samedi",
-      "Dimanche",
-    ],
+    () => ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"],
     []
   );
   const visibleDayNames = useMemo(
     () => (showWeekendsEnabled ? dayNames : dayNames.slice(0, 5)),
     [dayNames, showWeekendsEnabled]
   );
+
   const monthColumnCount = showWeekendsEnabled ? 7 : 5;
   const monthGridStyle = useMemo(
-    () => ({
-      "--month-grid-day-count": String(monthColumnCount),
-    }),
+    () => ({ "--month-grid-day-count": String(monthColumnCount) }),
     [monthColumnCount]
   );
+
   const [events, setEvents] = useState([]);
   const [eventsByDay, setEventsByDay] = useState({});
   const [tasksByDay, setTasksByDay] = useState({});
-  const hasStaticEvents =
-    Array.isArray(staticEvents) && staticEvents.length > 0;
+
+  const hasStaticEvents = Array.isArray(staticEvents) && staticEvents.length > 0;
   const hasStaticTasks = Array.isArray(staticTasks) && staticTasks.length > 0;
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  const offset = (firstDay + 6) % 7; // Monday = 0
+  const offset = (firstDay + 6) % 7;
 
   const cells = [];
-  for (let i = 0; i < offset; i++) {
+  for (let i = 0; i < offset; i += 1) {
     cells.push(null);
   }
-  for (let d = 1; d <= daysInMonth; d++) {
+  for (let d = 1; d <= daysInMonth; d += 1) {
     cells.push(d);
   }
   while (cells.length < 42) {
@@ -329,13 +365,12 @@ function MonthGrid({
   }
 
   const rows = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 6; i += 1) {
     rows.push(cells.slice(i * 7, i * 7 + 7));
   }
 
   const monthRange = useMemo(() => getMonthRange(year, month), [year, month]);
 
-  // Watch events - seulement si user connecté
   const contextKey = useMemo(() => {
     if (!context) {
       return "none";
@@ -343,7 +378,16 @@ function MonthGrid({
     if (context.type === "team") {
       return `team:${context.teamId || ""}:${context.memberUid || ""}`;
     }
-    return `personal:${context.userId || ""}`;
+    if (context.type === "team-shared") {
+      return `team-shared:${context.teamId || ""}`;
+    }
+    if (context.type === "personal") {
+      return `personal:${context.userId || ""}`;
+    }
+    if (context.userId) {
+      return `personal:${context.userId}`;
+    }
+    return "none";
   }, [context?.type, context?.teamId, context?.memberUid, context?.userId]);
 
   const groupItemsByDay = useCallback((items) => {
@@ -353,15 +397,22 @@ function MonthGrid({
       if (Number.isNaN(eventDate.getTime())) {
         return;
       }
-      const dayKey = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
-
-      if (!byDay[dayKey]) {
-        byDay[dayKey] = [];
+      const key = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
+      if (!byDay[key]) {
+        byDay[key] = [];
       }
-      byDay[dayKey].push(entry);
+      byDay[key].push(entry);
     });
     return byDay;
   }, []);
+
+  const viewingOtherTeamMember = Boolean(
+    context &&
+      context.type === "team" &&
+      context.memberUid &&
+      user?.uid &&
+      context.memberUid !== user.uid
+  );
 
   useEffect(() => {
     if (hasStaticEvents) {
@@ -370,30 +421,73 @@ function MonthGrid({
       return () => {};
     }
 
-    if (!user) {
+    if (!user || !monthRange?.from || !monthRange?.to) {
       setEvents([]);
       setEventsByDay({});
       return () => {};
     }
 
-    if (!monthRange?.from || !monthRange?.to) {
+    if (!context || (context.type === "team" && !context.memberUid)) {
       setEvents([]);
       setEventsByDay({});
       return () => {};
     }
 
-    if (context && context.type === "team" && !context.memberUid) {
-      setEvents([]);
-      setEventsByDay({});
-      return () => {};
+    if (viewingOtherTeamMember) {
+      let cancelled = false;
+      const segments = buildWeekRangesForMonth(monthRange);
+      if (!segments.length) {
+        setEvents([]);
+        setEventsByDay({});
+        return () => {};
+      }
+
+      const load = async () => {
+        const collected = [];
+        for (const segment of segments) {
+          const startISO = formatIsoDate(segment.start);
+          const endISO = formatIsoDate(segment.end);
+          if (!startISO || !endISO) {
+            // eslint-disable-next-line no-continue
+            continue;
+          }
+          try {
+            const weekly = await fetchWeekEventsOnce(context, startISO, endISO);
+            if (cancelled) {
+              return;
+            }
+            if (Array.isArray(weekly)) {
+              collected.push(...weekly);
+            }
+          } catch (error) {
+            console.warn("MonthGrid weekly fetch error", error);
+          }
+        }
+        if (cancelled) {
+          return;
+        }
+        const merged = mergeEventsById(collected);
+        setEvents(merged);
+        setEventsByDay(groupItemsByDay(merged));
+      };
+
+      load();
+      return () => {
+        cancelled = true;
+      };
     }
 
     const unsubscribe = watchPlanningEventsInRange(
       context,
       monthRange,
       (newEvents) => {
-        setEvents(newEvents);
-        setEventsByDay(groupItemsByDay(newEvents));
+        setEvents(Array.isArray(newEvents) ? newEvents : []);
+        setEventsByDay(groupItemsByDay(Array.isArray(newEvents) ? newEvents : []));
+      },
+      (error) => {
+        console.error("watchPlanningEventsInRange month view error", error);
+        setEvents([]);
+        setEventsByDay({});
       }
     );
 
@@ -401,26 +495,21 @@ function MonthGrid({
   }, [
     user,
     monthRange,
-    contextKey,
     context,
+    contextKey,
     hasStaticEvents,
     staticEvents,
+    viewingOtherTeamMember,
     groupItemsByDay,
   ]);
 
-  // Watch tasks - seulement si user connecté
   useEffect(() => {
     if (hasStaticTasks) {
       setTasksByDay(groupItemsByDay(staticTasks));
       return () => {};
     }
 
-    if (!user || !context) {
-      setTasksByDay({});
-      return () => {};
-    }
-
-    if (!monthRange?.from || !monthRange?.to) {
+    if (!user || !context || !monthRange?.from || !monthRange?.to) {
       setTasksByDay({});
       return () => {};
     }
@@ -430,17 +519,38 @@ function MonthGrid({
       return () => {};
     }
 
-    let active = true;
+    if (viewingOtherTeamMember) {
+      let cancelled = false;
+      const loadTasks = async () => {
+        try {
+          const rawTasks = await fetchWeeklyTasksOnce(context);
+          if (cancelled) {
+            return;
+          }
+          const occurrences = expandWeeklyTasksToMonthRange(rawTasks, monthRange);
+          setTasksByDay(groupItemsByDay(occurrences));
+        } catch (error) {
+          console.warn("MonthGrid tasks fallback error", error);
+          if (!cancelled) {
+            setTasksByDay({});
+          }
+        }
+      };
+      loadTasks();
+      return () => {
+        cancelled = true;
+      };
+    }
 
+    let active = true;
     const unsubscribe = watchWeeklyTasksForContext(
       context,
       (weeklyTasksList) => {
         if (!active) {
           return;
         }
-
         const occurrences = expandWeeklyTasksToMonthRange(
-          weeklyTasksList,
+          Array.isArray(weeklyTasksList) ? weeklyTasksList : [],
           monthRange
         );
         setTasksByDay(groupItemsByDay(occurrences));
@@ -462,11 +572,12 @@ function MonthGrid({
     };
   }, [
     user,
-    monthRange,
-    contextKey,
     context,
+    contextKey,
+    monthRange,
     hasStaticTasks,
     staticTasks,
+    viewingOtherTeamMember,
     groupItemsByDay,
   ]);
 
@@ -475,27 +586,27 @@ function MonthGrid({
       console.warn("Utilisateur non connecté, sélection bloquée");
       return;
     }
-
-    if (value) {
-      const selectedDate = new Date(year, month, value);
-      const wantsEvent = window.confirm(
-        "Créer un événement ?\nAnnuler pour accéder à la semaine"
-      );
-      if (wantsEvent) {
-        onCreateEvent && onCreateEvent(selectedDate);
-      } else if (onDateSelect) {
-        onDateSelect(selectedDate);
-      }
+    if (!value) {
+      return;
+    }
+    const selectedDate = new Date(year, month, value);
+    const wantsEvent = window.confirm(
+      "Créer un événement ?\nAnnuler pour accéder à la semaine"
+    );
+    if (wantsEvent) {
+      onCreateEvent && onCreateEvent(selectedDate);
+    } else if (onDateSelect) {
+      onDateSelect(selectedDate);
     }
   };
 
   const getDayItems = (value) => {
-    if (!value) return { events: [], tasks: [], total: 0 };
-
-    const dayKey = `${year}-${month}-${value}`;
-    const dayEvents = eventsByDay[dayKey] || [];
-    const dayTasks = tasksByDay[dayKey] || [];
-
+    if (!value) {
+      return { events: [], tasks: [], total: 0 };
+    }
+    const key = `${year}-${month}-${value}`;
+    const dayEvents = eventsByDay[key] || [];
+    const dayTasks = tasksByDay[key] || [];
     return {
       events: dayEvents,
       tasks: dayTasks,
@@ -504,19 +615,18 @@ function MonthGrid({
   };
 
   const renderDayItems = (items, maxVisible = 3) => {
-    const { events, tasks, total } = items;
-    const allItems = [...events, ...tasks].slice(0, maxVisible);
+    const { events: dayEvents, tasks: dayTasks, total } = items;
+    const allItems = [...dayEvents, ...dayTasks].slice(0, maxVisible);
     const remaining = Math.max(0, total - maxVisible);
 
     return (
       <>
         {allItems.map((item) => {
-          const isTask = !!item.icon;
-          const type = item.status || item.type;
-          const statusClass =
-            !isTask && ["paid", "unpaid", "pending"].includes(type)
-              ? `status-${type}`
-              : "";
+          const isTask = (item.type || "").toLowerCase() === "task" || Boolean(item.icon);
+          const status = (item.status || item.type || "").toLowerCase();
+          const statusClass = !isTask && ["paid", "pending", "unpaid"].includes(status)
+            ? `status-${status}`
+            : "";
           const colors = getTaskColor(item.color || "");
           const style = isTask
             ? {
@@ -544,10 +654,7 @@ function MonthGrid({
               {isTask && (
                 <span className="month-item-icon" aria-hidden="true">
                   {IconComponent ? (
-                    <IconComponent
-                      className="h-[14px] w-[14px]"
-                      strokeWidth={2}
-                    />
+                    <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} />
                   ) : (
                     item.icon || "•"
                   )}
@@ -564,47 +671,37 @@ function MonthGrid({
     );
   };
 
-  const isSpanningEvent = (event, currentDay) => {
-    const eventStart = new Date(event.start);
-    const eventEnd = new Date(event.end);
-    const dayStart = new Date(year, month, currentDay);
-    const dayEnd = new Date(year, month, currentDay + 1);
-
-    return eventStart < dayStart || eventEnd > dayEnd;
-  };
-
   return (
     <div className="month-calendar" style={monthGridStyle}>
       <div className="month-day-header">
-        {visibleDayNames.map((day) => (
-          <div key={day} className="calendar-header-cell">
-            {day}
+        {visibleDayNames.map((dayLabel) => (
+          <div key={dayLabel} className="calendar-header-cell">
+            {dayLabel}
           </div>
         ))}
       </div>
       <div className="month-grid border rounded-md overflow-hidden">
-        {rows.map((week, wi) => (
-          <div key={wi} className="calendar-row">
-            {week.map((value, di) => {
-              if (!showWeekendsEnabled && di >= 5) {
+        {rows.map((week, weekIndex) => (
+          <div key={`week-${weekIndex}`} className="calendar-row">
+            {week.map((value, dayIndex) => {
+              if (!showWeekendsEnabled && dayIndex >= 5) {
                 return null;
               }
               return value ? (
                 <div
-                  key={di}
+                  key={`day-${weekIndex}-${dayIndex}`}
                   className="calendar-cell"
                   onClick={() => handleSelect(value)}
                 >
                   <div className="calendar-cell-header">
                     <span className="calendar-cell-day">{value}</span>
                   </div>
-
                   <div className="calendar-cell-content">
                     {renderDayItems(getDayItems(value))}
                   </div>
                 </div>
               ) : (
-                <div key={di} className="calendar-cell empty" />
+                <div key={`empty-${weekIndex}-${dayIndex}`} className="calendar-cell empty" />
               );
             })}
           </div>
@@ -615,3 +712,5 @@ function MonthGrid({
 }
 
 export default MonthGrid;
+
+
