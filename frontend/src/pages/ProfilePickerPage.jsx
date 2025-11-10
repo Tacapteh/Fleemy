@@ -171,7 +171,7 @@ const ProfilePickerPage = () => {
         setError('');
       }
 
-      fetchTeamsViaApi({
+      fetchTeamsList({
         skipStartLoading: true,
         silent: true,
         shouldUpdate: () => active,
@@ -228,7 +228,7 @@ const ProfilePickerPage = () => {
             if (isPermissionDeniedError(snapshotError)) {
               console.warn('Firestore team subscription permission denied', snapshotError);
               stopTeamsListener();
-              fetchTeamsViaApi({
+              fetchTeamsList({
                 skipStartLoading: true,
                 silent: true,
                 shouldUpdate: () => active,
@@ -246,7 +246,7 @@ const ProfilePickerPage = () => {
       } catch (subscriptionError) {
         if (isPermissionDeniedError(subscriptionError)) {
           console.warn('Skipping Firestore teams subscription (permission denied)');
-          fetchTeamsViaApi({
+          fetchTeamsList({
             skipStartLoading: true,
             silent: true,
             shouldUpdate: () => active,
@@ -255,7 +255,7 @@ const ProfilePickerPage = () => {
         }
 
         console.error('Failed to subscribe to teams', subscriptionError);
-        fetchTeamsViaApi({
+        fetchTeamsList({
           skipStartLoading: true,
           shouldUpdate: () => active,
         });
@@ -280,7 +280,7 @@ const ProfilePickerPage = () => {
         unsubscribeAuth();
       }
     };
-  }, [fetchTeamsViaApi, navigate]);
+  }, [fetchTeamsList, navigate]);
 
   const updateLastContext = useCallback(async (contextData) => {
     try {
