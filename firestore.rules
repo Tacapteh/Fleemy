@@ -1,45 +1,42 @@
-rules_version = '2';
+﻿rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---- Helpers (sans 'let' ni 'if' blocs) ----
+    // ---- Helpers ----
     function isAuthenticated() {
       return request.auth != null && request.auth.uid != null;
     }
 
-    // Normalise une string non vide
-    function normId(v) {
-      return (v is string && v.size() > 0) ? v : null;
+    function normId(value) {
+      return (value is string && value.size() > 0) ? value : null;
     }
 
-    // Owner détecté à partir du payload ou du doc, sinon defaultUid
     function planningOwnerFromData(defaultUid) {
-      return normId(request.resource != null ? request.resource.data.owner_uid : null) != null
-        ? normId(request.resource.data.owner_uid)
-        : (
-            normId(request.resource != null ? request.resource.data.user_id : null) != null
-            ? normId(request.resource.data.user_id)
-            : (
-                normId(resource != null ? resource.data.owner_uid : null) != null
-                ? normId(resource.data.owner_uid)
-                : (
-                    normId(resource != null ? resource.data.user_id : null) != null
-                    ? normId(resource.data.user_id)
-                    : defaultUid
-                  )
-              )
-          );
+      let owner = null;
+      if (request.resource != null) {
+        owner = normId(request.resource.data.owner_uid);
+        if (owner == null) {
+          owner = normId(request.resource.data.user_id);
+        }
+      }
+      if (owner == null && resource != null) {
+        owner = normId(resource.data.owner_uid);
+        if (owner == null) {
+          owner = normId(resource.data.user_id);
+        }
+      }
+      return owner != null ? owner : defaultUid;
     }
 
-    // TeamId détecté à partir du payload ou du doc, sinon defaultTeamId
     function planningTeamFromData(defaultTeamId) {
-      return normId(request.resource != null ? request.resource.data.team_id : null) != null
-        ? normId(request.resource.data.team_id)
-        : (
-            normId(resource != null ? resource.data.team_id : null) != null
-            ? normId(resource.data.team_id)
-            : defaultTeamId
-          );
+      let teamId = null;
+      if (request.resource != null) {
+        teamId = normId(request.resource.data.team_id);
+      }
+      if (teamId == null && resource != null) {
+        teamId = normId(resource.data.team_id);
+      }
+      return teamId != null ? teamId : defaultTeamId;
     }
 
     function matchesPlanningOwner(expectedOwner) {
@@ -47,40 +44,70 @@ service cloud.firestore {
     }
 
     function matchesPlanningTeam(expectedTeamId) {
-      return (expectedTeamId == null)
-        ? (planningTeamFromData(null) == null)
-        : (planningTeamFromData(expectedTeamId) == expectedTeamId);
+      if (expectedTeamId == null) {
+        return planningTeamFromData(null) == null;
+      }
+      return planningTeamFromData(expectedTeamId) == expectedTeamId;
     }
 
-    // Vérifie appartenance/ownership équipe (formats 'members' list OU map, + fallbacks)
+    function teamResourceShowsMember() {
+      return isAuthenticated()
+        && resource != null
+        && resource.data != null
+        && (
+          (resource.data.members is list && resource.data.members.hasAny([request.auth.uid]))
+          ||
+          (resource.data.members is map && resource.data.members.keys().hasAny([request.auth.uid]))
+          ||
+          resource.data.owner_uid == request.auth.uid
+          ||
+          resource.data.ownerUid == request.auth.uid
+        );
+    }
+
+    function userDocumentListsTeam(teamId) {
+      if (!isAuthenticated()) {
+        return false;
+      }
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      if (!userDoc.exists()) {
+        return false;
+      }
+      let teamsField = userDoc.data.teams;
+      if (teamsField is list && teamsField.hasAny([teamId])) {
+        return true;
+      }
+      if (teamsField is map && teamsField.keys().hasAny([teamId])) {
+        return true;
+      }
+      return false;
+    }
+
     function isTeamMember(teamId) {
-      return isAuthenticated() && (
-        (
-          get(/databases/$(database)/documents/teams/$(teamId)).exists()
-          &&
-          (
-            (
-              (get(/databases/$(database)/documents/teams/$(teamId)).data.members is list)
-              &&
-              (request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members)
-            )
-            ||
-            (
-              (get(/databases/$(database)/documents/teams/$(teamId)).data.members is map)
-              &&
-              (request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members)
-            )
-            ||
-            (get(/databases/$(database)/documents/teams/$(teamId)).data.owner_uid == request.auth.uid)
-            ||
-            (get(/databases/$(database)/documents/teams/$(teamId)).data.ownerUid == request.auth.uid)
-          )
-        )
-        ||
-        exists(/databases/$(database)/documents/teams/$(teamId)/memberships/$(request.auth.uid))
-        ||
-        exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid))
-      );
+      if (!isAuthenticated()) {
+        return false;
+      }
+
+      let teamDoc = get(/databases/$(database)/documents/teams/$(teamId));
+      if (teamDoc.exists()) {
+        let teamData = teamDoc.data;
+        if (teamData.members is list && teamData.members.hasAny([request.auth.uid])) {
+          return true;
+        }
+        if (teamData.members is map && teamData.members.keys().hasAny([request.auth.uid])) {
+          return true;
+        }
+        if (teamData.owner_uid == request.auth.uid || teamData.ownerUid == request.auth.uid) {
+          return true;
+        }
+      }
+
+      if (userDocumentListsTeam(teamId)) {
+        return true;
+      }
+
+      return exists(/databases/$(database)/documents/teams/$(teamId)/memberships/$(request.auth.uid))
+        || exists(/databases/$(database)/documents/teams/$(teamId)/members/$(request.auth.uid));
     }
 
     function canWritePlanningFor(ownerUid) {
@@ -88,18 +115,16 @@ service cloud.firestore {
     }
 
     function canReadPlanningFor(ownerUid, expectedTeamId) {
-      return isAuthenticated() && (
-        request.auth.uid == ownerUid
-        ||
-        (
-          planningTeamFromData(expectedTeamId) is string
-          && planningTeamFromData(expectedTeamId).size() > 0
-          && isTeamMember(planningTeamFromData(expectedTeamId))
-        )
-      );
+      if (!isAuthenticated()) {
+        return false;
+      }
+      if (request.auth.uid == ownerUid) {
+        return true;
+      }
+      let teamId = planningTeamFromData(expectedTeamId);
+      return teamId is string && teamId.size() > 0 && isTeamMember(teamId);
     }
 
-    // ---- Espace /users/{uid} ----
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
 
@@ -116,7 +141,6 @@ service cloud.firestore {
       }
     }
 
-    // ---- Clients (scopés par user_id) ----
     match /clients/{clientId} {
       allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
       allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
@@ -135,9 +159,8 @@ service cloud.firestore {
       }
     }
 
-    // ---- Teams ----
     match /teams/{teamId} {
-      allow read: if isTeamMember(teamId);
+      allow read: if teamResourceShowsMember() || userDocumentListsTeam(teamId);
       allow write: if isTeamMember(teamId)
         || (isAuthenticated() && get(/databases/$(database)/documents/teams/$(teamId)).data.owner_uid == request.auth.uid);
 
@@ -147,9 +170,8 @@ service cloud.firestore {
       }
 
       match /teamPlanning/{docId} {
-        allow read: if request.auth != null
-          && (request.auth.uid in get(/databases/$(database)/documents/teams/$(teamId)).data.members);
-        allow write: if false; // écriture uniquement via backend
+        allow read: if isTeamMember(teamId);
+        allow write: if false;
       }
 
       match /members/{memberUid} {
@@ -171,13 +193,14 @@ service cloud.firestore {
       }
     }
 
-    // ---- dailyTodos (on s’appuie sur user_id + teamId) ----
     match /dailyTodos/{docId} {
-      // Lecture : propriétaire OU membre d’équipe si teamId présent
+      function todoOwner() {
+        return docId.split('_')[0];
+      }
+
       allow read: if isAuthenticated() && (
-        (resource != null && resource.data.user_id == request.auth.uid)
-        ||
-        (
+        todoOwner() == request.auth.uid
+        || (
           resource != null
           && resource.data.teamId is string
           && resource.data.teamId.size() > 0
@@ -185,11 +208,9 @@ service cloud.firestore {
         )
       );
 
-      // Écriture : uniquement le propriétaire (user_id dans le payload)
       allow write: if isAuthenticated()
         && request.resource != null
         && request.resource.data.user_id == request.auth.uid;
     }
-
   }
 }
