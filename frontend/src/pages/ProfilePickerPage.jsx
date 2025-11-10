@@ -42,7 +42,7 @@ const ProfilePickerPage = () => {
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
 
-  const fetchTeamsViaApi = useCallback(
+  const fetchTeamsList = useCallback(
     async (options = {}) => {
       const {
         skipStartLoading = false,
@@ -54,9 +54,9 @@ const ProfilePickerPage = () => {
         setLoading(true);
       }
 
+      let source = 'api';
       try {
         const response = await apiFetch('/teams/my');
-
         if (response?.success !== true || !Array.isArray(response?.teams)) {
           throw new Error('Invalid response');
         }
@@ -83,6 +83,7 @@ const ProfilePickerPage = () => {
         }
       } catch (apiError) {
         console.error('Failed to fetch teams via API', apiError);
+        source = 'firestore';
         let fallbackTeams = [];
         try {
           fallbackTeams = await fetchUserTeamsFromFirestore();
