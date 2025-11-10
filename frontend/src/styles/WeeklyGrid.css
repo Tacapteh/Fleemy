@@ -48,11 +48,9 @@
 
 .time-label-text {
   position: absolute;
-  top: 0;
+  top: 8px;
   right: 0;
   transform: none;
-  line-height: 1;
-  padding-top: 2px;
 }
 
 .week-grid-body {
