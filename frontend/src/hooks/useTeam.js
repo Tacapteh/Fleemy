@@ -49,7 +49,18 @@ export default function useTeam(teamId) {
     return null;
   }, [teamId]);
 
-  const currentUser = auth.currentUser;
+  const [currentUser, setCurrentUser] = useState(() => auth.currentUser);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user);
+    });
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   const buildMembersList = useMemo(() => {
     return (rawMembers = []) => {
@@ -71,7 +82,7 @@ export default function useTeam(teamId) {
 
   useEffect(() => {
     const loadTeam = async () => {
-      if (!auth.currentUser || !resolvedTeamId) {
+      if (!currentUser || !resolvedTeamId) {
         setState({ data: null, error: null });
         setLoading(false);
         return;
