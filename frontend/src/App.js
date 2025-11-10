@@ -21,6 +21,8 @@ import {
   clearTeamsCache,
 } from "./utils/teamCache";
 
+const CONTEXT_CHECK_TIMEOUT_MS = 7000;
+
 const Login = lazy(() => import("./Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Planning = lazy(() => import("./pages/Planning"));
@@ -85,10 +87,33 @@ function AuthGuard({ user, children }) {
             return;
           } else if (savedContext.type === 'team' && savedContext.teamId) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
-            const result = await ensureTeamsCache(
+            const ensurePromise = ensureTeamsCache(
               () => apiFetch('/teams/my'),
               { forceRefresh: true },
-            );
+            )
+              .then((value) => ({ status: 'resolved', value }))
+              .catch((error) => ({ status: 'rejected', error }));
+
+            const resultOrTimeout = await Promise.race([
+              ensurePromise,
+              new Promise((resolve) =>
+                setTimeout(() => resolve({ status: 'timeout' }), CONTEXT_CHECK_TIMEOUT_MS),
+              ),
+            ]);
+
+            if (resultOrTimeout.status === 'timeout') {
+              console.warn(
+                'AuthGuard: délai dépassé lors de la vérification du contexte, poursuite sans validation réseau.',
+              );
+              setChecking(false);
+              return;
+            }
+
+            if (resultOrTimeout.status === 'rejected') {
+              throw resultOrTimeout.error;
+            }
+
+            const result = resultOrTimeout.value;
 
             if (result.success) {
               const stillMember = Array.isArray(result.teams)
