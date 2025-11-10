@@ -97,17 +97,36 @@ const resolveStatusCategoryValue = (status) => {
   if (
     [
       "paid",
-      "payǸ",
+      "payé",
       "paye",
       "payee",
-      "rǸglǸ",
+      "réglé",
       "regle",
-      "reglǸ",
+      "réglée",
       "reglee",
       "settled",
     ].includes(normalized)
   ) {
     return "paid";
+  }
+  if (
+    [
+      "to_invoice",
+      "toinvoice",
+      "a_facturer",
+      "a facturer",
+      "à facturer",
+      "facturer",
+      "unpaid",
+      "non payé",
+      "non_paye",
+      "impayé",
+      "impaye",
+      "overdue",
+      "late",
+    ].includes(normalized)
+  ) {
+    return "to_invoice";
   }
   if (
     [
@@ -124,32 +143,14 @@ const resolveStatusCategoryValue = (status) => {
       "quote_validee",
       "sent",
       "devis",
-      "devis envoyǸ",
+      "devis envoyé",
       "devis_envoye",
       "estimate",
       "estimation",
       "waiting_payment",
-      "unpaid",
-      "non payǸ",
-      "non_paye",
-      "impayǸ",
-      "impaye",
-      "overdue",
     ].includes(normalized)
   ) {
     return "pending";
-  }
-  if (
-    [
-      "to_invoice",
-      "toinvoice",
-      "a_facturer",
-      "a facturer",
-      "à facturer",
-      "facturer",
-    ].includes(normalized)
-  ) {
-    return "to_invoice";
   }
   return "pending";
 };
@@ -413,7 +414,11 @@ const isBillableSlot = (slot) => {
   return true;
 };
 
-const calculateWeeklyEstimatedAmount = (slots, globalHourlyRate) => {
+const calculateWeeklyEstimatedAmount = (
+  slots,
+  globalHourlyRate,
+  clientsById
+) => {
   if (!Array.isArray(slots) || slots.length === 0) {
     return 0;
   }
@@ -441,40 +446,21 @@ const calculateWeeklyEstimatedAmount = (slots, globalHourlyRate) => {
       return;
     }
 
-    let rateToApply = null;
-    const client = slot?.client;
-
-    if (
-      client &&
-      (client.useGlobalRate === false || client.use_global_rate === false)
-    ) {
-      const clientRateCandidates = [client.hourlyRate, client.hourly_rate];
-      for (const candidate of clientRateCandidates) {
-        const numeric = Number(candidate);
-        if (Number.isFinite(numeric) && numeric > 0) {
-          rateToApply = numeric;
-          break;
-        }
+    const overrideAmount = getOverrideAmount(slot);
+    let amount = null;
+    if (Number.isFinite(overrideAmount) && overrideAmount > 0) {
+      amount = overrideAmount;
+    } else {
+      const rateToApply = getApplicableRate(
+        slot,
+        clientsById,
+        globalHourlyRate
+      );
+      if (Number.isFinite(rateToApply) && rateToApply > 0) {
+        amount = durationHours * rateToApply;
       }
     }
 
-    if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
-      const numericGlobalRate = Number(globalHourlyRate);
-      if (Number.isFinite(numericGlobalRate) && numericGlobalRate > 0) {
-        rateToApply = numericGlobalRate;
-      }
-    }
-
-    if (!Number.isFinite(rateToApply) || rateToApply <= 0) {
-      rateToApply = getSlotRate(slot);
-    }
-
-    const numericRate = Number(rateToApply);
-    if (!Number.isFinite(numericRate) || numericRate <= 0) {
-      return;
-    }
-
-    const amount = durationHours * numericRate;
     if (Number.isFinite(amount) && amount > 0) {
       total += amount;
     }
@@ -631,18 +617,15 @@ export default function Dashboard() {
       }
 
       const overrideAmount = getOverrideAmount(slot);
-      const slotRate = getSlotRate(slot);
       let amount = null;
       if (Number.isFinite(overrideAmount) && overrideAmount > 0) {
         amount = overrideAmount;
       } else {
-        let rateToApply = null;
-        if (Number.isFinite(slotRate) && slotRate > 0) {
-          rateToApply = slotRate;
-        } else {
-          rateToApply = getApplicableRate(slot, clientsById, globalHourlyRate);
-        }
-
+        const rateToApply = getApplicableRate(
+          slot,
+          clientsById,
+          globalHourlyRate
+        );
         if (Number.isFinite(rateToApply) && rateToApply > 0 && hasDuration) {
           amount = durationHours * rateToApply;
         }
@@ -686,8 +669,8 @@ export default function Dashboard() {
   }, [slots, settings?.hourlyRate, clients, globalHourlyRate, clientsById]);
 
   const weeklyEstimatedAmount = useMemo(
-    () => calculateWeeklyEstimatedAmount(slots, globalHourlyRate),
-    [slots, globalHourlyRate]
+    () => calculateWeeklyEstimatedAmount(slots, globalHourlyRate, clientsById),
+    [slots, globalHourlyRate, clientsById]
   );
 
   const weeklyHoursDisplay = useMemo(() => {
