@@ -8,6 +8,7 @@ import {
 } from "../firebase";
 import { useSettings } from "../context/SettingsContext";
 import { getIcon } from "../icons/registry";
+import { getTaskColor } from "../constants/colors";
 
 const DAY_NAME_TO_INDEX = {
   monday: 0,
@@ -516,13 +517,13 @@ function MonthGrid({
             !isTask && ["paid", "unpaid", "pending"].includes(type)
               ? `status-${type}`
               : "";
-          const taskColor = item.color || "#10b981";
+          const colors = getTaskColor(item.color || "");
           const style = isTask
             ? {
-                "--item-color": taskColor,
-                backgroundColor: taskColor,
-                color: "#ffffff",
-                borderColor: taskColor,
+                "--item-color": colors.backgroundColor,
+                backgroundColor: colors.backgroundColor,
+                color: colors.color,
+                borderColor: colors.borderColor,
               }
             : !statusClass && item.color
             ? { "--item-color": item.color }
