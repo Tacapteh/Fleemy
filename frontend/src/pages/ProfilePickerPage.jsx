@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Users, Plus, LogIn, Share2, Trash2 } from 'lucide-react';
-import { auth, db, isPermissionDeniedError } from '../firebase';
+import {
+  auth,
+  db,
+  isPermissionDeniedError,
+  fetchUserTeamsFromFirestore,
+} from '../firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
@@ -78,10 +83,41 @@ const ProfilePickerPage = () => {
         }
       } catch (apiError) {
         console.error('Failed to fetch teams via API', apiError);
-        if (!silent && shouldUpdate()) {
-          setTeams([]);
-          setError("Impossible de charger vos équipes pour l'instant");
-          clearTeamsCache();
+        let fallbackTeams = [];
+        try {
+          fallbackTeams = await fetchUserTeamsFromFirestore();
+        } catch (fallbackError) {
+          console.warn('Fallback Firestore teams fetch failed', fallbackError);
+        }
+
+        const normalizedFallback = Array.isArray(fallbackTeams)
+          ? fallbackTeams
+              .map((team) => ({
+                team_id: team.team_id || team.id || null,
+                name: team.name || 'Équipe sans nom',
+                owner_uid: team.owner_uid || team.ownerUid || null,
+                invite_code: team.invite_code || team.inviteCode || null,
+                members_count:
+                  typeof team.members_count === 'number'
+                    ? team.members_count
+                    : Array.isArray(team.members)
+                    ? team.members.length
+                    : 0,
+              }))
+              .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
+              .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+          : [];
+
+        if (shouldUpdate()) {
+          if (normalizedFallback.length > 0) {
+            setTeams(normalizedFallback);
+            setError('');
+            writeTeamsCache(normalizedFallback);
+          } else if (!silent) {
+            setTeams([]);
+            setError("Impossible de charger vos équipes pour l'instant");
+            clearTeamsCache();
+          }
         }
       } finally {
         if (shouldUpdate()) {

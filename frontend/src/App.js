@@ -88,7 +88,7 @@ function AuthGuard({ user, children }) {
           } else if (savedContext.type === 'team' && savedContext.teamId) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
             const ensurePromise = ensureTeamsCache(
-              () => apiFetch('/teams/my'),
+              null,
               { forceRefresh: true },
             )
               .then((value) => ({ status: 'resolved', value }))
