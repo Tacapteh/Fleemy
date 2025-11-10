@@ -48,7 +48,7 @@
 
 .time-label-text {
   position: absolute;
-  top: 4px;
+  top: -2px;
   right: 0;
   transform: none;
 }

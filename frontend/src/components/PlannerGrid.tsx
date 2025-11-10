@@ -798,7 +798,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
               </div>
             ))}
             <div className="hour-label-final flex items-end justify-end pr-2 pb-1 mt-1 bg-white/80 text-xs text-slate-500 leading-none dark:bg-slate-900/80 dark:text-slate-100 min-h-[var(--weekly-grid-row-h)]">
-              <span>{finalHourLabel}</span>
+              <span className="time-label-text">{finalHourLabel}</span>
             </div>
           </div>
 
