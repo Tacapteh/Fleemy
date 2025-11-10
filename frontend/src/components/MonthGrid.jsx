@@ -477,7 +477,7 @@ function MonthGrid({
       };
     };
 
-    const shouldPrefetch = context?.type === "team" || viewingOtherTeamMember;
+    const shouldPrefetch = viewingOtherTeamMember;
     if (shouldPrefetch) {
       stopPrefetch = runChunkPrefetch();
     }
