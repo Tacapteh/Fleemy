@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
-import { auth, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { useEffect, useMemo, useState } from "react";
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 const buildMemberLabel = (memberData, currentUser) => {
   if (!memberData) return { uid: null };
 
-  if (typeof memberData === 'string') {
+  if (typeof memberData === "string") {
     return { uid: memberData };
   }
 
@@ -40,11 +40,14 @@ export default function useTeam(teamId) {
       return teamId;
     }
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        return window.localStorage.getItem('teamId');
+      if (typeof window !== "undefined" && window.localStorage) {
+        return window.localStorage.getItem("teamId");
       }
     } catch (storageError) {
-      console.warn('useTeam: unable to read teamId from localStorage', storageError);
+      console.warn(
+        "useTeam: unable to read teamId from localStorage",
+        storageError
+      );
     }
     return null;
   }, [teamId]);
@@ -112,7 +115,7 @@ export default function useTeam(teamId) {
             }
 
             try {
-              const userDoc = await getDoc(doc(db, 'users', member.uid));
+              const userDoc = await getDoc(doc(db, "users", member.uid));
               if (userDoc.exists()) {
                 const userData = userDoc.data();
                 const inferredName =
@@ -135,7 +138,11 @@ export default function useTeam(teamId) {
                 };
               }
             } catch (memberError) {
-              console.warn('useTeam: impossible de charger le membre', member.uid, memberError);
+              console.warn(
+                "useTeam: impossible de charger le membre",
+                member.uid,
+                memberError
+              );
             }
 
             if (member.uid === currentUser?.uid) {
@@ -151,17 +158,15 @@ export default function useTeam(teamId) {
         );
 
         const uniqueMembersMap = new Map();
-        members
-          .filter(Boolean)
-          .forEach((member) => {
-            if (!member.uid) return;
-            const existing = uniqueMembersMap.get(member.uid) || {};
-            uniqueMembersMap.set(member.uid, {
-              uid: member.uid,
-              name: member.name || existing.name || null,
-              email: member.email || existing.email || null,
-            });
+        members.filter(Boolean).forEach((member) => {
+          if (!member.uid) return;
+          const existing = uniqueMembersMap.get(member.uid) || {};
+          uniqueMembersMap.set(member.uid, {
+            uid: member.uid,
+            name: member.name || existing.name || null,
+            email: member.email || existing.email || null,
           });
+        });
 
         setState({
           data: {
@@ -173,18 +178,18 @@ export default function useTeam(teamId) {
           error: null,
         });
       } catch (e) {
-        if (e.message?.includes('Missing or insufficient permissions')) {
-          setState({ error: 'no-access', data: null });
+        if (e.message?.includes("Missing or insufficient permissions")) {
+          setState({ error: "no-access", data: null });
         } else {
-          console.error('useTeam error', e);
-          setState({ data: null, error: e.message || 'unknown' });
+          console.error("useTeam error", e);
+          setState({ data: null, error: e.message || "unknown" });
         }
       }
       setLoading(false);
     };
 
     loadTeam();
-  }, [resolvedTeamId]);
+  }, [resolvedTeamId, currentUser]);
 
   return { team: state.data, error: state.error, loading };
 }
