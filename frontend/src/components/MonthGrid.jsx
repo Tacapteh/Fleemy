@@ -258,31 +258,6 @@ const startOfWeek = (value) => {
   return base;
 };
 
-const buildWeekRangesForMonth = (range) => {
-  if (!range?.from || !range?.to) {
-    return [];
-  }
-  const firstWeekStart = startOfWeek(range.from);
-  if (!firstWeekStart) {
-    return [];
-  }
-  const limit = new Date(range.to);
-  limit.setHours(23, 59, 59, 999);
-  const segments = [];
-  const cursor = new Date(firstWeekStart);
-  while (cursor <= limit) {
-    const weekStart = new Date(cursor);
-    const weekEnd = new Date(cursor);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    if (weekEnd > limit) {
-      weekEnd.setTime(limit.getTime());
-    }
-    segments.push({ start: weekStart, end: weekEnd });
-    cursor.setDate(cursor.getDate() + 7);
-  }
-  return segments;
-};
-
 const mergeEventsById = (events) => {
   if (!Array.isArray(events)) {
     return [];
@@ -436,54 +411,37 @@ function MonthGrid({
     let cancelled = false;
     let stopPrefetch = () => {};
 
-    const runChunkPrefetch = () => {
-      const segments = buildWeekRangesForMonth(monthRange);
-      if (!segments.length) {
-        return () => {};
-      }
-      let active = true;
-      (async () => {
-        const collected = [];
-        for (const segment of segments) {
-          if (!active || cancelled) {
-            return;
-          }
-          const startISO = formatIsoDate(segment.start);
-          const endISO = formatIsoDate(segment.end);
-          if (!startISO || !endISO) {
-            // eslint-disable-next-line no-continue
-            continue;
-          }
+    if (viewingOtherTeamMember) {
+      const startISO = formatIsoDate(monthRange.from);
+      const endISO = formatIsoDate(monthRange.to);
+      if (startISO && endISO) {
+        let active = true;
+        (async () => {
           try {
-            const weekly = await fetchWeekEventsOnce(context, startISO, endISO);
+            const fallbackEvents = await fetchWeekEventsOnce(
+              context,
+              startISO,
+              endISO
+            );
             if (!active || cancelled) {
               return;
             }
-            if (Array.isArray(weekly)) {
-              collected.push(...weekly);
-            }
+            const merged = mergeEventsById(
+              Array.isArray(fallbackEvents) ? fallbackEvents : []
+            );
+            setEvents(merged);
+            setEventsByDay(groupItemsByDay(merged));
           } catch (error) {
-            console.warn("MonthGrid weekly fetch error", error);
+            if (!active || cancelled) {
+              return;
+            }
+            console.warn("MonthGrid month fetch error", error);
           }
-        }
-        if (!active || cancelled) {
-          return;
-        }
-        const merged = mergeEventsById(collected);
-        setEvents(merged);
-        setEventsByDay(groupItemsByDay(merged));
-      })();
-      return () => {
-        active = false;
-      };
-    };
-
-    const shouldPrefetch = viewingOtherTeamMember;
-    if (shouldPrefetch) {
-      stopPrefetch = runChunkPrefetch();
-    }
-
-    if (viewingOtherTeamMember) {
+        })();
+        stopPrefetch = () => {
+          active = false;
+        };
+      }
       return () => {
         cancelled = true;
         stopPrefetch();
