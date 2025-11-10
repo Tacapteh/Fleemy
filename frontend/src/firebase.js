@@ -64,9 +64,15 @@ const firebaseConfig = {
   authDomain: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_AUTH_DOMAIN),
   projectId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_PROJECT_ID),
   appId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_APP_ID),
-  messagingSenderId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID),
-  storageBucket: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_STORAGE_BUCKET),
-  measurementId: sanitizeConfigValue(process.env.REACT_APP_FIREBASE_MEASUREMENT_ID),
+  messagingSenderId: sanitizeConfigValue(
+    process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID
+  ),
+  storageBucket: sanitizeConfigValue(
+    process.env.REACT_APP_FIREBASE_STORAGE_BUCKET
+  ),
+  measurementId: sanitizeConfigValue(
+    process.env.REACT_APP_FIREBASE_MEASUREMENT_ID
+  ),
 };
 
 const requiredKeys = ["apiKey", "authDomain", "projectId", "appId"];
@@ -144,16 +150,14 @@ const ensureAuthPersistence = () => {
         if (strategy.key !== "memory") {
           console.info(`Firebase auth persistence set to ${strategy.key}`);
         } else {
-          console.info(
-            "Firebase auth using in-memory persistence fallback",
-          );
+          console.info("Firebase auth using in-memory persistence fallback");
         }
         return strategy.key;
       } catch (error) {
         if (error && PERSISTENCE_FALLBACK_ERROR_CODES.has(error.code)) {
           console.warn(
             `Unable to use Firebase auth ${strategy.key} persistence, trying next option`,
-            error,
+            error
           );
           continue;
         }
@@ -164,7 +168,7 @@ const ensureAuthPersistence = () => {
     }
 
     console.warn(
-      "All Firebase auth persistence strategies failed, continuing without persistence",
+      "All Firebase auth persistence strategies failed, continuing without persistence"
     );
     return null;
   })().catch((error) => {
@@ -243,7 +247,9 @@ export const signInWithGoogle = async () => {
     });
   } catch (error) {
     if (error?.code === REDIRECT_IN_PROGRESS_ERROR_CODE) {
-      console.info("Google redirect already in progress, reusing existing flow");
+      console.info(
+        "Google redirect already in progress, reusing existing flow"
+      );
       return buildSignInResult({
         status: GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED,
       });
@@ -253,7 +259,7 @@ export const signInWithGoogle = async () => {
       if (!persistenceKey || persistenceKey === "memory") {
         console.warn(
           "Popup sign-in failed and redirect flow is unavailable without persistent storage",
-          error,
+          error
         );
         return buildSignInResult({
           status: GOOGLE_SIGN_IN_STATUS.RECOVERABLE_ERROR,
@@ -261,7 +267,10 @@ export const signInWithGoogle = async () => {
         });
       }
 
-      console.warn("Popup sign-in failed, falling back to redirect flow", error);
+      console.warn(
+        "Popup sign-in failed, falling back to redirect flow",
+        error
+      );
       redirectResultPromise = null;
       try {
         await signInWithRedirect(auth, googleProvider);
@@ -356,7 +365,7 @@ export const waitForAuth = () => {
         resolve(lastResolvedUser);
       },
       (error) => {
-        console.error('waitForAuth error', error);
+        console.error("waitForAuth error", error);
         lastResolvedUser = null;
         authReady = true;
         cachedAuthPromise = null;
@@ -370,13 +379,17 @@ export const waitForAuth = () => {
 
 export const getUid = () => auth.currentUser?.uid || null;
 
-export const waitForAuthenticatedUid = async ({ requireUser = true, warnOnPending = false, onCancel } = {}) => {
+export const waitForAuthenticatedUid = async ({
+  requireUser = true,
+  warnOnPending = false,
+  onCancel,
+} = {}) => {
   const immediateUid = getUid();
   if (immediateUid) {
     return immediateUid;
   }
   if (warnOnPending && !authReady) {
-    console.warn('Auth non encore initialisée');
+    console.warn("Auth non encore initialisée");
   }
 
   const firstResolution = await waitForAuth();
@@ -406,7 +419,7 @@ export const waitForAuthenticatedUid = async ({ requireUser = true, warnOnPendin
         }
       },
       (error) => {
-        console.error('waitForAuthenticatedUid error', error);
+        console.error("waitForAuthenticatedUid error", error);
         unsubscribe();
         settle(null);
       }
@@ -417,7 +430,7 @@ export const waitForAuthenticatedUid = async ({ requireUser = true, warnOnPendin
       settle(null);
     };
 
-    if (typeof onCancel === 'function') {
+    if (typeof onCancel === "function") {
       onCancel(cancel);
     }
   });
@@ -427,7 +440,7 @@ const planningRealtimeRegistry = new Set();
 const planningAuthSubscribers = new Set();
 
 const registerPlanningListener = (unsubscribe) => {
-  if (typeof unsubscribe !== 'function') {
+  if (typeof unsubscribe !== "function") {
     return () => {};
   }
   let active = true;
@@ -440,7 +453,7 @@ const registerPlanningListener = (unsubscribe) => {
     try {
       unsubscribe();
     } catch (error) {
-      console.error('Error while unsubscribing planning listener', error);
+      console.error("Error while unsubscribing planning listener", error);
     }
   };
   planningRealtimeRegistry.add(wrapped);
@@ -455,14 +468,14 @@ const clearPlanningListeners = () => {
     try {
       unsubscribe();
     } catch (error) {
-      console.error('Error while clearing planning listener', error);
+      console.error("Error while clearing planning listener", error);
     }
   });
   planningRealtimeRegistry.clear();
 };
 
 const registerPlanningAuthRestart = (callback) => {
-  if (typeof callback !== 'function') {
+  if (typeof callback !== "function") {
     return () => {};
   }
   planningAuthSubscribers.add(callback);
@@ -481,7 +494,7 @@ const notifyPlanningAuthSubscribers = () => {
     try {
       callback();
     } catch (error) {
-      console.error('Planning auth restart callback error', error);
+      console.error("Planning auth restart callback error", error);
     }
   });
 };
@@ -519,7 +532,10 @@ const logPermissionError = (path, uid, err, options = {}) => {
       console.error(message);
     }
     if (toast) {
-      showToast("Accès refusé : vérifiez vos règles ou l'UID du document", true);
+      showToast(
+        "Accès refusé : vérifiez vos règles ou l'UID du document",
+        true
+      );
     }
     recentErrors.set(key, now);
   }
@@ -562,7 +578,7 @@ const toPermissionDeniedError = (error) => {
   const message = String(error?.message || "");
   if (status === 403 || message.toLowerCase().includes("forbidden")) {
     const normalized = new Error(
-      message || "Missing or insufficient permissions",
+      message || "Missing or insufficient permissions"
     );
     normalized.code = "permission-denied";
     normalized.status = status ?? 403;
@@ -580,7 +596,7 @@ const toPermissionDeniedError = (error) => {
 };
 
 const formatHourMinute = (hours, minutes) =>
-  `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 
 const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
   if (value == null) {
@@ -600,7 +616,10 @@ const toHourMinuteString = (value, fallback = DEFAULT_EVENT_START) => {
       const rawMinute = Number.parseInt(parts[1] ?? "0", 10);
       if (!Number.isNaN(rawHour)) {
         const hour = Math.max(0, Math.min(rawHour, 23));
-        const minute = Math.max(0, Math.min(Number.isNaN(rawMinute) ? 0 : rawMinute, 59));
+        const minute = Math.max(
+          0,
+          Math.min(Number.isNaN(rawMinute) ? 0 : rawMinute, 59)
+        );
         return formatHourMinute(hour, minute);
       }
     }
@@ -624,7 +643,9 @@ const getIsoWeekInfo = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return { week: null, year: null };
   }
-  const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const utcDate = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
   const dayNumber = utcDate.getUTCDay() || 7;
   utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayNumber);
   const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
@@ -670,9 +691,10 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
   const parsedRate = Number(
     typeof eventData.hourly_rate === "number"
       ? eventData.hourly_rate
-      : eventData.hourly_rate ?? 0,
+      : (eventData.hourly_rate ?? 0)
   );
-  const hourlyRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 50;
+  const hourlyRate =
+    Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 50;
 
   const body = {
     description: eventData.description || "",
@@ -681,8 +703,12 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
     day: ensureDayKey(eventData.day, startDate),
     start_time: toHourMinuteString(eventData.start, DEFAULT_EVENT_START),
     end_time: toHourMinuteString(eventData.end, DEFAULT_EVENT_END),
-    status: eventData.payment_status || eventData.status || eventData.type || "pending",
-    type: eventData.type === 'absence' ? 'absence' : 'normal',
+    status:
+      eventData.payment_status ||
+      eventData.status ||
+      eventData.type ||
+      "pending",
+    type: eventData.type === "absence" ? "absence" : "normal",
     hourly_rate: hourlyRate,
   };
 
@@ -697,7 +723,9 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
   }
 
   const method = eventData.id ? "PUT" : "POST";
-  const path = eventData.id ? `/planning/events/${eventData.id}` : "/planning/events";
+  const path = eventData.id
+    ? `/planning/events/${eventData.id}`
+    : "/planning/events";
 
   const response = await apiFetch(path, {
     method,
@@ -705,7 +733,8 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
   });
 
   if (!response || response.success === false) {
-    const errorMessage = response?.error || "Impossible de sauvegarder l'événement";
+    const errorMessage =
+      response?.error || "Impossible de sauvegarder l'événement";
     throw new Error(errorMessage);
   }
 
@@ -715,8 +744,9 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
   const viewerUid = getUid();
 
   const durationMinutes = Math.max(
-    Number.parseInt(rawEvent?.duration, 10) || Math.round((endDate - startDate) / 60000),
-    0,
+    Number.parseInt(rawEvent?.duration, 10) ||
+      Math.round((endDate - startDate) / 60000),
+    0
   );
 
   const normalizedDay = ensureDayKey(rawEvent?.day ?? eventData.day, startDate);
@@ -748,7 +778,8 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
       eventData.status ??
       eventData.type ??
       "pending",
-    type: rawEvent?.type ?? (eventData.type === 'absence' ? 'absence' : 'normal'),
+    type:
+      rawEvent?.type ?? (eventData.type === "absence" ? "absence" : "normal"),
     hourly_rate: normalizedRate,
     day: normalizedDay,
     start: startDate,
@@ -764,7 +795,7 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
     enriched,
     owner,
     team,
-    viewerUid,
+    viewerUid
   );
 
   if (normalized) {
@@ -792,11 +823,12 @@ async function deleteEventViaApiFallback(resolved, eventId) {
     `/planning/events/${eventId}${query ? `?${query}` : ""}`,
     {
       method: "DELETE",
-    },
+    }
   );
 
   if (!response || response.success === false) {
-    const errorMessage = response?.error || "Impossible de supprimer l'événement";
+    const errorMessage =
+      response?.error || "Impossible de supprimer l'événement";
     throw new Error(errorMessage);
   }
 
@@ -877,7 +909,7 @@ export const listenTeamMemberships = (teamId, { onData, onError } = {}) => {
   let fallbackAttempted = false;
 
   const cleanup = () => {
-    if (typeof unsubscribe === 'function') {
+    if (typeof unsubscribe === "function") {
       unsubscribe();
       unsubscribe = null;
     }
@@ -894,7 +926,7 @@ export const listenTeamMemberships = (teamId, { onData, onError } = {}) => {
       onData?.(members);
       return members;
     } catch (error) {
-      console.error('listenTeamMemberships fallback error', error);
+      console.error("listenTeamMemberships fallback error", error);
       return null;
     }
   };
@@ -912,7 +944,10 @@ export const listenTeamMemberships = (teamId, { onData, onError } = {}) => {
       }
     }
 
-    logPermissionError(`teams/${teamId}/memberships`, getUid(), error, { level: 'warn', toast: false });
+    logPermissionError(`teams/${teamId}/memberships`, getUid(), error, {
+      level: "warn",
+      toast: false,
+    });
     onError?.(error);
   };
 
@@ -938,14 +973,16 @@ export const listenTeamMemberships = (teamId, { onData, onError } = {}) => {
       const currentUser = auth.currentUser;
       const currentUid = currentUser?.uid || null;
       if (currentUid) {
-        await ensureTeamMemberContainer(teamId, currentUid, { suppressErrors: true });
+        await ensureTeamMemberContainer(teamId, currentUid, {
+          suppressErrors: true,
+        });
       }
     } catch (error) {
-      console.warn('listenTeamMemberships ensure container error', error);
+      console.warn("listenTeamMemberships ensure container error", error);
     }
 
     try {
-      const membersRef = collection(db, 'teams', teamId, 'memberships');
+      const membersRef = collection(db, "teams", teamId, "memberships");
       unsubscribe = onSnapshot(membersRef, handleSnapshot, handleError);
     } catch (error) {
       await handleError(error);
@@ -971,11 +1008,11 @@ const parsePlanningDate = (value) => {
     const dateValue = value.toDate();
     return Number.isNaN(dateValue.getTime()) ? null : dateValue;
   }
-  if (typeof value === 'string' || typeof value === 'number') {
+  if (typeof value === "string" || typeof value === "number") {
     const dateValue = new Date(value);
     return Number.isNaN(dateValue.getTime()) ? null : dateValue;
   }
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
+  if (typeof value === "object" && typeof value.toDate === "function") {
     const dateValue = value.toDate();
     return Number.isNaN(dateValue.getTime()) ? null : dateValue;
   }
@@ -984,7 +1021,7 @@ const parsePlanningDate = (value) => {
 
 const normalizeTeamPlanningRecord = (
   data,
-  { id = null, fallbackTeamId = null } = {},
+  { id = null, fallbackTeamId = null } = {}
 ) => {
   if (!data) {
     return null;
@@ -999,27 +1036,25 @@ const normalizeTeamPlanningRecord = (
   const priceValue = Number(data.price);
 
   return {
-    id: typeof id === 'string' ? id : null,
-    title: typeof data.title === 'string' ? data.title : '',
-    type: typeof data.type === 'string' ? data.type : 'event',
+    id: typeof id === "string" ? id : null,
+    title: typeof data.title === "string" ? data.title : "",
+    type: typeof data.type === "string" ? data.type : "event",
     start: startDate,
     end: endDate,
-    color: typeof data.color === 'string' && data.color ? data.color : null,
-    status: typeof data.status === 'string' ? data.status : null,
+    color: typeof data.color === "string" && data.color ? data.color : null,
+    status: typeof data.status === "string" ? data.status : null,
     price: Number.isFinite(priceValue) ? priceValue : null,
-    createdBy: typeof data.createdBy === 'string' ? data.createdBy : null,
+    createdBy: typeof data.createdBy === "string" ? data.createdBy : null,
     createdByName:
-      typeof data.createdByName === 'string' ? data.createdByName : null,
+      typeof data.createdByName === "string" ? data.createdByName : null,
     createdByInitials:
-      typeof data.createdByInitials === 'string'
+      typeof data.createdByInitials === "string"
         ? data.createdByInitials
         : null,
-    teamId: typeof data.teamId === 'string' ? data.teamId : fallbackTeamId,
+    teamId: typeof data.teamId === "string" ? data.teamId : fallbackTeamId,
     synced: Boolean(data.synced),
     personalEventId:
-      typeof data.personalEventId === 'string'
-        ? data.personalEventId
-        : null,
+      typeof data.personalEventId === "string" ? data.personalEventId : null,
     timestamp: data.timestamp || null,
   };
 };
@@ -1028,17 +1063,14 @@ const normalizeTeamPlanningDoc = (docSnap, fallbackTeamId = null) => {
   if (!docSnap) {
     return null;
   }
-  const data = typeof docSnap.data === 'function' ? docSnap.data() : {};
+  const data = typeof docSnap.data === "function" ? docSnap.data() : {};
   return normalizeTeamPlanningRecord(data, {
     id: docSnap.id,
     fallbackTeamId,
   });
 };
 
-export const fetchTeamPlanningEntries = async (
-  teamId,
-  options = {},
-) => {
+export const fetchTeamPlanningEntries = async (teamId, options = {}) => {
   if (!teamId) {
     return [];
   }
@@ -1055,7 +1087,7 @@ export const fetchTeamPlanningEntries = async (
           normalizeTeamPlanningRecord(entry, {
             id: entry?.id,
             fallbackTeamId: teamId,
-          }),
+          })
         )
         .filter(Boolean);
 
@@ -1104,7 +1136,7 @@ export const fetchTeamPlanningEntries = async (
     } catch (apiError) {
       const permissionError = toPermissionDeniedError(apiError);
       if (!permissionError && !isPermissionDeniedError(apiError)) {
-        console.error('fetchTeamPlanningEntries api fallback error', apiError);
+        console.error("fetchTeamPlanningEntries api fallback error", apiError);
       }
       throw permissionError || apiError;
     }
@@ -1115,7 +1147,7 @@ export const fetchTeamPlanningEntries = async (
   }
 
   try {
-    const planningRef = collection(db, 'teams', teamId, 'teamPlanning');
+    const planningRef = collection(db, "teams", teamId, "teamPlanning");
     const snapshot = await getDocs(planningRef);
 
     const entries = snapshot.docs
@@ -1141,7 +1173,7 @@ export const fetchTeamPlanningEntries = async (
     }
 
     if (!isPermissionDeniedError(error)) {
-      console.error('fetchTeamPlanningEntries error', error);
+      console.error("fetchTeamPlanningEntries error", error);
     }
     throw error;
   }
@@ -1149,7 +1181,7 @@ export const fetchTeamPlanningEntries = async (
 
 export const listenToTeamPlanningEntries = (
   teamId,
-  { onData, onError } = {},
+  { onData, onError } = {}
 ) => {
   if (!teamId) {
     onData?.([]);
@@ -1160,7 +1192,7 @@ export const listenToTeamPlanningEntries = (
   let unsubscribe = null;
 
   const cleanup = () => {
-    if (typeof unsubscribe === 'function') {
+    if (typeof unsubscribe === "function") {
       unsubscribe();
       unsubscribe = null;
     }
@@ -1168,7 +1200,7 @@ export const listenToTeamPlanningEntries = (
 
   const start = () => {
     try {
-      const planningRef = collection(db, 'teams', teamId, 'teamPlanning');
+      const planningRef = collection(db, "teams", teamId, "teamPlanning");
       unsubscribe = onSnapshot(
         planningRef,
         (snapshot) => {
@@ -1187,7 +1219,7 @@ export const listenToTeamPlanningEntries = (
           }
           cleanup();
           onError?.(error);
-        },
+        }
       );
     } catch (error) {
       onError?.(error);
@@ -1257,30 +1289,31 @@ const ensurePlanningContext = async (context) => {
   await waitForAuth();
   const sessionUser = auth.currentUser;
   if (!sessionUser) {
-    console.warn('Auth non initialisée : écoute différée');
-    return { status: 'deferred' };
+    console.warn("Auth non initialisée : écoute différée");
+    return { status: "deferred" };
   }
 
   const sessionUid = sessionUser.uid;
-  const normalizedContext = context && typeof context === 'object' ? context : {};
-  const contextType = normalizedContext.type === 'team' ? 'team' : 'personal';
+  const normalizedContext =
+    context && typeof context === "object" ? context : {};
+  const contextType = normalizedContext.type === "team" ? "team" : "personal";
 
   let ownerUid = null;
   let teamId = null;
   let memberUid = null;
 
-  if (contextType === 'team') {
+  if (contextType === "team") {
     teamId = normalizedContext.teamId || null;
     memberUid =
       normalizedContext.memberUid ||
       normalizedContext.userId ||
       normalizedContext.ownerUid ||
-      (typeof context === 'string' ? context : null);
+      (typeof context === "string" ? context : null);
     if (!teamId) {
-      throw new Error('Team planning context requires teamId');
+      throw new Error("Team planning context requires teamId");
     }
     if (!memberUid) {
-      throw new Error('Team planning context requires memberUid');
+      throw new Error("Team planning context requires memberUid");
     }
     ownerUid = memberUid;
   } else {
@@ -1288,21 +1321,26 @@ const ensurePlanningContext = async (context) => {
       normalizedContext.userId ||
       normalizedContext.ownerUid ||
       normalizedContext.memberUid ||
-      (typeof context === 'string' ? context : null);
+      (typeof context === "string" ? context : null);
     memberUid = ownerUid;
   }
 
   const targetUid = ownerUid || sessionUid;
   if (!targetUid) {
-    console.warn('Auth non initialisée : écoute différée');
-    return { status: 'deferred' };
+    console.warn("Auth non initialisée : écoute différée");
+    return { status: "deferred" };
   }
 
-  if (contextType === 'team' && teamId && sessionUid) {
+  if (contextType === "team" && teamId && sessionUid) {
     try {
-      await ensureTeamMemberContainer(teamId, sessionUid, { suppressErrors: true });
+      await ensureTeamMemberContainer(teamId, sessionUid, {
+        suppressErrors: true,
+      });
     } catch (membershipError) {
-      console.warn('ensurePlanningContext membership ensure failed', membershipError);
+      console.warn(
+        "ensurePlanningContext membership ensure failed",
+        membershipError
+      );
     }
   }
 
@@ -1312,22 +1350,36 @@ const ensurePlanningContext = async (context) => {
   let baseRef = null;
   let weeklyTasksRef = null;
 
-  if (contextType === 'team' && teamId && targetUid) {
+  if (contextType === "team" && teamId && targetUid) {
     planningCollectionPath = `teams/${teamId}/members/${targetUid}/planningEvents`;
     if (viewingOwnData) {
-      baseRef = collection(db, 'teams', teamId, 'members', targetUid, 'planningEvents');
-      weeklyTasksRef = collection(db, 'teams', teamId, 'members', targetUid, 'weeklyTasks');
+      baseRef = collection(
+        db,
+        "teams",
+        teamId,
+        "members",
+        targetUid,
+        "planningEvents"
+      );
+      weeklyTasksRef = collection(
+        db,
+        "teams",
+        teamId,
+        "members",
+        targetUid,
+        "weeklyTasks"
+      );
     }
   } else if (viewingOwnData) {
     planningCollectionPath = `users/${sessionUid}/planningEvents`;
-    baseRef = collection(db, 'users', sessionUid, 'planningEvents');
-    weeklyTasksRef = collection(db, 'users', sessionUid, 'weeklyTasks');
+    baseRef = collection(db, "users", sessionUid, "planningEvents");
+    weeklyTasksRef = collection(db, "users", sessionUid, "weeklyTasks");
   } else if (sessionUid) {
     planningCollectionPath = `users/${sessionUid}/planningEvents`;
   }
 
   return {
-    status: 'ok',
+    status: "ok",
     type: contextType,
     baseRef,
     eventsRef: baseRef,
@@ -1380,7 +1432,7 @@ const normalizeTeamSnapshot = (docSnap) => {
   if (Array.isArray(rawMembers)) {
     members = rawMembers;
     membersCount = rawMembers.length;
-  } else if (rawMembers && typeof rawMembers === 'object') {
+  } else if (rawMembers && typeof rawMembers === "object") {
     members = Object.entries(rawMembers).map(([uid, value]) => {
       if (value && typeof value === "object") {
         return { uid, ...value };
@@ -1390,15 +1442,19 @@ const normalizeTeamSnapshot = (docSnap) => {
     membersCount = members.length;
   }
 
-  if (!membersCount && typeof data.members_count === 'number') {
+  if (!membersCount && typeof data.members_count === "number") {
     membersCount = data.members_count;
   }
 
   return {
     team_id: docSnap.id,
-    name: data.name || 'Équipe sans nom',
+    name: data.name || "Équipe sans nom",
     owner_uid:
-      data.owner_uid || data.ownerUid || data.ownerId || (data.owner || {}).uid || null,
+      data.owner_uid ||
+      data.ownerUid ||
+      data.ownerId ||
+      (data.owner || {}).uid ||
+      null,
     invite_code: data.invite_code || null,
     members_count: membersCount,
     members,
@@ -1411,7 +1467,9 @@ export async function fetchUserTeamsFromFirestore() {
     uid = await waitForAuthenticatedUid({ warnOnPending: true });
   }
   if (!uid) {
-    throw new Error("Impossible de récupérer les équipes sans utilisateur authentifié");
+    throw new Error(
+      "Impossible de récupérer les équipes sans utilisateur authentifié"
+    );
   }
 
   const uniqueTeams = new Map();
@@ -1419,35 +1477,44 @@ export async function fetchUserTeamsFromFirestore() {
   const collect = (snapshot) => {
     snapshot.forEach((docSnap) => {
       const normalized = normalizeTeamSnapshot(docSnap);
-      uniqueTeams.set(normalized.team_id, { ...normalized, source: 'firestore' });
+      uniqueTeams.set(normalized.team_id, {
+        ...normalized,
+        source: "firestore",
+      });
     });
   };
 
   try {
-    const teamsCollection = collection(db, 'teams');
-    const memberQuery = query(teamsCollection, where('members', 'array-contains', uid));
-    const ownerQuery = query(teamsCollection, where('owner_uid', '==', uid));
+    const teamsCollection = collection(db, "teams");
+    const memberQuery = query(
+      teamsCollection,
+      where("members", "array-contains", uid)
+    );
+    const ownerQuery = query(teamsCollection, where("owner_uid", "==", uid));
     const membershipQuery = query(
-      collectionGroup(db, 'memberships'),
-      where(documentId(), "==", uid),
+      collectionGroup(db, "memberships"),
+      where(documentId(), "==", uid)
     );
 
-    const membershipPromise = getDocs(membershipQuery).catch((membershipError) => {
-      if (isPermissionDeniedError(membershipError)) {
+    const membershipPromise = getDocs(membershipQuery).catch(
+      (membershipError) => {
+        if (isPermissionDeniedError(membershipError)) {
+          return null;
+        }
+        logPermissionError("teams memberships", uid, membershipError, {
+          level: "warn",
+          toast: false,
+        });
         return null;
       }
-      logPermissionError("teams memberships", uid, membershipError, {
-        level: "warn",
-        toast: false,
-      });
-      return null;
-    });
+    );
 
-    const [memberSnapshot, ownerSnapshot, membershipSnapshot] = await Promise.all([
-      getDocs(memberQuery),
-      getDocs(ownerQuery),
-      membershipPromise,
-    ]);
+    const [memberSnapshot, ownerSnapshot, membershipSnapshot] =
+      await Promise.all([
+        getDocs(memberQuery),
+        getDocs(ownerQuery),
+        membershipPromise,
+      ]);
 
     collect(memberSnapshot);
     collect(ownerSnapshot);
@@ -1477,13 +1544,16 @@ export async function fetchUserTeamsFromFirestore() {
             });
             return null;
           }
-        }),
+        })
       );
 
       resolved.forEach((entry) => {
         if (entry?.teamSnap?.exists()) {
           const normalized = normalizeTeamSnapshot(entry.teamSnap);
-          uniqueTeams.set(entry.teamId, { ...normalized, source: "firestore-membership" });
+          uniqueTeams.set(entry.teamId, {
+            ...normalized,
+            source: "firestore-membership",
+          });
         }
       });
     }
@@ -1494,7 +1564,7 @@ export async function fetchUserTeamsFromFirestore() {
       return [];
     }
 
-    logPermissionError('teams', uid, error, { level: 'warn', toast: false });
+    logPermissionError("teams", uid, error, { level: "warn", toast: false });
     throw error;
   }
 }
@@ -1508,14 +1578,14 @@ const toDateSafe = (value) => {
   if (value instanceof Timestamp) {
     return value.toDate();
   }
-  if (typeof value === 'string' || typeof value === 'number') {
+  if (typeof value === "string" || typeof value === "number") {
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) {
       return null;
     }
     return parsed;
   }
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
+  if (typeof value === "object" && typeof value.toDate === "function") {
     const parsed = value.toDate();
     if (Number.isNaN(parsed.getTime())) {
       return null;
@@ -1525,11 +1595,16 @@ const toDateSafe = (value) => {
   return null;
 };
 
-const EVENT_STATUS_VALUES = new Set(['paid', 'unpaid', 'pending', 'not_worked']);
+const EVENT_STATUS_VALUES = new Set([
+  "paid",
+  "unpaid",
+  "pending",
+  "not_worked",
+]);
 
 const normalizeStringLower = (value) => {
-  if (typeof value !== 'string') {
-    return '';
+  if (typeof value !== "string") {
+    return "";
   }
   return value.trim().toLowerCase();
 };
@@ -1544,7 +1619,7 @@ const deriveEventStatus = (data) => {
   ];
 
   for (const candidate of candidates) {
-    if (typeof candidate !== 'string') {
+    if (typeof candidate !== "string") {
       continue;
     }
     const normalized = normalizeStringLower(candidate);
@@ -1553,25 +1628,30 @@ const deriveEventStatus = (data) => {
     }
   }
 
-  if (typeof data?.status === 'string' && data.status.trim()) {
+  if (typeof data?.status === "string" && data.status.trim()) {
     return data.status.trim();
   }
 
-  return 'pending';
+  return "pending";
 };
 
 const deriveEventType = (data) => {
-  const candidates = [data?.type, data?.event_type, data?.eventType, data?.category];
+  const candidates = [
+    data?.type,
+    data?.event_type,
+    data?.eventType,
+    data?.category,
+  ];
   for (const candidate of candidates) {
     const normalized = normalizeStringLower(candidate);
-    if (normalized === 'absence') {
-      return 'absence';
+    if (normalized === "absence") {
+      return "absence";
     }
-    if (normalized === 'normal' || normalized === 'work') {
-      return 'normal';
+    if (normalized === "normal" || normalized === "work") {
+      return "normal";
     }
   }
-  return 'normal';
+  return "normal";
 };
 
 const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
@@ -1591,7 +1671,8 @@ const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
   const resolvedStatus = deriveEventStatus(data);
   const resolvedType = deriveEventType(data);
   const legacyTypeValue =
-    typeof data.type === 'string' && !['absence', 'normal', 'work'].includes(normalizeStringLower(data.type))
+    typeof data.type === "string" &&
+    !["absence", "normal", "work"].includes(normalizeStringLower(data.type))
       ? data.type
       : undefined;
 
@@ -1620,7 +1701,13 @@ const normalizeEventDocument = (docSnap, ownerUid, teamId, viewerUid) => {
   if (!docSnap || !docSnap.exists()) {
     return null;
   }
-  return normalizeEventData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
+  return normalizeEventData(
+    docSnap.id,
+    docSnap.data(),
+    ownerUid,
+    teamId,
+    viewerUid
+  );
 };
 
 const normalizeTaskDateField = (value) => {
@@ -1632,16 +1719,16 @@ const normalizeTaskDateField = (value) => {
 
   if (value instanceof Date) {
     candidate = new Date(value);
-  } else if (typeof value === 'string') {
+  } else if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) {
       return null;
     }
     const normalized = trimmed.length === 10 ? `${trimmed}T00:00:00` : trimmed;
     candidate = new Date(normalized);
-  } else if (typeof value === 'number') {
+  } else if (typeof value === "number") {
     candidate = new Date(value);
-  } else if (typeof value === 'object' && typeof value.toDate === 'function') {
+  } else if (typeof value === "object" && typeof value.toDate === "function") {
     candidate = value.toDate();
   }
 
@@ -1651,27 +1738,27 @@ const normalizeTaskDateField = (value) => {
 
   candidate.setHours(0, 0, 0, 0);
   const year = candidate.getFullYear();
-  const month = String(candidate.getMonth() + 1).padStart(2, '0');
-  const day = String(candidate.getDate()).padStart(2, '0');
+  const month = String(candidate.getMonth() + 1).padStart(2, "0");
+  const day = String(candidate.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
 const normalizeTaskPriority = (value) => {
-  if (typeof value !== 'string') {
-    return 'medium';
+  if (typeof value !== "string") {
+    return "medium";
   }
 
   const normalized = value.trim().toLowerCase();
-  return ['high', 'medium', 'low'].includes(normalized) ? normalized : 'medium';
+  return ["high", "medium", "low"].includes(normalized) ? normalized : "medium";
 };
 
 const normalizeTaskStatus = (value) => {
-  if (typeof value !== 'string') {
-    return 'todo';
+  if (typeof value !== "string") {
+    return "todo";
   }
 
   const normalized = value.trim().toLowerCase();
-  return ['todo', 'doing', 'done'].includes(normalized) ? normalized : 'todo';
+  return ["todo", "doing", "done"].includes(normalized) ? normalized : "todo";
 };
 
 const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
@@ -1683,15 +1770,21 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
   const rawRanges = Array.isArray(data.time_ranges)
     ? data.time_ranges
     : Array.isArray(data.time_slots)
-    ? data.time_slots
-    : [];
+      ? data.time_slots
+      : [];
 
   const resolvedRanges = rawRanges.map((range) => {
     const rawDay = range?.day ?? range?.dayIndex ?? range?.weekday;
     const normalizedDay = normalizeWeekdayValue(rawDay);
-    const normalizedWeekday = normalizeWeekdayValue(range?.weekday ?? normalizedDay);
+    const normalizedWeekday = normalizeWeekdayValue(
+      range?.weekday ?? normalizedDay
+    );
     const normalizedDate = normalizeTaskDateField(
-      range?.task_date ?? range?.taskDate ?? range?.task_day_iso ?? range?.taskDayIso ?? null,
+      range?.task_date ??
+        range?.taskDate ??
+        range?.task_day_iso ??
+        range?.taskDayIso ??
+        null
     );
 
     return {
@@ -1706,27 +1799,32 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
 
   let resolvedWeekday = normalizeWeekdayValue(data.weekday);
   if (resolvedWeekday == null && resolvedRanges.length > 0) {
-    resolvedWeekday = normalizeWeekdayValue(resolvedRanges[0]?.weekday ?? resolvedRanges[0]?.day ?? null);
+    resolvedWeekday = normalizeWeekdayValue(
+      resolvedRanges[0]?.weekday ?? resolvedRanges[0]?.day ?? null
+    );
   }
 
   const creationDateIso = normalizeTaskDateField(
-    data.dateISO ?? data.dateIso ?? data.date_iso ?? null,
+    data.dateISO ?? data.dateIso ?? data.date_iso ?? null
   );
 
-  const rawStatus = typeof data.status === 'string' ? data.status : undefined;
-  const normalizedStatus = rawStatus ? normalizeTaskStatus(rawStatus) : undefined;
+  const rawStatus = typeof data.status === "string" ? data.status : undefined;
+  const normalizedStatus = rawStatus
+    ? normalizeTaskStatus(rawStatus)
+    : undefined;
   const isDone = data.done === true;
 
   return {
     id,
-    label: data.label || data.title || data.name || 'Tâche sans titre',
-    title: data.title || data.label || data.name || 'Tâche sans titre',
+    label: data.label || data.title || data.name || "Tâche sans titre",
+    title: data.title || data.label || data.name || "Tâche sans titre",
     price: data.price ?? null,
-    color: data.color || data.colorCode || '#dbeafe',
-    icon: data.icon || data.emoji || '📋',
+    color: data.color || data.colorCode || "#dbeafe",
+    icon: data.icon || data.emoji || "📋",
     time_ranges: resolvedRanges,
     weekday: resolvedWeekday,
-    startTime: data.startTime || data.start_time || (resolvedRanges[0]?.start ?? null),
+    startTime:
+      data.startTime || data.start_time || (resolvedRanges[0]?.start ?? null),
     endTime: data.endTime || data.end_time || (resolvedRanges[0]?.end ?? null),
     weekly: true,
     user_id: resolvedOwner,
@@ -1737,7 +1835,7 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     updated_at: data.updated_at || null,
     dateISO: creationDateIso,
     priority: normalizeTaskPriority(data.priority),
-    status: normalizedStatus || (isDone ? 'done' : 'todo'),
+    status: normalizedStatus || (isDone ? "done" : "todo"),
     done: isDone,
   };
 };
@@ -1746,7 +1844,13 @@ const normalizeWeeklyTaskDocument = (docSnap, ownerUid, teamId, viewerUid) => {
   if (!docSnap || !docSnap.exists()) {
     return null;
   }
-  return normalizeWeeklyTaskData(docSnap.id, docSnap.data(), ownerUid, teamId, viewerUid);
+  return normalizeWeeklyTaskData(
+    docSnap.id,
+    docSnap.data(),
+    ownerUid,
+    teamId,
+    viewerUid
+  );
 };
 
 const normalizeWeeklyTaskTimeString = (
@@ -1795,7 +1899,7 @@ const normalizeWeeklyTaskTimeString = (
 };
 
 const normalizeWeekdayValue = (value) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     const normalized = Math.floor(value);
     if (normalized >= 0 && normalized <= 6) {
       return normalized;
@@ -1805,7 +1909,7 @@ const normalizeWeekdayValue = (value) => {
     }
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed) {
       const parsed = Number.parseInt(trimmed, 10);
@@ -1861,8 +1965,8 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
         typeof rawDay === "number"
           ? rawDay
           : Number.isFinite(Number.parseInt(rawDay, 10))
-          ? Number.parseInt(rawDay, 10)
-          : null;
+            ? Number.parseInt(rawDay, 10)
+            : null;
       if (day == null || Number.isNaN(day) || day < 0 || day > 6) {
         return null;
       }
@@ -1879,8 +1983,12 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
         return null;
       }
 
-      const [startH, startM] = start.split(":").map((value) => Number.parseInt(value, 10));
-      const [endH, endM] = end.split(":").map((value) => Number.parseInt(value, 10));
+      const [startH, startM] = start
+        .split(":")
+        .map((value) => Number.parseInt(value, 10));
+      const [endH, endM] = end
+        .split(":")
+        .map((value) => Number.parseInt(value, 10));
       const startMinutes = startH * 60 + startM;
       const endMinutes = endH * 60 + endM;
       if (endMinutes <= startMinutes) {
@@ -1888,7 +1996,11 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
       }
 
       const taskDateIso = normalizeTaskDateField(
-        range.task_date ?? range.taskDate ?? range.task_day_iso ?? range.taskDayIso ?? null,
+        range.task_date ??
+          range.taskDate ??
+          range.task_day_iso ??
+          range.taskDayIso ??
+          null
       );
 
       const sanitized = { day, start, end, weekday: day };
@@ -1914,15 +2026,26 @@ const normalizeWeeklyTaskPrice = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => {
-  const rawLabel = typeof taskData?.label === "string" ? taskData.label.trim() : "";
-  const rawTitle = typeof taskData?.title === "string" ? taskData.title.trim() : "";
+const buildWeeklyTaskPayload = (
+  taskData,
+  ownerUid,
+  teamId,
+  sanitizedRanges
+) => {
+  const rawLabel =
+    typeof taskData?.label === "string" ? taskData.label.trim() : "";
+  const rawTitle =
+    typeof taskData?.title === "string" ? taskData.title.trim() : "";
 
   const label = rawLabel || rawTitle || "Tâche sans titre";
   const title = rawTitle || rawLabel || "Tâche sans titre";
 
   let normalizedWeekday = normalizeWeekdayValue(taskData?.weekday);
-  if (normalizedWeekday == null && Array.isArray(sanitizedRanges) && sanitizedRanges.length > 0) {
+  if (
+    normalizedWeekday == null &&
+    Array.isArray(sanitizedRanges) &&
+    sanitizedRanges.length > 0
+  ) {
     normalizedWeekday = normalizeWeekdayValue(sanitizedRanges[0]?.day);
   }
 
@@ -1933,7 +2056,8 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
     color: taskData?.color || null,
     icon: taskData?.icon || null,
     time_ranges: sanitizedRanges.map((range) => {
-      const normalizedWeekday = normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
+      const normalizedWeekday =
+        normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
       const payloadRange = {
         day: range.day,
         start: range.start,
@@ -1941,7 +2065,9 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
         weekday: normalizedWeekday,
       };
 
-      const normalizedDate = normalizeTaskDateField(range.task_date ?? range.task_day_iso ?? null);
+      const normalizedDate = normalizeTaskDateField(
+        range.task_date ?? range.task_day_iso ?? null
+      );
       if (normalizedDate) {
         payloadRange.task_date = normalizedDate;
         payloadRange.task_day_iso = normalizedDate;
@@ -1959,7 +2085,7 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
   };
 
   const normalizedCreationDate = normalizeTaskDateField(
-    taskData?.dateISO ?? taskData?.dateIso ?? taskData?.date_iso ?? null,
+    taskData?.dateISO ?? taskData?.dateIso ?? taskData?.date_iso ?? null
   );
 
   if (normalizedCreationDate) {
@@ -1996,36 +2122,50 @@ const buildWeeklyTaskPayload = (taskData, ownerUid, teamId, sanitizedRanges) => 
   return payload;
 };
 
-const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges) => {
-  const { ownerUid: resolvedOwnerUid, targetUid, teamId, sessionUid } = resolved;
+const saveWeeklyTaskViaApiFallback = async (
+  resolved,
+  taskData,
+  sanitizedRanges
+) => {
+  const {
+    ownerUid: resolvedOwnerUid,
+    targetUid,
+    teamId,
+    sessionUid,
+  } = resolved;
   const ownerUid = resolvedOwnerUid || targetUid || sessionUid || getUid();
   if (!ownerUid) {
-    throw new Error('Utilisateur non connecté');
+    throw new Error("Utilisateur non connecté");
   }
 
   if (!Array.isArray(sanitizedRanges) || sanitizedRanges.length === 0) {
-    throw new Error('Au moins un créneau horaire valide est requis');
+    throw new Error("Au moins un créneau horaire valide est requis");
   }
 
   const apiFetch = await getApiFetch();
   const normalizedPrice = normalizeWeeklyTaskPrice(taskData?.price);
 
-  const normalizedWeekday = normalizeWeekdayValue(taskData?.weekday ?? sanitizedRanges[0]?.day ?? null);
+  const normalizedWeekday = normalizeWeekdayValue(
+    taskData?.weekday ?? sanitizedRanges[0]?.day ?? null
+  );
 
   const body = {
-    label: typeof taskData?.label === 'string' && taskData.label.trim()
-      ? taskData.label.trim()
-      : undefined,
-    title: typeof taskData?.title === 'string' && taskData.title.trim()
-      ? taskData.title.trim()
-      : undefined,
+    label:
+      typeof taskData?.label === "string" && taskData.label.trim()
+        ? taskData.label.trim()
+        : undefined,
+    title:
+      typeof taskData?.title === "string" && taskData.title.trim()
+        ? taskData.title.trim()
+        : undefined,
     price: normalizedPrice,
     color: taskData?.color ?? null,
     icon: taskData?.icon ?? null,
     priority: normalizeTaskPriority(taskData?.priority),
     status: normalizeTaskStatus(taskData?.status),
     time_ranges: sanitizedRanges.map((range) => {
-      const normalizedWeekday = normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
+      const normalizedWeekday =
+        normalizeWeekdayValue(range.weekday ?? range.day ?? null) ?? range.day;
       const payloadRange = {
         day: range.day,
         start: range.start,
@@ -2033,7 +2173,9 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
         weekday: normalizedWeekday,
       };
 
-      const normalizedDate = normalizeTaskDateField(range.task_date ?? range.task_day_iso ?? null);
+      const normalizedDate = normalizeTaskDateField(
+        range.task_date ?? range.task_day_iso ?? null
+      );
       if (normalizedDate) {
         payloadRange.task_date = normalizedDate;
         payloadRange.task_day_iso = normalizedDate;
@@ -2055,6 +2197,10 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
     body.endTime = primaryRange.end;
   }
 
+  if (teamId) {
+    body.team_id = teamId;
+  }
+
   if (normalizedWeekday != null) {
     body.weekday = normalizedWeekday;
   }
@@ -2066,17 +2212,17 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
   if (body.icon == null) {
     delete body.icon;
   }
-  if (body.color == null || body.color === '') {
+  if (body.color == null || body.color === "") {
     delete body.color;
   }
   if (!body.label && !body.title) {
-    body.label = 'Tâche sans titre';
+    body.label = "Tâche sans titre";
   }
 
-  const method = taskData?.id ? 'PUT' : 'POST';
+  const method = taskData?.id ? "PUT" : "POST";
   const path = taskData?.id
     ? `/planning/v2/weekly-tasks/${taskData.id}`
-    : '/planning/v2/weekly-tasks';
+    : "/planning/v2/weekly-tasks";
 
   const response = await apiFetch(path, {
     method,
@@ -2084,7 +2230,8 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
   });
 
   if (!response || response.success === false) {
-    const message = response?.error || 'Impossible de sauvegarder la tâche hebdomadaire';
+    const message =
+      response?.error || "Impossible de sauvegarder la tâche hebdomadaire";
     throw new Error(message);
   }
 
@@ -2092,11 +2239,14 @@ const saveWeeklyTaskViaApiFallback = async (resolved, taskData, sanitizedRanges)
   const viewerUid = sessionUid || getUid();
 
   return normalizeWeeklyTaskData(
-    rawTask.id || taskData?.id || rawTask.uid || `${ownerUid}-${body.label || body.title || 'task'}`,
+    rawTask.id ||
+      taskData?.id ||
+      rawTask.uid ||
+      `${ownerUid}-${body.label || body.title || "task"}`,
     rawTask,
     ownerUid,
     teamId || null,
-    viewerUid,
+    viewerUid
   );
 };
 
@@ -2113,46 +2263,55 @@ const buildFallbackQueryParams = (context, fromDate, toDate) => {
   if (fromDate) {
     const iso = toIsoDateString(fromDate);
     if (iso) {
-      params.set('from', iso);
+      params.set("from", iso);
     }
   }
   if (toDate) {
     const iso = toIsoDateString(toDate);
     if (iso) {
-      params.set('to', iso);
+      params.set("to", iso);
     }
   }
-  if (context?.type === 'team') {
+  if (context?.type === "team") {
     if (context.teamId) {
-      params.set('team_id', context.teamId);
+      params.set("team_id", context.teamId);
     }
     if (context.memberUid) {
-      params.set('member_uid', context.memberUid);
+      params.set("member_uid", context.memberUid);
     }
   }
   return params;
 };
-
 
 const fetchPlanningEventsFallback = async (context, fromDate, toDate) => {
   try {
     const params = buildFallbackQueryParams(context, fromDate, toDate);
     const apiFetch = await getApiFetch();
     const query = params.toString();
-    const response = await apiFetch(`/planning/v2/events${query ? `?${query}` : ''}`);
+    const response = await apiFetch(
+      `/planning/v2/events${query ? `?${query}` : ""}`
+    );
     const events = Array.isArray(response?.events) ? response.events : [];
     const viewerUid = getUid();
-    const teamId = context?.type === 'team' ? context.teamId ?? null : null;
-    const defaultOwner = context?.type === 'team' ? context.memberUid : context?.userId;
+    const teamId = context?.type === "team" ? (context.teamId ?? null) : null;
+    const defaultOwner =
+      context?.type === "team" ? context.memberUid : context?.userId;
 
     return events
       .map((event) => {
-        const ownerUid = event.owner_uid || event.user_id || defaultOwner || viewerUid;
-        return normalizeEventData(event.id || event.uid || `${ownerUid}-${event.start}`, event, ownerUid, teamId, viewerUid);
+        const ownerUid =
+          event.owner_uid || event.user_id || defaultOwner || viewerUid;
+        return normalizeEventData(
+          event.id || event.uid || `${ownerUid}-${event.start}`,
+          event,
+          ownerUid,
+          teamId,
+          viewerUid
+        );
       })
       .filter(Boolean);
   } catch (error) {
-    console.error('fetchPlanningEventsFallback error', error);
+    console.error("fetchPlanningEventsFallback error", error);
     throw error;
   }
 };
@@ -2160,30 +2319,42 @@ const fetchPlanningEventsFallback = async (context, fromDate, toDate) => {
 const fetchWeeklyTasksFallback = async (context) => {
   try {
     const params = new URLSearchParams();
-    if (context?.type === 'team') {
+    if (context?.type === "team") {
       if (context.teamId) {
-        params.set('team_id', context.teamId);
+        params.set("team_id", context.teamId);
       }
       if (context.memberUid) {
-        params.set('member_uid', context.memberUid);
+        params.set("member_uid", context.memberUid);
       }
     }
     const apiFetch = await getApiFetch();
     const query = params.toString();
-    const response = await apiFetch(`/planning/v2/weekly-tasks${query ? `?${query}` : ''}`);
+    const response = await apiFetch(
+      `/planning/v2/weekly-tasks${query ? `?${query}` : ""}`
+    );
     const tasks = Array.isArray(response?.tasks) ? response.tasks : [];
     const viewerUid = getUid();
-    const teamId = context?.type === 'team' ? context.teamId ?? null : null;
-    const defaultOwner = context?.type === 'team' ? context.memberUid : context?.userId;
+    const teamId = context?.type === "team" ? (context.teamId ?? null) : null;
+    const defaultOwner =
+      context?.type === "team" ? context.memberUid : context?.userId;
 
     return tasks
       .map((task) => {
-        const ownerUid = task.owner_uid || task.user_id || defaultOwner || viewerUid;
-        return normalizeWeeklyTaskData(task.id || task.uid || `${ownerUid}-${task.label || task.name || 'task'}`, task, ownerUid, teamId, viewerUid);
+        const ownerUid =
+          task.owner_uid || task.user_id || defaultOwner || viewerUid;
+        return normalizeWeeklyTaskData(
+          task.id ||
+            task.uid ||
+            `${ownerUid}-${task.label || task.name || "task"}`,
+          task,
+          ownerUid,
+          teamId,
+          viewerUid
+        );
       })
       .filter(Boolean);
   } catch (error) {
-    console.error('fetchWeeklyTasksFallback error', error);
+    console.error("fetchWeeklyTasksFallback error", error);
     throw error;
   }
 };
@@ -2193,7 +2364,7 @@ export const fetchWeeklyTasksOnce = async (context) => {
     const tasks = await fetchWeeklyTasksFallback(context);
     return Array.isArray(tasks) ? tasks : [];
   } catch (error) {
-    console.warn('fetchWeeklyTasksOnce error', error);
+    console.warn("fetchWeeklyTasksOnce error", error);
     return [];
   }
 };
@@ -2202,14 +2373,13 @@ const buildRangeFromIso = (startIso, endIso) => {
   if (!startIso || !endIso) {
     return null;
   }
-  const from = new Date(startIso + 'T00:00:00');
-  const to = new Date(endIso + 'T23:59:59');
+  const from = new Date(startIso + "T00:00:00");
+  const to = new Date(endIso + "T23:59:59");
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
     return null;
   }
   return { from, to };
 };
-
 
 export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   if (!range?.from || !range?.to) {
@@ -2235,14 +2405,14 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   let active = true;
 
   const cleanupSubscription = () => {
-    if (typeof unsubscribe === 'function') {
+    if (typeof unsubscribe === "function") {
       unsubscribe();
       unsubscribe = null;
     }
   };
 
   const cleanupRestart = () => {
-    if (typeof removeRestart === 'function') {
+    if (typeof removeRestart === "function") {
       removeRestart();
       removeRestart = null;
     }
@@ -2266,7 +2436,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
         return;
       }
 
-      if (!resolved || resolved.status === 'deferred') {
+      if (!resolved || resolved.status === "deferred") {
         cleanupSubscription();
         cleanupRestart();
         onData?.([]);
@@ -2281,7 +2451,15 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
 
       cleanupRestart();
 
-      const { baseRef, targetUid, sessionUid, readOnly, teamId, type, memberUid: resolvedMemberUid } = resolved;
+      const {
+        baseRef,
+        targetUid,
+        sessionUid,
+        readOnly,
+        teamId,
+        type,
+        memberUid: resolvedMemberUid,
+      } = resolved;
       const path = pathForResolvedContext(resolved);
 
       const shouldUseFallbackOnly = !baseRef;
@@ -2290,7 +2468,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
 
       effectiveContext = {
         ...(effectiveContext || {}),
-        type: type || effectiveContext?.type || 'personal',
+        type: type || effectiveContext?.type || "personal",
         userId: targetUid,
         memberUid: resolvedMemberUid || targetUid,
         ownerUid: targetUid,
@@ -2300,12 +2478,12 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
       const fromTimestamp = Timestamp.fromDate(fromDate);
       const toTimestamp = Timestamp.fromDate(toDate);
       const constraints = [
-        where('start', '>=', fromTimestamp),
-        where('start', '<=', toTimestamp),
-        orderBy('start', 'asc'),
+        where("start", ">=", fromTimestamp),
+        where("start", "<=", toTimestamp),
+        orderBy("start", "asc"),
       ];
 
-      console.info('planningEvents subscribe', {
+      console.info("planningEvents subscribe", {
         sessionUid,
         targetUid,
         path,
@@ -2318,14 +2496,14 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
           const fallbackEvents = await fetchPlanningEventsFallback(
             effectiveContext,
             fromDate,
-            toDate,
+            toDate
           );
           if (!active) {
             return;
           }
           onData?.(Array.isArray(fallbackEvents) ? fallbackEvents : []);
         } catch (fallbackError) {
-          console.error('planningEvents fallback-only error', fallbackError);
+          console.error("planningEvents fallback-only error", fallbackError);
           onError?.(fallbackError);
         }
         return;
@@ -2333,23 +2511,33 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
 
       const handleSnapshot = (snapshot) => {
         const events = snapshot.docs
-          .map((docSnap) => normalizeEventDocument(docSnap, targetUid, teamId || null, sessionUid))
+          .map((docSnap) =>
+            normalizeEventDocument(
+              docSnap,
+              targetUid,
+              teamId || null,
+              sessionUid
+            )
+          )
           .filter(Boolean);
         onData?.(events);
       };
 
       const handleError = async (error) => {
         const isPermissionIssue = isPermissionDeniedError(error);
-        const logPath = path || 'planningEvents';
-        logPermissionError(logPath, sessionUid || getUid(), error, { toast: false, level: 'warn' });
+        const logPath = path || "planningEvents";
+        logPermissionError(logPath, sessionUid || getUid(), error, {
+          toast: false,
+          level: "warn",
+        });
         const logFn = isPermissionIssue ? console.warn : console.error;
-        logFn('onSnapshot planningEvents', { path: logPath, targetUid }, error);
+        logFn("onSnapshot planningEvents", { path: logPath, targetUid }, error);
         if (isPermissionIssue) {
           try {
             const fallbackEvents = await fetchPlanningEventsFallback(
               effectiveContext,
               fromDate,
-              toDate,
+              toDate
             );
             if (!active) {
               return;
@@ -2359,13 +2547,17 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
               return;
             }
           } catch (fallbackError) {
-            console.error('planningEvents fallback failed', fallbackError);
+            console.error("planningEvents fallback failed", fallbackError);
           }
         }
         onError?.(error);
       };
 
-      const rawUnsubscribe = onSnapshot(query(baseRef, ...constraints), handleSnapshot, handleError);
+      const rawUnsubscribe = onSnapshot(
+        query(baseRef, ...constraints),
+        handleSnapshot,
+        handleError
+      );
       unsubscribe = registerPlanningListener(rawUnsubscribe);
     } catch (error) {
       if (!active) {
@@ -2384,7 +2576,13 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   };
 };
 
-export const watchWeekEvents = (context, weekStartISO, weekEndISO, onData, onError) => {
+export const watchWeekEvents = (
+  context,
+  weekStartISO,
+  weekEndISO,
+  onData,
+  onError
+) => {
   const range = buildRangeFromIso(weekStartISO, weekEndISO);
   if (!range) {
     onData?.([]);
@@ -2393,7 +2591,11 @@ export const watchWeekEvents = (context, weekStartISO, weekEndISO, onData, onErr
   return watchPlanningEventsInRange(context, range, onData, onError);
 };
 
-export const fetchWeekEventsOnce = async (context, weekStartISO, weekEndISO) => {
+export const fetchWeekEventsOnce = async (
+  context,
+  weekStartISO,
+  weekEndISO
+) => {
   const range = buildRangeFromIso(weekStartISO, weekEndISO);
   if (!range) {
     return [];
@@ -2401,33 +2603,33 @@ export const fetchWeekEventsOnce = async (context, weekStartISO, weekEndISO) => 
   try {
     return await fetchPlanningEventsFallback(context, range.from, range.to);
   } catch (error) {
-    console.warn('fetchWeekEventsOnce error', error);
+    console.warn("fetchWeekEventsOnce error", error);
     return [];
   }
 };
 
-
 // Écriture client : uniquement les événements personnels. Pour une équipe, déléguer au backend.
 export const saveEventNew = async (context, eventData = {}) => {
   const resolved = await ensurePlanningContext(context);
-  if (!resolved || resolved.status === 'deferred') {
-    throw new Error('Utilisateur non connecté');
+  if (!resolved || resolved.status === "deferred") {
+    throw new Error("Utilisateur non connecté");
   }
 
   const { sessionUid, readOnly } = resolved;
   const currentUid = sessionUid || getUid();
   if (!currentUid) {
-    throw new Error('Utilisateur non connecté');
+    throw new Error("Utilisateur non connecté");
   }
   if (!eventData) {
     eventData = {};
   }
   if (readOnly) {
-    throw new Error('Contexte planning accessible uniquement en lecture');
+    throw new Error("Contexte planning accessible uniquement en lecture");
   }
 
   const explicitTeamId = eventData.team_id;
-  const teamId = explicitTeamId && explicitTeamId !== '' ? explicitTeamId : null;
+  const teamId =
+    explicitTeamId && explicitTeamId !== "" ? explicitTeamId : null;
   const resolvedTeamId = resolved.teamId || null;
   const effectiveTeamId = teamId || resolvedTeamId;
 
@@ -2448,18 +2650,25 @@ export const saveEventNew = async (context, eventData = {}) => {
   };
 
   delete payload.id;
-  Object.keys(payload).forEach((key) => payload[key] === undefined && delete payload[key]);
+  Object.keys(payload).forEach(
+    (key) => payload[key] === undefined && delete payload[key]
+  );
 
   if (effectiveTeamId) {
     return saveEventViaApiFallback(
-      { ownerUid: currentUid, teamId: effectiveTeamId, type: 'team' },
+      { ownerUid: currentUid, teamId: effectiveTeamId, type: "team" },
       eventData,
       startTs,
-      endTs,
+      endTs
     );
   }
 
-  const eventsCollection = collection(db, 'users', currentUid, 'planningEvents');
+  const eventsCollection = collection(
+    db,
+    "users",
+    currentUid,
+    "planningEvents"
+  );
 
   try {
     if (eventData.id) {
@@ -2473,7 +2682,7 @@ export const saveEventNew = async (context, eventData = {}) => {
         user_id: currentUid,
         owner_uid: currentUid,
         team_id: null,
-        source: 'firestore',
+        source: "firestore",
       };
     }
 
@@ -2489,21 +2698,20 @@ export const saveEventNew = async (context, eventData = {}) => {
       user_id: currentUid,
       owner_uid: currentUid,
       team_id: null,
-      source: 'firestore',
+      source: "firestore",
     };
   } catch (error) {
     if (!isPermissionDeniedError(error)) {
       throw error;
     }
     return saveEventViaApiFallback(
-      { ownerUid: currentUid, teamId: null, type: 'personal' },
+      { ownerUid: currentUid, teamId: null, type: "personal" },
       eventData,
       startTs,
-      endTs,
+      endTs
     );
   }
 };
-
 
 // Suppression client : uniquement sur users/<uid>/planningEvents.
 export const deleteEventNew = async (context, eventId) => {
@@ -2512,25 +2720,30 @@ export const deleteEventNew = async (context, eventId) => {
   }
 
   const resolved = await ensurePlanningContext(context);
-  if (!resolved || resolved.status === 'deferred') {
-    throw new Error('Utilisateur non connecté');
+  if (!resolved || resolved.status === "deferred") {
+    throw new Error("Utilisateur non connecté");
   }
 
   const { sessionUid, readOnly, teamId } = resolved;
   if (!sessionUid) {
-    throw new Error('Utilisateur non connecté');
+    throw new Error("Utilisateur non connecté");
   }
   if (readOnly) {
-    throw new Error('Contexte planning accessible uniquement en lecture');
+    throw new Error("Contexte planning accessible uniquement en lecture");
   }
   if (teamId) {
     return deleteEventViaApiFallback(resolved, eventId);
   }
 
-  const eventsCollection = collection(db, 'users', sessionUid, 'planningEvents');
+  const eventsCollection = collection(
+    db,
+    "users",
+    sessionUid,
+    "planningEvents"
+  );
   try {
     await deleteDoc(doc(eventsCollection, eventId));
-    return { success: true, source: 'firestore', id: eventId };
+    return { success: true, source: "firestore", id: eventId };
   } catch (error) {
     if (isPermissionDeniedError(error)) {
       return deleteEventViaApiFallback(resolved, eventId);
@@ -2539,43 +2752,64 @@ export const deleteEventNew = async (context, eventId) => {
   }
 };
 
-
 export const saveWeeklyTask = async (context, taskData = {}) => {
-  if (!taskData || typeof taskData !== 'object') {
-    throw new Error('Données de tâche hebdomadaire invalides');
+  if (!taskData || typeof taskData !== "object") {
+    throw new Error("Données de tâche hebdomadaire invalides");
   }
 
   const resolved = await ensurePlanningContext(context);
-  if (!resolved || resolved.status === 'deferred') {
-    throw new Error('Utilisateur non connecté');
+  if (!resolved || resolved.status === "deferred") {
+    throw new Error("Utilisateur non connecté");
   }
 
-  const { weeklyTasksRef, sessionUid, readOnly, teamId, ownerUid: resolvedOwnerUid, targetUid } = resolved;
+  const {
+    weeklyTasksRef,
+    sessionUid,
+    readOnly,
+    teamId,
+    ownerUid: resolvedOwnerUid,
+    targetUid,
+  } = resolved;
   if (!sessionUid) {
-    throw new Error('Utilisateur non connecté');
+    throw new Error("Utilisateur non connecté");
   }
   if (readOnly) {
-    throw new Error('Contexte planning accessible uniquement en lecture');
+    throw new Error("Contexte planning accessible uniquement en lecture");
   }
 
   const ownerUid = resolvedOwnerUid || targetUid || sessionUid;
   if (!ownerUid) {
-    throw new Error('Utilisateur non connecté');
+    throw new Error("Utilisateur non connecté");
   }
 
   const sanitizedRanges = sanitizeWeeklyTaskTimeRanges(taskData.time_ranges);
   if (!sanitizedRanges.length) {
-    throw new Error('Au moins un créneau horaire valide est requis');
+    throw new Error("Au moins un créneau horaire valide est requis");
   }
 
   const normalizedTaskData = {
     ...taskData,
     time_ranges: sanitizedRanges,
-    weekday: normalizeWeekdayValue(taskData?.weekday ?? sanitizedRanges[0]?.day ?? null),
+    weekday: normalizeWeekdayValue(
+      taskData?.weekday ?? sanitizedRanges[0]?.day ?? null
+    ),
     priority: normalizeTaskPriority(taskData?.priority),
     status: normalizeTaskStatus(taskData?.status),
   };
-  const payload = buildWeeklyTaskPayload(normalizedTaskData, ownerUid, teamId || null, sanitizedRanges);
+  const payload = buildWeeklyTaskPayload(
+    normalizedTaskData,
+    ownerUid,
+    teamId || null,
+    sanitizedRanges
+  );
+  const shouldAttachTeamIdToUserDoc =
+    teamId &&
+    weeklyTasksRef &&
+    typeof weeklyTasksRef.path === "string" &&
+    weeklyTasksRef.path.includes("/users/");
+  const payloadForWrite = shouldAttachTeamIdToUserDoc
+    ? { ...payload, team_id: teamId }
+    : payload;
 
   const attemptFallbackSave = async () =>
     saveWeeklyTaskViaApiFallback(resolved, normalizedTaskData, sanitizedRanges);
@@ -2587,68 +2821,75 @@ export const saveWeeklyTask = async (context, taskData = {}) => {
   try {
     if (normalizedTaskData.id) {
       const docRef = doc(weeklyTasksRef, normalizedTaskData.id);
-      await setDoc(docRef, payload, { merge: true });
+      await setDoc(docRef, payloadForWrite, { merge: true });
       return normalizeWeeklyTaskData(
         normalizedTaskData.id,
-        { ...normalizedTaskData, ...payload, time_ranges: sanitizedRanges },
+        {
+          ...normalizedTaskData,
+          ...payloadForWrite,
+          time_ranges: sanitizedRanges,
+        },
         ownerUid,
         teamId || null,
-        sessionUid,
+        sessionUid
       );
     }
 
     const docRef = await addDoc(weeklyTasksRef, {
-      ...payload,
+      ...payloadForWrite,
       created_at: serverTimestamp(),
     });
 
     return normalizeWeeklyTaskData(
       docRef.id,
-      { ...normalizedTaskData, ...payload, time_ranges: sanitizedRanges },
+      {
+        ...normalizedTaskData,
+        ...payloadForWrite,
+        time_ranges: sanitizedRanges,
+      },
       ownerUid,
       teamId || null,
-      sessionUid,
+      sessionUid
     );
   } catch (error) {
     if (isPermissionDeniedError(error)) {
       try {
         return await attemptFallbackSave();
       } catch (fallbackError) {
-        logPermissionError('weeklyTasks', sessionUid, fallbackError);
+        logPermissionError("weeklyTasks", sessionUid, fallbackError);
         throw fallbackError;
       }
     }
-    logPermissionError('weeklyTasks', sessionUid, error);
+    logPermissionError("weeklyTasks", sessionUid, error);
     throw error;
   }
 };
 
 export const deleteWeeklyTask = async (context, taskId) => {
   if (!taskId) {
-    throw new Error('Identifiant de la tâche requis');
+    throw new Error("Identifiant de la tâche requis");
   }
 
   const resolved = await ensurePlanningContext(context);
-  if (!resolved || resolved.status === 'deferred') {
-    throw new Error('Utilisateur non connecté');
+  if (!resolved || resolved.status === "deferred") {
+    throw new Error("Utilisateur non connecté");
   }
 
   const { weeklyTasksRef, sessionUid, readOnly } = resolved;
   if (!sessionUid) {
-    throw new Error('Utilisateur non connecté');
+    throw new Error("Utilisateur non connecté");
   }
   if (readOnly) {
-    throw new Error('Contexte planning accessible uniquement en lecture');
+    throw new Error("Contexte planning accessible uniquement en lecture");
   }
 
   try {
     await deleteDoc(doc(weeklyTasksRef, taskId));
   } catch (error) {
-    logPermissionError('weeklyTasks', sessionUid, error);
+    logPermissionError("weeklyTasks", sessionUid, error);
     throw error;
   }
 };
-
 
 export const watchWeeklyTasksForContext = (context, onData, onError) => {
   let effectiveContext = context;
@@ -2657,14 +2898,14 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
   let active = true;
 
   const cleanupSubscription = () => {
-    if (typeof unsubscribe === 'function') {
+    if (typeof unsubscribe === "function") {
       unsubscribe();
       unsubscribe = null;
     }
   };
 
   const cleanupRestart = () => {
-    if (typeof removeRestart === 'function') {
+    if (typeof removeRestart === "function") {
       removeRestart();
       removeRestart = null;
     }
@@ -2677,7 +2918,7 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
         return;
       }
 
-      if (!resolved || resolved.status === 'deferred') {
+      if (!resolved || resolved.status === "deferred") {
         cleanupSubscription();
         cleanupRestart();
         onData?.([]);
@@ -2692,12 +2933,19 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
 
       cleanupRestart();
 
-      const { weeklyTasksRef, targetUid, teamId, sessionUid, type, memberUid: resolvedMemberUid } = resolved;
+      const {
+        weeklyTasksRef,
+        targetUid,
+        teamId,
+        sessionUid,
+        type,
+        memberUid: resolvedMemberUid,
+      } = resolved;
       cleanupSubscription();
 
       effectiveContext = {
         ...(effectiveContext || {}),
-        type: type || effectiveContext?.type || 'personal',
+        type: type || effectiveContext?.type || "personal",
         userId: targetUid,
         memberUid: resolvedMemberUid || targetUid,
         ownerUid: targetUid,
@@ -2705,16 +2953,51 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
       };
 
       const shouldUseFallbackOnly = !weeklyTasksRef;
+      const canQueryTeamMemberTasks =
+        shouldUseFallbackOnly &&
+        type === "team" &&
+        teamId &&
+        targetUid &&
+        sessionUid &&
+        targetUid !== sessionUid;
+
+      if (canQueryTeamMemberTasks) {
+        try {
+          const memberTasksRef = collection(
+            db,
+            "users",
+            targetUid,
+            "weeklyTasks"
+          );
+          const memberTasksQuery = query(
+            memberTasksRef,
+            where("team_id", "==", teamId)
+          );
+          const rawUnsubscribe = onSnapshot(
+            memberTasksQuery,
+            handleSnapshot,
+            handleError
+          );
+          unsubscribe = registerPlanningListener(rawUnsubscribe);
+          return;
+        } catch (teamQueryError) {
+          console.warn(
+            "Direct weeklyTasks team query failed, falling back to API",
+            teamQueryError
+          );
+        }
+      }
 
       if (shouldUseFallbackOnly) {
         try {
-          const fallbackTasks = await fetchWeeklyTasksFallback(effectiveContext);
+          const fallbackTasks =
+            await fetchWeeklyTasksFallback(effectiveContext);
           if (!active) {
             return;
           }
           onData?.(Array.isArray(fallbackTasks) ? fallbackTasks : []);
         } catch (fallbackError) {
-          console.error('weeklyTasks fallback-only error', fallbackError);
+          console.error("weeklyTasks fallback-only error", fallbackError);
           onError?.(fallbackError);
         }
         return;
@@ -2725,7 +3008,8 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
         if (isPermissionDeniedError(error) && !fallbackAttempted) {
           fallbackAttempted = true;
           try {
-            const fallbackTasks = await fetchWeeklyTasksFallback(effectiveContext);
+            const fallbackTasks =
+              await fetchWeeklyTasksFallback(effectiveContext);
             if (!active) {
               return;
             }
@@ -2734,22 +3018,33 @@ export const watchWeeklyTasksForContext = (context, onData, onError) => {
               return;
             }
           } catch (fallbackError) {
-            console.error('weeklyTasks fallback failed', fallbackError);
+            console.error("weeklyTasks fallback failed", fallbackError);
           }
         }
-        logPermissionError('weeklyTasks', sessionUid, error);
+        logPermissionError("weeklyTasks", sessionUid, error);
         onError?.(error);
       };
 
       const handleSnapshot = (snapshot) => {
         const viewerUid = sessionUid || getUid();
         const tasks = snapshot.docs
-          .map((docSnap) => normalizeWeeklyTaskDocument(docSnap, targetUid, teamId || null, viewerUid))
+          .map((docSnap) =>
+            normalizeWeeklyTaskDocument(
+              docSnap,
+              targetUid,
+              teamId || null,
+              viewerUid
+            )
+          )
           .filter(Boolean);
         onData?.(tasks);
       };
 
-      const rawUnsubscribe = onSnapshot(weeklyTasksRef, handleSnapshot, handleError);
+      const rawUnsubscribe = onSnapshot(
+        weeklyTasksRef,
+        handleSnapshot,
+        handleError
+      );
       unsubscribe = registerPlanningListener(rawUnsubscribe);
     } catch (error) {
       if (!active) {
@@ -2790,5 +3085,3 @@ export const getMonthRange = (year, month) => {
 };
 
 window.auth = auth;
-
-

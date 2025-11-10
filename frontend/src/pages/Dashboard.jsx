@@ -1,8 +1,9 @@
-import { useOutletContext, useNavigate } from 'react-router-dom';
-import { useMemo, useCallback } from 'react';
-import { contextStore } from '../stores/contextStore';
-import { useSettings } from '../context/SettingsContext';
-import useUserWeekSlots from '../hooks/useUserWeekSlots';
+import React, { useMemo, useCallback } from "react";
+import { useSettings } from "../context/SettingsContext";
+import { useOutletContext, useNavigate } from "react-router-dom";
+import useClients from "../hooks/useClients";
+import { contextStore } from "../stores/contextStore";
+import useUserWeekSlots from "../hooks/useUserWeekSlots";
 import {
   CardSection,
   SectionHeaderRow,
@@ -14,7 +15,7 @@ import {
   DailyLifeIcons,
   StatusIcons,
   WellbeingIcons,
-} from '../ui';
+} from "../ui";
 
 const toDateSafe = (value) => {
   if (!value) {
@@ -25,12 +26,12 @@ const toDateSafe = (value) => {
     return Number.isNaN(value.getTime()) ? null : new Date(value);
   }
 
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     const candidate = new Date(value);
     return Number.isNaN(candidate.getTime()) ? null : candidate;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) {
       return null;
@@ -40,7 +41,7 @@ const toDateSafe = (value) => {
     return Number.isNaN(candidate.getTime()) ? null : candidate;
   }
 
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
+  if (typeof value === "object" && typeof value.toDate === "function") {
     try {
       const candidate = value.toDate();
       return candidate instanceof Date && !Number.isNaN(candidate.getTime())
@@ -84,69 +85,77 @@ const getSlotEndDate = (slot) => {
 
 const resolveStatusCategoryValue = (status) => {
   if (status === null || status === undefined) {
-    return 'unpaid';
+    return "pending";
   }
   const normalized = status.toString().trim().toLowerCase();
   if (!normalized) {
-    return 'unpaid';
+    return "pending";
   }
-  if (['not_worked', 'cancelled', 'canceled'].includes(normalized)) {
+  if (["not_worked", "cancelled", "canceled"].includes(normalized)) {
     return null;
   }
   if (
     [
-      'paid',
-      'payé',
-      'paye',
-      'payee',
-      'réglé',
-      'regle',
-      'reglé',
-      'reglee',
-      'settled',
+      "paid",
+      "payǸ",
+      "paye",
+      "payee",
+      "rǸglǸ",
+      "regle",
+      "reglǸ",
+      "reglee",
+      "settled",
     ].includes(normalized)
   ) {
-    return 'paid';
+    return "paid";
   }
   if (
     [
-      'pending',
-      'waiting',
-      'awaiting',
-      'en attente',
-      'en_attente',
-      'attente',
-      'quote',
-      'quote_sent',
-      'sent',
-      'devis',
-      'devis envoyé',
-      'devis_envoye',
-      'estimate',
-      'estimation',
-      'waiting_payment',
+      "pending",
+      "waiting",
+      "awaiting",
+      "en attente",
+      "en_attente",
+      "attente",
+      "quote",
+      "quote_sent",
+      "quote_validated",
+      "quote_valide",
+      "quote_validee",
+      "sent",
+      "devis",
+      "devis envoyǸ",
+      "devis_envoye",
+      "estimate",
+      "estimation",
+      "waiting_payment",
+      "unpaid",
+      "non payǸ",
+      "non_paye",
+      "impayǸ",
+      "impaye",
+      "overdue",
     ].includes(normalized)
   ) {
-    return 'pending';
+    return "pending";
   }
   if (
     [
-      'unpaid',
-      'non payé',
-      'non_paye',
-      'impayé',
-      'impaye',
-      'overdue',
+      "to_invoice",
+      "toinvoice",
+      "a_facturer",
+      "a facturer",
+      "à facturer",
+      "facturer",
     ].includes(normalized)
   ) {
-    return 'unpaid';
+    return "to_invoice";
   }
-  return 'pending';
+  return "pending";
 };
-
 const getSlotPaymentCategory = (slot) => {
   if (!slot) {
-    return 'unpaid';
+    return "pending";
   }
   const candidates = [
     slot.payment_status,
@@ -156,7 +165,7 @@ const getSlotPaymentCategory = (slot) => {
     slot.state,
   ];
   const firstNonNull = candidates.find(
-    (candidate) => candidate !== undefined && candidate !== null,
+    (candidate) => candidate !== undefined && candidate !== null
   );
   return resolveStatusCategoryValue(firstNonNull);
 };
@@ -182,15 +191,118 @@ const getSlotRate = (slot) => {
   return null;
 };
 
+const getOverrideAmount = (event) => {
+  if (!event || typeof event !== "object") {
+    return null;
+  }
+  const candidates = [
+    event.priceOverride,
+    event.price_override,
+    event.amountOverride,
+    event.amount_override,
+    event.amount,
+    event.totalAmount,
+    event.total_amount,
+    event.price,
+    event.payment_amount,
+  ];
+  for (const candidate of candidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return numeric;
+    }
+  }
+  return null;
+};
+
+const getEventClientId = (event) => {
+  if (!event || typeof event !== "object") {
+    return null;
+  }
+  const candidates = [
+    event.clientId,
+    event.client_id,
+    event.client?.id,
+    event.client?.client_id,
+    event.client?.clientId,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" || typeof candidate === "number") {
+      const trimmed = candidate.toString().trim();
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+  return null;
+};
+
+const getApplicableRate = (event, clientsById, globalRate) => {
+  if (!event || typeof event !== "object") {
+    return Number.isFinite(globalRate) && globalRate > 0 ? globalRate : null;
+  }
+
+  const overrideAmount = getOverrideAmount(event);
+  if (Number.isFinite(overrideAmount)) {
+    return null;
+  }
+
+  const resolvedClientId = getEventClientId(event);
+  const clientFromMap =
+    resolvedClientId && clientsById && typeof clientsById === "object"
+      ? clientsById[resolvedClientId] || null
+      : null;
+
+  const candidateClients = [];
+  if (event.client && typeof event.client === "object") {
+    candidateClients.push(event.client);
+  }
+  if (clientFromMap) {
+    candidateClients.push(clientFromMap);
+  }
+
+  for (const client of candidateClients) {
+    if (!client) {
+      continue;
+    }
+    const clientHasCustomRate =
+      client.useGlobalRate === false ||
+      client.use_global_rate === false ||
+      Number(client.hourly_rate_custom) > 0 ||
+      Number(client.hourlyRateCustom) > 0 ||
+      Number(client.hourlyRate) > 0 ||
+      Number(client.hourly_rate) > 0;
+
+    if (!clientHasCustomRate) {
+      continue;
+    }
+
+    const rateCandidates = [
+      client.hourlyRateCustom,
+      client.hourly_rate_custom,
+      client.hourlyRate,
+      client.hourly_rate,
+    ];
+    for (const rateCandidate of rateCandidates) {
+      const numeric = Number(rateCandidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+  }
+
+  return Number.isFinite(globalRate) && globalRate > 0 ? globalRate : null;
+};
+
 const isBillableSlot = (slot) => {
-  if (!slot || typeof slot !== 'object') {
+  if (!slot || typeof slot !== "object") {
     return false;
   }
 
   const normalizedType =
-    typeof slot.type === 'string' ? slot.type.trim().toLowerCase() : null;
+    typeof slot.type === "string" ? slot.type.trim().toLowerCase() : null;
 
-  if (normalizedType === 'absence') {
+  if (normalizedType === "absence") {
     return false;
   }
 
@@ -207,12 +319,14 @@ const isBillableSlot = (slot) => {
     if (candidate === undefined || candidate === null) {
       continue;
     }
-    if (typeof candidate === 'string') {
+    if (typeof candidate === "string") {
       const normalized = candidate.trim().toLowerCase();
       if (!normalized) {
         continue;
       }
-      if (['task', 'weekly_task', 'weekly-task', 'absence'].includes(normalized)) {
+      if (
+        ["task", "weekly_task", "weekly-task", "absence"].includes(normalized)
+      ) {
         continue;
       }
     }
@@ -228,56 +342,56 @@ const isBillableSlot = (slot) => {
   }
 
   const hasClientSignal = Boolean(
-    (typeof slot?.client === 'string' && slot.client.trim()) ||
-      (slot?.client && typeof slot.client === 'object') ||
-      (typeof slot?.client_name === 'string' && slot.client_name.trim()) ||
-      (typeof slot?.clientName === 'string' && slot.clientName.trim()) ||
-      (typeof slot?.client_label === 'string' && slot.client_label.trim()) ||
-      (typeof slot?.clientLabel === 'string' && slot.clientLabel.trim()) ||
-      (typeof slot?.client_id === 'string' && slot.client_id.trim()) ||
-      (typeof slot?.clientId === 'string' && slot.clientId.trim()),
+    (typeof slot?.client === "string" && slot.client.trim()) ||
+      (slot?.client && typeof slot.client === "object") ||
+      (typeof slot?.client_name === "string" && slot.client_name.trim()) ||
+      (typeof slot?.clientName === "string" && slot.clientName.trim()) ||
+      (typeof slot?.client_label === "string" && slot.client_label.trim()) ||
+      (typeof slot?.clientLabel === "string" && slot.clientLabel.trim()) ||
+      (typeof slot?.client_id === "string" && slot.client_id.trim()) ||
+      (typeof slot?.clientId === "string" && slot.clientId.trim())
   );
 
   const numericRate = getSlotRate(slot);
   const hasRate = Number.isFinite(numericRate);
 
   const normalizedSource =
-    typeof slot?.source === 'string' ? slot.source.trim().toLowerCase() : '';
+    typeof slot?.source === "string" ? slot.source.trim().toLowerCase() : "";
   const normalizedKind =
-    typeof slot?.kind === 'string' ? slot.kind.trim().toLowerCase() : '';
+    typeof slot?.kind === "string" ? slot.kind.trim().toLowerCase() : "";
 
   const explicitWeeklyTask =
     slot?.weekly === true ||
     slot?.isWeeklyTask === true ||
     slot?.is_task === true ||
-    normalizedSource === 'weekly_task' ||
-    normalizedKind === 'weekly_task' ||
-    normalizedType === 'task' ||
-    normalizedType === 'weekly_task' ||
-    normalizedType === 'weekly-task' ||
-    typeof slot?.weekly_task_id === 'string' ||
-    typeof slot?.weeklyTaskId === 'string' ||
-    typeof slot?.task_id === 'string' ||
-    typeof slot?.taskId === 'string' ||
-    typeof slot?.weekly_task_occurrence_id === 'string' ||
-    typeof slot?.weeklyTaskOccurrenceId === 'string' ||
-    typeof slot?.task_occurrence_id === 'string' ||
-    typeof slot?.taskOccurrenceId === 'string';
+    normalizedSource === "weekly_task" ||
+    normalizedKind === "weekly_task" ||
+    normalizedType === "task" ||
+    normalizedType === "weekly_task" ||
+    normalizedType === "weekly-task" ||
+    typeof slot?.weekly_task_id === "string" ||
+    typeof slot?.weeklyTaskId === "string" ||
+    typeof slot?.task_id === "string" ||
+    typeof slot?.taskId === "string" ||
+    typeof slot?.weekly_task_occurrence_id === "string" ||
+    typeof slot?.weeklyTaskOccurrenceId === "string" ||
+    typeof slot?.task_occurrence_id === "string" ||
+    typeof slot?.taskOccurrenceId === "string";
 
   const taskLabel = (() => {
-    if (typeof slot?.task_label === 'string' && slot.task_label.trim()) {
+    if (typeof slot?.task_label === "string" && slot.task_label.trim()) {
       return slot.task_label.trim();
     }
-    if (typeof slot?.taskLabel === 'string' && slot.taskLabel.trim()) {
+    if (typeof slot?.taskLabel === "string" && slot.taskLabel.trim()) {
       return slot.taskLabel.trim();
     }
-    if (typeof slot?.task_name === 'string' && slot.task_name.trim()) {
+    if (typeof slot?.task_name === "string" && slot.task_name.trim()) {
       return slot.task_name.trim();
     }
-    if (typeof slot?.taskName === 'string' && slot.taskName.trim()) {
+    if (typeof slot?.taskName === "string" && slot.taskName.trim()) {
       return slot.taskName.trim();
     }
-    return '';
+    return "";
   })();
 
   const hasExplicitStatus = Boolean(explicitStatus);
@@ -371,17 +485,17 @@ const calculateWeeklyEstimatedAmount = (slots, globalHourlyRate) => {
 
 const resolveSlotLabel = (slot) => {
   if (!slot) {
-    return 'Créneau planifié';
+    return "Créneau planifié";
   }
   const slotType =
-    typeof slot.type === 'string' ? slot.type.trim().toLowerCase() : '';
-  if (slotType === 'absence') {
-    return 'Indisponible';
+    typeof slot.type === "string" ? slot.type.trim().toLowerCase() : "";
+  if (slotType === "absence") {
+    return "Indisponible";
   }
   const candidates = [
     slot.client_name,
     slot.clientName,
-    typeof slot.client === 'string' ? slot.client : null,
+    typeof slot.client === "string" ? slot.client : null,
     slot.client?.name,
     slot.client?.label,
     slot.title,
@@ -392,14 +506,14 @@ const resolveSlotLabel = (slot) => {
     slot.taskName,
   ];
   for (const candidate of candidates) {
-    if (typeof candidate === 'string') {
+    if (typeof candidate === "string") {
       const trimmed = candidate.trim();
       if (trimmed) {
         return trimmed;
       }
     }
   }
-  return 'Créneau planifié';
+  return "Créneau planifié";
 };
 
 export default function Dashboard() {
@@ -408,9 +522,9 @@ export default function Dashboard() {
   const { settings } = useSettings();
 
   const context = contextStore.get();
-  const isTeamMode = context?.type === 'team';
+  const isTeamMode = context?.type === "team";
   const teamId = context?.teamId;
-  const planningPath = isTeamMode && teamId ? `/team/${teamId}` : '/me';
+  const planningPath = isTeamMode && teamId ? `/team/${teamId}` : "/me";
 
   const {
     slots,
@@ -418,23 +532,58 @@ export default function Dashboard() {
     error: slotsError,
   } = useUserWeekSlots(user?.uid);
 
+  const { clients } = useClients(user, {
+    page: 1,
+    limit: 100,
+    include_archived: false,
+  });
+
+  const clientsById = useMemo(() => {
+    if (!Array.isArray(clients) || clients.length === 0) {
+      return {};
+    }
+    return clients.reduce((acc, client) => {
+      if (!client || typeof client !== "object") {
+        return acc;
+      }
+      const candidateIds = [
+        client.id,
+        client.client_id,
+        client.clientId,
+        client.uid,
+      ];
+      candidateIds.forEach((candidate) => {
+        if (typeof candidate === "string" || typeof candidate === "number") {
+          const trimmed = candidate.toString().trim();
+          if (trimmed && !acc[trimmed]) {
+            acc[trimmed] = client;
+          }
+        }
+      });
+      return acc;
+    }, {});
+  }, [clients]);
+
   const globalHourlyRate = useMemo(() => {
-    const numeric = Number(settings?.hourlyRateGlobal);
-    if (Number.isFinite(numeric) && numeric > 0) {
-      return Math.round(numeric * 100) / 100;
+    const candidates = [settings?.hourlyRate, settings?.hourlyRateGlobal];
+    for (const candidate of candidates) {
+      const numeric = Number(candidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return Math.round(numeric * 100) / 100;
+      }
     }
     return 0;
-  }, [settings?.hourlyRateGlobal]);
+  }, [settings?.hourlyRate, settings?.hourlyRateGlobal]);
 
   const currencyFormatter = useMemo(
     () =>
-      new Intl.NumberFormat('fr-FR', {
-        style: 'currency',
-        currency: 'EUR',
+      new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
         minimumFractionDigits: 0,
         maximumFractionDigits: 0,
       }),
-    [],
+    []
   );
 
   const { weeklyHours, paymentTotals, upcomingSlots } = useMemo(() => {
@@ -456,39 +605,60 @@ export default function Dashboard() {
         return;
       }
 
-      const durationHours = durationMs / (60 * 60 * 1000);
-      if (!Number.isFinite(durationHours) || durationHours <= 0) {
-        return;
+      let durationHours = null;
+      if (Number.isFinite(durationMs) && durationMs > 0) {
+        durationHours = durationMs / (60 * 60 * 1000);
       }
-
+      if (!Number.isFinite(durationHours) || durationHours <= 0) {
+        const durationMinutesCandidates = [
+          slot.durationMinutes,
+          slot.duration_minutes,
+          slot.duration,
+        ];
+        for (const candidate of durationMinutesCandidates) {
+          const numeric = Number(candidate);
+          if (Number.isFinite(numeric) && numeric > 0) {
+            durationHours = numeric / 60;
+            break;
+          }
+        }
+      }
+      const hasDuration = Number.isFinite(durationHours) && durationHours > 0;
       const billable = isBillableSlot(slot);
 
-      if (billable) {
+      if (billable && hasDuration) {
         hoursTotal += durationHours;
       }
 
+      const overrideAmount = getOverrideAmount(slot);
       const slotRate = getSlotRate(slot);
-      const rateToApply = Number.isFinite(slotRate) && slotRate > 0 ? slotRate : globalHourlyRate;
+      let amount = null;
+      if (Number.isFinite(overrideAmount) && overrideAmount > 0) {
+        amount = overrideAmount;
+      } else {
+        let rateToApply = null;
+        if (Number.isFinite(slotRate) && slotRate > 0) {
+          rateToApply = slotRate;
+        } else {
+          rateToApply = getApplicableRate(slot, clientsById, globalHourlyRate);
+        }
 
-      let amount = 0;
-      if (Number.isFinite(rateToApply) && rateToApply > 0) {
-        amount = durationHours * rateToApply;
-        if (!Number.isFinite(amount) || amount <= 0) {
-          amount = 0;
+        if (Number.isFinite(rateToApply) && rateToApply > 0 && hasDuration) {
+          amount = durationHours * rateToApply;
         }
       }
 
-      if (!billable) {
+      if (!billable || !Number.isFinite(amount) || amount <= 0) {
         amount = 0;
       }
 
       const statusCategory = getSlotPaymentCategory(slot);
       if (Number.isFinite(amount) && amount > 0 && statusCategory) {
-        if (statusCategory === 'paid') {
+        if (statusCategory === "paid") {
           totals.confirmed += amount;
-        } else if (statusCategory === 'pending') {
+        } else if (statusCategory === "pending") {
           totals.pending += amount;
-        } else if (statusCategory === 'unpaid') {
+        } else if (statusCategory === "to_invoice") {
           totals.toInvoice += amount;
         }
       }
@@ -513,57 +683,70 @@ export default function Dashboard() {
       paymentTotals: totals,
       upcomingSlots: upcoming,
     };
-  }, [slots, globalHourlyRate]);
+  }, [slots, settings?.hourlyRate, clients, globalHourlyRate, clientsById]);
 
   const weeklyEstimatedAmount = useMemo(
     () => calculateWeeklyEstimatedAmount(slots, globalHourlyRate),
-    [slots, globalHourlyRate],
+    [slots, globalHourlyRate]
   );
 
   const weeklyHoursDisplay = useMemo(() => {
-    const rounded = Math.round((Number.isFinite(weeklyHours) ? weeklyHours : 0) * 4) / 4;
+    const rounded =
+      Math.round((Number.isFinite(weeklyHours) ? weeklyHours : 0) * 4) / 4;
     if (!Number.isFinite(rounded) || rounded <= 0) {
-      return '0';
+      return "0";
     }
     const decimalPart = Math.abs(rounded % 1);
     const needsDecimal = decimalPart > 0.001;
-    return rounded.toLocaleString('fr-FR', {
+    return rounded.toLocaleString("fr-FR", {
       minimumFractionDigits: needsDecimal ? 2 : 0,
       maximumFractionDigits: 2,
     });
   }, [weeklyHours]);
 
   const weeklyEarningsDisplay = useMemo(() => {
-    const value = Number.isFinite(weeklyEstimatedAmount) ? weeklyEstimatedAmount : 0;
+    const value = Number.isFinite(weeklyEstimatedAmount)
+      ? weeklyEstimatedAmount
+      : 0;
     return currencyFormatter.format(Math.round(value));
   }, [weeklyEstimatedAmount, currencyFormatter]);
 
   const paymentsDisplay = useMemo(
     () => ({
-      confirmed: currencyFormatter.format(Math.round(paymentTotals.confirmed || 0)),
+      confirmed: currencyFormatter.format(
+        Math.round(paymentTotals.confirmed || 0)
+      ),
       pending: currencyFormatter.format(Math.round(paymentTotals.pending || 0)),
-      toInvoice: currencyFormatter.format(Math.round(paymentTotals.toInvoice || 0)),
+      toInvoice: currencyFormatter.format(
+        Math.round(paymentTotals.toInvoice || 0)
+      ),
     }),
-    [paymentTotals, currencyFormatter],
+    [paymentTotals, currencyFormatter]
   );
 
   const formatUpcomingDetail = (start, end) => {
     if (!(start instanceof Date) || Number.isNaN(start.getTime())) {
-      return '';
+      return "";
     }
-    const startLabel = start.toLocaleDateString('fr-FR', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
+    const startLabel = start.toLocaleDateString("fr-FR", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
     });
-    const startTime = start.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
+    const startTime = start.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
-    const endTime = end instanceof Date && !Number.isNaN(end.getTime())
-      ? end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
-      : null;
-    return endTime ? `${startLabel} · ${startTime} - ${endTime}` : `${startLabel} · ${startTime}`;
+    const endTime =
+      end instanceof Date && !Number.isNaN(end.getTime())
+        ? end.toLocaleTimeString("fr-FR", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : null;
+    return endTime
+      ? `${startLabel} · ${startTime} - ${endTime}`
+      : `${startLabel} · ${startTime}`;
   };
 
   const upcomingWithDetails = upcomingSlots.map((slot) => ({
@@ -574,17 +757,21 @@ export default function Dashboard() {
   const loading = slotsLoading;
 
   const handleUpcomingWidgetClick = useCallback(() => {
-    navigate({ pathname: planningPath, search: '?view=month' });
+    navigate({ pathname: planningPath, search: "?view=month" });
   }, [navigate, planningPath]);
 
   const handleUpcomingWidgetKeyDown = useCallback(
     (event) => {
-      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      if (
+        event.key === "Enter" ||
+        event.key === " " ||
+        event.key === "Spacebar"
+      ) {
         event.preventDefault();
         handleUpcomingWidgetClick();
       }
     },
-    [handleUpcomingWidgetClick],
+    [handleUpcomingWidgetClick]
   );
 
   if (loading) {
@@ -592,13 +779,15 @@ export default function Dashboard() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 p-4 md:p-8 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
         <div className="mx-auto max-w-7xl space-y-6">
           {/* Header Skeleton */}
-          <div className={`h-12 w-64 animate-pulse ${radius.card} bg-slate-200 dark:bg-slate-800`} />
-          
+          <div
+            className={`h-12 w-64 animate-pulse ${radius.card} bg-slate-200 dark:bg-slate-800`}
+          />
+
           {/* Widgets Grid Skeleton */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div 
-                key={i} 
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
                 data-testid={`dashboard-skeleton-${i}`}
                 className={`h-40 animate-pulse ${radius.card} bg-slate-200 dark:bg-slate-800`}
               />
@@ -610,7 +799,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div 
+    <div
       data-testid="dashboard-container"
       className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-purple-50/20 p-4 md:p-8 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900"
     >
@@ -626,15 +815,18 @@ export default function Dashboard() {
               />
             }
             title={`Bienvenue, ${
-              user?.displayName || user?.email?.split('@')[0] || 'Utilisateur'
+              user?.displayName || user?.email?.split("@")[0] || "Utilisateur"
             }`}
             titleClassName="text-2xl md:text-3xl font-semibold"
           />
           <p className={`text-sm md:text-base ${text.secondary}`}>
-            Voici un aperçu de votre activité {isTeamMode ? 'd\'équipe' : 'personnelle'}
+            Voici un aperçu de votre activité{" "}
+            {isTeamMode ? "d'équipe" : "personnelle"}
           </p>
           {slotsError && (
-            <p className="text-sm text-red-400 dark:text-red-400">{slotsError}</p>
+            <p className="text-sm text-red-400 dark:text-red-400">
+              {slotsError}
+            </p>
           )}
         </div>
 
@@ -643,21 +835,21 @@ export default function Dashboard() {
           {/* Widget: Cette semaine - Cliquable pour naviguer vers Planning */}
           <div
             data-testid="dashboard-week-widget"
-            onClick={() => navigate(isTeamMode ? `/team/${teamId}` : '/me')}
+            onClick={() => navigate(isTeamMode ? `/team/${teamId}` : "/me")}
             className="group cursor-pointer"
           >
             <CardSection
               variant="planning"
-              icon={
-                <WorkIcons.Clock aria-hidden="true" className="h-5 w-5" />
-              }
+              icon={<WorkIcons.Clock aria-hidden="true" className="h-5 w-5" />}
               title="Cette semaine"
-              subtitle={isTeamMode ? 'Vue équipe' : 'Vue personnelle'}
+              subtitle={isTeamMode ? "Vue équipe" : "Vue personnelle"}
               className="h-full transition-transform group-hover:scale-[1.01]"
             >
               <div className="flex items-center justify-between gap-6">
                 <div className="space-y-1">
-                  <p className={`text-4xl font-semibold leading-tight ${text.primary}`}>
+                  <p
+                    className={`text-4xl font-semibold leading-tight ${text.primary}`}
+                  >
                     {weeklyHoursDisplay}h
                   </p>
                   <p className={`text-sm ${text.secondary}`}>
@@ -675,7 +867,7 @@ export default function Dashboard() {
           {/* Widget: Paiements - Consolidé et Cliquable */}
           <div
             data-testid="dashboard-payments-widget"
-            onClick={() => navigate('/invoices')}
+            onClick={() => navigate("/invoices")}
             className="group cursor-pointer"
           >
             <CardSection
@@ -695,7 +887,9 @@ export default function Dashboard() {
                   <p className={`text-4xl font-semibold ${text.primary}`}>
                     {paymentsDisplay.confirmed}
                   </p>
-                  <p className={`text-sm ${text.secondary}`}>Revenus confirmés</p>
+                  <p className={`text-sm ${text.secondary}`}>
+                    Revenus confirmés
+                  </p>
                 </div>
 
                 <div className="space-y-3">
@@ -776,8 +970,8 @@ export default function Dashboard() {
               title="Prochains créneaux"
               subtitle={
                 upcomingWithDetails.length === 0
-                  ? 'Aucun créneau imminent'
-                  : 'Vos rendez-vous à venir'
+                  ? "Aucun créneau imminent"
+                  : "Vos rendez-vous à venir"
               }
               className="h-full transition-transform group-hover:scale-[1.01]"
             >
@@ -826,7 +1020,6 @@ export default function Dashboard() {
               </div>
             </CardSection>
           </div>
-
         </div>
       </div>
     </div>

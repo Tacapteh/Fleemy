@@ -52,6 +52,7 @@ const DEFAULT_PREFS = {
   dayStartHour: 7,
   dayEndHour: 20,
   hourlyRateGlobal: 0,
+  hourlyRate: 0,
   showTaskPriorityBadges: true,
   showTaskStatusBadges: true,
 };
@@ -67,7 +68,9 @@ const SettingsContext = createContext({
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(DEFAULT_PREFS);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(() => auth.currentUser || null);
+  const [currentUser, setCurrentUser] = useState(
+    () => auth.currentUser || null
+  );
 
   const sanitizePreferences = useCallback((data) => {
     if (!data || typeof data !== "object") {
@@ -103,7 +106,6 @@ export function SettingsProvider({ children }) {
         acc[key] = rounded;
         return acc;
       }
-
       if (key === "dayStartHour" || key === "dayEndHour") {
         const numericValue = Number(incomingValue);
         if (!Number.isFinite(numericValue)) {
@@ -130,6 +132,12 @@ export function SettingsProvider({ children }) {
       acc[key] = incomingValue;
       return acc;
     }, {});
+
+    const hourlyRateValue = Number(sanitized.hourlyRateGlobal);
+    sanitized.hourlyRate =
+      Number.isFinite(hourlyRateValue) && hourlyRateValue >= 0
+        ? hourlyRateValue
+        : 0;
 
     const resolvedStart = Number.isFinite(sanitized.dayStartHour)
       ? sanitized.dayStartHour
@@ -186,7 +194,10 @@ export function SettingsProvider({ children }) {
             await setDoc(prefsRef, DEFAULT_PREFS);
           } catch (error) {
             if (!cancelled) {
-              console.warn("SettingsProvider: unable to initialize preferences", error);
+              console.warn(
+                "SettingsProvider: unable to initialize preferences",
+                error
+              );
               setSettings({ ...DEFAULT_PREFS });
               setLoading(false);
             }
@@ -194,7 +205,10 @@ export function SettingsProvider({ children }) {
         }
       } catch (error) {
         if (!cancelled) {
-          console.warn("SettingsProvider: unable to initialize preferences", error);
+          console.warn(
+            "SettingsProvider: unable to initialize preferences",
+            error
+          );
           setSettings({ ...DEFAULT_PREFS });
           setLoading(false);
         }
@@ -246,7 +260,19 @@ export function SettingsProvider({ children }) {
 
   const updateSetting = useCallback(
     async (key, value) => {
-      setSettings((prev) => ({ ...(prev || DEFAULT_PREFS), [key]: value }));
+      const targetKey = key === "hourlyRate" ? "hourlyRateGlobal" : key;
+
+      setSettings((prev) => {
+        const next = { ...(prev || DEFAULT_PREFS), [targetKey]: value };
+        if (targetKey === "hourlyRateGlobal") {
+          const numericValue = Number(value);
+          next.hourlyRate =
+            Number.isFinite(numericValue) && numericValue >= 0
+              ? Math.round(numericValue * 100) / 100
+              : 0;
+        }
+        return next;
+      });
 
       const uid = currentUser?.uid;
       if (!uid) {
@@ -256,7 +282,7 @@ export function SettingsProvider({ children }) {
       const prefsRef = doc(db, "users", uid, "settings", "preferences");
 
       try {
-        await updateDoc(prefsRef, { [key]: value });
+        await updateDoc(prefsRef, { [targetKey]: value });
       } catch (err) {
         console.warn("SettingsProvider: unable to update preference", err);
       }
@@ -276,7 +302,11 @@ export function SettingsProvider({ children }) {
     };
   }, [settings, loading, updateSetting]);
 
-  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+  return (
+    <SettingsContext.Provider value={value}>
+      {children}
+    </SettingsContext.Provider>
+  );
 }
 
 export function useSettings() {

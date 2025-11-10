@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import PlannerGrid from '../components/PlannerGrid';
-import MonthGrid from '../components/MonthGrid';
-import WeekNavigationHeader from '../components/WeekNavigationHeader';
-import EventModal from '../components/EventModal';
-import WeeklyTaskModal from '../components/WeeklyTaskModal';
-import DailyTodoPanel from '../components/DailyTodoPanel';
-import useTeam from '../hooks/useTeam';
-import useTasks from '../hooks/useTasks';
-import useUserWeekSlots, { requestWeekSlotsRefresh } from '../hooks/useUserWeekSlots';
-import { useSettings } from '../context/SettingsContext';
-import { getIcon } from '../icons/registry';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams, useSearchParams } from "react-router-dom";
+import PlannerGrid from "../components/PlannerGrid";
+import MonthGrid from "../components/MonthGrid";
+import WeekNavigationHeader from "../components/WeekNavigationHeader";
+import EventModal from "../components/EventModal";
+import WeeklyTaskModal from "../components/WeeklyTaskModal";
+import DailyTodoPanel from "../components/DailyTodoPanel";
+import useTeam from "../hooks/useTeam";
+import useTasks from "../hooks/useTasks";
+import useUserWeekSlots, {
+  requestWeekSlotsRefresh,
+} from "../hooks/useUserWeekSlots";
+import { useSettings } from "../context/SettingsContext";
+import { getIcon } from "../icons/registry";
 import {
   useFirebaseUser,
   saveEventNew,
@@ -21,17 +23,25 @@ import {
   listenToTeamPlanningEntries,
   fetchTeamPlanningEntries,
   isPermissionDeniedError,
-} from '../firebase';
-import { apiFetch, ServiceUnavailableError } from '../lib/api';
-import { showToast } from '../utils/toast';
-import { subscribeToUIEvent } from '../store/uiStore';
-import { contextStore } from '../stores/contextStore';
-import { ensureTeamsCache, readTeamsCache } from '../utils/teamCache';
-import { SectionHeaderRow, Calendar, StatusSummaryCard } from '../ui';
+} from "../firebase";
+import { apiFetch, ServiceUnavailableError } from "../lib/api";
+import { showToast } from "../utils/toast";
+import { subscribeToUIEvent } from "../store/uiStore";
+import { contextStore } from "../stores/contextStore";
+import { ensureTeamsCache, readTeamsCache } from "../utils/teamCache";
+import { SectionHeaderRow, Calendar, StatusSummaryCard } from "../ui";
 
-const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-const DEFAULT_START = '09:00';
-const DEFAULT_END = '10:00';
+const DAY_KEYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+const DEFAULT_START = "09:00";
+const DEFAULT_END = "10:00";
 const TaskSummaryRow = ({ iconId, label, price }) => {
   const IconComponent = getIcon(iconId || undefined);
 
@@ -47,7 +57,11 @@ const TaskSummaryRow = ({ iconId, label, price }) => {
           className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/30 dark:text-sky-200"
           title={label}
         >
-          <IconComponent className="h-4 w-4" aria-hidden="true" focusable="false" />
+          <IconComponent
+            className="h-4 w-4"
+            aria-hidden="true"
+            focusable="false"
+          />
         </span>
         <span className="truncate text-sm">{label}</span>
       </div>
@@ -59,7 +73,7 @@ const TaskSummaryRow = ({ iconId, label, price }) => {
 };
 
 const PRIMARY_ACTION_BUTTON_CLASSES =
-  'inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors transition-shadow duration-150 hover:bg-blue-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-lg disabled:hover:bg-blue-500';
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors transition-shadow duration-150 hover:bg-blue-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-lg disabled:hover:bg-blue-500";
 
 const matchTeamId = (team, teamId) => {
   if (!team || !teamId) {
@@ -67,9 +81,7 @@ const matchTeamId = (team, teamId) => {
   }
 
   return (
-    team.team_id === teamId ||
-    team.teamId === teamId ||
-    team.id === teamId
+    team.team_id === teamId || team.teamId === teamId || team.id === teamId
   );
 };
 
@@ -78,9 +90,10 @@ const resolveCachedTeamName = (teamId) => {
     return null;
   }
 
-  const contextTeamName = typeof contextStore.getTeamName === 'function'
-    ? contextStore.getTeamName()
-    : null;
+  const contextTeamName =
+    typeof contextStore.getTeamName === "function"
+      ? contextStore.getTeamName()
+      : null;
 
   if (contextTeamName) {
     return contextTeamName;
@@ -100,14 +113,17 @@ const resolveCachedTeamName = (teamId) => {
     }
   }
 
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     try {
-      const storedName = window.localStorage.getItem('teamName');
+      const storedName = window.localStorage.getItem("teamName");
       if (storedName) {
         return storedName;
       }
     } catch (storageError) {
-      console.warn('Unable to read cached team name from localStorage', storageError);
+      console.warn(
+        "Unable to read cached team name from localStorage",
+        storageError
+      );
     }
   }
 
@@ -115,30 +131,27 @@ const resolveCachedTeamName = (teamId) => {
 };
 
 const computeInitials = (name, email) => {
-  if (typeof name === 'string' && name.trim()) {
-    const parts = name
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
+  if (typeof name === "string" && name.trim()) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
     if (parts.length) {
       const initials = parts
         .slice(0, 2)
         .map((part) => part.charAt(0).toUpperCase())
-        .join('');
+        .join("");
       if (initials) {
         return initials;
       }
     }
   }
 
-  if (typeof email === 'string' && email.trim()) {
-    const prefix = email.split('@')[0] || '';
+  if (typeof email === "string" && email.trim()) {
+    const prefix = email.split("@")[0] || "";
     if (prefix) {
       return prefix.slice(0, 2).toUpperCase();
     }
   }
 
-  return '??';
+  return "??";
 };
 
 const normalizeTeamPlanningEntries = (entries) => {
@@ -179,7 +192,7 @@ const normalizeTeamPlanningEntries = (entries) => {
 const MEMBER_COLOR_CACHE = new Map();
 
 const generateMemberColor = (seed) => {
-  const cacheKey = seed || 'member';
+  const cacheKey = seed || "member";
   if (MEMBER_COLOR_CACHE.has(cacheKey)) {
     return MEMBER_COLOR_CACHE.get(cacheKey);
   }
@@ -196,7 +209,7 @@ const generateMemberColor = (seed) => {
   const lightness = 45;
   const background = `hsl(${hue}deg ${saturation}% ${lightness}%)`;
   const border = `hsl(${hue}deg ${saturation}% ${Math.min(72, lightness + 18)}%)`;
-  const color = { background, border, text: '#ffffff' };
+  const color = { background, border, text: "#ffffff" };
   MEMBER_COLOR_CACHE.set(cacheKey, color);
   return color;
 };
@@ -210,16 +223,16 @@ const isMembershipServiceUnavailableError = (error) => {
     return true;
   }
 
-  if (typeof error === 'object') {
+  if (typeof error === "object") {
     const code = error?.code || error?.response?.data?.code;
-    return code === 'MEMBERSHIPS_UNAVAILABLE';
+    return code === "MEMBERSHIPS_UNAVAILABLE";
   }
 
   return false;
 };
 
-const TEAM_PLANNING_TAB_PERSONAL = 'personal';
-const TEAM_PLANNING_TAB_SHARED = 'team';
+const TEAM_PLANNING_TAB_PERSONAL = "personal";
+const TEAM_PLANNING_TAB_SHARED = "team";
 const TEAM_PLANNING_ACCESS_DENIED_MESSAGE =
   "Accès refusé : vous n'avez pas les droits pour consulter ce planning d'équipe.";
 
@@ -228,8 +241,8 @@ const toIsoDate = (date) => {
     return null;
   }
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
 
@@ -242,12 +255,12 @@ const toDateSafe = (value) => {
     return Number.isNaN(value.getTime()) ? null : new Date(value);
   }
 
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     const candidate = new Date(value);
     return Number.isNaN(candidate.getTime()) ? null : candidate;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) {
       return null;
@@ -256,7 +269,7 @@ const toDateSafe = (value) => {
     return Number.isNaN(candidate.getTime()) ? null : candidate;
   }
 
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
+  if (typeof value === "object" && typeof value.toDate === "function") {
     try {
       const candidate = value.toDate();
       return candidate instanceof Date && !Number.isNaN(candidate.getTime())
@@ -321,11 +334,11 @@ const getSlotRate = (slot) => {
 
 const toTimeString = (value) => {
   if (!value) return DEFAULT_START;
-  if (typeof value === 'string' && value.includes(':')) {
+  if (typeof value === "string" && value.includes(":")) {
     return value;
   }
   if (value instanceof Date) {
-    return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+    return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
   }
   return DEFAULT_START;
 };
@@ -348,20 +361,28 @@ const endOfWeek = (weekStart) => {
 const formatWeekLabel = (date) => {
   const start = startOfWeek(date);
   const end = endOfWeek(start);
-  const startStr = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
-  const endStr = end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const startStr = start.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+  });
+  const endStr = end.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
   return `Semaine du ${startStr} au ${endStr}`;
 };
 
-const formatMonthLabel = (date) => date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+const formatMonthLabel = (date) =>
+  date.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
 const buildMemberLabel = (member, currentUser) => {
   if (!member) {
-    return 'Membre';
+    return "Membre";
   }
   const base = member.displayName || member.email || null;
   if (member.uid === currentUser?.uid) {
-    return base || currentUser.displayName || currentUser.email || 'Moi';
+    return base || currentUser.displayName || currentUser.email || "Moi";
   }
   if (base) {
     return base;
@@ -377,11 +398,11 @@ export default function Planning() {
   const teamId = routeTeamId || null;
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const rawViewParam = (searchParams.get('view') || '').toLowerCase();
-  const viewParam = rawViewParam === 'month' ? 'month' : 'week';
+  const rawViewParam = (searchParams.get("view") || "").toLowerCase();
+  const viewParam = rawViewParam === "month" ? "month" : "week";
   const [view, setView] = useState(viewParam);
   const [planningTab, setPlanningTab] = useState(
-    isTeamContext ? TEAM_PLANNING_TAB_SHARED : TEAM_PLANNING_TAB_PERSONAL,
+    isTeamContext ? TEAM_PLANNING_TAB_SHARED : TEAM_PLANNING_TAB_PERSONAL
   );
 
   useEffect(() => {
@@ -391,8 +412,8 @@ export default function Planning() {
   }, [viewParam, view]);
 
   useEffect(() => {
-    if (planningTab === TEAM_PLANNING_TAB_SHARED && view !== 'week') {
-      setView('week');
+    if (planningTab === TEAM_PLANNING_TAB_SHARED && view !== "week") {
+      setView("week");
     }
   }, [planningTab, view]);
 
@@ -406,36 +427,46 @@ export default function Planning() {
 
   const handleViewChange = useCallback(
     (nextView) => {
-      const normalized = nextView === 'month' ? 'month' : 'week';
+      const normalized = nextView === "month" ? "month" : "week";
       if (normalized === viewParam) {
         return;
       }
 
       const params = new URLSearchParams(searchParams);
-      if (normalized === 'week') {
-        params.delete('view');
+      if (normalized === "week") {
+        params.delete("view");
       } else {
-        params.set('view', 'month');
+        params.set("view", "month");
       }
 
       setSearchParams(params, { replace: true });
     },
-    [viewParam, searchParams, setSearchParams],
+    [viewParam, searchParams, setSearchParams]
   );
   const [currentDate, setCurrentDate] = useState(new Date());
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState(null);
 
-  const [modal, setModal] = useState({ open: false, event: null, selectedDate: null, readOnly: false });
-  const [weeklyTaskModal, setWeeklyTaskModal] = useState({ open: false, task: null });
+  const [modal, setModal] = useState({
+    open: false,
+    event: null,
+    selectedDate: null,
+    readOnly: false,
+  });
+  const [weeklyTaskModal, setWeeklyTaskModal] = useState({
+    open: false,
+    task: null,
+  });
 
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState(null);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
-  const [teamMembershipReady, setTeamMembershipReady] = useState(!isTeamContext);
-  const [teamMembershipAllowed, setTeamMembershipAllowed] = useState(!isTeamContext);
+  const [teamMembershipReady, setTeamMembershipReady] =
+    useState(!isTeamContext);
+  const [teamMembershipAllowed, setTeamMembershipAllowed] =
+    useState(!isTeamContext);
   const [availableTeams, setAvailableTeams] = useState([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamsError, setTeamsError] = useState(null);
@@ -465,7 +496,9 @@ export default function Planning() {
       return null;
     }
     if (isTeamContext && teamId) {
-      const matched = availableTeams.find((candidate) => matchTeamId(candidate, teamId));
+      const matched = availableTeams.find((candidate) =>
+        matchTeamId(candidate, teamId)
+      );
       if (matched) {
         return matched;
       }
@@ -540,73 +573,73 @@ export default function Planning() {
 
   const currencyFormatter = useMemo(
     () =>
-      new Intl.NumberFormat('fr-FR', {
-        style: 'currency',
-        currency: 'EUR',
+      new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
       }),
-    [],
+    []
   );
 
   const resolveStatusCategory = useCallback((status) => {
     if (!status) {
-      return 'unpaid';
+      return "unpaid";
     }
     const normalized = status.toString().trim().toLowerCase();
     if (!normalized) {
-      return 'unpaid';
+      return "unpaid";
     }
-    if (['not_worked', 'cancelled', 'canceled'].includes(normalized)) {
+    if (["not_worked", "cancelled", "canceled"].includes(normalized)) {
       return null;
     }
     if (
       [
-        'paid',
-        'payé',
-        'paye',
-        'payee',
-        'réglé',
-        'regle',
-        'reglé',
-        'reglee',
-        'settled',
+        "paid",
+        "payé",
+        "paye",
+        "payee",
+        "réglé",
+        "regle",
+        "reglé",
+        "reglee",
+        "settled",
       ].includes(normalized)
     ) {
-      return 'paid';
+      return "paid";
     }
     if (
       [
-        'pending',
-        'waiting',
-        'awaiting',
-        'en attente',
-        'en_attente',
-        'attente',
-        'quote',
-        'quote_sent',
-        'sent',
-        'devis',
-        'devis envoyé',
-        'devis_envoye',
-        'estimate',
-        'estimation',
-        'waiting_payment',
+        "pending",
+        "waiting",
+        "awaiting",
+        "en attente",
+        "en_attente",
+        "attente",
+        "quote",
+        "quote_sent",
+        "sent",
+        "devis",
+        "devis envoyé",
+        "devis_envoye",
+        "estimate",
+        "estimation",
+        "waiting_payment",
       ].includes(normalized)
     ) {
-      return 'pending';
+      return "pending";
     }
     if (
       [
-        'unpaid',
-        'non payé',
-        'non_paye',
-        'impayé',
-        'impaye',
-        'overdue',
+        "unpaid",
+        "non payé",
+        "non_paye",
+        "impayé",
+        "impaye",
+        "overdue",
       ].includes(normalized)
     ) {
-      return 'unpaid';
+      return "unpaid";
     }
-    return 'pending';
+    return "pending";
   }, []);
 
   useEffect(() => {
@@ -614,10 +647,10 @@ export default function Planning() {
       return;
     }
     if (isTeamContext && teamId) {
-      contextStore.set({ type: 'team', teamId, teamName: resolvedTeamName });
+      contextStore.set({ type: "team", teamId, teamName: resolvedTeamName });
       setTeamContext(teamId);
     } else {
-      contextStore.set({ type: 'solo' });
+      contextStore.set({ type: "solo" });
       setTeamContext(null);
     }
   }, [isTeamContext, teamId, resolvedTeamName, user?.uid]);
@@ -634,7 +667,7 @@ export default function Planning() {
     setTeamsLoading(true);
     setTeamsError(null);
 
-    ensureTeamsCache(() => apiFetch('/teams/my'))
+    ensureTeamsCache(() => apiFetch("/teams/my"))
       .then((result) => {
         if (cancelled) {
           return;
@@ -647,7 +680,7 @@ export default function Planning() {
         if (cancelled) {
           return;
         }
-        console.error('Planning: unable to load teams', error);
+        console.error("Planning: unable to load teams", error);
         setAvailableTeams([]);
         setTeamsError("Impossible de charger les équipes");
         setTeamsLoading(false);
@@ -682,13 +715,15 @@ export default function Planning() {
           const params = new URLSearchParams({
             page: String(pageIndex),
             limit: String(pageSize),
-            include_archived: 'false',
+            include_archived: "false",
           });
           const response = await apiFetch(`/clients?${params.toString()}`, {
-            headers: { 'X-User-Id': user.uid },
+            headers: { "X-User-Id": user.uid },
           });
 
-          const batch = Array.isArray(response?.clients) ? response.clients : [];
+          const batch = Array.isArray(response?.clients)
+            ? response.clients
+            : [];
           batch.forEach((client) => {
             if (!client || !client.id) {
               return;
@@ -697,7 +732,7 @@ export default function Planning() {
             const normalized = {
               ...client,
               use_global_rate:
-                typeof client.use_global_rate === 'boolean'
+                typeof client.use_global_rate === "boolean"
                   ? client.use_global_rate
                   : true,
             };
@@ -715,7 +750,8 @@ export default function Planning() {
             aggregatedClients.set(client.id, normalized);
           });
 
-          const total = typeof response?.total === 'number' ? response.total : null;
+          const total =
+            typeof response?.total === "number" ? response.total : null;
           hasMore = Boolean(response?.has_more) && batch.length > 0;
           if (total !== null && aggregatedClients.size >= total) {
             hasMore = false;
@@ -727,7 +763,7 @@ export default function Planning() {
           pageIndex += 1;
         } catch (error) {
           if (!cancelled) {
-            console.error('Planning: unable to load clients', error);
+            console.error("Planning: unable to load clients", error);
             setClients([]);
             setClientsError("Impossible de charger les clients");
             setClientsLoading(false);
@@ -769,7 +805,7 @@ export default function Planning() {
     const ensureMembership = async () => {
       try {
         await apiFetch(`/teams/${teamId}/memberships/ensure`, {
-          method: 'POST',
+          method: "POST",
           body: JSON.stringify({ include_joined_at: false }),
         });
         if (!cancelled) {
@@ -778,7 +814,7 @@ export default function Planning() {
           setTeamPlanningError(null);
         }
       } catch (error) {
-        console.error('ensureTeamMembership error', error);
+        console.error("ensureTeamMembership error", error);
         if (cancelled) {
           return;
         }
@@ -786,7 +822,9 @@ export default function Planning() {
         const status = error?.status ?? error?.response?.status ?? null;
         const code = error?.code;
         const denied =
-          status === 403 || code === 'permission-denied' || isPermissionDeniedError(error);
+          status === 403 ||
+          code === "permission-denied" ||
+          isPermissionDeniedError(error);
 
         if (denied) {
           setTeamMembershipAllowed(false);
@@ -794,7 +832,10 @@ export default function Planning() {
           setTeamPlanningLoading(false);
           setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
         } else {
-          showToast("Impossible de vérifier votre appartenance à l'équipe", true);
+          showToast(
+            "Impossible de vérifier votre appartenance à l'équipe",
+            true
+          );
           setTeamMembershipAllowed(true);
         }
 
@@ -919,7 +960,7 @@ export default function Planning() {
         });
       },
       onError: (error) => {
-        console.error('listenTeamMemberships error', error);
+        console.error("listenTeamMemberships error", error);
         setMembers([]);
         setMembersError(error);
         setMembersLoading(false);
@@ -927,7 +968,7 @@ export default function Planning() {
     });
 
     return () => {
-      if (typeof unsubscribe === 'function') {
+      if (typeof unsubscribe === "function") {
         unsubscribe();
       }
     };
@@ -998,9 +1039,11 @@ export default function Planning() {
           return;
         }
         const permissionIssue = isPermissionDeniedError(fallbackError);
-        const serviceUnavailable = isMembershipServiceUnavailableError(fallbackError);
-        const logMethod = permissionIssue || serviceUnavailable ? console.warn : console.error;
-        logMethod('team planning fallback load error', fallbackError);
+        const serviceUnavailable =
+          isMembershipServiceUnavailableError(fallbackError);
+        const logMethod =
+          permissionIssue || serviceUnavailable ? console.warn : console.error;
+        logMethod("team planning fallback load error", fallbackError);
         setTeamPlanningEntries([]);
         if (permissionIssue) {
           setTeamPlanningError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
@@ -1019,9 +1062,9 @@ export default function Planning() {
       }
       const permissionDenied = isPermissionDeniedError(error);
       if (permissionDenied) {
-        console.warn('team planning realtime permission error', error);
+        console.warn("team planning realtime permission error", error);
       } else {
-        console.error('team planning realtime error', error);
+        console.error("team planning realtime error", error);
       }
       cleanupSubscription();
       await loadFallbackEntries({ preferApi: permissionDenied });
@@ -1030,10 +1073,13 @@ export default function Planning() {
     cleanupSubscription();
 
     try {
-      teamPlanningSubscriptionRef.current = listenToTeamPlanningEntries(sharedTeamId, {
-        onData: applyEntries,
-        onError: handleSnapshotError,
-      });
+      teamPlanningSubscriptionRef.current = listenToTeamPlanningEntries(
+        sharedTeamId,
+        {
+          onData: applyEntries,
+          onError: handleSnapshotError,
+        }
+      );
     } catch (subscriptionError) {
       teamPlanningSubscriptionRef.current = null;
       handleSnapshotError(subscriptionError);
@@ -1062,7 +1108,7 @@ export default function Planning() {
       if (isTeamContext && !teamMembershipAllowed) {
         return null;
       }
-      return { type: 'team-shared', teamId: sharedTeamId, userId: user.uid };
+      return { type: "team-shared", teamId: sharedTeamId, userId: user.uid };
     }
     if (isTeamContext) {
       if (!teamMembershipAllowed) {
@@ -1071,9 +1117,9 @@ export default function Planning() {
       if (!teamMembershipReady || !teamId || !selectedMemberId) {
         return null;
       }
-      return { type: 'team', teamId, memberUid: selectedMemberId };
+      return { type: "team", teamId, memberUid: selectedMemberId };
     }
-    return { type: 'personal', userId: user.uid };
+    return { type: "personal", userId: user.uid };
   }, [
     planningTab,
     sharedTeamId,
@@ -1099,7 +1145,18 @@ export default function Planning() {
       return true;
     }
     return selectedMemberId !== user.uid;
-  }, [planningTab, isTeamContext, teamMembershipAllowed, selectedMemberId, user?.uid]);
+  }, [
+    planningTab,
+    isTeamContext,
+    teamMembershipAllowed,
+    selectedMemberId,
+    user?.uid,
+  ]);
+
+  const isViewingOtherTeamMember =
+    isTeamContext &&
+    planningTab !== TEAM_PLANNING_TAB_SHARED &&
+    Boolean(selectedMemberId && user?.uid && selectedMemberId !== user.uid);
 
   const shouldDelayEvents =
     planningTab !== TEAM_PLANNING_TAB_SHARED &&
@@ -1129,19 +1186,21 @@ export default function Planning() {
       const countedTaskIds = new Set();
       const numericGlobalRate = Number(hourlyRateValue);
       const globalRate =
-        Number.isFinite(numericGlobalRate) && numericGlobalRate > 0 ? numericGlobalRate : 0;
+        Number.isFinite(numericGlobalRate) && numericGlobalRate > 0
+          ? numericGlobalRate
+          : 0;
 
       const slotsArray = Array.isArray(slotsList) ? slotsList : [];
 
       slotsArray.forEach((slot) => {
-        if (!slot || typeof slot !== 'object') {
+        if (!slot || typeof slot !== "object") {
           return;
         }
 
         const normalizedType =
-          typeof slot.type === 'string' ? slot.type.trim().toLowerCase() : '';
+          typeof slot.type === "string" ? slot.type.trim().toLowerCase() : "";
 
-        if (normalizedType === 'absence') {
+        if (normalizedType === "absence") {
           return;
         }
 
@@ -1158,12 +1217,16 @@ export default function Planning() {
           if (candidate === undefined || candidate === null) {
             continue;
           }
-          if (typeof candidate === 'string') {
+          if (typeof candidate === "string") {
             const normalized = candidate.trim().toLowerCase();
             if (!normalized) {
               continue;
             }
-            if (['task', 'weekly_task', 'weekly-task', 'absence'].includes(normalized)) {
+            if (
+              ["task", "weekly_task", "weekly-task", "absence"].includes(
+                normalized
+              )
+            ) {
               continue;
             }
           }
@@ -1172,57 +1235,63 @@ export default function Planning() {
         }
 
         const normalizedSource =
-          typeof slot?.source === 'string' ? slot.source.trim().toLowerCase() : '';
+          typeof slot?.source === "string"
+            ? slot.source.trim().toLowerCase()
+            : "";
         const normalizedKind =
-          typeof slot?.kind === 'string' ? slot.kind.trim().toLowerCase() : '';
+          typeof slot?.kind === "string" ? slot.kind.trim().toLowerCase() : "";
 
         const explicitWeeklyTask =
           slot?.weekly === true ||
           slot?.isWeeklyTask === true ||
           slot?.is_task === true ||
-          normalizedSource === 'weekly_task' ||
-          normalizedKind === 'weekly_task' ||
-          normalizedType === 'task' ||
-          normalizedType === 'weekly_task' ||
-          normalizedType === 'weekly-task' ||
-          typeof slot?.weekly_task_id === 'string' ||
-          typeof slot?.weeklyTaskId === 'string' ||
-          typeof slot?.task_id === 'string' ||
-          typeof slot?.taskId === 'string' ||
-          typeof slot?.weekly_task_occurrence_id === 'string' ||
-          typeof slot?.weeklyTaskOccurrenceId === 'string' ||
-          typeof slot?.task_occurrence_id === 'string' ||
-          typeof slot?.taskOccurrenceId === 'string';
+          normalizedSource === "weekly_task" ||
+          normalizedKind === "weekly_task" ||
+          normalizedType === "task" ||
+          normalizedType === "weekly_task" ||
+          normalizedType === "weekly-task" ||
+          typeof slot?.weekly_task_id === "string" ||
+          typeof slot?.weeklyTaskId === "string" ||
+          typeof slot?.task_id === "string" ||
+          typeof slot?.taskId === "string" ||
+          typeof slot?.weekly_task_occurrence_id === "string" ||
+          typeof slot?.weeklyTaskOccurrenceId === "string" ||
+          typeof slot?.task_occurrence_id === "string" ||
+          typeof slot?.taskOccurrenceId === "string";
 
         const taskLabel = (() => {
-          if (typeof slot?.task_label === 'string' && slot.task_label.trim()) {
+          if (typeof slot?.task_label === "string" && slot.task_label.trim()) {
             return slot.task_label.trim();
           }
-          if (typeof slot?.taskLabel === 'string' && slot.taskLabel.trim()) {
+          if (typeof slot?.taskLabel === "string" && slot.taskLabel.trim()) {
             return slot.taskLabel.trim();
           }
-          if (typeof slot?.task_name === 'string' && slot.task_name.trim()) {
+          if (typeof slot?.task_name === "string" && slot.task_name.trim()) {
             return slot.task_name.trim();
           }
-          if (typeof slot?.taskName === 'string' && slot.taskName.trim()) {
+          if (typeof slot?.taskName === "string" && slot.taskName.trim()) {
             return slot.taskName.trim();
           }
-          return '';
+          return "";
         })();
 
         const hasClientSignal = Boolean(
-          (typeof slot?.client === 'string' && slot.client.trim()) ||
-            (slot?.client && typeof slot.client === 'object') ||
-            (typeof slot?.client_name === 'string' && slot.client_name.trim()) ||
-            (typeof slot?.clientName === 'string' && slot.clientName.trim()) ||
-            (typeof slot?.client_label === 'string' && slot.client_label.trim()) ||
-            (typeof slot?.clientLabel === 'string' && slot.clientLabel.trim()) ||
-            (typeof slot?.client_id === 'string' && slot.client_id.trim()) ||
-            (typeof slot?.clientId === 'string' && slot.clientId.trim()),
+          (typeof slot?.client === "string" && slot.client.trim()) ||
+            (slot?.client && typeof slot.client === "object") ||
+            (typeof slot?.client_name === "string" &&
+              slot.client_name.trim()) ||
+            (typeof slot?.clientName === "string" && slot.clientName.trim()) ||
+            (typeof slot?.client_label === "string" &&
+              slot.client_label.trim()) ||
+            (typeof slot?.clientLabel === "string" &&
+              slot.clientLabel.trim()) ||
+            (typeof slot?.client_id === "string" && slot.client_id.trim()) ||
+            (typeof slot?.clientId === "string" && slot.clientId.trim())
         );
 
         const slotRateCandidate = getSlotRate(slot);
-        const hasRate = Number.isFinite(slotRateCandidate) && slotRateCandidate > 0;
+        const hasRate =
+          Number.isFinite(slotRateCandidate) && slotRateCandidate > 0;
 
         const hasExplicitStatus = Boolean(explicitStatus);
 
@@ -1304,12 +1373,17 @@ export default function Planning() {
               : null);
         }
 
-        if (!resolvedClient && slot?.client && typeof slot.client === 'object') {
+        if (
+          !resolvedClient &&
+          slot?.client &&
+          typeof slot.client === "object"
+        ) {
           resolvedClient = slot.client;
         }
 
         if (resolvedClient) {
-          const usesGlobalRate = resolvedClient?.useGlobalRate ?? resolvedClient?.use_global_rate;
+          const usesGlobalRate =
+            resolvedClient?.useGlobalRate ?? resolvedClient?.use_global_rate;
           const clientHourlyRate =
             resolvedClient?.hourlyRate ??
             resolvedClient?.hourly_rate ??
@@ -1319,17 +1393,24 @@ export default function Planning() {
 
           const parsedClientRate = Number(clientHourlyRate);
           const normalizedUseGlobal =
-            typeof usesGlobalRate === 'string'
-              ? ['global', 'true'].includes(usesGlobalRate.trim().toLowerCase())
+            typeof usesGlobalRate === "string"
+              ? ["global", "true"].includes(usesGlobalRate.trim().toLowerCase())
               : usesGlobalRate;
 
-          if (normalizedUseGlobal === false && Number.isFinite(parsedClientRate) && parsedClientRate > 0) {
+          if (
+            normalizedUseGlobal === false &&
+            Number.isFinite(parsedClientRate) &&
+            parsedClientRate > 0
+          ) {
             rateToApply = parsedClientRate;
           } else if (normalizedUseGlobal === true) {
             if (globalRate > 0) {
               rateToApply = globalRate;
             }
-          } else if (Number.isFinite(parsedClientRate) && parsedClientRate > 0) {
+          } else if (
+            Number.isFinite(parsedClientRate) &&
+            parsedClientRate > 0
+          ) {
             rateToApply = parsedClientRate;
           }
         }
@@ -1356,17 +1437,21 @@ export default function Planning() {
         }
 
         const statusCategory = resolveStatusCategory(
-          explicitStatus ?? slot?.payment_status ?? slot?.status ?? slot?.type ?? '',
+          explicitStatus ??
+            slot?.payment_status ??
+            slot?.status ??
+            slot?.type ??
+            ""
         );
         if (!statusCategory) {
           return;
         }
 
-        if (statusCategory === 'paid') {
+        if (statusCategory === "paid") {
           totals.totalPaye += amount;
-        } else if (statusCategory === 'pending') {
+        } else if (statusCategory === "pending") {
           totals.totalEnAttente += amount;
-        } else if (statusCategory === 'unpaid') {
+        } else if (statusCategory === "unpaid") {
           totals.totalNonPaye += amount;
         }
       });
@@ -1381,7 +1466,7 @@ export default function Planning() {
           occurrence.occurrenceId ||
           occurrence.id ||
           (occurrence.taskId
-            ? `${occurrence.taskId}-${occurrence.taskDateISO || occurrence.task_date_iso || ''}`
+            ? `${occurrence.taskId}-${occurrence.taskDateISO || occurrence.task_date_iso || ""}`
             : null);
 
         if (occurrenceId && countedTaskIds.has(String(occurrenceId))) {
@@ -1399,10 +1484,11 @@ export default function Planning() {
 
       return totals;
     },
-    [clientMap, clients, resolveStatusCategory],
+    [clientMap, clients, resolveStatusCategory]
   );
 
-  const effectiveTasksContext = planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext;
+  const effectiveTasksContext =
+    planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext;
 
   const {
     tasks: weeklyTasks,
@@ -1415,7 +1501,10 @@ export default function Planning() {
     if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
       return [];
     }
-    if (!Array.isArray(teamPlanningEntries) || teamPlanningEntries.length === 0) {
+    if (
+      !Array.isArray(teamPlanningEntries) ||
+      teamPlanningEntries.length === 0
+    ) {
       return [];
     }
     const startTime = weekStart.getTime();
@@ -1423,16 +1512,25 @@ export default function Planning() {
 
     return teamPlanningEntries
       .map((entry) => {
-        const startDate = entry.start instanceof Date ? entry.start : new Date(entry.start);
-        const endDate = entry.end instanceof Date ? entry.end : new Date(entry.end);
-        if (!startDate || Number.isNaN(startDate.getTime()) || !endDate || Number.isNaN(endDate.getTime())) {
+        const startDate =
+          entry.start instanceof Date ? entry.start : new Date(entry.start);
+        const endDate =
+          entry.end instanceof Date ? entry.end : new Date(entry.end);
+        if (
+          !startDate ||
+          Number.isNaN(startDate.getTime()) ||
+          !endDate ||
+          Number.isNaN(endDate.getTime())
+        ) {
           return null;
         }
         return {
           ...entry,
           start: startDate,
           end: endDate,
-          createdByInitials: entry.createdByInitials || computeInitials(entry.createdByName, entry.createdBy),
+          createdByInitials:
+            entry.createdByInitials ||
+            computeInitials(entry.createdByName, entry.createdBy),
         };
       })
       .filter((entry) => {
@@ -1449,14 +1547,18 @@ export default function Planning() {
     if (!teamEntriesForWeek.length) {
       return [];
     }
-    return teamEntriesForWeek.filter((entry) => (entry?.type || 'event').toLowerCase() !== 'task');
+    return teamEntriesForWeek.filter(
+      (entry) => (entry?.type || "event").toLowerCase() !== "task"
+    );
   }, [teamEntriesForWeek]);
 
   const teamTaskBlocks = useMemo(() => {
     if (!teamEntriesForWeek.length) {
       return [];
     }
-    return teamEntriesForWeek.filter((entry) => (entry?.type || '').toLowerCase() === 'task');
+    return teamEntriesForWeek.filter(
+      (entry) => (entry?.type || "").toLowerCase() === "task"
+    );
   }, [teamEntriesForWeek]);
 
   const teamEventsMerged = useMemo(() => {
@@ -1481,27 +1583,36 @@ export default function Planning() {
         if (diff !== 0) {
           return diff;
         }
-        return (a.createdByName || '').localeCompare(b.createdByName || '');
+        return (a.createdByName || "").localeCompare(b.createdByName || "");
       });
       const base = sorted[0];
       const participants = sorted.map((item) => {
-        const color = generateMemberColor(item.createdBy || item.createdByName || item.createdByInitials || 'member');
+        const color = generateMemberColor(
+          item.createdBy ||
+            item.createdByName ||
+            item.createdByInitials ||
+            "member"
+        );
         return {
           id: item.createdBy || item.id,
-          name: item.createdByName || 'Membre',
-          initials: item.createdByInitials || computeInitials(item.createdByName, item.createdBy),
+          name: item.createdByName || "Membre",
+          initials:
+            item.createdByInitials ||
+            computeInitials(item.createdByName, item.createdBy),
           background: color.background,
           border: color.border,
           text: color.text,
         };
       });
-      const tooltipDetails = sorted.map((item) => `${item.title || 'Bloc'} — ${item.createdByName || 'Membre'}`);
+      const tooltipDetails = sorted.map(
+        (item) => `${item.title || "Bloc"} — ${item.createdByName || "Membre"}`
+      );
       merged.push({
         ...base,
         teamParticipants: participants,
         teamMerged: sorted.length > 1,
         teamMergedEntries: sorted,
-        teamMergedTooltip: tooltipDetails.join('\n'),
+        teamMergedTooltip: tooltipDetails.join("\n"),
       });
     });
 
@@ -1525,28 +1636,34 @@ export default function Planning() {
         if (!(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
           return null;
         }
-        const rawDayIndex = Math.floor((startDate.getTime() - weekStartMs) / msInDay);
+        const rawDayIndex = Math.floor(
+          (startDate.getTime() - weekStartMs) / msInDay
+        );
         if (rawDayIndex < 0 || rawDayIndex > 6) {
           return null;
         }
         const dayIndex = rawDayIndex;
-        const color = generateMemberColor(task.createdBy || task.createdByName || task.id);
+        const color = generateMemberColor(
+          task.createdBy || task.createdByName || task.id
+        );
         return {
           taskId: task.id,
           occurrenceId: task.id,
           dayIndex,
           startDate,
           endDate,
-          label: task.title || 'Tâche',
+          label: task.title || "Tâche",
           color: task.color || color.background,
-          price: typeof task.price === 'number' ? task.price : null,
+          price: typeof task.price === "number" ? task.price : null,
           icon: task.icon || null,
           readOnly: false,
           teamParticipants: [
             {
               id: task.createdBy || task.id,
-              name: task.createdByName || 'Membre',
-              initials: task.createdByInitials || computeInitials(task.createdByName, task.createdBy),
+              name: task.createdByName || "Membre",
+              initials:
+                task.createdByInitials ||
+                computeInitials(task.createdByName, task.createdBy),
               background: color.background,
               border: color.border,
               text: color.text,
@@ -1571,44 +1688,63 @@ export default function Planning() {
     return taskOccurrences;
   }, [planningTab, teamTaskOccurrences, taskOccurrences]);
 
-  const activeWeeklyTasks = planningTab === TEAM_PLANNING_TAB_SHARED ? [] : weeklyTasks;
+  const activeWeeklyTasks =
+    planningTab === TEAM_PLANNING_TAB_SHARED ? [] : weeklyTasks;
+  const showTeamWeeklyTasksEmptyState =
+    isViewingOtherTeamMember &&
+    !tasksLoading &&
+    Array.isArray(weeklyTasks) &&
+    weeklyTasks.length === 0;
   const recapTotals = useMemo(
-    () => calculateRecapTotals(activeEvents, activeTaskOccurrences, hourlyRateGlobal),
-    [calculateRecapTotals, activeEvents, activeTaskOccurrences, hourlyRateGlobal],
+    () =>
+      calculateRecapTotals(
+        activeEvents,
+        activeTaskOccurrences,
+        hourlyRateGlobal
+      ),
+    [
+      calculateRecapTotals,
+      activeEvents,
+      activeTaskOccurrences,
+      hourlyRateGlobal,
+    ]
   );
 
   const summaryCards = useMemo(
     () => [
       {
-        key: 'paid',
-        label: 'Payé',
+        key: "paid",
+        label: "Payé",
         amount: recapTotals.totalPaye,
-        border: 'border-emerald-200/70 dark:border-emerald-500/40',
-        background: 'bg-emerald-50 dark:bg-emerald-500/10',
-        accent: 'text-emerald-600 dark:text-emerald-300',
+        border: "border-emerald-200/70 dark:border-emerald-500/40",
+        background: "bg-emerald-50 dark:bg-emerald-500/10",
+        accent: "text-emerald-600 dark:text-emerald-300",
       },
       {
-        key: 'pending',
-        label: 'En attente',
+        key: "pending",
+        label: "En attente",
         amount: recapTotals.totalEnAttente,
-        border: 'border-amber-200/70 dark:border-amber-500/30',
-        background: 'bg-amber-50 dark:bg-amber-500/10',
-        accent: 'text-amber-600 dark:text-amber-300',
+        border: "border-amber-200/70 dark:border-amber-500/30",
+        background: "bg-amber-50 dark:bg-amber-500/10",
+        accent: "text-amber-600 dark:text-amber-300",
       },
       {
-        key: 'unpaid',
-        label: 'Non payé',
+        key: "unpaid",
+        label: "Non payé",
         amount: recapTotals.totalNonPaye,
-        border: 'border-rose-200/70 dark:border-rose-500/40',
-        background: 'bg-rose-50 dark:bg-rose-500/10',
-        accent: 'text-rose-600 dark:text-rose-300',
+        border: "border-rose-200/70 dark:border-rose-500/40",
+        background: "bg-rose-50 dark:bg-rose-500/10",
+        accent: "text-rose-600 dark:text-rose-300",
       },
     ],
-    [recapTotals],
+    [recapTotals]
   );
 
   const tasksSummary = useMemo(() => {
-    if (!Array.isArray(activeTaskOccurrences) || activeTaskOccurrences.length === 0) {
+    if (
+      !Array.isArray(activeTaskOccurrences) ||
+      activeTaskOccurrences.length === 0
+    ) {
       return { total: 0, items: [] };
     }
 
@@ -1621,15 +1757,20 @@ export default function Planning() {
         }
 
         const label =
-          typeof occurrence?.label === 'string' && occurrence.label.trim()
+          typeof occurrence?.label === "string" && occurrence.label.trim()
             ? occurrence.label.trim()
-            : 'Tâche';
+            : "Tâche";
 
-        const startDate = occurrence?.startDate instanceof Date ? occurrence.startDate : null;
-        const sortValue = startDate ? startDate.getTime() : Number.POSITIVE_INFINITY;
+        const startDate =
+          occurrence?.startDate instanceof Date ? occurrence.startDate : null;
+        const sortValue = startDate
+          ? startDate.getTime()
+          : Number.POSITIVE_INFINITY;
 
         return {
-          id: occurrence.occurrenceId || `${occurrence.taskId || 'task'}-${priceNumber}`,
+          id:
+            occurrence.occurrenceId ||
+            `${occurrence.taskId || "task"}-${priceNumber}`,
           icon: occurrence.icon || null,
           label,
           price: priceNumber,
@@ -1646,14 +1787,19 @@ export default function Planning() {
       if (a.sortValue !== b.sortValue) {
         return a.sortValue - b.sortValue;
       }
-      return a.label.localeCompare(b.label, 'fr');
+      return a.label.localeCompare(b.label, "fr");
     });
 
     const total = items.reduce((sum, item) => sum + item.price, 0);
 
     return {
       total,
-      items: items.map(({ id, icon, label, price }) => ({ id, icon, label, price })),
+      items: items.map(({ id, icon, label, price }) => ({
+        id,
+        icon,
+        label,
+        price,
+      })),
     };
   }, [activeTaskOccurrences]);
 
@@ -1671,8 +1817,8 @@ export default function Planning() {
       try {
         await deleteWeeklyTask(planningContext, taskId);
       } catch (error) {
-        console.error('deleteWeeklyTask error', error);
-        showToast('Erreur lors de la suppression de la tâche', true);
+        console.error("deleteWeeklyTask error", error);
+        showToast("Erreur lors de la suppression de la tâche", true);
       } finally {
         setWeeklyTaskModal({ open: false, task: null });
       }
@@ -1683,7 +1829,7 @@ export default function Planning() {
   useEffect(() => {
     const cleanupFns = [];
 
-    const unsubscribeOpen = subscribeToUIEvent('openTaskModal', (taskId) => {
+    const unsubscribeOpen = subscribeToUIEvent("openTaskModal", (taskId) => {
       if (readOnly) {
         return;
       }
@@ -1694,26 +1840,31 @@ export default function Planning() {
       }
     });
 
-    const unsubscribeDelete = subscribeToUIEvent('confirmDeleteTask', (taskId) => {
-      if (readOnly) {
-        return;
+    const unsubscribeDelete = subscribeToUIEvent(
+      "confirmDeleteTask",
+      (taskId) => {
+        if (readOnly) {
+          return;
+        }
+        const original = activeWeeklyTasks.find((task) => task.id === taskId);
+        if (!original) {
+          return;
+        }
+        const confirmed = window.confirm(
+          `Supprimer la tâche "${original.label}" ?`
+        );
+        if (!confirmed) {
+          return;
+        }
+        handleDeleteWeeklyTask(taskId);
       }
-      const original = activeWeeklyTasks.find((task) => task.id === taskId);
-      if (!original) {
-        return;
-      }
-      const confirmed = window.confirm(`Supprimer la tâche "${original.label}" ?`);
-      if (!confirmed) {
-        return;
-      }
-      handleDeleteWeeklyTask(taskId);
-    });
+    );
 
     cleanupFns.push(unsubscribeOpen, unsubscribeDelete);
 
     return () => {
       cleanupFns.forEach((fn) => {
-        if (typeof fn === 'function') fn();
+        if (typeof fn === "function") fn();
       });
     };
   }, [activeWeeklyTasks, planningTab, readOnly, handleDeleteWeeklyTask]);
@@ -1727,7 +1878,12 @@ export default function Planning() {
         baseDate.setHours(9, 0, 0, 0);
       }
 
-      setModal({ open: true, event: null, selectedDate: baseDate, readOnly: false });
+      setModal({
+        open: true,
+        event: null,
+        selectedDate: baseDate,
+        readOnly: false,
+      });
     },
     [readOnly, planningContext]
   );
@@ -1735,7 +1891,12 @@ export default function Planning() {
   const openEventModal = useCallback(
     (event) => {
       if (!event) return;
-      setModal({ open: true, event, selectedDate: new Date(event.start), readOnly });
+      setModal({
+        open: true,
+        event,
+        selectedDate: new Date(event.start),
+        readOnly,
+      });
     },
     [readOnly]
   );
@@ -1745,7 +1906,12 @@ export default function Planning() {
   }, []);
 
   const openWeeklyTaskModal = useCallback(() => {
-    if (readOnly || !planningContext || planningTab === TEAM_PLANNING_TAB_SHARED) return;
+    if (
+      readOnly ||
+      !planningContext ||
+      planningTab === TEAM_PLANNING_TAB_SHARED
+    )
+      return;
     setWeeklyTaskModal({ open: true, task: null });
   }, [readOnly, planningContext, planningTab]);
 
@@ -1757,10 +1923,11 @@ export default function Planning() {
     (savedTask) => {
       closeWeeklyTaskModal();
 
-      const rawLabel = typeof savedTask?.label === 'string' ? savedTask.label.trim() : '';
+      const rawLabel =
+        typeof savedTask?.label === "string" ? savedTask.label.trim() : "";
       const message = rawLabel
         ? `Tâche "${rawLabel}" sauvegardée`
-        : 'Tâche hebdomadaire sauvegardée';
+        : "Tâche hebdomadaire sauvegardée";
 
       showToast(message);
     },
@@ -1776,8 +1943,12 @@ export default function Planning() {
       const dayIndex = data.day ?? data.dayIndex ?? 0;
       const eventDate = new Date(weekStart);
       eventDate.setDate(weekStart.getDate() + dayIndex);
-      const [startHour, startMinute] = toTimeString(data.start || DEFAULT_START).split(':').map(Number);
-      const [endHour, endMinute] = toTimeString(data.end || DEFAULT_END).split(':').map(Number);
+      const [startHour, startMinute] = toTimeString(data.start || DEFAULT_START)
+        .split(":")
+        .map(Number);
+      const [endHour, endMinute] = toTimeString(data.end || DEFAULT_END)
+        .split(":")
+        .map(Number);
 
       const start = new Date(eventDate);
       start.setHours(startHour, startMinute, 0, 0);
@@ -1789,22 +1960,30 @@ export default function Planning() {
         return;
       }
 
-      const rawType = typeof data.type === 'string' ? data.type.trim().toLowerCase() : '';
-      const eventType = rawType === 'absence' ? 'absence' : 'normal';
+      const rawType =
+        typeof data.type === "string" ? data.type.trim().toLowerCase() : "";
+      const eventType = rawType === "absence" ? "absence" : "normal";
 
-      const paymentStatusCandidates = [data.payment_status, data.status, data.paymentStatus];
-      let resolvedStatus = eventType === 'absence' ? 'not_worked' : 'unpaid';
+      const paymentStatusCandidates = [
+        data.payment_status,
+        data.status,
+        data.paymentStatus,
+      ];
+      let resolvedStatus = eventType === "absence" ? "not_worked" : "unpaid";
       for (const candidate of paymentStatusCandidates) {
-        if (typeof candidate === 'string' && candidate.trim()) {
+        if (typeof candidate === "string" && candidate.trim()) {
           resolvedStatus = candidate.trim();
           break;
         }
       }
 
-      const shouldClearClient = eventType === 'absence';
-      const sanitizedClientId = shouldClearClient ? '' : data.client_id || '';
-      const sanitizedClientName = shouldClearClient ? '' : data.client_name || '';
-      const resolvedTitle = data.description || data.title || sanitizedClientName || 'Bloc';
+      const shouldClearClient = eventType === "absence";
+      const sanitizedClientId = shouldClearClient ? "" : data.client_id || "";
+      const sanitizedClientName = shouldClearClient
+        ? ""
+        : data.client_name || "";
+      const resolvedTitle =
+        data.description || data.title || sanitizedClientName || "Bloc";
 
       if (planningTab === TEAM_PLANNING_TAB_SHARED) {
         if (!user?.uid || !sharedTeamId) {
@@ -1815,20 +1994,20 @@ export default function Planning() {
         try {
           const resolvePersonalEventId = () => {
             const candidateKeys = [
-              'personalEventId',
-              'personal_event_id',
-              'personalEventID',
-              'personal_eventID',
-              'personalEvent',
-              'personal_event',
+              "personalEventId",
+              "personal_event_id",
+              "personalEventID",
+              "personal_eventID",
+              "personalEvent",
+              "personal_event",
             ];
             for (const key of candidateKeys) {
               const value = data?.[key];
-              if (typeof value === 'string' && value.trim()) {
+              if (typeof value === "string" && value.trim()) {
                 return value.trim();
               }
             }
-            if (typeof data?.id === 'string' && data.id.trim()) {
+            if (typeof data?.id === "string" && data.id.trim()) {
               return data.id.trim();
             }
             return null;
@@ -1837,35 +2016,37 @@ export default function Planning() {
           const _startMs = start.getTime();
           const _endMs = end.getTime();
           if (!Number.isFinite(_startMs) || !Number.isFinite(_endMs)) {
-            throw new Error('Invalid dates for team event');
+            throw new Error("Invalid dates for team event");
           }
           if (_endMs <= _startMs) {
             end = new Date(_startMs + 15 * 60 * 1000);
           }
 
-          const teamTitle = (resolvedTitle || '').trim();
+          const teamTitle = (resolvedTitle || "").trim();
 
           const teamPayload = {
             id: data.teamPlanningId || data.team_planning_id || null,
             title: teamTitle,
-            type: 'event',
+            type: "event",
             start: start.toISOString(),
             end: end.toISOString(),
             status: resolvedStatus,
-            color: data.color || '#2563eb',
-            price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
+            color: data.color || "#2563eb",
+            price: Number.isFinite(Number(data.price))
+              ? Number(data.price)
+              : null,
             createdBy: user.uid,
-            createdByName: user.displayName || user.email || 'Moi',
+            createdByName: user.displayName || user.email || "Moi",
             createdByInitials: computeInitials(user.displayName, user.email),
             teamId: sharedTeamId,
             synced: Boolean(data.synced),
             personalEventId: data.personalEventId || data.id || null,
           };
 
-          console.log('[TEAM POST]', teamPayload);
+          console.log("[TEAM POST]", teamPayload);
 
           const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
-            method: 'POST',
+            method: "POST",
             body: JSON.stringify(teamPayload),
           });
 
@@ -1878,16 +2059,18 @@ export default function Planning() {
             start: start.toISOString(),
             end: end.toISOString(),
             type: eventType,
-            client: shouldClearClient ? '' : sanitizedClientName || resolvedTitle,
+            client: shouldClearClient
+              ? ""
+              : sanitizedClientName || resolvedTitle,
             status: resolvedStatus,
             payment_status: resolvedStatus,
             hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
             duration: Math.round((end - start) / (60 * 1000)),
             task_id: shouldClearClient ? null : data.task_id || null,
-            description: data.description || '',
+            description: data.description || "",
             client_id: sanitizedClientId,
             client_name: sanitizedClientName,
-            day: DAY_KEYS[dayIndex] || 'monday',
+            day: DAY_KEYS[dayIndex] || "monday",
             team_planning_id: teamEntryId,
             synced: true,
           };
@@ -1896,22 +2079,29 @@ export default function Planning() {
             let syncedPersonalId = personalPayload.id || null;
             try {
               const syncedEvent = await saveEventNew(
-                { type: 'personal', userId: user.uid },
-                personalPayload,
+                { type: "personal", userId: user.uid },
+                personalPayload
               );
               syncedPersonalId = syncedEvent?.id || personalPayload.id || null;
               if (syncedPersonalId) {
                 personalPayload.id = syncedPersonalId;
               }
-              requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
+              requestWeekSlotsRefresh(
+                { type: "personal", userId: user.uid },
+                weekStart,
+                weekEnd
+              );
             } catch (syncError) {
-              console.warn('Unable to synchronise personal planning from team event', syncError);
+              console.warn(
+                "Unable to synchronise personal planning from team event",
+                syncError
+              );
             }
 
             if (syncedPersonalId && teamEntryId) {
               try {
                 await apiFetch(`/teams/${sharedTeamId}/planning`, {
-                  method: 'POST',
+                  method: "POST",
                   body: JSON.stringify({
                     ...teamPayload,
                     id: teamEntryId,
@@ -1920,18 +2110,28 @@ export default function Planning() {
                   }),
                 });
               } catch (linkError) {
-                console.warn('Unable to associer le bloc équipe à votre événement personnel', linkError);
+                console.warn(
+                  "Unable to associer le bloc équipe à votre événement personnel",
+                  linkError
+                );
               }
             }
           } else if (personalPayload.id && user?.uid) {
             try {
               await saveEventNew(
-                { type: 'personal', userId: user.uid },
-                personalPayload,
+                { type: "personal", userId: user.uid },
+                personalPayload
               );
-              requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
+              requestWeekSlotsRefresh(
+                { type: "personal", userId: user.uid },
+                weekStart,
+                weekEnd
+              );
             } catch (updateError) {
-              console.warn('Unable to update personal event linked to team block', updateError);
+              console.warn(
+                "Unable to update personal event linked to team block",
+                updateError
+              );
             }
           }
 
@@ -1939,24 +2139,24 @@ export default function Planning() {
         } catch (error) {
           const readableError =
             (error &&
-              typeof error === 'object' &&
+              typeof error === "object" &&
               error !== null &&
-              'detail' in error &&
+              "detail" in error &&
               error.detail) ||
             error;
-          console.log('[TEAM ERR]', readableError);
+          console.log("[TEAM ERR]", readableError);
           const msg =
             (error &&
-              typeof error === 'object' &&
+              typeof error === "object" &&
               error !== null &&
-              'detail' in error &&
+              "detail" in error &&
               error.detail) ||
             (error &&
-              typeof error === 'object' &&
+              typeof error === "object" &&
               error !== null &&
-              'message' in error &&
+              "message" in error &&
               error.message) ||
-            (typeof error === 'string' ? error : null) ||
+            (typeof error === "string" ? error : null) ||
             "Échec de l'enregistrement";
           showToast(msg, true);
         } finally {
@@ -1975,17 +2175,18 @@ export default function Planning() {
           start: start.toISOString(),
           end: end.toISOString(),
           type: eventType,
-          client: shouldClearClient ? '' : sanitizedClientName || resolvedTitle,
+          client: shouldClearClient ? "" : sanitizedClientName || resolvedTitle,
           status: resolvedStatus,
           payment_status: resolvedStatus,
           hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
           duration: Math.round((end - start) / (60 * 1000)),
           task_id: shouldClearClient ? null : data.task_id || null,
-          description: data.description || '',
+          description: data.description || "",
           client_id: sanitizedClientId,
           client_name: sanitizedClientName,
-          day: DAY_KEYS[dayIndex] || 'monday',
-          team_planning_id: data.teamPlanningId || data.team_planning_id || null,
+          day: DAY_KEYS[dayIndex] || "monday",
+          team_planning_id:
+            data.teamPlanningId || data.team_planning_id || null,
           synced: Boolean(data.synced),
         };
 
@@ -1998,22 +2199,27 @@ export default function Planning() {
             const teamPayload = {
               id: data.teamPlanningId || data.team_planning_id || null,
               title: resolvedTitle,
-              type: 'event',
+              type: "event",
               start: start.toISOString(),
               end: end.toISOString(),
               status: resolvedStatus,
-              color: data.color || '#2563eb',
-              price: Number.isFinite(Number(data.price)) ? Number(data.price) : null,
+              color: data.color || "#2563eb",
+              price: Number.isFinite(Number(data.price))
+                ? Number(data.price)
+                : null,
               createdBy: user?.uid || null,
-              createdByName: user?.displayName || user?.email || 'Moi',
-              createdByInitials: computeInitials(user?.displayName, user?.email),
+              createdByName: user?.displayName || user?.email || "Moi",
+              createdByInitials: computeInitials(
+                user?.displayName,
+                user?.email
+              ),
               teamId: sharedTeamId,
               synced: true,
               personalEventId: savedPersonalId || data.id || null,
             };
 
             const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
-              method: 'POST',
+              method: "POST",
               body: JSON.stringify(teamPayload),
             });
 
@@ -2025,20 +2231,23 @@ export default function Planning() {
                   synced: true,
                 });
               } catch (attachError) {
-                console.warn('Unable to attach team planning identifier to event', attachError);
+                console.warn(
+                  "Unable to attach team planning identifier to event",
+                  attachError
+                );
               }
             }
 
             requestTeamPlanningRefresh();
           } catch (teamSyncError) {
-            console.error('team planning sync error', teamSyncError);
+            console.error("team planning sync error", teamSyncError);
           }
         }
 
-        showToast('Événement sauvegardé avec succès');
+        showToast("Événement sauvegardé avec succès");
       } catch (error) {
-        console.error('saveEventNew error', error);
-        showToast('Erreur lors de la sauvegarde', true);
+        console.error("saveEventNew error", error);
+        showToast("Erreur lors de la sauvegarde", true);
       } finally {
         closeModal();
       }
@@ -2072,22 +2281,37 @@ export default function Planning() {
           return;
         }
         try {
-          await apiFetch(`/teams/${sharedTeamId}/planning/${id}`, { method: 'DELETE' });
+          await apiFetch(`/teams/${sharedTeamId}/planning/${id}`, {
+            method: "DELETE",
+          });
           requestTeamPlanningRefresh();
 
-          const personalId = modal.event?.personalEventId || modal.event?.team_planning_id || null;
+          const personalId =
+            modal.event?.personalEventId ||
+            modal.event?.team_planning_id ||
+            null;
           if (personalId && user?.uid) {
             try {
-              await deleteEventNew({ type: 'personal', userId: user.uid }, personalId);
-              requestWeekSlotsRefresh({ type: 'personal', userId: user.uid }, weekStart, weekEnd);
+              await deleteEventNew(
+                { type: "personal", userId: user.uid },
+                personalId
+              );
+              requestWeekSlotsRefresh(
+                { type: "personal", userId: user.uid },
+                weekStart,
+                weekEnd
+              );
             } catch (personalError) {
-              console.warn('Unable to delete personal event linked to team block', personalError);
+              console.warn(
+                "Unable to delete personal event linked to team block",
+                personalError
+              );
             }
           }
 
           showToast("Bloc d'équipe supprimé");
         } catch (error) {
-          console.error('team planning delete error', error);
+          console.error("team planning delete error", error);
           showToast("Impossible de supprimer le bloc d'équipe", true);
         } finally {
           closeModal();
@@ -2101,10 +2325,10 @@ export default function Planning() {
       try {
         await deleteEventNew(planningContext, id);
         requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
-        showToast('Événement supprimé avec succès');
+        showToast("Événement supprimé avec succès");
       } catch (error) {
-        console.error('deleteEventNew error', error);
-        showToast('Erreur lors de la suppression', true);
+        console.error("deleteEventNew error", error);
+        showToast("Erreur lors de la suppression", true);
       } finally {
         closeModal();
       }
@@ -2136,7 +2360,7 @@ export default function Planning() {
 
   const goToPrevious = useCallback(() => {
     setCurrentDate((date) =>
-      view === 'week'
+      view === "week"
         ? new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7)
         : new Date(date.getFullYear(), date.getMonth() - 1, 1)
     );
@@ -2144,13 +2368,16 @@ export default function Planning() {
 
   const goToNext = useCallback(() => {
     setCurrentDate((date) =>
-      view === 'week'
+      view === "week"
         ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7)
         : new Date(date.getFullYear(), date.getMonth() + 1, 1)
     );
   }, [view]);
 
-  const currentLabel = view === 'week' ? formatWeekLabel(currentDate) : formatMonthLabel(currentDate);
+  const currentLabel =
+    view === "week"
+      ? formatWeekLabel(currentDate)
+      : formatMonthLabel(currentDate);
 
   const taskSources = activeTaskOccurrences;
 
@@ -2188,7 +2415,8 @@ export default function Planning() {
     membersError,
   ]);
 
-  const teamPlanningServiceUnavailable = isMembershipServiceUnavailableError(teamPlanningError);
+  const teamPlanningServiceUnavailable =
+    isMembershipServiceUnavailableError(teamPlanningError);
 
   const teamPlanningErrorMessage = (() => {
     if (!teamPlanningError) {
@@ -2196,15 +2424,15 @@ export default function Planning() {
     }
 
     if (teamPlanningServiceUnavailable) {
-      return 'Service d\'équipe momentanément indisponible — nouvelle tentative…';
+      return "Service d'équipe momentanément indisponible — nouvelle tentative…";
     }
 
-    if (typeof teamPlanningError === 'string') {
+    if (typeof teamPlanningError === "string") {
       return teamPlanningError;
     }
 
     if (
-      typeof teamPlanningError?.message === 'string' &&
+      typeof teamPlanningError?.message === "string" &&
       teamPlanningError.message.trim().length > 0
     ) {
       return teamPlanningError.message;
@@ -2213,8 +2441,8 @@ export default function Planning() {
     const responseData = teamPlanningError?.response?.data;
     if (
       responseData &&
-      typeof responseData === 'object' &&
-      typeof responseData.message === 'string' &&
+      typeof responseData === "object" &&
+      typeof responseData.message === "string" &&
       responseData.message.trim().length > 0
     ) {
       return responseData.message;
@@ -2222,8 +2450,8 @@ export default function Planning() {
 
     if (
       responseData &&
-      typeof responseData === 'object' &&
-      typeof responseData.detail === 'string' &&
+      typeof responseData === "object" &&
+      typeof responseData.detail === "string" &&
       responseData.detail.trim().length > 0
     ) {
       return responseData.detail;
@@ -2232,19 +2460,21 @@ export default function Planning() {
     return "Impossible de charger le planning d'équipe";
   })();
 
-  const pageTitle = planningTab === TEAM_PLANNING_TAB_SHARED
-    ? sharedTeamName
-      ? `Planning ${sharedTeamName}`
-      : 'Planning d’équipe'
-    : isTeamContext && resolvedTeamName
-      ? `Planning ${resolvedTeamName}`
-      : 'Mon planning';
+  const pageTitle =
+    planningTab === TEAM_PLANNING_TAB_SHARED
+      ? sharedTeamName
+        ? `Planning ${sharedTeamName}`
+        : "Planning d’équipe"
+      : isTeamContext && resolvedTeamName
+        ? `Planning ${resolvedTeamName}`
+        : "Mon planning";
 
-  const subtitle = planningTab === TEAM_PLANNING_TAB_SHARED
-    ? 'Planifiez les créneaux partagés de votre équipe en temps réel'
-    : isTeamContext
-      ? 'Consultez et organisez les plannings de votre équipe'
-      : 'Gérez vos événements et vos tâches hebdomadaires';
+  const subtitle =
+    planningTab === TEAM_PLANNING_TAB_SHARED
+      ? "Planifiez les créneaux partagés de votre équipe en temps réel"
+      : isTeamContext
+        ? "Consultez et organisez les plannings de votre équipe"
+        : "Gérez vos événements et vos tâches hebdomadaires";
 
   return (
     <div className="space-y-6 text-slate-900 dark:text-slate-100">
@@ -2252,76 +2482,78 @@ export default function Planning() {
         <header className="space-y-2">
           <SectionHeaderRow
             headingLevel={1}
-            icon={
-              <Calendar aria-hidden="true" className="h-6 w-6" />
-            }
+            icon={<Calendar aria-hidden="true" className="h-6 w-6" />}
             iconClassName="text-gray-900 dark:text-slate-100"
             title={pageTitle}
             titleClassName="text-2xl font-semibold text-gray-900 dark:text-slate-100"
             className="items-start gap-3"
           />
-          <p className="text-sm text-gray-600 dark:text-slate-300">{subtitle}</p>
+          <p className="text-sm text-gray-600 dark:text-slate-300">
+            {subtitle}
+          </p>
           {eventsError && planningTab !== TEAM_PLANNING_TAB_SHARED && (
             <p className="text-sm text-red-600">{eventsError}</p>
           )}
           {tasksError && planningTab !== TEAM_PLANNING_TAB_SHARED && (
             <p className="text-sm text-red-600">{tasksError}</p>
           )}
-          {teamPlanningErrorMessage && planningTab === TEAM_PLANNING_TAB_SHARED && (
-            <p
-              className={
-                teamPlanningServiceUnavailable
-                  ? 'text-sm text-slate-500 italic'
-                  : 'text-sm text-red-600'
-              }
-            >
-              {teamPlanningErrorMessage}
-            </p>
-          )}
+          {teamPlanningErrorMessage &&
+            planningTab === TEAM_PLANNING_TAB_SHARED && (
+              <p
+                className={
+                  teamPlanningServiceUnavailable
+                    ? "text-sm text-slate-500 italic"
+                    : "text-sm text-red-600"
+                }
+              >
+                {teamPlanningErrorMessage}
+              </p>
+            )}
           {membersError && (
             <p className="text-sm text-red-600">{membersError}</p>
           )}
         </header>
 
         {isTeamContext &&
-          (sharedTeamId || (Array.isArray(availableTeams) && availableTeams.length > 0)) && (
-          <div
-            role="tablist"
-            aria-label="Mode de planning"
-            className="mt-3 flex w-full flex-wrap gap-2 rounded-lg bg-slate-100 p-1 dark:bg-slate-800/60 sm:w-auto"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={planningTab === TEAM_PLANNING_TAB_PERSONAL}
-              onClick={() => setPlanningTab(TEAM_PLANNING_TAB_PERSONAL)}
-              className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
-                planningTab === TEAM_PLANNING_TAB_PERSONAL
-                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-                  : 'bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40'
-              }`}
+          (sharedTeamId ||
+            (Array.isArray(availableTeams) && availableTeams.length > 0)) && (
+            <div
+              role="tablist"
+              aria-label="Mode de planning"
+              className="mt-3 flex w-full flex-wrap gap-2 rounded-lg bg-slate-100 p-1 dark:bg-slate-800/60 sm:w-auto"
             >
-              Mon planning
-            </button>
-            {sharedTeamId && (
               <button
                 type="button"
                 role="tab"
-                aria-selected={planningTab === TEAM_PLANNING_TAB_SHARED}
-                onClick={() => setPlanningTab(TEAM_PLANNING_TAB_SHARED)}
-                disabled={!sharedTeamId}
-                aria-disabled={!sharedTeamId}
+                aria-selected={planningTab === TEAM_PLANNING_TAB_PERSONAL}
+                onClick={() => setPlanningTab(TEAM_PLANNING_TAB_PERSONAL)}
                 className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
-                  planningTab === TEAM_PLANNING_TAB_SHARED
-                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-                    : 'bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40'
-                } ${sharedTeamId ? '' : 'cursor-not-allowed opacity-60'}`}
+                  planningTab === TEAM_PLANNING_TAB_PERSONAL
+                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                    : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
+                }`}
               >
-                Planning d'équipe
+                Mon planning
               </button>
-            )}
-          </div>
-        )}
+              {sharedTeamId && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={planningTab === TEAM_PLANNING_TAB_SHARED}
+                  onClick={() => setPlanningTab(TEAM_PLANNING_TAB_SHARED)}
+                  disabled={!sharedTeamId}
+                  aria-disabled={!sharedTeamId}
+                  className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
+                    planningTab === TEAM_PLANNING_TAB_SHARED
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                      : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
+                  } ${sharedTeamId ? "" : "cursor-not-allowed opacity-60"}`}
+                >
+                  Planning d'équipe
+                </button>
+              )}
+            </div>
+          )}
 
         {teamsError && (
           <p className="mt-2 text-sm text-red-600">{teamsError}</p>
@@ -2329,13 +2561,16 @@ export default function Planning() {
 
         {isTeamContext && (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <label htmlFor="team-member-select" className="text-sm font-medium text-gray-700 dark:text-slate-200">
+            <label
+              htmlFor="team-member-select"
+              className="text-sm font-medium text-gray-700 dark:text-slate-200"
+            >
               Voir le planning de :
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <select
                 id="team-member-select"
-                value={selectedMemberId || ''}
+                value={selectedMemberId || ""}
                 onChange={handleMemberChange}
                 disabled={membersLoading || members.length === 0}
                 className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
@@ -2370,14 +2605,24 @@ export default function Planning() {
             type="button"
             onClick={!readOnly ? () => openCreateModal() : undefined}
             disabled={readOnly || !planningContext}
+            aria-disabled={readOnly || !planningContext}
             className={PRIMARY_ACTION_BUTTON_CLASSES}
           >
             + Événement
           </button>
           <button
             type="button"
-            onClick={!readOnly && planningTab !== TEAM_PLANNING_TAB_SHARED ? openWeeklyTaskModal : undefined}
+            onClick={
+              !readOnly && planningTab !== TEAM_PLANNING_TAB_SHARED
+                ? openWeeklyTaskModal
+                : undefined
+            }
             disabled={
+              readOnly ||
+              !planningContext ||
+              planningTab === TEAM_PLANNING_TAB_SHARED
+            }
+            aria-disabled={
               readOnly ||
               !planningContext ||
               planningTab === TEAM_PLANNING_TAB_SHARED
@@ -2390,7 +2635,7 @@ export default function Planning() {
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
-        {view === 'week' ? (
+        {view === "week" ? (
           <PlannerGrid
             events={activeEvents}
             tasks={taskSources}
@@ -2400,7 +2645,9 @@ export default function Planning() {
             onEventClick={openEventModal}
             onTaskClick={(occurrence) => {
               if (readOnly) return;
-              const original = weeklyTasks.find((task) => task.id === occurrence.taskId);
+              const original = weeklyTasks.find(
+                (task) => task.id === occurrence.taskId
+              );
               if (original) {
                 setWeeklyTaskModal({ open: true, task: original });
               }
@@ -2412,12 +2659,14 @@ export default function Planning() {
             year={currentDate.getFullYear()}
             month={currentDate.getMonth()}
             onDateSelect={(date) => {
-              handleViewChange('week');
+              handleViewChange("week");
               setCurrentDate(date);
             }}
             onEventClick={openEventModal}
             onCreateEvent={openCreateModal}
-            context={planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext}
+            context={
+              planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext
+            }
           />
         )}
 
@@ -2431,7 +2680,10 @@ export default function Planning() {
             </p>
           )}
           {clientsError && !clientsLoading && (
-            <p className="mt-1 text-xs text-red-500 dark:text-red-400" role="alert">
+            <p
+              className="mt-1 text-xs text-red-500 dark:text-red-400"
+              role="alert"
+            >
               {clientsError}
             </p>
           )}
@@ -2457,8 +2709,8 @@ export default function Planning() {
             <div
               className={`rounded-xl border px-4 py-3 text-sm shadow-sm transition-colors ${
                 tasksSummary.items.length > 0
-                  ? 'border-sky-200/70 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10'
-                  : 'border-slate-200/70 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40'
+                  ? "border-sky-200/70 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10"
+                  : "border-slate-200/70 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40"
               }`}
             >
               <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
@@ -2483,21 +2735,34 @@ export default function Planning() {
           </div>
         </div>
 
-        {/* Daily Todo Section - Only visible in week view */}
-        {view === 'week' && planningTab !== TEAM_PLANNING_TAB_SHARED && selectedMemberId && (
-          <div className="mt-6">
-            <DailyTodoPanel
-              selectedDate={currentDate}
-              userId={selectedMemberId}
-              readOnly={readOnly}
-              teamId={isTeamContext ? teamId : null}
-              compact={true}
-            />
-          </div>
+        {showTeamWeeklyTasksEmptyState && (
+          <p
+            className="mt-2 text-xs text-slate-500 dark:text-slate-400"
+            role="status"
+          >
+            Aucune tâche partagée avec l'équipe pour cette semaine.
+          </p>
         )}
 
+        {/* Daily Todo Section - Only visible in week view */}
+        {view === "week" &&
+          planningTab !== TEAM_PLANNING_TAB_SHARED &&
+          selectedMemberId && (
+            <div className="mt-6">
+              <DailyTodoPanel
+                selectedDate={currentDate}
+                userId={selectedMemberId}
+                readOnly={readOnly}
+                teamId={isTeamContext ? teamId : null}
+                compact={true}
+              />
+            </div>
+          )}
+
         {showSkeleton && (
-          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">Chargement des données…</div>
+          <div className="mt-4 text-sm text-gray-500 dark:text-slate-400">
+            Chargement des données…
+          </div>
         )}
       </div>
 
@@ -2516,7 +2781,11 @@ export default function Planning() {
         task={weeklyTaskModal.task}
         onSave={handleWeeklyTaskSaved}
         onClose={closeWeeklyTaskModal}
-        onDelete={!readOnly ? (task) => task?.id && handleDeleteWeeklyTask(task.id) : undefined}
+        onDelete={
+          !readOnly
+            ? (task) => task?.id && handleDeleteWeeklyTask(task.id)
+            : undefined
+        }
         context={planningContext}
         readOnly={readOnly}
         weekStartISO={weekStartISO}
