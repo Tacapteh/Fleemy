@@ -43,6 +43,14 @@
 
 .time-label-slot {
   min-height: var(--weekly-grid-row-h);
+  position: relative;
+}
+
+.time-label-text {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
 }
 
 .week-grid-body {
