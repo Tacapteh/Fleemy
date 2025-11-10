@@ -271,6 +271,8 @@ function MonthGrid({
   onEventClick,
   onCreateEvent,
   context,
+  staticEvents = [],
+  staticTasks = [],
 }) {
   const user = useFirebaseUser();
   const { settings, loading } = useSettings();
