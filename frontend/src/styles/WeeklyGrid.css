@@ -48,8 +48,14 @@
 
 .time-label-text {
   position: absolute;
-  top: -2px;
+  top: 0;
   right: 0;
+  transform: none;
+}
+
+.hour-label-final .time-label-text {
+  top: auto;
+  bottom: 0;
   transform: none;
 }
 
