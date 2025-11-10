@@ -122,7 +122,7 @@ const parseTaskDate = (value) => {
   return null;
 };
 
-const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
+export const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
   if (!Array.isArray(weeklyTasks) || !range?.from || !range?.to) {
     return [];
   }

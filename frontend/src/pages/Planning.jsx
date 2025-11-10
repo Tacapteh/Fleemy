@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import PlannerGrid from "../components/PlannerGrid";
-import MonthGrid from "../components/MonthGrid";
+import MonthGrid, { expandWeeklyTasksToMonthRange } from "../components/MonthGrid";
 import WeekNavigationHeader from "../components/WeekNavigationHeader";
 import EventModal from "../components/EventModal";
 import WeeklyTaskModal from "../components/WeeklyTaskModal";
@@ -1688,27 +1688,27 @@ export default function Planning() {
   }, [teamTaskBlocks, weekStart]);
 
   const currentMonthRange = useMemo(() => {
-    const start = new Date(
+    const from = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
       1
     );
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth() + 1,
       0
     );
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
   }, [currentDate]);
 
   const teamMonthEvents = useMemo(() => {
     if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
       return [];
     }
-    const { start, end } = currentMonthRange;
-    if (!start || !end) {
+    const { from, to } = currentMonthRange;
+    if (!from || !to) {
       return [];
     }
     return teamPlanningEntries
@@ -1720,7 +1720,7 @@ export default function Planning() {
         if (!(entry?.start instanceof Date) || !(entry?.end instanceof Date)) {
           return false;
         }
-        return entry.start <= end && entry.end >= start;
+        return entry.start <= to && entry.end >= from;
       })
       .map((entry) => ({
         id: entry.id || `${entry.start.getTime()}-${entry.end.getTime()}`,
@@ -1738,8 +1738,8 @@ export default function Planning() {
     if (planningTab !== TEAM_PLANNING_TAB_SHARED) {
       return [];
     }
-    const { start, end } = currentMonthRange;
-    if (!start || !end) {
+    const { from, to } = currentMonthRange;
+    if (!from || !to) {
       return [];
     }
     return teamPlanningEntries
@@ -1751,7 +1751,7 @@ export default function Planning() {
         if (!(entry?.start instanceof Date) || !(entry?.end instanceof Date)) {
           return false;
         }
-        return entry.start <= end && entry.end >= start;
+        return entry.start <= to && entry.end >= from;
       })
       .map((task) => {
         const palette = generateMemberColor(
@@ -1771,6 +1771,26 @@ export default function Planning() {
         };
       });
   }, [planningTab, teamPlanningEntries, currentMonthRange]);
+
+  const teamSoloMonthTasks = useMemo(() => {
+    if (
+      !isTeamContext ||
+      planningTab === TEAM_PLANNING_TAB_SHARED ||
+      !currentMonthRange?.from ||
+      !currentMonthRange?.to
+    ) {
+      return [];
+    }
+    if (!Array.isArray(weeklyTasks) || weeklyTasks.length === 0) {
+      return [];
+    }
+    try {
+      return expandWeeklyTasksToMonthRange(weeklyTasks, currentMonthRange);
+    } catch (error) {
+      console.warn("team month tasks expansion failed", error);
+      return [];
+    }
+  }, [isTeamContext, planningTab, weeklyTasks, currentMonthRange]);
 
   const activeEvents = useMemo(() => {
     if (planningTab === TEAM_PLANNING_TAB_SHARED) {
@@ -2775,7 +2795,9 @@ export default function Planning() {
             staticTasks={
               planningTab === TEAM_PLANNING_TAB_SHARED
                 ? teamMonthTasks
-                : undefined
+                : isTeamContext
+                  ? teamSoloMonthTasks
+                  : undefined
             }
           />
         )}
