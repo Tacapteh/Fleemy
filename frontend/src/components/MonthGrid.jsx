@@ -421,14 +421,15 @@ function MonthGrid({
       return () => {};
     }
 
-    setEvents([]);
-    setEventsByDay({});
-
     if (!user || !monthRange?.from || !monthRange?.to) {
+      setEvents([]);
+      setEventsByDay({});
       return () => {};
     }
 
     if (!context || (context.type === "team" && !context.memberUid)) {
+      setEvents([]);
+      setEventsByDay({});
       return () => {};
     }
 
@@ -534,13 +535,13 @@ function MonthGrid({
       return () => {};
     }
 
-    setTasksByDay({});
-
     if (!user || !context || !monthRange?.from || !monthRange?.to) {
+      setTasksByDay({});
       return () => {};
     }
 
     if (context.type === "team" && !context.memberUid) {
+      setTasksByDay({});
       return () => {};
     }
 
