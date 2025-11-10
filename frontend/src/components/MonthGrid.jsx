@@ -421,30 +421,32 @@ function MonthGrid({
       return () => {};
     }
 
+    setEvents([]);
+    setEventsByDay({});
+
     if (!user || !monthRange?.from || !monthRange?.to) {
-      setEvents([]);
-      setEventsByDay({});
       return () => {};
     }
 
     if (!context || (context.type === "team" && !context.memberUid)) {
-      setEvents([]);
-      setEventsByDay({});
       return () => {};
     }
 
-    if (viewingOtherTeamMember) {
-      let cancelled = false;
+    let cancelled = false;
+    let stopPrefetch = () => {};
+
+    const runChunkPrefetch = () => {
       const segments = buildWeekRangesForMonth(monthRange);
       if (!segments.length) {
-        setEvents([]);
-        setEventsByDay({});
         return () => {};
       }
-
-      const load = async () => {
+      let active = true;
+      (async () => {
         const collected = [];
         for (const segment of segments) {
+          if (!active || cancelled) {
+            return;
+          }
           const startISO = formatIsoDate(segment.start);
           const endISO = formatIsoDate(segment.end);
           if (!startISO || !endISO) {
@@ -453,7 +455,7 @@ function MonthGrid({
           }
           try {
             const weekly = await fetchWeekEventsOnce(context, startISO, endISO);
-            if (cancelled) {
+            if (!active || cancelled) {
               return;
             }
             if (Array.isArray(weekly)) {
@@ -463,17 +465,27 @@ function MonthGrid({
             console.warn("MonthGrid weekly fetch error", error);
           }
         }
-        if (cancelled) {
+        if (!active || cancelled) {
           return;
         }
         const merged = mergeEventsById(collected);
         setEvents(merged);
         setEventsByDay(groupItemsByDay(merged));
+      })();
+      return () => {
+        active = false;
       };
+    };
 
-      load();
+    const shouldPrefetch = context?.type === "team" || viewingOtherTeamMember;
+    if (shouldPrefetch) {
+      stopPrefetch = runChunkPrefetch();
+    }
+
+    if (viewingOtherTeamMember) {
       return () => {
         cancelled = true;
+        stopPrefetch();
       };
     }
 
@@ -481,17 +493,30 @@ function MonthGrid({
       context,
       monthRange,
       (newEvents) => {
-        setEvents(Array.isArray(newEvents) ? newEvents : []);
-        setEventsByDay(groupItemsByDay(Array.isArray(newEvents) ? newEvents : []));
+        if (cancelled) {
+          return;
+        }
+        const normalizedEvents = Array.isArray(newEvents) ? newEvents : [];
+        setEvents(normalizedEvents);
+        setEventsByDay(groupItemsByDay(normalizedEvents));
       },
       (error) => {
+        if (cancelled) {
+          return;
+        }
         console.error("watchPlanningEventsInRange month view error", error);
         setEvents([]);
         setEventsByDay({});
       }
     );
 
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      stopPrefetch();
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
   }, [
     user,
     monthRange,
@@ -509,13 +534,13 @@ function MonthGrid({
       return () => {};
     }
 
+    setTasksByDay({});
+
     if (!user || !context || !monthRange?.from || !monthRange?.to) {
-      setTasksByDay({});
       return () => {};
     }
 
     if (context.type === "team" && !context.memberUid) {
-      setTasksByDay({});
       return () => {};
     }
 
