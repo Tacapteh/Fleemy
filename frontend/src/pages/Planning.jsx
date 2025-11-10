@@ -884,6 +884,13 @@ export default function Planning() {
     }
 
     if (!teamMembershipAllowed) {
+      if (!teamMembershipReady) {
+        setMembers([]);
+        setMembersLoading(true);
+        setMembersError(null);
+        setSelectedMemberId(null);
+        return () => {};
+      }
       setMembers([]);
       setMembersLoading(false);
       setMembersError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
@@ -1007,6 +1014,13 @@ export default function Planning() {
     }
 
     if (isTeamContext && !teamMembershipAllowed) {
+      if (!teamMembershipReady) {
+        cleanupSubscription();
+        setTeamPlanningEntries([]);
+        setTeamPlanningLoading(true);
+        setTeamPlanningError(null);
+        return;
+      }
       cleanupSubscription();
       setTeamPlanningEntries([]);
       setTeamPlanningLoading(false);
