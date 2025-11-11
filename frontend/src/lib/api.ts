@@ -69,9 +69,9 @@ const appendBaseUrl = (candidate: string | null) => {
 };
 
 appendBaseUrl(ENV_API_URL);
-appendBaseUrl(DEFAULT_API_URL);
 appendBaseUrl(SAME_ORIGIN_OVERRIDE);
 appendBaseUrl(BROWSER_FALLBACK_URL);
+appendBaseUrl(DEFAULT_API_URL);
 const RETRY_DELAYS = [0, 250, 500, 1000];
 const TEMPORARY_RETRY_DELAYS = [0, 300, 1000];
 const TEMPORARY_FINAL_BACKOFF = 2500;
