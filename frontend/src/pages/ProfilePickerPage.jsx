@@ -7,7 +7,15 @@ import {
   isPermissionDeniedError,
   fetchUserTeamsFromFirestore,
 } from '../firebase';
-import { collectionGroup, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
+import {
+  collectionGroup,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+} from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
@@ -230,7 +238,7 @@ const ProfilePickerPage = () => {
         shouldUpdate: () => active,
       });
 
-    const subscribeToTeams = (user) => {
+    const subscribeToTeams = async (user) => {
       stopTeamsListener();
 
       if (!user) {
@@ -254,10 +262,59 @@ const ProfilePickerPage = () => {
       hydrateTeamsFromFetcher();
 
       try {
-        const membershipsQuery = query(
-          collectionGroup(db, 'members'),
-          where('uid', '==', user.uid),
-        );
+        const membershipCollectionNames = ['memberships', 'members'];
+        let membershipsQuery = null;
+
+        for (const collectionName of membershipCollectionNames) {
+          let candidateQuery = null;
+          try {
+            candidateQuery = query(
+              collectionGroup(db, collectionName),
+              where('uid', '==', user.uid),
+            );
+          } catch (collectionError) {
+            if (isPermissionDeniedError(collectionError)) {
+              membershipsQuery = null;
+              break;
+            }
+            console.warn(
+              `Unable to prepare ${collectionName} membership query`,
+              collectionError,
+            );
+            continue;
+          }
+
+          let snapshot = null;
+          try {
+            snapshot = await getDocs(candidateQuery);
+            if (!active) {
+              return;
+            }
+          } catch (membershipError) {
+            if (isPermissionDeniedError(membershipError)) {
+              membershipsQuery = null;
+              break;
+            }
+            console.warn(
+              `Unable to prefetch ${collectionName} memberships`,
+              membershipError,
+            );
+          }
+
+          if (!membershipsQuery) {
+            membershipsQuery = candidateQuery;
+          }
+
+          if (snapshot && !snapshot.empty) {
+            membershipsQuery = candidateQuery;
+            break;
+          }
+        }
+
+        if (!membershipsQuery) {
+          hydrateTeamsFromFetcher();
+          return;
+        }
 
         let latestSnapshotId = 0;
 

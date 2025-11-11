@@ -1491,29 +1491,84 @@ export async function fetchUserTeamsFromFirestore() {
       where("members", "array-contains", uid)
     );
     const ownerQuery = query(teamsCollection, where("owner_uid", "==", uid));
-    const memberDocsQuery = query(
-      collectionGroup(db, "members"),
-      where("uid", "==", uid)
-    );
 
-    const memberDocsPromise = getDocs(memberDocsQuery).catch(
-      (membershipError) => {
-        if (isPermissionDeniedError(membershipError)) {
-          return null;
-        }
-        logPermissionError("teams members", uid, membershipError, {
-          level: "warn",
-          toast: false,
-        });
-        return null;
+    const membershipDocsPromise = (async () => {
+      if (typeof db?.collectionGroup !== "function") {
+        return [];
       }
-    );
 
-    const [memberSnapshot, ownerSnapshot, memberDocsSnapshot] =
+      const membershipCollectionNames = ["memberships", "members"];
+      const membershipDocMap = new Map();
+
+      for (const collectionName of membershipCollectionNames) {
+        let groupRef;
+        try {
+          groupRef = collectionGroup(db, collectionName);
+        } catch (groupError) {
+          if (isPermissionDeniedError(groupError)) {
+            break;
+          }
+          logPermissionError(
+            `teams ${collectionName} collectionGroup`,
+            uid,
+            groupError,
+            { level: "warn", toast: false }
+          );
+          continue;
+        }
+
+        const buildQuery = (constraint) => query(groupRef, constraint);
+        const queryConstraints = [where("uid", "==", uid)];
+
+        try {
+          queryConstraints.push(where(documentId(), "==", uid));
+        } catch (fieldError) {
+          // ``documentId`` may not be supported in some mock environments.
+          if (!isPermissionDeniedError(fieldError)) {
+            console.warn("Unable to use documentId constraint", fieldError);
+          }
+        }
+
+        for (const constraint of queryConstraints) {
+          let snapshot = null;
+          try {
+            snapshot = await getDocs(buildQuery(constraint));
+          } catch (membershipError) {
+            if (isPermissionDeniedError(membershipError)) {
+              snapshot = null;
+            } else {
+              logPermissionError(
+                `teams ${collectionName} memberships`,
+                uid,
+                membershipError,
+                { level: "warn", toast: false }
+              );
+            }
+          }
+
+          if (snapshot && !snapshot.empty) {
+            snapshot.forEach((docSnap) => {
+              const docPath = docSnap?.ref?.path || `${collectionName}/${docSnap.id}`;
+              if (!membershipDocMap.has(docPath)) {
+                membershipDocMap.set(docPath, docSnap);
+              }
+            });
+          }
+        }
+
+        if (membershipDocMap.size > 0) {
+          break;
+        }
+      }
+
+      return Array.from(membershipDocMap.values());
+    })();
+
+    const [memberSnapshot, ownerSnapshot, membershipDocSnaps] =
       await Promise.all([
         getDocs(memberQuery),
         getDocs(ownerQuery),
-        memberDocsPromise,
+        membershipDocsPromise,
       ]);
 
     collect(memberSnapshot);
@@ -1521,14 +1576,15 @@ export async function fetchUserTeamsFromFirestore() {
 
     const missingTeamRefs = new Map();
 
-    if (memberDocsSnapshot) {
-      memberDocsSnapshot.forEach((docSnap) => {
+    if (Array.isArray(membershipDocSnaps)) {
+      membershipDocSnaps.forEach((docSnap) => {
         const teamRef = docSnap?.ref?.parent?.parent;
         const data =
           typeof docSnap.data === "function" ? docSnap.data() : docSnap.data;
-        const teamId = teamRef?.id || data?.team_id || data?.teamId;
+        const teamId =
+          teamRef?.id || data?.team_id || data?.teamId || data?.team || null;
         if (teamId && !uniqueTeams.has(teamId)) {
-          missingTeamRefs.set(teamId, teamRef);
+          missingTeamRefs.set(teamId, teamRef || doc(db, "teams", teamId));
         }
       });
     }
