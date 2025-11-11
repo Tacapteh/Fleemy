@@ -1491,17 +1491,17 @@ export async function fetchUserTeamsFromFirestore() {
       where("members", "array-contains", uid)
     );
     const ownerQuery = query(teamsCollection, where("owner_uid", "==", uid));
-    const membershipQuery = query(
-      collectionGroup(db, "memberships"),
-      where(documentId(), "==", uid)
+    const memberDocsQuery = query(
+      collectionGroup(db, "members"),
+      where("uid", "==", uid)
     );
 
-    const membershipPromise = getDocs(membershipQuery).catch(
+    const memberDocsPromise = getDocs(memberDocsQuery).catch(
       (membershipError) => {
         if (isPermissionDeniedError(membershipError)) {
           return null;
         }
-        logPermissionError("teams memberships", uid, membershipError, {
+        logPermissionError("teams members", uid, membershipError, {
           level: "warn",
           toast: false,
         });
@@ -1509,11 +1509,11 @@ export async function fetchUserTeamsFromFirestore() {
       }
     );
 
-    const [memberSnapshot, ownerSnapshot, membershipSnapshot] =
+    const [memberSnapshot, ownerSnapshot, memberDocsSnapshot] =
       await Promise.all([
         getDocs(memberQuery),
         getDocs(ownerQuery),
-        membershipPromise,
+        memberDocsPromise,
       ]);
 
     collect(memberSnapshot);
@@ -1521,10 +1521,12 @@ export async function fetchUserTeamsFromFirestore() {
 
     const missingTeamRefs = new Map();
 
-    if (membershipSnapshot) {
-      membershipSnapshot.forEach((docSnap) => {
+    if (memberDocsSnapshot) {
+      memberDocsSnapshot.forEach((docSnap) => {
         const teamRef = docSnap?.ref?.parent?.parent;
-        const teamId = teamRef?.id;
+        const data =
+          typeof docSnap.data === "function" ? docSnap.data() : docSnap.data;
+        const teamId = teamRef?.id || data?.team_id || data?.teamId;
         if (teamId && !uniqueTeams.has(teamId)) {
           missingTeamRefs.set(teamId, teamRef);
         }

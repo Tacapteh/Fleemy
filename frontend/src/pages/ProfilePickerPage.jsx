@@ -7,7 +7,7 @@ import {
   isPermissionDeniedError,
   fetchUserTeamsFromFirestore,
 } from '../firebase';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collectionGroup, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { apiFetch } from '../lib/api';
 import { contextStore } from '../stores/contextStore';
 import CreateTeamDialog from '../components/profiles/CreateTeamDialog';
@@ -20,6 +20,8 @@ import {
 } from '../utils/teamCache';
 import { showToast } from '../utils/toast';
 
+const DEFAULT_TEAM_NAME = 'Equipe sans nom';
+
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
   const [teams, setTeams] = useState([]);
@@ -30,6 +32,33 @@ const ProfilePickerPage = () => {
   const [inviteDialogTeam, setInviteDialogTeam] = useState(null);
   const [contextError, setContextError] = useState('');
   const [deletingTeamId, setDeletingTeamId] = useState(null);
+
+  const normalizeTeamDoc = (docSnap) => {
+    if (!docSnap) {
+      return null;
+    }
+    const exists =
+      typeof docSnap.exists === 'function' ? docSnap.exists() : Boolean(docSnap.exists);
+    if (!exists) {
+      return null;
+    }
+    const data = typeof docSnap.data === 'function' ? docSnap.data() : {};
+    const members = Array.isArray(data.members) ? data.members : [];
+    const fallbackCount =
+      typeof data.members_count === 'number'
+        ? data.members_count
+        : typeof data.membersCount === 'number'
+        ? data.membersCount
+        : members.length;
+
+    return {
+      team_id: docSnap.id,
+      name: data.name || DEFAULT_TEAM_NAME,
+      owner_uid: data.owner_uid || data.ownerUid || null,
+      invite_code: data.invite_code || data.inviteCode || null,
+      members_count: fallbackCount,
+    };
+  };
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -81,7 +110,7 @@ const ProfilePickerPage = () => {
         const nextTeams = response.teams
           .map((team) => ({
             team_id: team.team_id || team.id || null,
-            name: team.name || 'Équipe sans nom',
+            name: team.name || DEFAULT_TEAM_NAME,
             owner_uid: team.owner_uid || team.ownerUid || null,
             invite_code: team.invite_code || team.inviteCode || null,
             members_count: typeof team.members_count === 'number'
@@ -112,7 +141,7 @@ const ProfilePickerPage = () => {
           ? fallbackTeams
               .map((team) => ({
                 team_id: team.team_id || team.id || null,
-                name: team.name || 'Équipe sans nom',
+                name: team.name || DEFAULT_TEAM_NAME,
                 owner_uid: team.owner_uid || team.ownerUid || null,
                 invite_code: team.invite_code || team.inviteCode || null,
                 members_count:
@@ -195,47 +224,125 @@ const ProfilePickerPage = () => {
       });
 
       try {
-        const teamsQuery = query(
-          collection(db, 'teams'),
-          where('members', 'array-contains', user.uid),
+        const membershipsQuery = query(
+          collectionGroup(db, 'members'),
+          where('uid', '==', user.uid),
         );
 
-        unsubscribeTeams = onSnapshot(
-          teamsQuery,
-          (snapshot) => {
-            if (!active) {
+        let latestSnapshotId = 0;
+
+        const extractMembershipEntries = (snapshot) =>
+          snapshot.docs
+            .map((docSnap) => {
+              const teamRef = docSnap?.ref?.parent?.parent || null;
+              let teamId = teamRef?.id || null;
+
+              if (!teamId) {
+                try {
+                  const membershipData =
+                    typeof docSnap.data === 'function' ? docSnap.data() : {};
+                  teamId = membershipData?.team_id || membershipData?.teamId || null;
+                } catch {
+                  teamId = null;
+                }
+              }
+
+              if (!teamId) {
+                return null;
+              }
+
+              return {
+                teamId,
+                teamRef: teamRef || doc(db, 'teams', teamId),
+              };
+            })
+            .filter(Boolean);
+
+        const handleSnapshot = (snapshot) => {
+          latestSnapshotId += 1;
+          const currentSnapshotId = latestSnapshotId;
+
+          const processSnapshot = async () => {
+            const membershipEntries = extractMembershipEntries(snapshot);
+
+            if (membershipEntries.length === 0) {
+              if (!active) {
+                return;
+              }
+              setTeams([]);
+              setLoading(false);
+              setError('');
+              clearTeamsCache();
               return;
             }
 
-            const nextTeams = snapshot.docs
-              .map((docSnap) => {
-                const data = typeof docSnap.data === 'function' ? docSnap.data() : {};
-                const members = Array.isArray(data.members) ? data.members : [];
-                const fallbackCount =
-                  typeof data.members_count === 'number'
-                    ? data.members_count
-                    : typeof data.membersCount === 'number'
-                    ? data.membersCount
-                    : members.length;
+            const uniqueTeamRefs = new Map();
+            membershipEntries.forEach(({ teamId, teamRef }) => {
+              if (teamId && !uniqueTeamRefs.has(teamId)) {
+                uniqueTeamRefs.set(teamId, teamRef);
+              }
+            });
 
-                return {
-                  team_id: docSnap.id,
-                  name: data.name || 'Équipe sans nom',
-                  owner_uid: data.owner_uid || data.ownerUid || null,
-                  invite_code: data.invite_code || data.inviteCode || null,
-                  members_count: fallbackCount,
-                };
-              })
+            if (uniqueTeamRefs.size === 0) {
+              if (!active) {
+                return;
+              }
+              setTeams([]);
+              setLoading(false);
+              setError('');
+              clearTeamsCache();
+              return;
+            }
+
+            const resolvedTeams = await Promise.all(
+              Array.from(uniqueTeamRefs.entries()).map(async ([teamId, teamRef]) => {
+                try {
+                  const teamSnap = await getDoc(teamRef);
+                  return teamSnap;
+                } catch (teamError) {
+                  console.warn(`Unable to fetch team ${teamId}`, teamError);
+                  return null;
+                }
+              }),
+            );
+
+            if (!active || currentSnapshotId !== latestSnapshotId) {
+              return;
+            }
+
+            const nextTeams = resolvedTeams
+              .map((teamSnap) => normalizeTeamDoc(teamSnap))
+              .filter(Boolean)
               .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-
-            if (!active) {
-              return;
-            }
 
             setTeams(nextTeams);
             setLoading(false);
             setError('');
             writeTeamsCache(nextTeams);
+          };
+
+          processSnapshot().catch((processingError) => {
+            if (!active) {
+              return;
+            }
+            console.error(
+              'Unable to hydrate teams from memberships snapshot',
+              processingError,
+            );
+            setTeams([]);
+            setLoading(false);
+            setError("Impossible de charger vos équipes pour l'instant");
+            clearTeamsCache();
+          });
+        };
+
+        unsubscribeTeams = onSnapshot(
+          membershipsQuery,
+          (snapshot) => {
+            if (!active) {
+              return;
+            }
+            handleSnapshot(snapshot);
           },
           (snapshotError) => {
             if (!active) {
@@ -243,7 +350,7 @@ const ProfilePickerPage = () => {
             }
 
             if (isPermissionDeniedError(snapshotError)) {
-              console.warn('Firestore team subscription permission denied', snapshotError);
+              console.warn('Firestore membership subscription permission denied', snapshotError);
               stopTeamsListener();
               fetchTeamsList({
                 skipStartLoading: true,
@@ -253,7 +360,7 @@ const ProfilePickerPage = () => {
               return;
             }
 
-            console.error('Firestore team subscription error', snapshotError);
+            console.error('Firestore membership subscription error', snapshotError);
             setTeams([]);
             setLoading(false);
             setError("Impossible de charger vos équipes pour l'instant");
@@ -262,7 +369,7 @@ const ProfilePickerPage = () => {
         );
       } catch (subscriptionError) {
         if (isPermissionDeniedError(subscriptionError)) {
-          console.warn('Skipping Firestore teams subscription (permission denied)');
+          console.warn('Skipping Firestore membership subscription (permission denied)');
           fetchTeamsList({
             skipStartLoading: true,
             silent: true,
