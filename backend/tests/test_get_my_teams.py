@@ -28,6 +28,17 @@ class DummyTeamsCollection:
     def __init__(self, docs_by_id):
         self._docs_by_id = docs_by_id
 
+    def _extract_field(self, data, field):
+        if "." not in field:
+            return data.get(field)
+
+        current = data
+        for segment in field.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(segment)
+        return current
+
     def where(self, field, op, value):
         matched = []
         for doc in self._docs_by_id.values():
@@ -39,7 +50,7 @@ class DummyTeamsCollection:
                 if isinstance(members, list) and value in members:
                     candidate = True
             elif op == "==":
-                candidate = data.get(field) == value
+                candidate = self._extract_field(data, field) == value
             else:  # pragma: no cover - defensive for unexpected operators
                 raise NotImplementedError(op)
 
@@ -141,6 +152,18 @@ async def test_get_my_teams_includes_owned_teams(monkeypatch):
             "owner_uid": user_uid,
             "invite_code": "INVITE3",
         },
+        "team-ownerUid": {
+            "name": "OwnerUid",
+            "members": [],
+            "ownerUid": user_uid,
+            "invite_code": "INVITE4",
+        },
+        "team-owner-object": {
+            "name": "OwnerObject",
+            "members": [],
+            "owner": {"uid": user_uid},
+            "invite_code": "INVITE5",
+        },
     }
 
     dummy_db = DummyDB(teams_payload)
@@ -155,7 +178,13 @@ async def test_get_my_teams_includes_owned_teams(monkeypatch):
 
     assert result["success"] is True
     team_ids = {team["team_id"] for team in result["teams"]}
-    assert team_ids == {"team-member", "team-owner", "team-both"}
+    assert team_ids == {
+        "team-member",
+        "team-owner",
+        "team-both",
+        "team-ownerUid",
+        "team-owner-object",
+    }
 
     owner_team = next(team for team in result["teams"] if team["team_id"] == "team-owner")
     assert owner_team["members_count"] == 4
