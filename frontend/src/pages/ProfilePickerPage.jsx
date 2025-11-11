@@ -147,7 +147,9 @@ const ProfilePickerPage = () => {
         }
       } catch (apiError) {
         if (apiError?.name === 'AbortError') {
-          console.warn('API teams fetch aborted, falling back to Firestore');
+          if (!silent) {
+            console.warn('API teams fetch aborted, falling back to Firestore');
+          }
         } else {
           console.error('Failed to fetch teams via API', apiError);
         }
