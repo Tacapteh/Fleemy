@@ -3932,8 +3932,43 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             return list(member_query.stream())
 
         def fetch_owner_teams():
-            owner_query = teams_ref.where("owner_uid", "==", user["uid"])
-            return list(owner_query.stream())
+            owner_fields = [
+                "owner_uid",
+                "ownerUid",
+                "ownerId",
+                "owner.uid",
+                "owner.user_uid",
+                "owner.userUid",
+                "owner.id",
+                "owner.user_id",
+                "owner.userId",
+            ]
+
+            seen_team_ids: Set[str] = set()
+            owner_documents: List[Any] = []
+
+            for field_name in owner_fields:
+                try:
+                    query_ref = teams_ref.where(field_name, "==", user["uid"])
+                except Exception:
+                    logger.debug(
+                        "Owner field %s is not queryable in this environment", field_name
+                    )
+                    continue
+
+                try:
+                    for team_doc in query_ref.stream():
+                        team_id = getattr(team_doc, "id", None)
+                        if not team_id or team_id in seen_team_ids:
+                            continue
+                        owner_documents.append(team_doc)
+                        seen_team_ids.add(team_id)
+                except Exception:
+                    logger.debug(
+                        "Owner field %s query failed, skipping", field_name, exc_info=True
+                    )
+
+            return owner_documents
 
         async def fetch_membership_docs() -> List[Any]:
             if not hasattr(db, "collection_group"):
@@ -4020,12 +4055,28 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 if isinstance(stored_count, int):
                     members_count = stored_count
 
+            owner_uid = team_data.get("owner_uid") or team_data.get("ownerUid")
+            owner_uid = owner_uid or team_data.get("ownerId")
+            if not owner_uid:
+                owner_payload = team_data.get("owner")
+                if isinstance(owner_payload, dict):
+                    for key in (
+                        "uid",
+                        "user_uid",
+                        "userUid",
+                        "id",
+                        "user_id",
+                        "userId",
+                    ):
+                        candidate = owner_payload.get(key)
+                        if candidate:
+                            owner_uid = candidate
+                            break
+
             teams_map[team_id] = {
                 "team_id": team_id,
                 "name": team_data.get("name"),
-                "owner_uid": team_data.get("owner_uid")
-                or team_data.get("ownerUid")
-                or team_data.get("ownerId"),
+                "owner_uid": owner_uid,
                 "invite_code": team_data.get("invite_code"),
                 "members_count": members_count,
             }
