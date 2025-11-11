@@ -32,12 +32,29 @@ const ProfilePickerPage = () => {
   const [deletingTeamId, setDeletingTeamId] = useState(null);
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const head = document.head || document.getElementsByTagName('head')[0];
+    if (!head) {
+      return;
+    }
+
     const selector = 'meta[http-equiv="Cross-Origin-Opener-Policy"]';
-    let coopMeta = document.head.querySelector(selector);
+    let coopMeta = head.querySelector(selector);
     if (!coopMeta) {
       coopMeta = document.createElement('meta');
       coopMeta.setAttribute('http-equiv', 'Cross-Origin-Opener-Policy');
-      document.head.prepend(coopMeta);
+
+      const firstChild = head.firstChild;
+      if (typeof head.prepend === 'function') {
+        head.prepend(coopMeta);
+      } else if (firstChild) {
+        head.insertBefore(coopMeta, firstChild);
+      } else {
+        head.appendChild(coopMeta);
+      }
     }
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
