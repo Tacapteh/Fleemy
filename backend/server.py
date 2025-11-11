@@ -3426,7 +3426,7 @@ async def create_team(
             )
         
         # Generate unique invite code
-        invite_code = generate_invite_code(8)
+        invite_code = await asyncio.to_thread(generate_invite_code, 8)
         
         team = Team(
             name=name,
@@ -3952,10 +3952,52 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 logger.exception("Failed to fetch membership collection group")
                 return []
 
-        member_docs, owner_docs, membership_docs = await asyncio.gather(
+        async def fetch_legacy_member_docs() -> List[Any]:
+            uid = user.get("uid")
+            if not uid:
+                return []
+
+            lookup_field = f"members.{uid}"
+
+            def _run_legacy_query() -> List[Any]:
+                try:
+                    legacy_query = teams_ref.where(lookup_field, "==", True)
+                    return list(legacy_query.stream())
+                except Exception as legacy_error:
+                    logger.warning(
+                        "Legacy members map query failed for %s: %s",
+                        lookup_field,
+                        legacy_error,
+                    )
+                    return []
+
+            legacy_docs = await asyncio.to_thread(_run_legacy_query)
+            if legacy_docs:
+                return legacy_docs
+
+            def _scan_all_teams() -> List[Any]:
+                results: List[Any] = []
+                try:
+                    for team_doc in teams_ref.stream():
+                        data = team_doc.to_dict() or {}
+                        member_ids = _normalize_member_ids(data.get("members"))
+                        if uid in member_ids:
+                            results.append(team_doc)
+                except Exception as scan_error:
+                    logger.warning(
+                        "Legacy members scan failed for %s: %s",
+                        uid,
+                        scan_error,
+                    )
+                return results
+
+            return await asyncio.to_thread(_scan_all_teams)
+
+        member_docs, owner_docs, membership_docs, legacy_member_docs = await asyncio.gather(
             asyncio.to_thread(fetch_member_teams),
             asyncio.to_thread(fetch_owner_teams),
             fetch_membership_docs(),
+            fetch_legacy_member_docs(),
         )
 
         teams_map: Dict[str, Dict[str, Any]] = {}
@@ -3988,7 +4030,7 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 "members_count": members_count,
             }
 
-        for team_doc in [*member_docs, *owner_docs]:
+        for team_doc in [*member_docs, *owner_docs, *legacy_member_docs]:
             _store_team(team_doc)
 
         membership_team_refs: Dict[str, Any] = {}
@@ -4048,7 +4090,7 @@ async def rotate_invite_code(
             )
         
         # Generate new code
-        new_code = generate_invite_code(8)
+        new_code = await asyncio.to_thread(generate_invite_code, 8)
         
         # Update team
         await asyncio.to_thread(
