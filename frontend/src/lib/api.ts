@@ -45,8 +45,11 @@ const ENV_API_URL =
     : null;
 
 const SAME_ORIGIN_OVERRIDE = resolveSameOriginOverride();
+const BROWSER_ORIGIN =
+  typeof window !== "undefined" ? window.location.origin || null : null;
 const BROWSER_FALLBACK_URL = resolveBrowserFallback();
 
+// Production fallback (Render)
 const DEFAULT_API_URL = "https://fleemy.onrender.com";
 
 const API_BASE_URLS: string[] = [];
@@ -70,6 +73,7 @@ const appendBaseUrl = (candidate: string | null) => {
 
 appendBaseUrl(ENV_API_URL);
 appendBaseUrl(SAME_ORIGIN_OVERRIDE);
+appendBaseUrl(BROWSER_ORIGIN);
 appendBaseUrl(BROWSER_FALLBACK_URL);
 appendBaseUrl(DEFAULT_API_URL);
 const RETRY_DELAYS = [0, 250, 500, 1000];
