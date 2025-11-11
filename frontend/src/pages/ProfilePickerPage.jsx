@@ -88,6 +88,8 @@ const ProfilePickerPage = () => {
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
 
+  const API_TEAM_FETCH_TIMEOUT_MS = 8000;
+
   const fetchTeamsList = useCallback(
     async (options = {}) => {
       const {
@@ -101,8 +103,24 @@ const ProfilePickerPage = () => {
       }
 
       let source = 'api';
+      const hasWindow = typeof window !== 'undefined';
+      const controller =
+        typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId =
+        controller && hasWindow && API_TEAM_FETCH_TIMEOUT_MS > 0
+          ? window.setTimeout(() => {
+              try {
+                controller.abort();
+              } catch {
+                /* ignore abort errors */
+              }
+            }, API_TEAM_FETCH_TIMEOUT_MS)
+          : null;
+
       try {
-        const response = await apiFetch('/teams/my');
+        const response = await apiFetch('/teams/my', {
+          signal: controller?.signal,
+        });
         if (response?.success !== true || !Array.isArray(response?.teams)) {
           throw new Error('Invalid response');
         }
@@ -128,7 +146,11 @@ const ProfilePickerPage = () => {
           writeTeamsCache(nextTeams);
         }
       } catch (apiError) {
-        console.error('Failed to fetch teams via API', apiError);
+        if (apiError?.name === 'AbortError') {
+          console.warn('API teams fetch aborted, falling back to Firestore');
+        } else {
+          console.error('Failed to fetch teams via API', apiError);
+        }
         source = 'firestore';
         let fallbackTeams = [];
         try {
@@ -167,6 +189,9 @@ const ProfilePickerPage = () => {
           }
         }
       } finally {
+        if (hasWindow && timeoutId !== null) {
+          window.clearTimeout(timeoutId);
+        }
         if (shouldUpdate()) {
           setLoading(false);
         }
