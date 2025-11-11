@@ -223,6 +223,13 @@ const ProfilePickerPage = () => {
       }
     };
 
+    const hydrateTeamsFromFetcher = () =>
+      fetchTeamsList({
+        skipStartLoading: true,
+        silent: true,
+        shouldUpdate: () => active,
+      });
+
     const subscribeToTeams = (user) => {
       stopTeamsListener();
 
@@ -244,11 +251,7 @@ const ProfilePickerPage = () => {
         setError('');
       }
 
-      fetchTeamsList({
-        skipStartLoading: true,
-        silent: true,
-        shouldUpdate: () => active,
-      });
+      hydrateTeamsFromFetcher();
 
       try {
         const membershipsQuery = query(
@@ -293,13 +296,7 @@ const ProfilePickerPage = () => {
             const membershipEntries = extractMembershipEntries(snapshot);
 
             if (membershipEntries.length === 0) {
-              if (!active) {
-                return;
-              }
-              setTeams([]);
-              setLoading(false);
-              setError('');
-              clearTeamsCache();
+              hydrateTeamsFromFetcher();
               return;
             }
 
@@ -311,13 +308,7 @@ const ProfilePickerPage = () => {
             });
 
             if (uniqueTeamRefs.size === 0) {
-              if (!active) {
-                return;
-              }
-              setTeams([]);
-              setLoading(false);
-              setError('');
-              clearTeamsCache();
+              hydrateTeamsFromFetcher();
               return;
             }
 
@@ -342,6 +333,11 @@ const ProfilePickerPage = () => {
               .filter(Boolean)
               .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
+            if (nextTeams.length === 0) {
+              hydrateTeamsFromFetcher();
+              return;
+            }
+
             setTeams(nextTeams);
             setLoading(false);
             setError('');
@@ -356,10 +352,7 @@ const ProfilePickerPage = () => {
               'Unable to hydrate teams from memberships snapshot',
               processingError,
             );
-            setTeams([]);
-            setLoading(false);
-            setError("Impossible de charger vos équipes pour l'instant");
-            clearTeamsCache();
+            hydrateTeamsFromFetcher();
           });
         };
 
@@ -379,37 +372,23 @@ const ProfilePickerPage = () => {
             if (isPermissionDeniedError(snapshotError)) {
               console.warn('Firestore membership subscription permission denied', snapshotError);
               stopTeamsListener();
-              fetchTeamsList({
-                skipStartLoading: true,
-                silent: true,
-                shouldUpdate: () => active,
-              });
+              hydrateTeamsFromFetcher();
               return;
             }
 
             console.error('Firestore membership subscription error', snapshotError);
-            setTeams([]);
-            setLoading(false);
-            setError("Impossible de charger vos équipes pour l'instant");
-            clearTeamsCache();
+            hydrateTeamsFromFetcher();
           },
         );
       } catch (subscriptionError) {
         if (isPermissionDeniedError(subscriptionError)) {
           console.warn('Skipping Firestore membership subscription (permission denied)');
-          fetchTeamsList({
-            skipStartLoading: true,
-            silent: true,
-            shouldUpdate: () => active,
-          });
+          hydrateTeamsFromFetcher();
           return;
         }
 
         console.error('Failed to subscribe to teams', subscriptionError);
-        fetchTeamsList({
-          skipStartLoading: true,
-          shouldUpdate: () => active,
-        });
+        hydrateTeamsFromFetcher();
       }
     };
 
@@ -556,7 +535,11 @@ const ProfilePickerPage = () => {
         throw new Error(data?.error || 'Erreur lors de la création');
       }
 
-      await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
+      try {
+        await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
+      } catch (membershipError) {
+        console.warn('Unable to ensure membership after team creation', membershipError);
+      }
 
       clearTeamsCache();
       setInviteDialogTeam({
@@ -585,9 +568,13 @@ const ProfilePickerPage = () => {
         throw new Error(data?.error || 'Code invalide ou expiré');
       }
 
-      await ensureMembershipForUser(data.team_id, user, {
-        includeJoinedAt: !data.already_member,
-      });
+      try {
+        await ensureMembershipForUser(data.team_id, user, {
+          includeJoinedAt: !data.already_member,
+        });
+      } catch (membershipError) {
+        console.warn('Unable to ensure membership after joining team', membershipError);
+      }
 
       clearTeamsCache();
       await handleSelectTeam({
