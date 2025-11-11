@@ -296,24 +296,55 @@ class InMemoryCollection:
 
     def _apply_filters(self, data):
         for field, op, value in self._filters:
+            normalized_op = op
+            if isinstance(op, str):
+                normalized_op = op.lower().replace("-", "_")
+
             field_value = self._resolve_field_value(data, field)
-            if op == "==":
+
+            if normalized_op == "==":
                 if field_value != value:
                     return False
-            elif op == "!=":
+            elif normalized_op == "!=":
                 if field_value == value:
                     return False
-            elif op == ">":
-                if not (field_value and field_value > value):
+            elif normalized_op == ">":
+                if field_value is None or field_value <= value:
                     return False
-            elif op == ">=":
-                if not (field_value and field_value >= value):
+            elif normalized_op == ">=":
+                if field_value is None or field_value < value:
                     return False
-            elif op == "<":
-                if not (field_value and field_value < value):
+            elif normalized_op == "<":
+                if field_value is None or field_value >= value:
                     return False
-            elif op == "<=":
-                if not (field_value and field_value <= value):
+            elif normalized_op == "<=":
+                if field_value is None or field_value > value:
+                    return False
+            elif normalized_op == "array_contains":
+                if not isinstance(field_value, list) or value not in field_value:
+                    return False
+            elif normalized_op == "array_contains_any":
+                if not isinstance(field_value, list):
+                    return False
+                try:
+                    candidates = list(value)
+                except TypeError:
+                    return False
+                if not any(candidate in field_value for candidate in candidates):
+                    return False
+            elif normalized_op == "in":
+                try:
+                    candidates = list(value)
+                except TypeError:
+                    return False
+                if field_value not in candidates:
+                    return False
+            elif normalized_op == "not_in":
+                try:
+                    candidates = list(value)
+                except TypeError:
+                    candidates = []
+                if field_value in candidates:
                     return False
         return True
 
