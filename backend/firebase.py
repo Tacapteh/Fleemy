@@ -4,6 +4,8 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict
+
 import firebase_admin
 from firebase_admin import credentials, firestore
 
@@ -25,6 +27,25 @@ if not firebase_admin._apps:
     # firebase_admin.initialize_app(cred)
     logger.info("✅ Firebase Admin initialisé (skipped for testing)")
 
+def _ensure_doc_entry(node: Dict[str, Any]) -> Dict[str, Any]:
+    node.setdefault("__doc__", {})
+    node.setdefault("__subcollections__", {})
+    return node
+
+
+def _to_plain_dict(data: Any) -> Dict[str, Any]:
+    if isinstance(data, dict):
+        return dict(data)
+
+    model_dump = getattr(data, "model_dump", None)
+    if callable(model_dump):
+        return dict(model_dump())
+
+    legacy_dict = getattr(data, "dict", None)
+    if callable(legacy_dict):
+        return dict(legacy_dict())
+
+    return dict(data)
 
 
 class InMemoryDocument(dict):
@@ -33,42 +54,92 @@ class InMemoryDocument(dict):
         self.store = store
         self.path = path
 
+    @property
+    def id(self):
+        return self.path[-1] if self.path else None
+
+    def _doc_entry(self, create: bool = True):
+        node = self.store
+        for index, part in enumerate(self.path):
+            is_collection = index % 2 == 0
+            if is_collection:
+                if part not in node:
+                    if not create:
+                        return None
+                    node[part] = {}
+                node = node[part]
+            else:
+                entry = node.get(part)
+                if entry is None:
+                    if not create:
+                        return None
+                    entry = {"__doc__": {}, "__subcollections__": {}}
+                    node[part] = entry
+                entry = _ensure_doc_entry(entry)
+                if index == len(self.path) - 1:
+                    return entry
+                node = entry["__subcollections__"]
+        return None
+
     def _ref(self):
-        d = self.store
-        for p in self.path:
-            d = d.setdefault(p, {})
-        return d
+        entry = self._doc_entry(create=True)
+        return entry["__doc__"] if entry is not None else {}
 
     def set(self, data, merge=False):
-        r = self._ref()
+        entry = self._doc_entry(create=True)
+        if entry is None:
+            return
+        payload = _to_plain_dict(data)
         if merge:
-            r.update(dict(data))
+            entry["__doc__"].update(payload)
         else:
-            r.clear()
-            r.update(dict(data))
+            entry["__doc__"] = payload
 
     def update(self, data):
-        self._ref().update(data)
+        entry = self._doc_entry(create=True)
+        if entry is None:
+            return
+        entry["__doc__"].update(_to_plain_dict(data))
 
     def get(self):
-        data = self._ref()
+        entry = self._doc_entry(create=False)
 
         class Snap:
-            def __init__(self, doc_id, d):
+            def __init__(self, doc_id, entry_data):
                 self.id = doc_id
-                self._d = dict(d)
-                self.exists = bool(d)
+                self._entry = entry_data
+                self.exists = entry_data is not None and "__doc__" in entry_data
 
             def to_dict(self):
-                return dict(self._d)
+                if self._entry and "__doc__" in self._entry:
+                    return dict(self._entry["__doc__"])
+                return {}
 
         doc_id = self.path[-1] if self.path else None
-        return Snap(doc_id, data)
+        return Snap(doc_id, entry)
 
     def delete(self):
-        self._ref().clear()
+        node = self.store
+        for index, part in enumerate(self.path):
+            is_collection = index % 2 == 0
+            if is_collection:
+                if part not in node:
+                    return
+                node = node[part]
+            else:
+                if part not in node:
+                    return
+                if index == len(self.path) - 1:
+                    del node[part]
+                    return
+                entry = _ensure_doc_entry(node[part])
+                node = entry["__subcollections__"]
 
     def collection(self, name):
+        entry = self._doc_entry(create=True)
+        if entry is None:
+            return InMemoryCollection(self.store, self.path + [name])
+        entry.setdefault("__subcollections__", {})
         return InMemoryCollection(self.store, self.path + [name])
 
 
@@ -81,14 +152,38 @@ class InMemoryCollection:
         self._order_direction = None
         self._limit_count = None
 
+    def _collection_store(self, create: bool):
+        node = self.store
+        for index, part in enumerate(self.path):
+            is_collection = index % 2 == 0
+            if is_collection:
+                if part not in node:
+                    if not create:
+                        return {}
+                    node[part] = {}
+                if index == len(self.path) - 1:
+                    return node[part]
+                node = node[part]
+            else:
+                entry = node.get(part)
+                if entry is None:
+                    if not create:
+                        return {}
+                    entry = {"__doc__": {}, "__subcollections__": {}}
+                    node[part] = entry
+                entry = _ensure_doc_entry(entry)
+                node = entry["__subcollections__"]
+        return {}
+
     def document(self, doc_id):
         return InMemoryDocument(self.store, self.path + [doc_id])
 
     def add(self, data, document_id=None):
+        store = self._collection_store(create=True)
         doc_id = document_id or uuid.uuid4().hex
-        doc = self.document(doc_id)
-        doc.set(dict(data) if isinstance(data, dict) else data)
-        return doc, None
+        entry = {"__doc__": _to_plain_dict(data), "__subcollections__": {}}
+        store[doc_id] = entry
+        return None, self.document(doc_id)
 
     # Simplified query helpers
     def where(self, field, op, value):
@@ -116,22 +211,25 @@ class InMemoryCollection:
         return new_collection
 
     def stream(self):
-        d = InMemoryDocument(self.store, self.path)._ref()
+        store = self._collection_store(create=False)
 
         class Snap:
-            def __init__(self, doc_id, data):
+            def __init__(self, doc_id, entry):
                 self.id = doc_id
-                self._d = dict(data)
+                self._entry = entry
 
             def to_dict(self):
-                return dict(self._d)
+                if self._entry and "__doc__" in self._entry:
+                    return dict(self._entry["__doc__"])
+                return {}
 
         # Apply filters
         results = []
-        for k, v in d.items():
-            if self._apply_filters(v):
-                results.append(Snap(k, v))
-        
+        for doc_id, entry in store.items():
+            data = entry.get("__doc__", {})
+            if self._apply_filters(data):
+                results.append(Snap(doc_id, entry))
+
         # Apply ordering
         if self._order_field:
             reverse = False
@@ -140,7 +238,6 @@ class InMemoryCollection:
             if isinstance(direction, str):
                 reverse = direction.upper() == "DESCENDING"
             elif direction is not None:
-                # Firestore exposes direction constants as objects which can be compared
                 reverse = (
                     getattr(direction, "name", "").upper() == "DESCENDING"
                     or direction == getattr(Query, "DESCENDING", None)
@@ -170,11 +267,11 @@ class InMemoryCollection:
                 key=lambda x: _normalize_order_value(x.to_dict().get(self._order_field)),
                 reverse=reverse,
             )
-        
+
         # Apply limit
         if self._limit_count:
-            results = results[:self._limit_count]
-        
+            results = results[: self._limit_count]
+
         return results
 
     def _apply_filters(self, data):
