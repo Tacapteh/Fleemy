@@ -274,9 +274,29 @@ class InMemoryCollection:
 
         return results
 
+    def _resolve_field_value(self, data, field):
+        if hasattr(field, "to_api_repr"):
+            try:
+                field = field.to_api_repr()
+            except Exception:  # pragma: no cover - defensive
+                field = str(field)
+
+        if isinstance(field, (list, tuple)):
+            parts = list(field)
+        else:
+            parts = str(field).split(".") if isinstance(field, str) else [field]
+
+        current = data
+        for part in parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                return None
+        return current
+
     def _apply_filters(self, data):
         for field, op, value in self._filters:
-            field_value = data.get(field)
+            field_value = self._resolve_field_value(data, field)
             if op == "==":
                 if field_value != value:
                     return False
