@@ -1,4 +1,10 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import "../styles/MonthCalendar.css";
 import {
   watchPlanningEventsInRange,
@@ -292,8 +298,9 @@ function MonthGrid({
     [monthColumnCount]
   );
 
-  const [events, setEvents] = useState([]);
-  const [eventsByDay, setEventsByDay] = useState({});
+  const [soloEvents, setSoloEvents] = useState([]);
+  const [teamEvents, setTeamEvents] = useState([]);
+  const teamUnsubRef = useRef(null);
   const [tasksByDay, setTasksByDay] = useState({});
 
   const hasStaticEvents = Array.isArray(staticEvents) && staticEvents.length > 0;
@@ -356,26 +363,61 @@ function MonthGrid({
     return byDay;
   }, []);
 
+  const isTeamMode = useMemo(() => {
+    if (hasStaticEvents) {
+      return true;
+    }
+    const type = context?.type;
+    return type === "team" || type === "team-shared";
+  }, [context?.type, hasStaticEvents]);
+
+  const visibleEvents = isTeamMode ? teamEvents : soloEvents;
+  const eventsByDay = useMemo(
+    () => groupItemsByDay(visibleEvents),
+    [groupItemsByDay, visibleEvents]
+  );
+
+  useEffect(() => {
+    if (!hasStaticEvents) {
+      return () => {};
+    }
+
+    if (typeof teamUnsubRef.current === "function") {
+      teamUnsubRef.current();
+      teamUnsubRef.current = null;
+    }
+    const normalized = Array.isArray(staticEvents) ? staticEvents : [];
+    setTeamEvents(normalized);
+    return () => {};
+  }, [hasStaticEvents, staticEvents]);
+
   useEffect(() => {
     if (hasStaticEvents) {
-      setEvents(staticEvents);
-      setEventsByDay(groupItemsByDay(staticEvents));
       return () => {};
     }
 
     if (!user || !monthRange?.from || !monthRange?.to) {
-      setEvents([]);
-      setEventsByDay({});
+      setSoloEvents([]);
       return () => {};
     }
 
-    if (!context || (context.type === "team" && !context.memberUid)) {
-      setEvents([]);
-      setEventsByDay({});
+    if (!context) {
+      setSoloEvents([]);
+      setTeamEvents([]);
+      return () => {};
+    }
+
+    if (context.type === "team" && !context.memberUid) {
+      setTeamEvents([]);
       return () => {};
     }
 
     let cancelled = false;
+
+    if (context.type === "team" && typeof teamUnsubRef.current === "function") {
+      teamUnsubRef.current();
+      teamUnsubRef.current = null;
+    }
 
     const unsubscribe = watchPlanningEventsInRange(
       context,
@@ -385,34 +427,50 @@ function MonthGrid({
           return;
         }
         const normalizedEvents = Array.isArray(newEvents) ? newEvents : [];
-        setEvents(normalizedEvents);
-        setEventsByDay(groupItemsByDay(normalizedEvents));
+        if (context.type === "team") {
+          setTeamEvents(normalizedEvents);
+        } else {
+          setSoloEvents(normalizedEvents);
+        }
       },
       (error) => {
         if (cancelled) {
           return;
         }
         console.error("watchPlanningEventsInRange month view error", error);
-        setEvents([]);
-        setEventsByDay({});
+        if (context.type === "team") {
+          setTeamEvents([]);
+        } else {
+          setSoloEvents([]);
+        }
       }
     );
+
+    if (context.type === "team") {
+      teamUnsubRef.current = unsubscribe;
+    }
 
     return () => {
       cancelled = true;
       if (typeof unsubscribe === "function") {
         unsubscribe();
       }
+      if (context.type === "team" && teamUnsubRef.current === unsubscribe) {
+        teamUnsubRef.current = null;
+      }
     };
-  }, [
-    user,
-    monthRange,
-    context,
-    contextKey,
-    hasStaticEvents,
-    staticEvents,
-    groupItemsByDay,
-  ]);
+  }, [context, contextKey, hasStaticEvents, monthRange, user]);
+
+  useEffect(() => {
+    if (isTeamMode) {
+      return;
+    }
+    if (typeof teamUnsubRef.current === "function") {
+      teamUnsubRef.current();
+      teamUnsubRef.current = null;
+    }
+    setTeamEvents([]);
+  }, [isTeamMode]);
 
   useEffect(() => {
     if (hasStaticTasks) {
