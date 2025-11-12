@@ -396,6 +396,16 @@ function AppWithSettings() {
               }
             />
             <Route
+              path="/budget"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement du budget..." />}>
+                    <BudgetPlanner />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route
               path="/settings"
               element={
                 <AuthGuard user={user}>
