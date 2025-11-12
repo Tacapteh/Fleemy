@@ -392,6 +392,12 @@ function MonthGrid({
   }, [hasStaticEvents, staticEvents]);
 
   useEffect(() => {
+    if (!hasStaticEvents) {
+      setTeamEvents([]);
+    }
+  }, [hasStaticEvents]);
+
+  useEffect(() => {
     if (hasStaticEvents) {
       return () => {};
     }
