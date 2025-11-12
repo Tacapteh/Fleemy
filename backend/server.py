@@ -1611,16 +1611,43 @@ async def resolve_planning_context(
     return events_ref, tasks_ref, target_uid
 
 
-def generate_invite_code(length=8):
+def generate_invite_code(length=8, max_attempts: int = 20):
     """Generate a unique uppercase alphanumeric invite code."""
+
     chars = string.ascii_uppercase + string.digits
-    while True:
-        code = ''.join(secrets.choice(chars) for _ in range(length))
-        # Check if code already exists
-        teams_ref = db.collection("teams")
-        existing = teams_ref.where("invite_code", "==", code).limit(1).stream()
-        if not list(existing):
+    teams_ref = db.collection("teams")
+    last_error: Optional[Exception] = None
+
+    for attempt in range(max_attempts):
+        code = "".join(secrets.choice(chars) for _ in range(length))
+        try:
+            query = teams_ref.where("invite_code", "==", code).limit(1)
+            existing = list(query.stream())
+        except Exception as stream_error:  # pragma: no cover - defensive
+            # The uniqueness check relies on Firestore indexes which may be
+            # missing in newly provisioned environments (emulators, tests,
+            # misconfigured deployments, etc.). Instead of bubbling the error
+            # and blocking the route, log it and accept the generated code –
+            # collisions are still handled by the outer loop.
+            last_error = stream_error
+            logger.warning(
+                "Unable to validate invite code uniqueness (attempt %d): %s",
+                attempt + 1,
+                stream_error,
+            )
             return code
+
+        if not existing:
+            return code
+
+    error_message = (
+        "Unable to generate a unique invite code after"
+        f" {max_attempts} attempts"
+    )
+    logger.error(error_message)
+    if last_error:
+        raise RuntimeError(error_message) from last_error
+    raise RuntimeError(error_message)
 
 
 # Authentication endpoints
@@ -3435,13 +3462,29 @@ async def create_team(
             invite_code=invite_code,
         )
 
-        team_data = {
-            **team.dict(),
-            "members": [user["uid"]],
-            "owner_uid": user["uid"],
-            "created_at": firestore.SERVER_TIMESTAMP,
-            "updated_at": firestore.SERVER_TIMESTAMP,
-        }
+        owner_uid = user["uid"]
+        team_payload = team.dict()
+        team_payload.update(
+            {
+                "members": [owner_uid],
+                "owner_uid": owner_uid,
+                "ownerUid": owner_uid,
+                "ownerId": owner_uid,
+                "members_count": 1,
+                "owner": {
+                    "uid": owner_uid,
+                    "user_uid": owner_uid,
+                    "userUid": owner_uid,
+                    "id": owner_uid,
+                    "user_id": owner_uid,
+                    "userId": owner_uid,
+                },
+            }
+        )
+        team_payload["created_at"] = firestore.SERVER_TIMESTAMP
+        team_payload["updated_at"] = firestore.SERVER_TIMESTAMP
+
+        team_data = team_payload
 
         await asyncio.to_thread(
             db.collection("teams").document(team.team_id).set,
