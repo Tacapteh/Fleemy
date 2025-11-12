@@ -2104,13 +2104,17 @@ async def get_earnings(
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Earnings displayed on the dashboard must always reflect the current
+    # user's personal schedule. Team planning collections aggregate every
+    # member's events/tasks which would inflate the widget totals when the
+    # UI is used in "team" mode. We still validate the membership when a
+    # team_id is provided, but the actual calculation relies solely on the
+    # personal collections.
     if team_id:
         await ensure_team_membership(team_id, user["uid"])
-        events_ref = team_col(team_id, "events")
-        tasks_ref = team_col(team_id, "tasks")
-    else:
-        events_ref = user_col(user["uid"], "events")
-        tasks_ref = user_col(user["uid"], "tasks")
+
+    events_ref = user_col(user["uid"], "events")
+    tasks_ref = user_col(user["uid"], "tasks")
 
     events = await stream_docs(
         events_ref.where("year", "==", year).where("week", "==", week)
@@ -2118,6 +2122,12 @@ async def get_earnings(
     tasks = await stream_docs(
         tasks_ref.where("year", "==", year).where("week", "==", week)
     )
+
+    # Defensive filtering: if personal collections still contain items linked
+    # to a team (for example, historical data created before this fix), ignore
+    # them so they do not affect the dashboard totals.
+    events = [event for event in events if not event.get("team_id")]
+    tasks = [task for task in tasks if not task.get("team_id")]
 
     earnings = {"paid": 0, "unpaid": 0, "pending": 0, "not_worked": 0, "total": 0}
 
