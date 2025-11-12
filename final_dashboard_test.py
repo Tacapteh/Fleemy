@@ -7,7 +7,7 @@ from datetime import datetime
 def test_dashboard_endpoints():
     """Test the three main dashboard planning endpoints"""
     
-    base_url = "https://visual-harmony-4.preview.emergentagent.com/api"
+    base_url = "https://money-manager-1265.preview.emergentagent.com/api"
     headers = {
         'Authorization': 'Bearer test-token-123',
         'Content-Type': 'application/json'
