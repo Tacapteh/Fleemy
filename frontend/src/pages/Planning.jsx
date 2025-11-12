@@ -2796,7 +2796,7 @@ export default function Planning() {
           />
         )}
 
-        <div className="mt-6">
+        <div className="mt-6 md:mt-4 lg:mt-3">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
             Récapitulatif des montants
           </h2>
@@ -2874,7 +2874,7 @@ export default function Planning() {
         {view === "week" &&
           planningTab !== TEAM_PLANNING_TAB_SHARED &&
           selectedMemberId && (
-            <div className="mt-6">
+            <div className="mt-6 md:mt-4 lg:mt-3">
               <DailyTodoPanel
                 selectedDate={currentDate}
                 userId={selectedMemberId}

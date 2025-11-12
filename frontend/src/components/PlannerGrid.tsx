@@ -446,16 +446,24 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   }, []);
 
   const gridViewportHeight = useMemo(
-    () => (isMobileLayout ? 'calc(100vh - 220px)' : 'calc(100vh - 320px)'),
+    () => (isMobileLayout ? 'calc(100vh - 220px)' : undefined),
     [isMobileLayout]
   );
 
   const gridScrollStyle = useMemo(
-    () => ({
-      height: gridViewportHeight,
-      maxHeight: gridViewportHeight,
-    }),
-    [gridViewportHeight]
+    () =>
+      (isMobileLayout
+        ? {
+            height: gridViewportHeight,
+            maxHeight: gridViewportHeight,
+            overflowY: 'auto',
+          }
+        : {
+            height: 'auto',
+            maxHeight: 'none',
+            overflow: 'visible',
+          }) as React.CSSProperties,
+    [gridViewportHeight, isMobileLayout]
   );
 
   const hours = useMemo(() => {
@@ -782,7 +790,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           ))}
         </div>
 
-        <div className="week-grid-container overflow-y-auto items-start py-2" style={gridScrollStyle}>
+        <div className="week-grid-container items-start py-2 overflow-visible" style={gridScrollStyle}>
           <div
             className="time-gutter relative flex flex-col dark:bg-slate-900 dark:border-slate-700"
             style={{ height: containerHeight }}
