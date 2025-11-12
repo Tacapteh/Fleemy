@@ -4640,6 +4640,10 @@ async def create_test_notification(
 # Include the router in the main app
 app.include_router(api_router)
 
+# Include budget router
+from .routes.budget import router as budget_router
+api_router.include_router(budget_router)
+
 
 @app.get("/healthz")
 async def healthz() -> Dict[str, Any]:
