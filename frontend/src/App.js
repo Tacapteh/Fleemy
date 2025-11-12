@@ -26,6 +26,7 @@ const CONTEXT_CHECK_TIMEOUT_MS = 7000;
 const Login = lazy(() => import("./Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Planning = lazy(() => import("./pages/Planning"));
+const BudgetPlanner = lazy(() => import("./pages/BudgetPlanner"));
 const Quotes = lazy(() => import("./pages/Quotes"));
 const Invoices = lazy(() => import("./pages/Invoices"));
 const Documents = lazy(() => import("./pages/Documents"));
