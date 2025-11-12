@@ -86,8 +86,8 @@ except Exception:  # pragma: no cover - fallback when dependency missing
     class Aborted(Exception):  # type: ignore
         pass
 
-from .pdf_utils import document_filename, invoice_pdf_bytes, quote_pdf_bytes
-from .email_utils import send_document_email
+from pdf_utils import document_filename, invoice_pdf_bytes, quote_pdf_bytes
+from email_utils import send_document_email
 
 # Firebase Admin
 import firebase_admin  # type: ignore[import-not-found]
