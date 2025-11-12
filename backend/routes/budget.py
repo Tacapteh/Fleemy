@@ -10,8 +10,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/budget", tags=["budget"])
 
-# Import verify_token from parent
-from ..server import verify_token, db, firestore
+# Import verify_token from server module
+# These will be imported when the router is included in server.py
+from server import verify_token, db, firestore
 
 
 class BudgetItem(BaseModel):
