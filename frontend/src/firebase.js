@@ -1490,7 +1490,36 @@ export async function fetchUserTeamsFromFirestore() {
       teamsCollection,
       where("members", "array-contains", uid)
     );
-    const ownerQuery = query(teamsCollection, where("owner_uid", "==", uid));
+    const ownerFieldCandidates = [
+      "owner_uid",
+      "ownerUid",
+      "ownerId",
+      "owner.uid",
+      "owner.user_uid",
+      "owner.userUid",
+      "owner.id",
+      "owner.user_id",
+      "owner.userId",
+    ];
+
+    const ownerSnapshotPromises = ownerFieldCandidates.map(async (fieldName) => {
+      try {
+        const ownerQuery = query(teamsCollection, where(fieldName, "==", uid));
+        return await getDocs(ownerQuery);
+      } catch (ownerError) {
+        if (isPermissionDeniedError(ownerError)) {
+          return null;
+        }
+
+        logPermissionError(
+          `teams owner lookup ${fieldName}`,
+          uid,
+          ownerError,
+          { level: "warn", toast: false }
+        );
+        return null;
+      }
+    });
 
     const membershipDocsPromise = (async () => {
       if (typeof db?.collectionGroup !== "function") {
@@ -1564,15 +1593,55 @@ export async function fetchUserTeamsFromFirestore() {
       return Array.from(membershipDocMap.values());
     })();
 
-    const [memberSnapshot, ownerSnapshot, membershipDocSnaps] =
+    const [memberSnapshot, ownerSnapshots, membershipDocSnaps] =
       await Promise.all([
         getDocs(memberQuery),
-        getDocs(ownerQuery),
+        Promise.all(ownerSnapshotPromises),
         membershipDocsPromise,
       ]);
 
     collect(memberSnapshot);
-    collect(ownerSnapshot);
+    let ownerDocsFound = 0;
+    ownerSnapshots
+      .filter((snapshot) => snapshot && !snapshot.empty)
+      .forEach((snapshot) => {
+        ownerDocsFound += snapshot.size;
+        collect(snapshot);
+      });
+
+    if (ownerDocsFound === 0) {
+      try {
+        const fallbackSnapshot = await getDocs(teamsCollection);
+        fallbackSnapshot.forEach((docSnap) => {
+          const data = docSnap?.data?.() || {};
+          const ownerCandidates = [
+            data.owner_uid,
+            data.ownerUid,
+            data.ownerId,
+            data?.owner?.uid,
+            data?.owner?.user_uid,
+            data?.owner?.userUid,
+            data?.owner?.id,
+            data?.owner?.user_id,
+            data?.owner?.userId,
+          ].filter((value) => typeof value === "string" && value);
+
+          if (ownerCandidates.includes(uid)) {
+            uniqueTeams.set(docSnap.id, {
+              ...normalizeTeamSnapshot(docSnap),
+              source: "firestore-owner-scan",
+            });
+          }
+        });
+      } catch (ownerScanError) {
+        if (!isPermissionDeniedError(ownerScanError)) {
+          console.warn(
+            "Unable to scan teams collection for owner fallback",
+            ownerScanError
+          );
+        }
+      }
+    }
 
     const missingTeamRefs = new Map();
 
