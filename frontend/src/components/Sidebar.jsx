@@ -8,6 +8,7 @@ import {
   FileText,
   Users as UsersIcon,
   Settings as SettingsIcon,
+  DollarSign,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
 const menuItems = [
   { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard, to: '/' },
   { id: 'planning', name: 'Planning', icon: Calendar },
+  { id: 'budget', name: 'Budget', icon: DollarSign, to: '/budget' },
   { id: 'todo', name: 'Notes du jour', icon: Book, to: '/todo' },
   { id: 'documents', name: 'Documents', icon: FileText, to: '/documents' },
   { id: 'clients', name: 'Clients', icon: UsersIcon, to: '/clients' },
