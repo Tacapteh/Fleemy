@@ -197,7 +197,7 @@ const BudgetPlanner = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setShowSettings(true)}
-            className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="rounded-lg border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
             data-testid="settings-button"
             aria-label="Paramètres"
           >
@@ -211,7 +211,7 @@ const BudgetPlanner = () => {
                   setEditingItem(null);
                   setShowItemModal(true);
                 }}
-                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-emerald-400 dark:focus-visible:ring-offset-slate-900"
                 data-testid="add-item-button"
               >
                 <Plus className="h-5 w-5" />
@@ -224,16 +224,16 @@ const BudgetPlanner = () => {
 
       {/* Read-only badge */}
       {isReadOnly && (
-        <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
+        <div className="rounded-lg bg-amber-100/80 p-4 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
           ⚠️ Lecture seule - Vous consultez le budget d'un autre membre
         </div>
       )}
 
       {/* Period Navigator */}
-      <div className="flex items-center justify-between rounded-lg bg-white p-4 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
+      <div className="flex items-center justify-between rounded-lg bg-white/90 p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900/60 dark:ring-slate-700">
         <button
           onClick={handlePreviousMonth}
-          className="rounded-lg p-2 transition hover:bg-gray-100 dark:hover:bg-slate-800"
+          className="rounded-lg p-2 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 dark:hover:bg-slate-800"
           aria-label="Mois précédent"
           data-testid="prev-month-button"
         >
@@ -246,7 +246,7 @@ const BudgetPlanner = () => {
 
         <button
           onClick={handleNextMonth}
-          className="rounded-lg p-2 transition hover:bg-gray-100 dark:hover:bg-slate-800"
+          className="rounded-lg p-2 transition hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 dark:hover:bg-slate-800"
           aria-label="Mois suivant"
           data-testid="next-month-button"
         >
@@ -256,7 +256,7 @@ const BudgetPlanner = () => {
 
       {/* Error display */}
       {error && (
-        <div className="rounded-lg bg-red-50 p-4 text-sm text-red-800 dark:bg-red-900/20 dark:text-red-200">
+        <div className="rounded-lg bg-rose-100/80 p-4 text-sm text-rose-900 dark:bg-rose-500/10 dark:text-rose-200">
           ❌ {error}
         </div>
       )}
@@ -271,24 +271,24 @@ const BudgetPlanner = () => {
       </div>
 
       {/* Items Table */}
-      <div className="rounded-lg bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
+      <div className="rounded-lg bg-white/95 p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900/60 dark:ring-slate-700">
         <div className="mb-4 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100">
             Transactions du mois
           </h3>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg bg-gray-100 p-1 dark:bg-slate-800/60">
+            <div className="flex rounded-lg bg-slate-100 p-1 dark:bg-slate-800/60">
               {typeTabs.map(tab => {
                 const isActive = filterType === tab.value;
                 return (
                   <button
                     key={tab.value}
                     onClick={() => setFilterType(tab.value)}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
                       isActive
-                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
-                        : 'text-gray-600 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
+                        ? 'bg-white/90 text-slate-900 shadow-sm ring-1 ring-emerald-300/60 dark:bg-slate-900/80 dark:text-slate-100 dark:ring-emerald-500/40'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
                     }`}
                     type="button"
                     aria-pressed={isActive}
@@ -303,7 +303,7 @@ const BudgetPlanner = () => {
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              className="rounded-md border border-slate-300 px-3 py-1 text-sm focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               data-testid="filter-category-select"
             >
               <option value="all">Toutes catégories</option>
@@ -349,7 +349,7 @@ const BudgetPlanner = () => {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {filteredItems.map((item, index) => (
-                  <tr key={item.id || index} className="transition hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                  <tr key={item.id || index} className="transition hover:bg-emerald-50/50 dark:hover:bg-slate-800/50">
                     <td className="py-3">
                       <div className="flex items-center gap-3">
                         <div
@@ -374,10 +374,10 @@ const BudgetPlanner = () => {
                       <span
                         className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                           item.type === 'income'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300'
                             : item.type === 'expense'
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                            ? 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300'
+                            : 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/20 dark:text-sky-300'
                         }`}
                       >
                         {item.type === 'income' ? 'Revenu' : item.type === 'expense' ? 'Dépense' : 'Épargne'}
@@ -404,7 +404,7 @@ const BudgetPlanner = () => {
                               setEditingItem(item);
                               setShowItemModal(true);
                             }}
-                            className="rounded p-1 text-blue-600 transition hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                            className="rounded p-1 text-emerald-500 transition hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
                             aria-label="Modifier"
                             data-testid={`edit-item-${index}`}
                           >
@@ -412,7 +412,7 @@ const BudgetPlanner = () => {
                           </button>
                           <button
                             onClick={() => handleDeleteItem(item.id || item._originalId)}
-                            className="rounded p-1 text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                            className="rounded p-1 text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
                             aria-label="Supprimer"
                             data-testid={`delete-item-${index}`}
                           >
@@ -441,8 +441,8 @@ const BudgetPlanner = () => {
           }}
           data-testid="item-modal"
         >
-          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl dark:bg-slate-900">
-            <div className="border-b border-gray-200 px-6 py-4 dark:border-slate-700">
+          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white/95 shadow-xl dark:bg-slate-900/70">
+            <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
                 {editingItem ? 'Modifier l\'élément' : 'Ajouter un élément'}
               </h2>
@@ -475,8 +475,8 @@ const BudgetPlanner = () => {
           }}
           data-testid="settings-modal"
         >
-          <div className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl dark:bg-slate-900">
-            <div className="border-b border-gray-200 px-6 py-4 dark:border-slate-700">
+          <div className="w-full max-w-md overflow-hidden rounded-lg bg-white/95 shadow-xl dark:bg-slate-900/70">
+            <div className="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">
                 Paramètres Budget
               </h2>
@@ -493,23 +493,23 @@ const BudgetPlanner = () => {
                   min="0"
                   value={savingsTarget}
                   onChange={(e) => setSavingsTarget(e.target.value)}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                   placeholder="Ex: 500"
                   data-testid="savings-target-input"
                 />
               </div>
 
-              <div className="flex gap-3 border-t border-gray-200 pt-4 dark:border-slate-700">
+              <div className="flex gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
                 <button
                   onClick={handleSavingsTargetUpdate}
-                  className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  className="flex-1 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:hover:bg-emerald-400 dark:focus-visible:ring-offset-slate-900"
                   data-testid="save-settings-button"
                 >
                   Enregistrer
                 </button>
                 <button
                   onClick={() => setShowSettings(false)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
                   data-testid="cancel-settings-button"
                 >
                   Annuler
