@@ -6,7 +6,6 @@ import IncomeExpenseBar from '../components/IncomeExpenseBar';
 import BudgetItemForm from '../components/BudgetItemForm';
 import { getTaskIcon } from '../constants/icons';
 import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Settings as SettingsIcon } from 'lucide-react';
-import { seedBudgetData } from '../services/budgetApi';
 
 const BudgetPlanner = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -120,21 +119,6 @@ const BudgetPlanner = () => {
     }
   };
 
-  const handleSeedData = async () => {
-    if (!window.confirm('Voulez-vous ajouter des données de test ?')) {
-      return;
-    }
-
-    try {
-      await seedBudgetData();
-      invalidate();
-      alert('Données de test ajoutées avec succès !');
-    } catch (err) {
-      console.error('Error seeding data:', err);
-      alert('Erreur: ' + err.message);
-    }
-  };
-
   const handleAddCategory = (newCategory) => {
     const updatedCategories = [...(settings?.customCategories || []), newCategory];
     updateSettings({
@@ -201,14 +185,6 @@ const BudgetPlanner = () => {
 
           {!isReadOnly && (
             <>
-              <button
-                onClick={handleSeedData}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
-                data-testid="seed-button"
-              >
-                🌱 Ajouter des données de test
-              </button>
-
               <button
                 onClick={() => {
                   setEditingItem(null);
