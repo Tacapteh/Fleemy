@@ -1,5 +1,7 @@
-import pytest
 from datetime import datetime, timedelta, timezone
+from urllib.parse import quote
+
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.server import app, db, TeamPlanningSerializationError
@@ -127,3 +129,49 @@ def test_team_planning_serialization_fallback(monkeypatch):
     assert item["end"] == payload["end"]
     assert item["timestamp"] is not None
     assert call_counter["value"] == 1
+
+
+def test_team_planning_delete_normalizes_entry_id():
+    client = TestClient(app)
+    team_id = "team-delete-normalize"
+    _create_team(team_id)
+
+    now = datetime.now(timezone.utc)
+    raw_entry_id = "users/test-user-123/planningEvents/event-456"
+    payload = {
+        "id": raw_entry_id,
+        "title": "Bloc à supprimer",
+        "type": "event",
+        "start": now.isoformat(),
+        "end": (now + timedelta(hours=1)).isoformat(),
+        "teamId": team_id,
+    }
+
+    create_response = client.post(
+        f"/api/teams/{team_id}/planning",
+        json=payload,
+        headers=_make_headers(),
+    )
+
+    assert create_response.status_code == 200
+    created_id = create_response.json()["item"]["id"]
+    assert created_id == "event-456"
+
+    encoded_entry_id = quote(raw_entry_id, safe="")
+    delete_response = client.delete(
+        f"/api/teams/{team_id}/planning/{encoded_entry_id}",
+        headers=_make_headers(),
+    )
+
+    assert delete_response.status_code == 200
+    body = delete_response.json()
+    assert body["success"] is True
+    assert body["entry_id"] == "event-456"
+
+    doc_ref = (
+        db.collection("teams")
+        .document(team_id)
+        .collection("teamPlanning")
+        .document("event-456")
+    )
+    assert not doc_ref.get().exists

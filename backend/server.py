@@ -3956,16 +3956,28 @@ async def delete_team_planning_entry(
 ):
     await ensure_team_membership(team_id, user["uid"])
 
+    normalized_entry_id = _normalize_team_planning_entry_id(entry_id)
+    if not normalized_entry_id:
+        raise HTTPException(status_code=400, detail="Identifiant de bloc invalide")
+
+    if normalized_entry_id != entry_id:
+        logger.info(
+            "Normalized team planning entry id from %r to %r for team %s during delete",
+            entry_id,
+            normalized_entry_id,
+            team_id,
+        )
+
     planning_ref = (
         db.collection("teams")
         .document(team_id)
         .collection("teamPlanning")
-        .document(entry_id)
+        .document(normalized_entry_id)
     )
 
     try:
         await asyncio.to_thread(planning_ref.delete)
-        return {"success": True, "entry_id": entry_id}
+        return {"success": True, "entry_id": normalized_entry_id}
     except Exception as exc:  # pragma: no cover - defensive logging
         logger.error("team planning delete error: %s", exc, exc_info=True)
         raise HTTPException(
