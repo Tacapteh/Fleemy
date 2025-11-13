@@ -636,7 +636,11 @@ const WeeklyTaskForm = ({
 
   return (
     <div className="modal-overlay weekly-task-overlay">
-      <div className="modal-content weekly-task-modal">
+      <div className="modal-content weekly-task-modal dark:bg-slate-900 dark:text-slate-100">
+        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
+          {initialTask ? 'Modifier la tâche hebdomadaire' : 'Nouvelle tâche hebdomadaire'}
+        </h2>
+
         {canSwitchToEvent && (
           <div
             className="modal-tab-group"
@@ -660,9 +664,6 @@ const WeeklyTaskForm = ({
             </button>
           </div>
         )}
-        <div className="weekly-task-header">
-          <h2>{initialTask ? 'Modifier la tâche hebdomadaire' : 'Nouvelle tâche hebdomadaire'}</h2>
-        </div>
 
         <form onSubmit={handleSubmit} className="weekly-task-form">
           {readOnly && (

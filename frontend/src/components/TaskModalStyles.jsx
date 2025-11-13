@@ -7,6 +7,10 @@ const TaskModalStyles = () => (
       width: 100%;
     }
 
+    .dark .weekly-task-modal {
+      color: #e2e8f0;
+    }
+
     .weekly-task-header {
       margin-bottom: 24px;
     }
@@ -16,6 +20,10 @@ const TaskModalStyles = () => (
       font-size: 20px;
       font-weight: 700;
       color: #212529;
+    }
+
+    .dark .weekly-task-header h2 {
+      color: #e2e8f0;
     }
 
     .weekly-task-form {
@@ -46,10 +54,22 @@ const TaskModalStyles = () => (
       color: #0b5ed7;
     }
 
+    .dark .weekly-task-alert-info {
+      background: rgba(59, 130, 246, 0.16);
+      border-color: rgba(59, 130, 246, 0.35);
+      color: #bfdbfe;
+    }
+
     .weekly-task-alert-error {
       background: #fde2e1;
       border: 1px solid #f1aeb5;
       color: #b02a37;
+    }
+
+    .dark .weekly-task-alert-error {
+      background: rgba(248, 113, 113, 0.18);
+      border-color: rgba(248, 113, 113, 0.35);
+      color: #fecaca;
     }
 
     .weekly-task-hint {
@@ -59,10 +79,18 @@ const TaskModalStyles = () => (
       color: #6c757d;
     }
 
+    .dark .weekly-task-hint {
+      color: #94a3b8;
+    }
+
     .weekly-task-hint-inline {
       font-size: 12px;
       color: #6c757d;
       font-weight: 400;
+    }
+
+    .dark .weekly-task-hint-inline {
+      color: #94a3b8;
     }
 
     .weekly-task-time-ranges {
@@ -81,6 +109,11 @@ const TaskModalStyles = () => (
       border-radius: 8px;
     }
 
+    .dark .weekly-task-range {
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+
     .weekly-task-range-controls {
       flex: 1;
       display: grid;
@@ -91,6 +124,12 @@ const TaskModalStyles = () => (
 
     .weekly-task-range-controls .form-input {
       margin: 0;
+    }
+
+    .dark .weekly-task-range-controls .form-input {
+      background: rgba(15, 23, 42, 0.85);
+      border-color: rgba(148, 163, 184, 0.35);
+      color: #e2e8f0;
     }
 
     .weekly-task-separator {
@@ -118,6 +157,16 @@ const TaskModalStyles = () => (
     .weekly-task-remove:not(:disabled):hover {
       background: #f1aeb5;
       color: #842029;
+    }
+
+    .dark .weekly-task-remove {
+      background: rgba(248, 113, 113, 0.25);
+      color: #fecaca;
+    }
+
+    .dark .weekly-task-remove:not(:disabled):hover {
+      background: rgba(248, 113, 113, 0.4);
+      color: #fee2e2;
     }
 
     .weekly-task-remove:disabled {
@@ -165,6 +214,21 @@ const TaskModalStyles = () => (
       color: #0d6efd;
     }
 
+    .dark .weekly-task-icon-button {
+      background: rgba(148, 163, 184, 0.2);
+      color: #e2e8f0;
+    }
+
+    .dark .weekly-task-icon-button:hover {
+      background: rgba(148, 163, 184, 0.3);
+    }
+
+    .dark .weekly-task-icon-button.is-selected {
+      border-color: rgba(59, 130, 246, 0.6);
+      background: rgba(59, 130, 246, 0.2);
+      color: #bfdbfe;
+    }
+
     .weekly-task-icon-button:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -194,6 +258,11 @@ const TaskModalStyles = () => (
       box-shadow: 0 0 0 3px rgba(33, 37, 41, 0.18);
     }
 
+    .dark .weekly-task-color-swatch.is-selected {
+      border-color: #e2e8f0;
+      box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.35);
+    }
+
     .weekly-task-color-swatch:disabled {
       opacity: 0.5;
       cursor: not-allowed;
@@ -211,6 +280,10 @@ const TaskModalStyles = () => (
       margin-top: 6px;
       font-size: 13px;
       color: #495057;
+    }
+
+    .dark .weekly-task-color-label {
+      color: #cbd5f5;
     }
 
     .weekly-task-actions {
