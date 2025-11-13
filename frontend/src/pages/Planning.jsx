@@ -2714,7 +2714,7 @@ export default function Planning() {
           view={view}
           onViewChange={handleViewChange}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 md:flex">
           <button
             type="button"
             onClick={!readOnly ? () => openCreateModal() : undefined}
@@ -2722,28 +2722,7 @@ export default function Planning() {
             aria-disabled={readOnly || !planningContext}
             className={PRIMARY_ACTION_BUTTON_CLASSES}
           >
-            + Événement
-          </button>
-          <button
-            type="button"
-            onClick={
-              !readOnly && planningTab !== TEAM_PLANNING_TAB_SHARED
-                ? openWeeklyTaskModal
-                : undefined
-            }
-            disabled={
-              readOnly ||
-              !planningContext ||
-              planningTab === TEAM_PLANNING_TAB_SHARED
-            }
-            aria-disabled={
-              readOnly ||
-              !planningContext ||
-              planningTab === TEAM_PLANNING_TAB_SHARED
-            }
-            className={PRIMARY_ACTION_BUTTON_CLASSES}
-          >
-            + Tâche hebdo
+            + Créer
           </button>
         </div>
       </div>
@@ -2925,6 +2904,14 @@ export default function Planning() {
         context={planningContext}
         readOnly={readOnly}
         weekStartISO={weekStartISO}
+        onSwitchToEvent={
+          !readOnly && planningContext
+            ? () => {
+                closeWeeklyTaskModal();
+                openCreateModal();
+              }
+            : undefined
+        }
       />
     </div>
   );

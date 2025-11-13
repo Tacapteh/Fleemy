@@ -9,6 +9,7 @@ export default function WeeklyTaskModal({
   context,
   readOnly,
   weekStartISO,
+  onSwitchToEvent,
 }) {
   if (!isOpen) return null;
 
@@ -27,6 +28,7 @@ export default function WeeklyTaskModal({
       onSave={handleSave}
       onCancel={onClose}
       onDelete={onDelete}
+      onSwitchToEvent={onSwitchToEvent}
     />
   );
 }

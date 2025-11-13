@@ -854,8 +854,9 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                         type="button"
                         onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
                         className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
+                        aria-label="Créer un événement"
                       >
-                        + Événement
+                        +
                       </button>
                     )}
                   </div>

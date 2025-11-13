@@ -301,6 +301,7 @@ const WeeklyTaskForm = ({
   context,
   readOnly = false,
   weekStartISO = null,
+  onSwitchToEvent,
 }) => {
   const settingsContext = useSettings() || {};
   const { settings, showTaskStatusBadges } = settingsContext;
@@ -630,9 +631,35 @@ const WeeklyTaskForm = ({
 
   const getColorLabel = (colorKey) => PASTEL_COLORS[colorKey]?.name || colorKey;
 
+  const canSwitchToEvent =
+    typeof onSwitchToEvent === 'function' && !readOnly;
+
   return (
     <div className="modal-overlay weekly-task-overlay">
       <div className="modal-content weekly-task-modal">
+        {canSwitchToEvent && (
+          <div
+            className="modal-tab-group"
+            role="group"
+            aria-label="Choisir le type de création"
+          >
+            <button
+              type="button"
+              className="modal-tab"
+              onClick={() => onSwitchToEvent()}
+              disabled={isSubmitting}
+            >
+              Événement
+            </button>
+            <button
+              type="button"
+              className="modal-tab is-active"
+              aria-current="page"
+            >
+              Tâche
+            </button>
+          </div>
+        )}
         <div className="weekly-task-header">
           <h2>{initialTask ? 'Modifier la tâche hebdomadaire' : 'Nouvelle tâche hebdomadaire'}</h2>
         </div>
