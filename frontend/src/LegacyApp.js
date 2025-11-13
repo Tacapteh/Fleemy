@@ -1402,8 +1402,8 @@ const EventModal = ({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
-        <h2 className="modal-header">
+      <div className="modal-content dark:bg-slate-900 dark:text-slate-100">
+        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
           {event ? "Modifier l'événement" : "Nouvel événement"}
         </h2>
 
@@ -2035,8 +2035,11 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: "600px" }}>
-        <h2 className="modal-header">
+      <div
+        className="modal-content dark:bg-slate-900 dark:text-slate-100"
+        style={{ maxWidth: "600px" }}
+      >
+        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
           {task ? "✏️ Modifier la tâche" : "➕ Nouvelle tâche"}
         </h2>
 
