@@ -1,5 +1,6 @@
 // Budget hook for managing budget data
 import { useState, useEffect, useCallback } from 'react';
+import { auth } from '../firebase';
 import {
   getBudgetItems,
   getBudgetSummary,
@@ -23,10 +24,36 @@ export const useBudget = (periodStart, periodEnd, teamMemberId = null) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [currentUser, setCurrentUser] = useState(() => auth.currentUser);
+
+  useEffect(() => {
+    if (!auth?.onAuthStateChanged) {
+      return undefined;
+    }
+
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setCurrentUser(user);
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   // Fetch items and summary
   const fetchData = useCallback(async () => {
     if (!periodStart || !periodEnd) {
+      return;
+    }
+
+    if (!currentUser) {
+      setItems([]);
+      setSummary(null);
+      setSettings(null);
+      setError('Veuillez vous connecter pour consulter votre budget.');
+      setLoading(false);
       return;
     }
 
@@ -60,7 +87,7 @@ export const useBudget = (periodStart, periodEnd, teamMemberId = null) => {
     } finally {
       setLoading(false);
     }
-  }, [periodStart, periodEnd, teamMemberId, refreshTrigger]);
+  }, [periodStart, periodEnd, teamMemberId, refreshTrigger, currentUser]);
 
   useEffect(() => {
     fetchData();
