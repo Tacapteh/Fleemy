@@ -2900,6 +2900,16 @@ export default function Planning() {
         readOnly={modal.readOnly || readOnly}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
+        onSwitchToTask={
+          !readOnly &&
+          planningContext &&
+          planningTab !== TEAM_PLANNING_TAB_SHARED
+            ? () => {
+                closeModal();
+                openWeeklyTaskModal();
+              }
+            : undefined
+        }
       />
 
       <WeeklyTaskModal

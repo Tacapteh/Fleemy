@@ -1038,6 +1038,7 @@ const EventModal = ({
   selectedDate,
   readOnly,
   navigate,
+  onSwitchToTask,
 }) => {
   const [formData, setFormData] = useState({
     description: "",
@@ -1382,6 +1383,21 @@ const EventModal = ({
     }
   };
 
+  const handleSwitchToTask = useCallback(() => {
+    if (typeof onSwitchToTask !== "function") {
+      return;
+    }
+
+    if (event || readOnly) {
+      return;
+    }
+
+    onSwitchToTask();
+  }, [event, onSwitchToTask, readOnly]);
+
+  const shouldShowTaskTab =
+    typeof onSwitchToTask === "function" && !event && !readOnly;
+
   if (!isOpen) return null;
 
   return (
@@ -1390,6 +1406,29 @@ const EventModal = ({
         <h2 className="modal-header">
           {event ? "Modifier l'événement" : "Nouvel événement"}
         </h2>
+
+        {shouldShowTaskTab && (
+          <div
+            className="modal-tab-group"
+            role="group"
+            aria-label="Choisir le type de création"
+          >
+            <button
+              type="button"
+              className="modal-tab is-active"
+              aria-current="page"
+            >
+              Événement
+            </button>
+            <button
+              type="button"
+              className="modal-tab"
+              onClick={handleSwitchToTask}
+            >
+              Tâche
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <fieldset disabled={readOnly}>

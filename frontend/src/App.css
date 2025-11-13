@@ -1217,6 +1217,75 @@ button:active {
   border-bottom: 1px solid #dee2e6;
 }
 
+.modal-tab-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+}
+
+.modal-tab {
+  flex: 1 1 0;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease,
+    box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.modal-tab:hover {
+  background-color: rgba(148, 163, 184, 0.35);
+}
+
+.modal-tab:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.modal-tab.is-active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.15);
+  transform: translateY(-1px);
+  cursor: default;
+}
+
+.modal-tab.is-active:hover {
+  background: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .modal-tab-group {
+    background: rgba(148, 163, 184, 0.2);
+  }
+
+  .modal-tab {
+    color: #e2e8f0;
+  }
+
+  .modal-tab:hover {
+    background-color: rgba(148, 163, 184, 0.35);
+  }
+
+  .modal-tab.is-active {
+    background: rgba(30, 41, 59, 0.85);
+    color: #f8fafc;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.55);
+  }
+
+  .modal-tab.is-active:hover {
+    background: rgba(30, 41, 59, 0.85);
+  }
+}
+
 .form-group {
   margin-bottom: 20px;
 }
