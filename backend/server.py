@@ -9,6 +9,7 @@ from fastapi import (  # type: ignore[import-not-found]
     Response,
     Request,
     Body,
+    Query,
 )
 from dotenv import load_dotenv, find_dotenv  # type: ignore[import-not-found]
 import os
@@ -30,6 +31,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 import asyncio
 import json
+import base64
 import calendar
 import httpx  # type: ignore[import-not-found]
 import re
@@ -4800,14 +4802,40 @@ def compute_budget_summary(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _budget_document_id_for_uid(raw_uid: str) -> str:
+    """Return a Firestore-safe document id for the given user id."""
+    if not isinstance(raw_uid, str):
+        raise HTTPException(status_code=400, detail="Invalid user identifier")
+
+    candidate = raw_uid.strip()
+    if not candidate:
+        raise HTTPException(status_code=400, detail="Invalid user identifier")
+
+    if "\\" not in candidate and "/" not in candidate:
+        return candidate
+
+    encoded = base64.urlsafe_b64encode(candidate.encode("utf-8")).decode("utf-8").rstrip("=")
+    logger.warning(
+        "Sanitized budget user id '%s' to Firestore-safe id '%s'", candidate, encoded
+    )
+    return encoded
+
+
 async def check_budget_team_access(user_uid: str, target_uid: str) -> bool:
     """Check if user can access target user's budget."""
     if user_uid == target_uid:
         return True
-    
+
     try:
-        user_doc = await asyncio.to_thread(db.collection('users').document(user_uid).get)
-        target_doc = await asyncio.to_thread(db.collection('users').document(target_uid).get)
+        safe_user_doc_id = _budget_document_id_for_uid(user_uid)
+        safe_target_doc_id = _budget_document_id_for_uid(target_uid)
+
+        user_doc = await asyncio.to_thread(
+            db.collection('users').document(safe_user_doc_id).get
+        )
+        target_doc = await asyncio.to_thread(
+            db.collection('users').document(safe_target_doc_id).get
+        )
         
         if not user_doc.exists or not target_doc.exists:
             return False
@@ -4836,13 +4864,14 @@ async def get_budget_items(
     """Get budget items with recurrence expansion."""
     try:
         target_uid = teamMemberId if teamMemberId else user['uid']
-        
+        target_doc_id = _budget_document_id_for_uid(target_uid)
+
         if teamMemberId and teamMemberId != user['uid']:
             has_access = await check_budget_team_access(user['uid'], teamMemberId)
             if not has_access:
                 raise HTTPException(status_code=403, detail="Not authorized to view this budget")
-        
-        items_ref = db.collection('users').document(target_uid).collection('budgetItems')
+
+        items_ref = db.collection('users').document(target_doc_id).collection('budgetItems')
         items_snap = await asyncio.to_thread(lambda: list(items_ref.stream()))
         
         items = []
@@ -4880,7 +4909,8 @@ async def create_budget_item(
             **item.dict()
         )
         
-        items_ref = db.collection('users').document(user['uid']).collection('budgetItems')
+        user_doc_id = _budget_document_id_for_uid(user['uid'])
+        items_ref = db.collection('users').document(user_doc_id).collection('budgetItems')
         doc_ref = items_ref.document()
         
         item_dict = new_item.dict()
@@ -4906,8 +4936,13 @@ async def update_budget_item(
         if teamMemberId and teamMemberId != user['uid']:
             raise HTTPException(status_code=403, detail="Cannot edit other team members' budgets")
         
-        target_uid = user['uid']
-        item_ref = db.collection('users').document(target_uid).collection('budgetItems').document(item_id)
+        target_doc_id = _budget_document_id_for_uid(user['uid'])
+        item_ref = (
+            db.collection('users')
+            .document(target_doc_id)
+            .collection('budgetItems')
+            .document(item_id)
+        )
         
         item_snap = await asyncio.to_thread(item_ref.get)
         if not item_snap.exists:
@@ -4941,8 +4976,13 @@ async def delete_budget_item(
         if teamMemberId and teamMemberId != user['uid']:
             raise HTTPException(status_code=403, detail="Cannot delete other team members' budgets")
         
-        target_uid = user['uid']
-        item_ref = db.collection('users').document(target_uid).collection('budgetItems').document(item_id)
+        target_doc_id = _budget_document_id_for_uid(user['uid'])
+        item_ref = (
+            db.collection('users')
+            .document(target_doc_id)
+            .collection('budgetItems')
+            .document(item_id)
+        )
         
         await asyncio.to_thread(item_ref.delete)
         
@@ -4958,7 +4998,13 @@ async def delete_budget_item(
 async def get_budget_settings(user: Dict[str, Any] = Depends(verify_token)):
     """Get budget settings for user."""
     try:
-        settings_ref = db.collection('users').document(user['uid']).collection('budgetSettings').document('main')
+        user_doc_id = _budget_document_id_for_uid(user['uid'])
+        settings_ref = (
+            db.collection('users')
+            .document(user_doc_id)
+            .collection('budgetSettings')
+            .document('main')
+        )
         settings_snap = await asyncio.to_thread(settings_ref.get)
         
         if settings_snap.exists:
@@ -4979,7 +5025,13 @@ async def update_budget_settings(
 ):
     """Update budget settings."""
     try:
-        settings_ref = db.collection('users').document(user['uid']).collection('budgetSettings').document('main')
+        user_doc_id = _budget_document_id_for_uid(user['uid'])
+        settings_ref = (
+            db.collection('users')
+            .document(user_doc_id)
+            .collection('budgetSettings')
+            .document('main')
+        )
         
         settings_dict = settings.dict()
         settings_dict['userId'] = user['uid']
@@ -5002,18 +5054,20 @@ async def get_budget_summary(
     """Get budget summary with aggregates."""
     try:
         target_uid = teamMemberId if teamMemberId else user['uid']
-        
+
         if teamMemberId and teamMemberId != user['uid']:
             has_access = await check_budget_team_access(user['uid'], teamMemberId)
             if not has_access:
                 raise HTTPException(status_code=403, detail="Not authorized to view this budget")
+
+        target_doc_id = _budget_document_id_for_uid(target_uid)
         
         year, month = map(int, at.split('-'))
         first_day = f"{year:04d}-{month:02d}-01"
         last_day_num = calendar.monthrange(year, month)[1]
         last_day = f"{year:04d}-{month:02d}-{last_day_num:02d}"
         
-        items_ref = db.collection('users').document(target_uid).collection('budgetItems')
+        items_ref = db.collection('users').document(target_doc_id).collection('budgetItems')
         items_snap = await asyncio.to_thread(lambda: list(items_ref.stream()))
         
         items = []
@@ -5056,7 +5110,8 @@ async def seed_budget_data(user: Dict[str, Any] = Depends(verify_token)):
             {'label': 'Épargne mensuelle', 'amount': 500.0, 'type': 'saving', 'categoryId': 'savings', 'iconId': 'target', 'color': '#B8EBD0', 'recurrence': 'monthly', 'startDate': '2025-01-01', 'endDate': None, 'notes': 'Objectif épargne'}
         ]
         
-        items_ref = db.collection('users').document(user['uid']).collection('budgetItems')
+        user_doc_id = _budget_document_id_for_uid(user['uid'])
+        items_ref = db.collection('users').document(user_doc_id).collection('budgetItems')
         
         created_items = []
         for seed_item in seed_items:
