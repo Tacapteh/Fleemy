@@ -12,10 +12,16 @@ const BudgetPlanner = () => {
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [filterType, setFilterType] = useState('all');
+  const [filterType, setFilterType] = useState('income');
   const [filterCategory, setFilterCategory] = useState('all');
   const [teamMemberId, setTeamMemberId] = useState(null);
   const [savingsTarget, setSavingsTarget] = useState('');
+
+  const typeTabs = useMemo(() => ([
+    { value: 'income', label: 'Revenus' },
+    { value: 'expense', label: 'Dépenses' },
+    { value: 'saving', label: 'Épargne' }
+  ]), []);
 
   // Calculate period dates
   const periodStart = useMemo(() => {
@@ -131,11 +137,7 @@ const BudgetPlanner = () => {
 
   // Filter items
   const filteredItems = useMemo(() => {
-    let filtered = items;
-
-    if (filterType !== 'all') {
-      filtered = filtered.filter(item => item.type === filterType);
-    }
+    let filtered = items.filter(item => item.type === filterType);
 
     if (filterCategory !== 'all') {
       filtered = filtered.filter(item => item.categoryId === filterCategory);
@@ -144,10 +146,29 @@ const BudgetPlanner = () => {
     return filtered.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
   }, [items, filterType, filterCategory]);
 
+  useEffect(() => {
+    if (items.length === 0) {
+      return;
+    }
+
+    if (!items.some(item => item.type === filterType)) {
+      const availableTab = typeTabs.find(tab => items.some(item => item.type === tab.value));
+      if (availableTab) {
+        setFilterType(availableTab.value);
+      }
+    }
+  }, [items, filterType, typeTabs]);
+
+  useEffect(() => {
+    setFilterCategory('all');
+  }, [filterType]);
+
   // Get unique categories for filter
   const categories = useMemo(() => {
     const catMap = new Map();
-    items.forEach(item => {
+    items
+      .filter(item => item.type === filterType)
+      .forEach(item => {
       if (!catMap.has(item.categoryId)) {
         catMap.set(item.categoryId, {
           id: item.categoryId,
@@ -157,7 +178,7 @@ const BudgetPlanner = () => {
       }
     });
     return Array.from(catMap.values());
-  }, [items]);
+  }, [items, filterType]);
 
   const monthYear = currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   const isReadOnly = teamMemberId && teamMemberId !== 'current-user-id';
@@ -256,18 +277,28 @@ const BudgetPlanner = () => {
             Transactions du mois
           </h3>
 
-          <div className="flex flex-wrap gap-2">
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-1 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-              data-testid="filter-type-select"
-            >
-              <option value="all">Tous types</option>
-              <option value="income">Revenus</option>
-              <option value="expense">Dépenses</option>
-              <option value="saving">Épargne</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg bg-gray-100 p-1 dark:bg-slate-800/60">
+              {typeTabs.map(tab => {
+                const isActive = filterType === tab.value;
+                return (
+                  <button
+                    key={tab.value}
+                    onClick={() => setFilterType(tab.value)}
+                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
+                      isActive
+                        ? 'bg-white text-gray-900 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700'
+                        : 'text-gray-600 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
+                    }`}
+                    type="button"
+                    aria-pressed={isActive}
+                    data-testid={`filter-type-tab-${tab.value}`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
 
             <select
               value={filterCategory}
