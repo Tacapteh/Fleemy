@@ -469,6 +469,47 @@ const ProfilePickerPage = () => {
     };
   }, [fetchTeamsList, navigate]);
 
+  useEffect(() => {
+    let active = true;
+    let unsubscribeAuth = null;
+    let lastFetchedUid = null;
+
+    const cachedTeams = readTeamsCache();
+    const hasCachedTeams = Array.isArray(cachedTeams) && cachedTeams.length > 0;
+
+    const ensureInitialTeams = (user) => {
+      if (!user?.uid || lastFetchedUid === user.uid) {
+        return;
+      }
+
+      lastFetchedUid = user.uid;
+
+      fetchTeamsList({
+        skipStartLoading: hasCachedTeams,
+        silent: hasCachedTeams,
+        shouldUpdate: () => active,
+      });
+    };
+
+    if (auth.currentUser) {
+      ensureInitialTeams(auth.currentUser);
+    }
+
+    unsubscribeAuth = auth.onAuthStateChanged((user) => {
+      if (!active) {
+        return;
+      }
+      ensureInitialTeams(user);
+    });
+
+    return () => {
+      active = false;
+      if (typeof unsubscribeAuth === 'function') {
+        unsubscribeAuth();
+      }
+    };
+  }, [fetchTeamsList]);
+
   const updateLastContext = useCallback(async (contextData) => {
     try {
       const user = auth.currentUser;
