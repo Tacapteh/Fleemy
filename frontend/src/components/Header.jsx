@@ -42,8 +42,8 @@ export default function Header({ user }) {
     if (!isNotificationsOpen) {
       if (!hasFetchedNotifications) {
         fetchNotifications()
-          .then(() => {
-            setHasFetchedNotifications(true);
+          .then((result) => {
+            setHasFetchedNotifications(Boolean(result));
           })
           .catch(() => {
             setHasFetchedNotifications(false);
