@@ -18,6 +18,8 @@ interface EmailDocumentParams {
   id: string;
   type: DocumentType;
   to: string;
+  subject?: string;
+  body?: string;
   token?: string;
 }
 
@@ -259,6 +261,8 @@ export async function emailDocument({
   id,
   type,
   to,
+  subject,
+  body,
   token,
 }: EmailDocumentParams): Promise<{ ok: boolean; sentTo?: string }> {
   if (!id) {
@@ -270,9 +274,19 @@ export async function emailDocument({
 
   const normalizedType: DocumentType = type === 'invoice' ? 'invoice' : 'quote';
 
+  const requestBody: Record<string, unknown> = { type: normalizedType, to };
+
+  if (typeof subject === 'string') {
+    requestBody.subject = subject;
+  }
+
+  if (typeof body === 'string') {
+    requestBody.body = body;
+  }
+
   return performAuthorizedRequest<{ ok: boolean; sentTo?: string }>({
     path: `/documents/${encodeURIComponent(String(id))}/email`,
-    body: { type: normalizedType, to },
+    body: requestBody,
     token,
     accept: JSON_CONTENT_TYPE,
     responseType: 'json',

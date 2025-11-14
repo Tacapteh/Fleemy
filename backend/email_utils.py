@@ -92,10 +92,14 @@ def build_document_email(
     document_type: str,
     recipient: str,
     document_id: str,
+    *,
+    subject: Optional[str] = None,
+    body: Optional[str] = None,
 ) -> EmailMessage:
     number = _document_number(document, document_type, document_id)
     subject_label = "devis" if document_type == "quote" else "facture"
-    subject = f"Votre {subject_label} {number}"
+    custom_subject = (subject or "").strip()
+    subject = custom_subject or f"Votre {subject_label} {number}"
 
     client_name = document.get("client_name") or "client"
     total = _format_total(document)
@@ -121,11 +125,15 @@ def build_document_email(
         ]
     )
 
+    normalized_body = (body or "").replace("\r\n", "\n")
+    custom_body = normalized_body.strip()
+    body_content = normalized_body if custom_body else "\n".join(body_lines)
+
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = _sender_address()
     message["To"] = recipient
-    message.set_content("\n".join(body_lines))
+    message.set_content(body_content)
 
     return message
 
@@ -210,6 +218,8 @@ def send_document_email(
     recipient: str,
     document_id: str,
     pdf_bytes: bytes,
+    subject: Optional[str] = None,
+    body: Optional[str] = None,
 ) -> None:
     host = _resolve_smtp_host()
 
@@ -221,7 +231,14 @@ def send_document_email(
     timeout = float(os.getenv("SMTP_TIMEOUT", "10"))
     creds = _resolve_smtp_credentials()
 
-    message = build_document_email(document, document_type, recipient, document_id)
+    message = build_document_email(
+        document,
+        document_type,
+        recipient,
+        document_id,
+        subject=subject,
+        body=body,
+    )
     message.add_attachment(
         pdf_bytes,
         maintype="application",

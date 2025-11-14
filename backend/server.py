@@ -900,6 +900,8 @@ class DocumentPdfRequest(BaseModel):
 
 class DocumentEmailRequest(DocumentPdfRequest):
     to: EmailStr
+    subject: Optional[str] = None
+    body: Optional[str] = None
 
 
 class TeamCreateRequest(BaseModel):
@@ -3439,6 +3441,8 @@ async def email_document_endpoint(
             recipient=payload.to,
             document_id=doc_id,
             pdf_bytes=pdf_bytes,
+            subject=payload.subject,
+            body=payload.body,
         )
     except RuntimeError as exc:
         logger.error(

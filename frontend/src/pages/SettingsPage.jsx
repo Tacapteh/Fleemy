@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettings } from "../context/SettingsContext";
 import useNotificationPreferences from "../hooks/useNotificationPreferences";
 import { showToast } from "../utils/toast";
 import { SectionHeaderRow, Settings as SettingsIcon } from "../ui";
+import { EMAIL_TEMPLATE_TOKENS } from "../utils/documents";
 
 function Switch({ checked, onToggle, ...props }) {
   const handleToggle = useCallback(() => {
@@ -92,6 +93,8 @@ export default function SettingsPage() {
   const [startHourInput, setStartHourInput] = useState("");
   const [endHourInput, setEndHourInput] = useState("");
   const [hourlyRateInput, setHourlyRateInput] = useState("0");
+  const [emailSubjectTemplateInput, setEmailSubjectTemplateInput] = useState("");
+  const [emailBodyTemplateInput, setEmailBodyTemplateInput] = useState("");
 
   const handleNotificationsToggle = useCallback(() => {
     const nextValue = !notificationsEnabled;
@@ -147,6 +150,24 @@ export default function SettingsPage() {
     setHourlyRateInput(String(safeValue));
   }, [settings, settings?.hourlyRateGlobal]);
 
+  useEffect(() => {
+    if (!settings) {
+      return;
+    }
+
+    const activeElementId =
+      typeof document !== "undefined" ? document.activeElement?.id : null;
+
+    if (activeElementId !== "setting-emailSubjectTemplate-input") {
+      setEmailSubjectTemplateInput(settings.emailSubjectTemplate || "");
+    }
+
+    if (activeElementId !== "setting-emailBodyTemplate-textarea") {
+      const normalized = (settings.emailBodyTemplate || "").replace(/\r\n/g, "\n");
+      setEmailBodyTemplateInput(normalized);
+    }
+  }, [settings, settings?.emailBodyTemplate, settings?.emailSubjectTemplate]);
+
   const handleToggle = useCallback(
     (key) => {
       if (!settings) {
@@ -158,12 +179,25 @@ export default function SettingsPage() {
     [settings, updateSetting]
   );
 
+  const emailTemplateTokens = useMemo(
+    () => Object.entries(EMAIL_TEMPLATE_TOKENS),
+    [],
+  );
+
   const handleDurationChange = useCallback((event) => {
     setDurationInput(event.target.value);
   }, []);
 
   const handleHourlyRateChange = useCallback((event) => {
     setHourlyRateInput(event.target.value);
+  }, []);
+
+  const handleEmailSubjectTemplateChange = useCallback((event) => {
+    setEmailSubjectTemplateInput(event.target.value);
+  }, []);
+
+  const handleEmailBodyTemplateChange = useCallback((event) => {
+    setEmailBodyTemplateInput(event.target.value);
   }, []);
 
   const commitDurationValue = useCallback(() => {
@@ -312,6 +346,36 @@ export default function SettingsPage() {
     }
   }, [hourlyRateInput, settings, updateSetting]);
 
+  const commitEmailSubjectTemplate = useCallback(() => {
+    if (!settings) {
+      return;
+    }
+
+    const nextValue = emailSubjectTemplateInput.trim();
+    if ((settings.emailSubjectTemplate || "") !== nextValue) {
+      updateSetting?.("emailSubjectTemplate", nextValue);
+    }
+  }, [emailSubjectTemplateInput, settings, updateSetting]);
+
+  const commitEmailBodyTemplate = useCallback(() => {
+    if (!settings) {
+      return;
+    }
+
+    const normalized = emailBodyTemplateInput.replace(/\r\n/g, "\n");
+    if ((settings.emailBodyTemplate || "") !== normalized) {
+      updateSetting?.("emailBodyTemplate", normalized);
+    }
+  }, [emailBodyTemplateInput, settings, updateSetting]);
+
+  const handleResetEmailTemplates = useCallback(() => {
+    setEmailSubjectTemplateInput("");
+    setEmailBodyTemplateInput("");
+    updateSetting?.("emailSubjectTemplate", "");
+    updateSetting?.("emailBodyTemplate", "");
+    showToast("Modèle d’e-mail réinitialisé");
+  }, [showToast, updateSetting]);
+
   const fullDay = settings?.showFullDay === true;
 
   const showFullDayToggle = toggleSettings.find((item) => item.key === "showFullDay");
@@ -366,12 +430,12 @@ export default function SettingsPage() {
           headingLevel={1}
           icon={<SettingsIcon aria-hidden="true" className="h-6 w-6" />}
           iconClassName="text-slate-900 dark:text-slate-100"
-          title="Paramètres d’affichage"
+          title="Paramètres de l’application"
           titleClassName="text-xl font-semibold text-slate-900 dark:text-slate-100 sm:text-2xl"
           className="items-start gap-3"
         />
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Personnalisez l’apparence de votre planning. Les modifications sont enregistrées automatiquement.
+          Personnalisez l’affichage du planning et préparez les modèles d’e-mails envoyés à vos clients. Les modifications sont enregistrées automatiquement.
         </p>
       </header>
 
@@ -542,6 +606,98 @@ export default function SettingsPage() {
           />
         </div>
       </div>
+
+      <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-700">
+          <h2 className="text-sm font-medium text-slate-900 dark:text-slate-100">Modèles d’e-mails</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Configurez l’objet et le message proposés lors de l’envoi des devis et factures.
+          </p>
+        </div>
+
+        <div className="space-y-5 px-4 py-4">
+          <div className="space-y-2">
+            <label
+              htmlFor="setting-emailSubjectTemplate-input"
+              className="text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              Objet par défaut
+            </label>
+            <input
+              id="setting-emailSubjectTemplate-input"
+              type="text"
+              value={emailSubjectTemplateInput}
+              onChange={handleEmailSubjectTemplateChange}
+              onBlur={commitEmailSubjectTemplate}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitEmailSubjectTemplate();
+                }
+              }}
+              placeholder="Votre devis {{documentNumber}}"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              L’objet est prérempli pour chaque envoi et reste modifiable dans la fenêtre d’e-mail.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="setting-emailBodyTemplate-textarea"
+              className="text-sm font-medium text-slate-700 dark:text-slate-200"
+            >
+              Message proposé
+            </label>
+            <textarea
+              id="setting-emailBodyTemplate-textarea"
+              value={emailBodyTemplateInput}
+              onChange={handleEmailBodyTemplateChange}
+              onBlur={commitEmailBodyTemplate}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  commitEmailBodyTemplate();
+                }
+              }}
+              rows={6}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
+              placeholder={"Bonjour,\n\nVeuillez trouver ci-joint votre {{documentType}}."}
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Les sauts de ligne sont conservés lors de l’envoi. Utilisez Ctrl/Cmd + Entrée pour enregistrer rapidement.
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-slate-50 px-3 py-3 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+            <p className="font-medium text-slate-700 dark:text-slate-200">Variables disponibles</p>
+            <ul className="mt-2 space-y-1">
+              {emailTemplateTokens.map(([token, description]) => (
+                <li key={token} className="flex flex-wrap items-baseline gap-2">
+                  <code className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                    {token}
+                  </code>
+                  <span>{description}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Ces contenus s’appliquent aux e-mails envoyés depuis les pages Devis et Factures.
+            </p>
+            <button
+              type="button"
+              onClick={handleResetEmailTemplates}
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors duration-150 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
+            >
+              Réinitialiser le modèle
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -55,6 +55,8 @@ const DEFAULT_PREFS = {
   hourlyRate: 0,
   showTaskPriorityBadges: true,
   showTaskStatusBadges: true,
+  emailSubjectTemplate: '',
+  emailBodyTemplate: '',
 };
 
 const SettingsContext = createContext({
@@ -116,6 +118,15 @@ export function SettingsProvider({ children }) {
         const truncated = Math.trunc(numericValue);
         const clamped = Math.max(0, Math.min(23, truncated));
         acc[key] = clamped;
+        return acc;
+      }
+
+      if (key === "emailSubjectTemplate" || key === "emailBodyTemplate") {
+        if (typeof incomingValue === "string") {
+          acc[key] = incomingValue;
+        } else {
+          acc[key] = DEFAULT_PREFS[key];
+        }
         return acc;
       }
 
