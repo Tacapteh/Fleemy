@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
+import re
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
-from typing import Any, Dict, Optional
+from html import escape
+from typing import Any, Dict, Optional, Sequence, Tuple
 from urllib.parse import urlparse
+
+import httpx
+from fastapi import HTTPException
 
 from .pdf_utils import document_filename
 
@@ -88,19 +94,31 @@ def _format_reference_date(document: Dict[str, Any], document_type: str) -> Opti
     return f"{label} : {formatted}"
 
 
+_HTML_TAG_REGEX = re.compile(r"<[a-zA-Z][^>]*>")
+
+
+def _text_to_html(text: str) -> str:
+    escaped = escape(text)
+    paragraphs = escaped.replace("\r\n", "\n").split("\n\n")
+    html_parts = []
+    for paragraph in paragraphs:
+        lines = paragraph.split("\n")
+        html_parts.append("<p>" + "<br/>".join(lines) + "</p>")
+    return "".join(html_parts)
+
+
 def build_document_email(
     document: Dict[str, Any],
     document_type: str,
-    recipient: str,
     document_id: str,
     *,
     subject: Optional[str] = None,
     body: Optional[str] = None,
-) -> EmailMessage:
+) -> Tuple[str, str, str]:
     number = _document_number(document, document_type, document_id)
     subject_label = "devis" if document_type == "quote" else "facture"
     custom_subject = (subject or "").strip()
-    subject = custom_subject or f"Votre {subject_label} {number}"
+    final_subject = custom_subject or f"Votre {subject_label} {number}"
 
     client_name = document.get("client_name") or "client"
     total = _format_total(document)
@@ -130,13 +148,13 @@ def build_document_email(
     custom_body = normalized_body.strip()
     body_content = normalized_body if custom_body else "\n".join(body_lines)
 
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = _sender_address()
-    message["To"] = recipient
-    message.set_content(body_content)
+    if custom_body and _HTML_TAG_REGEX.search(normalized_body):
+        html_body = normalized_body
+    else:
+        html_body = _text_to_html(body_content)
 
-    return message
+    return final_subject, body_content, html_body
+
 
 def _smtp_connection_from_url() -> Dict[str, Optional[Any]]:
     """Extract connection settings from standard SMTP URL env vars."""
@@ -297,16 +315,113 @@ def _resolve_smtp_credentials() -> Dict[str, Optional[str]]:
     return {"username": username, "password": password}
 
 
-def send_document_email(
+BREVO_API_ENDPOINT = "https://api.brevo.com/v3/smtp/email"
+
+
+def send_transactional_email_via_brevo(
+    to_email: str,
+    to_name: Optional[str],
+    subject: str,
+    html_body: str,
+    reply_to_email: Optional[str],
+    reply_to_name: Optional[str],
     *,
-    document: Dict[str, Any],
-    document_type: str,
-    recipient: str,
-    document_id: str,
-    pdf_bytes: bytes,
-    subject: Optional[str] = None,
-    body: Optional[str] = None,
+    text_body: Optional[str] = None,
+    attachments: Optional[Sequence[Tuple[str, bytes]]] = None,
 ) -> None:
+    api_key = os.getenv("BREVO_API_KEY")
+    provider = (os.getenv("EMAIL_PROVIDER") or "brevo").strip().lower() or "brevo"
+    sender_email = os.getenv("EMAIL_FROM")
+    sender_name = (os.getenv("EMAIL_FROM_NAME") or "Fleemy").strip() or "Fleemy"
+
+    if provider != "brevo":
+        logger.debug("send_transactional_email_via_brevo called while provider=%s", provider)
+
+    if not api_key or not sender_email:
+        logger.error("Brevo configuration missing: BREVO_API_KEY or EMAIL_FROM not set")
+        raise HTTPException(status_code=500, detail="Configuration e-mail Brevo manquante")
+
+    payload: Dict[str, Any] = {
+        "sender": {
+            "email": sender_email,
+            "name": sender_name,
+        },
+        "to": [
+            {
+                "email": to_email,
+                "name": to_name or to_email,
+            }
+        ],
+        "subject": subject,
+        "htmlContent": html_body,
+        "replyTo": {
+            "email": (reply_to_email or sender_email),
+            "name": (reply_to_name or to_name or sender_name),
+        },
+    }
+
+    if text_body:
+        payload["textContent"] = text_body
+
+    if attachments:
+        encoded_attachments = []
+        for filename, content_bytes in attachments:
+            if not filename:
+                continue
+            encoded_attachments.append(
+                {
+                    "name": filename,
+                    "content": base64.b64encode(content_bytes).decode("utf-8"),
+                }
+            )
+        if encoded_attachments:
+            payload["attachment"] = encoded_attachments
+
+    headers = {
+        "api-key": api_key,
+        "accept": "application/json",
+        "content-type": "application/json",
+    }
+
+    try:
+        response = httpx.post(
+            BREVO_API_ENDPOINT,
+            headers=headers,
+            json=payload,
+            timeout=10.0,
+        )
+    except httpx.RequestError as exc:  # pragma: no cover - network failure
+        logger.error("Brevo request failed: %s", exc)
+        raise RuntimeError("Échec de l'envoi de l'e-mail : connexion au service Brevo impossible") from exc
+
+    if response.status_code < 200 or response.status_code >= 300:
+        logger.error(
+            "Brevo API error %s: %s",
+            response.status_code,
+            response.text,
+        )
+        raise RuntimeError(
+            "Échec de l'envoi de l'e-mail : %s - %s"
+            % (response.status_code, response.text)
+        )
+
+
+def _send_email_via_smtp(
+    to_email: str,
+    to_name: Optional[str],
+    subject: str,
+    html_body: str,
+    reply_to_email: Optional[str],
+    reply_to_name: Optional[str],
+    *,
+    text_body: Optional[str] = None,
+    attachments: Optional[Sequence[Tuple[str, bytes]]] = None,
+) -> None:
+    from email.utils import formataddr
+
+    sender_email = _sender_address()
+    sender_display_name = (os.getenv("EMAIL_FROM_NAME") or "Fleemy").strip() or "Fleemy"
+
     host = _resolve_smtp_host()
 
     use_ssl = _bool_env("SMTP_USE_SSL", False)
@@ -317,20 +432,32 @@ def send_document_email(
     timeout = float(os.getenv("SMTP_TIMEOUT", "10"))
     creds = _resolve_smtp_credentials()
 
-    message = build_document_email(
-        document,
-        document_type,
-        recipient,
-        document_id,
-        subject=subject,
-        body=body,
-    )
-    message.add_attachment(
-        pdf_bytes,
-        maintype="application",
-        subtype="pdf",
-        filename=document_filename(document, document_type),
-    )
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = formataddr((sender_display_name, sender_email))
+    message["To"] = formataddr((to_name or to_email, to_email))
+    reply_email = reply_to_email or sender_email
+    if reply_email:
+        message["Reply-To"] = formataddr(
+            (
+                reply_to_name or to_name or sender_display_name,
+                reply_email,
+            )
+        )
+
+    content = text_body or html_body or ""
+    message.set_content(content)
+    if html_body:
+        message.add_alternative(html_body, subtype="html")
+
+    if attachments:
+        for filename, content_bytes in attachments:
+            message.add_attachment(
+                content_bytes,
+                maintype="application",
+                subtype="pdf",
+                filename=filename,
+            )
 
     smtp_class = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
 
@@ -344,5 +471,95 @@ def send_document_email(
                 smtp.login(creds["username"], creds["password"])
             smtp.send_message(message)
     except Exception as exc:  # pragma: no cover - safety net
-        logger.error("Failed to send %s %s by email: %s", document_type, document_id, exc)
+        logger.error("Failed to send email via SMTP: %s", exc)
         raise RuntimeError("Échec de l'envoi de l'e-mail : %s" % exc) from exc
+
+
+def send_fleemy_email(
+    *,
+    to_email: str,
+    to_name: Optional[str],
+    subject: str,
+    html_body: str,
+    reply_to_email: Optional[str],
+    reply_to_name: Optional[str],
+    text_body: Optional[str] = None,
+    attachments: Optional[Sequence[Tuple[str, bytes]]] = None,
+) -> None:
+    provider = (os.getenv("EMAIL_PROVIDER") or "brevo").strip().lower() or "brevo"
+
+    if provider == "brevo":
+        send_transactional_email_via_brevo(
+            to_email,
+            to_name,
+            subject,
+            html_body,
+            reply_to_email,
+            reply_to_name,
+            text_body=text_body,
+            attachments=attachments,
+        )
+        return
+
+    if provider == "smtp":
+        _send_email_via_smtp(
+            to_email,
+            to_name,
+            subject,
+            html_body,
+            reply_to_email,
+            reply_to_name,
+            text_body=text_body,
+            attachments=attachments,
+        )
+        return
+
+    raise RuntimeError(f"Provider d'e-mail non supporté : {provider}")
+
+
+def send_document_email(
+    *,
+    document: Dict[str, Any],
+    document_type: str,
+    recipient: str,
+    document_id: str,
+    pdf_bytes: bytes,
+    subject: Optional[str] = None,
+    body: Optional[str] = None,
+    reply_to_email: Optional[str] = None,
+    reply_to_name: Optional[str] = None,
+    recipient_name: Optional[str] = None,
+) -> None:
+    final_subject, text_body, html_body = build_document_email(
+        document,
+        document_type,
+        document_id,
+        subject=subject,
+        body=body,
+    )
+
+    attachment_name = document_filename(document, document_type)
+    attachments = [(attachment_name, pdf_bytes)]
+
+    to_name = (
+        recipient_name
+        or document.get("client_contact_name")
+        or document.get("client_name")
+        or document.get("client", {}).get("name")
+        if isinstance(document.get("client"), dict)
+        else None
+    )
+
+    sender_email = os.getenv("EMAIL_FROM")
+    sender_name = (os.getenv("EMAIL_FROM_NAME") or "Fleemy").strip() or "Fleemy"
+
+    send_fleemy_email(
+        to_email=recipient,
+        to_name=to_name,
+        subject=final_subject,
+        html_body=html_body,
+        reply_to_email=reply_to_email or sender_email,
+        reply_to_name=reply_to_name or sender_name,
+        text_body=text_body,
+        attachments=attachments,
+    )
