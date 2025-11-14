@@ -13,6 +13,10 @@ _RELEVANT_ENV_VARS = [
     "EMAIL_HOST",
     "MAILGUN_SMTP_SERVER",
     "SENDGRID_SMTP_HOST",
+    "SMTP_URL",
+    "SMTP_URI",
+    "MAIL_URL",
+    "EMAIL_URL",
     "SENDGRID_USERNAME",
     "SENDGRID_PASSWORD",
     "SENDGRID_API_KEY",
@@ -61,3 +65,15 @@ def test_resolve_smtp_host_without_configuration(monkeypatch):
     with pytest.raises(RuntimeError) as exc:
         email_utils._resolve_smtp_host()
     assert "SMTP_HOST n'est pas configuré" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "env_name",
+    ["SMTP_URL", "SMTP_URI", "MAIL_URL", "EMAIL_URL"],
+)
+def test_resolve_smtp_host_from_url(monkeypatch, env_name):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv(env_name, "smtp://user:secret@smtp.example.net:2525")
+    email_utils = _reload_email_utils(monkeypatch)
+    assert email_utils._resolve_smtp_host() == "smtp.example.net"
+    assert email_utils._resolve_smtp_port(587) == 2525
