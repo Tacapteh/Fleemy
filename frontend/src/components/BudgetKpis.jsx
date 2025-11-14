@@ -1,4 +1,5 @@
 import React from 'react';
+import { Wallet, ShoppingCart, TrendingUp, TrendingDown, PiggyBank } from 'lucide-react';
 
 const BudgetKpis = ({ summary, settings, loading }) => {
   if (loading) {
@@ -25,7 +26,8 @@ const BudgetKpis = ({ summary, settings, loading }) => {
       value: totalIncome,
       color: 'bg-[#B8EBD0]',
       textColor: 'text-gray-900',
-      icon: '💰',
+      Icon: Wallet,
+      iconColor: 'text-emerald-700',
       dataTestId: 'kpi-income'
     },
     {
@@ -33,7 +35,8 @@ const BudgetKpis = ({ summary, settings, loading }) => {
       value: totalExpense,
       color: 'bg-[#FFBFC4]',
       textColor: 'text-gray-900',
-      icon: '💸',
+      Icon: ShoppingCart,
+      iconColor: 'text-rose-600',
       dataTestId: 'kpi-expenses'
     },
     {
@@ -41,7 +44,8 @@ const BudgetKpis = ({ summary, settings, loading }) => {
       value: net,
       color: net >= 0 ? 'bg-[#BFE6FF]' : 'bg-[#FFD6B8]',
       textColor: 'text-gray-900',
-      icon: net >= 0 ? '📈' : '📉',
+      Icon: net >= 0 ? TrendingUp : TrendingDown,
+      iconColor: net >= 0 ? 'text-emerald-600' : 'text-rose-600',
       dataTestId: 'kpi-net'
     },
     {
@@ -49,7 +53,8 @@ const BudgetKpis = ({ summary, settings, loading }) => {
       value: savings,
       color: 'bg-[#DCCEF8]',
       textColor: 'text-gray-900',
-      icon: '🐷',
+      Icon: PiggyBank,
+      iconColor: 'text-sky-700',
       dataTestId: 'kpi-savings',
       showProgress: savingsTarget > 0,
       progress: savingsProgress
@@ -71,7 +76,9 @@ const BudgetKpis = ({ summary, settings, loading }) => {
                 {kpi.value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
               </p>
             </div>
-            <div className="text-3xl opacity-60">{kpi.icon}</div>
+            <div className="rounded-full bg-white/70 p-2 shadow-sm">
+              <kpi.Icon className={`h-7 w-7 ${kpi.iconColor}`} aria-hidden="true" />
+            </div>
           </div>
           {kpi.showProgress && (
             <div className="mt-3">
