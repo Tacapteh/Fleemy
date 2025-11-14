@@ -884,7 +884,7 @@ const WeeklyTaskForm = ({
                         aria-label={`Icône ${normalizedKey}`}
                         title={normalizedKey}
                       >
-                        <span aria-hidden>{getTaskIcon(iconKey)}</span>
+                        <span aria-hidden>{getTaskIcon(iconKey, { className: 'h-5 w-5' })}</span>
                       </button>
                     );
                   })}

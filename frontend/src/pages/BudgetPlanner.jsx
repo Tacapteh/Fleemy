@@ -377,10 +377,10 @@ const BudgetPlanner = () => {
                     <td className="py-3">
                       <div className="flex items-center gap-3">
                         <div
-                          className="flex h-8 w-8 items-center justify-center rounded text-lg"
+                          className="flex h-8 w-8 items-center justify-center rounded"
                           style={{ backgroundColor: item.color }}
                         >
-                          {getTaskIcon(item.iconId)}
+                          {getTaskIcon(item.iconId, { className: 'h-5 w-5' })}
                         </div>
                         <div>
                           <div className="font-medium text-gray-900 dark:text-slate-100">

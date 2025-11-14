@@ -92,7 +92,9 @@ const CategoryPicker = ({ selectedCategory, onSelect, type, customCategories = [
                   }}
                   data-testid={`category-${category.id}`}
                 >
-                  <span className="text-xl">{getTaskIcon(category.iconId)}</span>
+                  <span className="flex h-5 w-5 items-center justify-center text-xl">
+                    {getTaskIcon(category.iconId, { className: 'h-5 w-5' })}
+                  </span>
                   <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
                     {category.name}
                   </span>
@@ -159,7 +161,7 @@ const CategoryPicker = ({ selectedCategory, onSelect, type, customCategories = [
                   }`}
                   data-testid={`new-cat-icon-${icon}`}
                 >
-                  {getTaskIcon(icon)}
+                  {getTaskIcon(icon, { className: 'h-5 w-5' })}
                 </button>
               ))}
             </div>
