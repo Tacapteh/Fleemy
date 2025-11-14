@@ -5,7 +5,18 @@ import CategoryDonut from '../components/CategoryDonut';
 import IncomeExpenseBar from '../components/IncomeExpenseBar';
 import BudgetItemForm from '../components/BudgetItemForm';
 import { getTaskIcon } from '../constants/icons';
-import { ChevronLeft, ChevronRight, Plus, Edit2, Trash2, Settings as SettingsIcon } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Edit2,
+  Trash2,
+  Settings as SettingsIcon,
+  AlertTriangle,
+  XCircle,
+  CalendarDays,
+  CalendarRange
+} from 'lucide-react';
 
 const BudgetPlanner = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -225,7 +236,10 @@ const BudgetPlanner = () => {
       {/* Read-only badge */}
       {isReadOnly && (
         <div className="rounded-lg bg-amber-100/80 p-4 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-          ⚠️ Lecture seule - Vous consultez le budget d'un autre membre
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            <span>Lecture seule - Vous consultez le budget d'un autre membre</span>
+          </div>
         </div>
       )}
 
@@ -257,7 +271,10 @@ const BudgetPlanner = () => {
       {/* Error display */}
       {error && (
         <div className="rounded-lg bg-rose-100/80 p-4 text-sm text-rose-900 dark:bg-rose-500/10 dark:text-rose-200">
-          ❌ {error}
+          <div className="flex items-start gap-2">
+            <XCircle className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
+            <span>{error}</span>
+          </div>
         </div>
       )}
 
@@ -391,8 +408,18 @@ const BudgetPlanner = () => {
                     </td>
                     <td className="py-3">
                       {item.recurrence !== 'none' && (
-                        <span className="text-xs text-gray-500 dark:text-slate-400">
-                          {item.recurrence === 'weekly' ? '📅 Hebdo' : '📆 Mensuel'}
+                        <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
+                          {item.recurrence === 'weekly' ? (
+                            <>
+                              <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>Hebdo</span>
+                            </>
+                          ) : (
+                            <>
+                              <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>Mensuel</span>
+                            </>
+                          )}
                         </span>
                       )}
                     </td>

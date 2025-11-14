@@ -11,6 +11,18 @@ import {
   updateBudgetSettings
 } from '../services/budgetApi';
 
+const normalizeBudgetItem = (item) => {
+  if (!item || !item.type) {
+    return item;
+  }
+
+  if (item.type === 'savings') {
+    return { ...item, type: 'saving' };
+  }
+
+  return item;
+};
+
 /**
  * Hook to manage budget data
  * @param {string} periodStart - Start date (YYYY-MM-DD)
@@ -71,7 +83,8 @@ export const useBudget = (periodStart, periodEnd, teamMemberId = null) => {
       ]);
 
       if (itemsRes.success) {
-        setItems(itemsRes.items || []);
+        const normalizedItems = (itemsRes.items || []).map(normalizeBudgetItem);
+        setItems(normalizedItems);
       }
 
       if (summaryRes.success) {

@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { AlertTriangle, PiggyBank, Wallet, ShoppingCart, ChevronDown, ChevronUp } from 'lucide-react';
 import IconPicker from './IconPicker';
 import CategoryPicker from './CategoryPicker';
+
+const normalizeBudgetType = (type) => {
+  if (type === 'savings') {
+    return 'saving';
+  }
+  return type;
+};
+
+const TYPE_OPTIONS = [
+  { value: 'income', label: 'Revenu', Icon: Wallet },
+  { value: 'expense', label: 'Dépense', Icon: ShoppingCart },
+  { value: 'saving', label: 'Épargne', Icon: PiggyBank }
+];
 
 const BudgetItemForm = ({ item = null, onSubmit, onCancel, customCategories = [], onAddCategory, readOnly = false }) => {
   const [formData, setFormData] = useState({
@@ -25,7 +39,7 @@ const BudgetItemForm = ({ item = null, onSubmit, onCancel, customCategories = []
       setFormData({
         label: item.label || '',
         amount: item.amount?.toString() || '',
-        type: item.type || 'expense',
+        type: normalizeBudgetType(item.type) || 'expense',
         categoryId: item.categoryId || '',
         categoryName: item.categoryName || '',
         iconId: item.iconId || 'briefcase',
@@ -104,7 +118,10 @@ const BudgetItemForm = ({ item = null, onSubmit, onCancel, customCategories = []
     return (
       <div className="space-y-4">
         <div className="rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200">
-          ⚠️ Lecture seule - Vous consultez le budget d'un autre membre
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 flex-shrink-0 text-yellow-600" aria-hidden="true" />
+            <span>Lecture seule - Vous consultez le budget d'un autre membre</span>
+          </div>
         </div>
       </div>
     );
@@ -118,11 +135,7 @@ const BudgetItemForm = ({ item = null, onSubmit, onCancel, customCategories = []
           Type
         </label>
         <div className="flex gap-2">
-          {[
-            { value: 'income', label: 'Revenu', icon: '💰' },
-            { value: 'expense', label: 'Dépense', icon: '💸' },
-            { value: 'saving', label: 'Épargne', icon: '🐷' }
-          ].map(({ value, label, icon }) => (
+          {TYPE_OPTIONS.map(({ value, label, Icon }) => (
             <button
               key={value}
               type="button"
@@ -134,7 +147,7 @@ const BudgetItemForm = ({ item = null, onSubmit, onCancel, customCategories = []
               }`}
               data-testid={`type-${value}`}
             >
-              <div className="text-2xl mb-1">{icon}</div>
+              <Icon className="mx-auto mb-1 h-6 w-6" aria-hidden="true" />
               <div className="text-sm font-medium">{label}</div>
             </button>
           ))}
@@ -226,7 +239,11 @@ const BudgetItemForm = ({ item = null, onSubmit, onCancel, customCategories = []
           data-testid="toggle-icon-picker"
         >
           <span>Personnaliser l'icône</span>
-          <span className="text-xl">{showIconPicker ? '▲' : '▼'}</span>
+          {showIconPicker ? (
+            <ChevronUp className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          )}
         </button>
         {showIconPicker && (
           <div className="mt-3">
