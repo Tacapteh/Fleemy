@@ -142,6 +142,22 @@ def _resolve_smtp_host() -> str:
     )
     if host:
         return host
+
+    # Provide sensible defaults for well-known providers when credentials are
+    # configured but the host variable is omitted. This mirrors the defaults
+    # documented by the providers and avoids hard failures in deployments that
+    # only set usernames/passwords.
+    if _env_first("SENDGRID_USERNAME", "SENDGRID_PASSWORD", "SENDGRID_API_KEY"):
+        return "smtp.sendgrid.net"
+
+    if _env_first(
+        "MAILGUN_SMTP_LOGIN",
+        "MAILGUN_SMTP_PASSWORD",
+        "MAILGUN_API_KEY",
+        "MAILGUN_DOMAIN",
+    ):
+        return "smtp.mailgun.org"
+
     raise RuntimeError(
         "SMTP_HOST n'est pas configuré. Définissez SMTP_HOST pour activer l'envoi d'e-mails."
     )

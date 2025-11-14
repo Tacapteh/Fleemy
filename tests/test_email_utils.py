@@ -1,0 +1,63 @@
+import importlib
+import sys
+import types
+
+import pytest
+
+
+_RELEVANT_ENV_VARS = [
+    "SMTP_HOST",
+    "SMTP_SERVER",
+    "MAIL_HOST",
+    "MAIL_SERVER",
+    "EMAIL_HOST",
+    "MAILGUN_SMTP_SERVER",
+    "SENDGRID_SMTP_HOST",
+    "SENDGRID_USERNAME",
+    "SENDGRID_PASSWORD",
+    "SENDGRID_API_KEY",
+    "MAILGUN_SMTP_LOGIN",
+    "MAILGUN_SMTP_PASSWORD",
+    "MAILGUN_API_KEY",
+    "MAILGUN_DOMAIN",
+]
+
+
+def _clear_env(monkeypatch):
+    for name in _RELEVANT_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+
+def _reload_email_utils(monkeypatch):
+    module_name = "backend.email_utils"
+    if module_name in sys.modules:
+        del sys.modules[module_name]
+    dummy_pdf_utils = types.ModuleType("backend.pdf_utils")
+    dummy_pdf_utils.document_filename = lambda *args, **kwargs: "document.pdf"
+    monkeypatch.setitem(sys.modules, "backend.pdf_utils", dummy_pdf_utils)
+    return importlib.import_module(module_name)
+
+
+@pytest.mark.parametrize(
+    "env, expected",
+    [
+        ({"SENDGRID_USERNAME": "apikey"}, "smtp.sendgrid.net"),
+        ({"SENDGRID_PASSWORD": "secret"}, "smtp.sendgrid.net"),
+        ({"MAILGUN_SMTP_LOGIN": "user"}, "smtp.mailgun.org"),
+        ({"MAILGUN_DOMAIN": "mg.example.com"}, "smtp.mailgun.org"),
+    ],
+)
+def test_resolve_smtp_host_with_provider_defaults(monkeypatch, env, expected):
+    _clear_env(monkeypatch)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    email_utils = _reload_email_utils(monkeypatch)
+    assert email_utils._resolve_smtp_host() == expected
+
+
+def test_resolve_smtp_host_without_configuration(monkeypatch):
+    _clear_env(monkeypatch)
+    email_utils = _reload_email_utils(monkeypatch)
+    with pytest.raises(RuntimeError) as exc:
+        email_utils._resolve_smtp_host()
+    assert "SMTP_HOST n'est pas configuré" in str(exc.value)
