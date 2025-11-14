@@ -3433,6 +3433,26 @@ async def email_document_endpoint(
             },
         )
 
+    client_display_name = (
+        document_data.get("client_contact_name")
+        or document_data.get("client_name")
+        or (
+            document_data.get("client", {}).get("name")
+            if isinstance(document_data.get("client"), dict)
+            else None
+        )
+    )
+
+    user_display_name = (
+        user.get("name")
+        or user.get("displayName")
+        or user.get("full_name")
+        or user.get("fullName")
+        or user.get("email")
+        or "Utilisateur Fleemy"
+    )
+    user_email = user.get("email") or os.getenv("EMAIL_FROM")
+
     try:
         await asyncio.to_thread(
             send_document_email,
@@ -3443,14 +3463,36 @@ async def email_document_endpoint(
             pdf_bytes=pdf_bytes,
             subject=payload.subject,
             body=payload.body,
+            reply_to_email=user_email,
+            reply_to_name=user_display_name,
+            recipient_name=client_display_name,
         )
-    except RuntimeError as exc:
-        logger.error(
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        logger.exception(
+            "Failed to send %s %s by email (config): %s", document_type, doc_id, detail
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "message": "Échec de l'envoi de l'e-mail",
+                "detail": detail,
+                "error": f"Échec de l'envoi de l'e-mail : {detail}",
+            },
+        )
+    except Exception as exc:
+        logger.exception(
             "Failed to send %s %s by email: %s", document_type, doc_id, exc
         )
         return JSONResponse(
-            status_code=502,
-            content={"success": False, "error": str(exc)},
+            status_code=500,
+            content={
+                "success": False,
+                "message": "Échec de l'envoi de l'e-mail",
+                "detail": str(exc),
+                "error": f"Échec de l'envoi de l'e-mail : {exc}",
+            },
         )
 
     logger.info("Document %s %s sent to %s", document_type, doc_id, payload.to)
