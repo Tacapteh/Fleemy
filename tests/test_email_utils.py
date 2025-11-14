@@ -13,6 +13,10 @@ _RELEVANT_ENV_VARS = [
     "EMAIL_HOST",
     "MAILGUN_SMTP_SERVER",
     "SENDGRID_SMTP_HOST",
+    "SENDINBLUE_SMTP_HOST",
+    "SENDINBLUE_SMTP_SERVER",
+    "BREVO_SMTP_HOST",
+    "BREVO_SMTP_SERVER",
     "SMTP_URL",
     "SMTP_URI",
     "MAIL_URL",
@@ -24,6 +28,12 @@ _RELEVANT_ENV_VARS = [
     "MAILGUN_SMTP_PASSWORD",
     "MAILGUN_API_KEY",
     "MAILGUN_DOMAIN",
+    "SENDINBLUE_SMTP_LOGIN",
+    "SENDINBLUE_SMTP_PASSWORD",
+    "SENDINBLUE_API_KEY",
+    "BREVO_SMTP_LOGIN",
+    "BREVO_SMTP_PASSWORD",
+    "BREVO_API_KEY",
 ]
 
 
@@ -49,6 +59,8 @@ def _reload_email_utils(monkeypatch):
         ({"SENDGRID_PASSWORD": "secret"}, "smtp.sendgrid.net"),
         ({"MAILGUN_SMTP_LOGIN": "user"}, "smtp.mailgun.org"),
         ({"MAILGUN_DOMAIN": "mg.example.com"}, "smtp.mailgun.org"),
+        ({"SENDINBLUE_SMTP_LOGIN": "user"}, "smtp-relay.sendinblue.com"),
+        ({"BREVO_API_KEY": "secret"}, "smtp-relay.sendinblue.com"),
     ],
 )
 def test_resolve_smtp_host_with_provider_defaults(monkeypatch, env, expected):
