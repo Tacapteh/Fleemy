@@ -13,10 +13,83 @@ const LIST_ENDPOINT = '/api/notifications/list';
 const MARK_READ_ENDPOINT = '/api/notifications/mark-read';
 const POLLING_INTERVAL_MS = 30_000;
 
-function normalizeNotifications(rawNotifications) {
+const isFirestoreTimestamp = (value) =>
+  value && typeof value === 'object' && typeof value.seconds === 'number' && typeof value.nanoseconds === 'number';
+
+const toISOString = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (Number.isNaN(parsed)) {
+      return null;
+    }
+    return new Date(parsed).toISOString();
+  }
+
+  if (isFirestoreTimestamp(value)) {
+    try {
+      const milliseconds = value.seconds * 1000 + Math.floor(value.nanoseconds / 1_000_000);
+      return new Date(milliseconds).toISOString();
+    } catch (error) {
+      console.warn('Unable to convert Firestore timestamp to ISO string', error);
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const getNotificationId = (notification) =>
+  notification?.id
+  || notification?.notificationId
+  || notification?.docId
+  || notification?.documentId
+  || null;
+
+const normalizeNotifications = (rawNotifications) => {
   if (!Array.isArray(rawNotifications)) {
     return [];
   }
+
+  const dedupedMap = new Map();
+
+  rawNotifications.forEach((notification) => {
+    if (!notification || typeof notification !== 'object') {
+      return;
+    }
+
+    const id = getNotificationId(notification);
+    if (!id) {
+      return;
+    }
+
+    const createdAt =
+      notification.createdAt
+      || notification.created_at
+      || notification.created_at_ts
+      || notification.created_at_iso
+      || null;
+
+    const normalizedNotification = {
+      id,
+      userId: notification.userId || notification.user_id || null,
+      title: notification.title || '',
+      message: notification.message || notification.body || '',
+      type: notification.type || 'info',
+      createdAt: toISOString(createdAt),
+      read: Boolean(notification.read),
+      relatedResource: notification.relatedResource || notification.related_resource || null,
+    };
+
+    dedupedMap.set(id, normalizedNotification);
+  });
 
   const getComparableTimestamp = (value) => {
     if (!value) {
@@ -31,17 +104,10 @@ function normalizeNotifications(rawNotifications) {
     return parsed;
   };
 
-  return rawNotifications
-    .map((notification) => {
-      const createdAt = notification?.createdAt || notification?.created_at || null;
-
-      return {
-        ...notification,
-        createdAt,
-      };
-    })
-    .sort((left, right) => getComparableTimestamp(right.createdAt) - getComparableTimestamp(left.createdAt));
-}
+  return Array.from(dedupedMap.values()).sort(
+    (left, right) => getComparableTimestamp(right.createdAt) - getComparableTimestamp(left.createdAt),
+  );
+};
 
 export function useNotifications(userId) {
   const { notificationsEnabled } = useNotificationPreferences();
@@ -124,13 +190,11 @@ export function useNotifications(userId) {
         return false;
       }
 
-      if (Array.isArray(data)) {
-        setNotifications(normalizeNotifications(data));
-      } else if (data?.notifications && Array.isArray(data.notifications)) {
-        setNotifications(normalizeNotifications(data.notifications));
-      } else {
-        setNotifications([]);
-      }
+      const normalizedNotifications = Array.isArray(data?.notifications)
+        ? normalizeNotifications(data.notifications)
+        : normalizeNotifications(data);
+
+      setNotifications(normalizedNotifications);
 
       if (isMountedRef.current) {
         setError(null);
@@ -188,13 +252,19 @@ export function useNotifications(userId) {
           throw new Error(`Erreur ${response.status}`);
         }
 
-        setNotifications((prevNotifications) =>
-          prevNotifications.map((notification) =>
-            unreadIds.includes(notification.id)
+        setNotifications((prevNotifications) => {
+          if (!Array.isArray(prevNotifications) || prevNotifications.length === 0) {
+            return prevNotifications;
+          }
+
+          const idsToUpdate = new Set(unreadIds);
+
+          return prevNotifications.map((notification) => (
+            idsToUpdate.has(notification.id)
               ? { ...notification, read: true }
-              : notification,
-          ),
-        );
+              : notification
+          ));
+        });
 
         setError(null);
 
@@ -223,6 +293,28 @@ export function useNotifications(userId) {
       setLoading(false);
     }
   }, [notificationsEnabled]);
+
+  useEffect(() => {
+    if (!notificationsEnabled) {
+      return undefined;
+    }
+
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications({ silent: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchNotifications, notificationsEnabled]);
 
   useEffect(() => {
     if (!notificationsEnabled) {
