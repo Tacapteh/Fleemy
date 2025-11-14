@@ -89,3 +89,21 @@ def test_resolve_smtp_host_from_url(monkeypatch, env_name):
     email_utils = _reload_email_utils(monkeypatch)
     assert email_utils._resolve_smtp_host() == "smtp.example.net"
     assert email_utils._resolve_smtp_port(587) == 2525
+
+
+@pytest.mark.parametrize(
+    "value, expected_host, expected_port",
+    [
+        ("smtp.example.org", "smtp.example.org", None),
+        ("smtp.example.org:2025", "smtp.example.org", 2025),
+        ("user@smtp.example.org:465", "smtp.example.org", 465),
+    ],
+)
+def test_resolve_smtp_host_from_url_without_scheme(
+    monkeypatch, value, expected_host, expected_port
+):
+    _clear_env(monkeypatch)
+    monkeypatch.setenv("SMTP_URL", value)
+    email_utils = _reload_email_utils(monkeypatch)
+    assert email_utils._resolve_smtp_host() == expected_host
+    assert email_utils._resolve_smtp_port(25) == (expected_port or 25)

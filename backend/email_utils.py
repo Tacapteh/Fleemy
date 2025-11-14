@@ -145,8 +145,35 @@ def _smtp_connection_from_url() -> Dict[str, Optional[Any]]:
         raw = os.getenv(name)
         if not raw:
             continue
+
+        stripped = raw.strip()
+        if not stripped:
+            continue
+
+        if "://" not in stripped:
+            # Support bare host[:port] values as often configured in legacy
+            # environments (e.g. Render secrets) without the scheme part.
+            host_part = stripped.split("@", 1)[-1]
+            host, sep, port_str = host_part.rpartition(":")
+            if sep:
+                candidate_host = host.strip("[] ")
+                try:
+                    candidate_port: Optional[int] = int(port_str)
+                except ValueError:
+                    logger.warning(
+                        "Invalid SMTP port '%s' in %s, ignoring value", port_str, name
+                    )
+                    candidate_port = None
+            else:
+                candidate_host = host_part.strip("[] ")
+                candidate_port = None
+
+            if candidate_host:
+                return {"host": candidate_host, "port": candidate_port}
+            continue
+
         try:
-            parsed = urlparse(raw)
+            parsed = urlparse(stripped)
         except ValueError:
             logger.warning("Invalid SMTP URL in %s: %s", name, raw)
             continue
