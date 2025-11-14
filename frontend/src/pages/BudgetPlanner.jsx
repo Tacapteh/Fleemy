@@ -25,6 +25,7 @@ const BudgetPlanner = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [filterType, setFilterType] = useState('income');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [hasUserSelectedType, setHasUserSelectedType] = useState(false);
   const [teamMemberId, setTeamMemberId] = useState(null);
   const [savingsTarget, setSavingsTarget] = useState('');
 
@@ -165,7 +166,7 @@ const BudgetPlanner = () => {
   }, [normalizedItems, filterType, filterCategory]);
 
   useEffect(() => {
-    if (normalizedItems.length === 0) {
+    if (normalizedItems.length === 0 || hasUserSelectedType) {
       return;
     }
 
@@ -175,7 +176,11 @@ const BudgetPlanner = () => {
         setFilterType(availableTab.value);
       }
     }
-  }, [normalizedItems, filterType, typeTabs]);
+  }, [normalizedItems, filterType, typeTabs, hasUserSelectedType]);
+
+  useEffect(() => {
+    setHasUserSelectedType(false);
+  }, [periodStart]);
 
   useEffect(() => {
     setFilterCategory('all');
@@ -308,7 +313,10 @@ const BudgetPlanner = () => {
                 return (
                   <button
                     key={tab.value}
-                    onClick={() => setFilterType(tab.value)}
+                    onClick={() => {
+                      setFilterType(tab.value);
+                      setHasUserSelectedType(true);
+                    }}
                     className={`rounded-md px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 ${
                       isActive
                         ? 'bg-white/90 text-slate-900 shadow-sm ring-1 ring-emerald-300/60 dark:bg-slate-900/80 dark:text-slate-100 dark:ring-emerald-500/40'
@@ -341,9 +349,13 @@ const BudgetPlanner = () => {
         <div className="overflow-x-auto">
           {loading ? (
             <div className="py-8 text-center text-gray-500 dark:text-slate-400">Chargement...</div>
-          ) : filteredItems.length === 0 ? (
+          ) : normalizedItems.length === 0 ? (
             <div className="py-8 text-center text-gray-500 dark:text-slate-400">
               Aucune transaction pour cette période
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="py-8 text-center text-gray-500 dark:text-slate-400">
+              Rien dans cette catégorie
             </div>
           ) : (
             <table className="w-full" data-testid="items-table">
