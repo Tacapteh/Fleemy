@@ -19,10 +19,14 @@ export default function SendDocumentModal({
   type,
   email,
   defaultEmail,
+  subject,
+  body,
   status,
   message,
   onClose,
   onEmailChange,
+  onSubjectChange,
+  onBodyChange,
   onSubmit,
   documentTitle,
 }) {
@@ -38,6 +42,8 @@ export default function SendDocumentModal({
 
   const isLoading = status === 'loading';
   const isSuccess = status === 'success';
+  const subjectValue = subject ?? '';
+  const bodyValue = body ?? '';
 
   const describedBy = useMemo(() => {
     if (message) {
@@ -197,6 +203,37 @@ export default function SendDocumentModal({
             )}
           </div>
 
+          <div className="space-y-1">
+            <label htmlFor={`${titleId}-subject`} className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Objet du message
+            </label>
+            <input
+              id={`${titleId}-subject`}
+              type="text"
+              value={subjectValue}
+              onChange={(event) => onSubjectChange(event.target.value)}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
+              placeholder={`Votre ${documentLabel}`}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor={`${titleId}-body`} className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Message du mail
+            </label>
+            <textarea
+              id={`${titleId}-body`}
+              value={bodyValue}
+              onChange={(event) => onBodyChange(event.target.value)}
+              rows={6}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
+              placeholder={`Message accompagnant la ${documentLabel}`}
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Modifiez le texte avant l'envoi. Les sauts de ligne sont conservés.
+            </p>
+          </div>
+
           {message && (
             <div
               id={messageId}
@@ -219,10 +256,12 @@ export default function SendDocumentModal({
           </button>
           <button
             type="button"
-            onClick={() => onSubmit(email)}
+            onClick={() => onSubmit({ email, subject: subjectValue, body: bodyValue })}
             className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:bg-blue-500 dark:hover:bg-blue-400 dark:focus-visible:ring-offset-slate-900"
             aria-label={sendButtonLabel}
-            disabled={isLoading || email.trim().length === 0}
+            disabled={
+              isLoading || email.trim().length === 0 || subjectValue.trim().length === 0
+            }
           >
             {isLoading ? 'Envoi…' : 'Envoyer'}
           </button>
@@ -237,16 +276,22 @@ SendDocumentModal.propTypes = {
   type: PropTypes.oneOf(['quote', 'invoice']).isRequired,
   email: PropTypes.string.isRequired,
   defaultEmail: PropTypes.string,
+  subject: PropTypes.string,
+  body: PropTypes.string,
   status: PropTypes.oneOf(['idle', 'loading', 'success', 'error']).isRequired,
   message: PropTypes.string,
   onClose: PropTypes.func.isRequired,
   onEmailChange: PropTypes.func.isRequired,
+  onSubjectChange: PropTypes.func.isRequired,
+  onBodyChange: PropTypes.func.isRequired,
   onSubmit: PropTypes.func.isRequired,
   documentTitle: PropTypes.string,
 };
 
 SendDocumentModal.defaultProps = {
   defaultEmail: '',
+  subject: '',
+  body: '',
   message: '',
   documentTitle: '',
 };
