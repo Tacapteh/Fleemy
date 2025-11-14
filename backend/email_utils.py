@@ -173,6 +173,10 @@ def _resolve_smtp_host() -> str:
         "EMAIL_HOST",
         "MAILGUN_SMTP_SERVER",
         "SENDGRID_SMTP_HOST",
+        "SENDINBLUE_SMTP_HOST",
+        "SENDINBLUE_SMTP_SERVER",
+        "BREVO_SMTP_HOST",
+        "BREVO_SMTP_SERVER",
     )
     if host:
         return host
@@ -191,6 +195,16 @@ def _resolve_smtp_host() -> str:
         "MAILGUN_DOMAIN",
     ):
         return "smtp.mailgun.org"
+
+    if _env_first(
+        "SENDINBLUE_SMTP_LOGIN",
+        "SENDINBLUE_SMTP_PASSWORD",
+        "SENDINBLUE_API_KEY",
+        "BREVO_SMTP_LOGIN",
+        "BREVO_SMTP_PASSWORD",
+        "BREVO_API_KEY",
+    ):
+        return "smtp-relay.sendinblue.com"
 
     raise RuntimeError(
         "SMTP_HOST n'est pas configuré. Définissez SMTP_HOST pour activer l'envoi d'e-mails."
@@ -228,6 +242,8 @@ def _resolve_smtp_credentials() -> Dict[str, Optional[str]]:
         "EMAIL_USERNAME",
         "MAILGUN_SMTP_LOGIN",
         "SENDGRID_USERNAME",
+        "SENDINBLUE_SMTP_LOGIN",
+        "BREVO_SMTP_LOGIN",
     )
     password = _env_first(
         "SMTP_PASSWORD",
@@ -237,6 +253,8 @@ def _resolve_smtp_credentials() -> Dict[str, Optional[str]]:
         "EMAIL_PASSWORD",
         "MAILGUN_SMTP_PASSWORD",
         "SENDGRID_PASSWORD",
+        "SENDINBLUE_SMTP_PASSWORD",
+        "BREVO_SMTP_PASSWORD",
     )
     return {"username": username, "password": password}
 
