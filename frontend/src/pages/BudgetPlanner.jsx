@@ -28,6 +28,8 @@ const BudgetPlanner = () => {
   const [teamMemberId, setTeamMemberId] = useState(null);
   const [savingsTarget, setSavingsTarget] = useState('');
 
+  const normalizeBudgetType = (type) => (type === 'savings' ? 'saving' : type);
+
   const typeTabs = useMemo(() => ([
     { value: 'income', label: 'Revenus' },
     { value: 'expense', label: 'Dépenses' },
@@ -147,28 +149,33 @@ const BudgetPlanner = () => {
   };
 
   // Filter items
+  const normalizedItems = useMemo(
+    () => items.map(item => ({ ...item, type: normalizeBudgetType(item.type) })),
+    [items]
+  );
+
   const filteredItems = useMemo(() => {
-    let filtered = items.filter(item => item.type === filterType);
+    let filtered = normalizedItems.filter(item => item.type === filterType);
 
     if (filterCategory !== 'all') {
       filtered = filtered.filter(item => item.categoryId === filterCategory);
     }
 
     return filtered.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
-  }, [items, filterType, filterCategory]);
+  }, [normalizedItems, filterType, filterCategory]);
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (normalizedItems.length === 0) {
       return;
     }
 
-    if (!items.some(item => item.type === filterType)) {
-      const availableTab = typeTabs.find(tab => items.some(item => item.type === tab.value));
+    if (!normalizedItems.some(item => item.type === filterType)) {
+      const availableTab = typeTabs.find(tab => normalizedItems.some(item => item.type === tab.value));
       if (availableTab) {
         setFilterType(availableTab.value);
       }
     }
-  }, [items, filterType, typeTabs]);
+  }, [normalizedItems, filterType, typeTabs]);
 
   useEffect(() => {
     setFilterCategory('all');
@@ -177,7 +184,7 @@ const BudgetPlanner = () => {
   // Get unique categories for filter
   const categories = useMemo(() => {
     const catMap = new Map();
-    items
+    normalizedItems
       .filter(item => item.type === filterType)
       .forEach(item => {
       if (!catMap.has(item.categoryId)) {
@@ -189,7 +196,7 @@ const BudgetPlanner = () => {
       }
     });
     return Array.from(catMap.values());
-  }, [items, filterType]);
+  }, [normalizedItems, filterType]);
 
   const monthYear = currentDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
   const isReadOnly = teamMemberId && teamMemberId !== 'current-user-id';
