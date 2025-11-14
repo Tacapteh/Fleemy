@@ -212,5 +212,27 @@ service cloud.firestore {
         && request.resource != null
         && request.resource.data.user_id == request.auth.uid;
     }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated()
+        && resource != null
+        && resource.data.userId == request.auth.uid;
+
+      allow create: if isAuthenticated()
+        && request.resource != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId', 'title', 'message', 'type', 'createdAt', 'read']);
+
+      allow update: if isAuthenticated()
+        && resource != null
+        && request.resource != null
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+
+      allow delete: if isAuthenticated()
+        && resource != null
+        && resource.data.userId == request.auth.uid;
+    }
   }
 }
