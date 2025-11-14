@@ -1,0 +1,1 @@
+export { PotteryIcon } from './PotteryIcon';

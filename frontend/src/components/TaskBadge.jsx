@@ -14,7 +14,16 @@ export default function TaskBadge({
   mode = 'badge' // 'badge' ou 'icon-only'
 }) {
   const colorStyles = getTaskColor(task.color);
-  const icon = getTaskIcon(task.icon);
+  const iconSizeClasses = {
+    small: 'h-3.5 w-3.5',
+    normal: 'h-4 w-4',
+    large: 'h-5 w-5'
+  };
+  const priceTextClasses = {
+    small: 'text-xs',
+    normal: 'text-sm',
+    large: 'text-base'
+  };
   
   // Formatage du temps pour l'aria-label
   const formatTime = (date) => {
@@ -68,7 +77,7 @@ export default function TaskBadge({
     
     return (
       <span {...iconOnlyProps}>
-        {icon}
+        {getTaskIcon(task.icon, { className: 'h-4 w-4' })}
       </span>
     );
   }
@@ -78,12 +87,6 @@ export default function TaskBadge({
     small: 'text-xs px-1 py-0.5',
     normal: 'text-sm px-2 py-1',
     large: 'text-base px-3 py-2'
-  };
-  
-  const iconSizes = {
-    small: 'text-xs',
-    normal: 'text-sm',
-    large: 'text-lg'
   };
   
   const baseClasses = `
@@ -125,14 +128,14 @@ export default function TaskBadge({
   
   return (
     <span {...badgeProps}>
-      <span className={`${iconSizes[size]} flex-shrink-0`} aria-hidden="true">
-        {icon}
+      <span className="flex-shrink-0" aria-hidden="true">
+        {getTaskIcon(task.icon, { className: iconSizeClasses[size] })}
       </span>
       <span className="truncate min-w-0">
         {task.label}
       </span>
       {task.price && (
-        <span className={`${iconSizes[size]} opacity-75 flex-shrink-0`} aria-hidden="true">
+        <span className={`${priceTextClasses[size]} opacity-75 flex-shrink-0`} aria-hidden="true">
           {task.price}€
         </span>
       )}

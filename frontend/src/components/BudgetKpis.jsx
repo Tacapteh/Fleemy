@@ -1,5 +1,6 @@
 import React from 'react';
-import { Wallet, ShoppingCart, TrendingUp, TrendingDown, PiggyBank } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, PiggyBank } from 'lucide-react';
+import ExpenseTrendIcon from './icons/ExpenseTrendIcon';
 
 const BudgetKpis = ({ summary, settings, loading }) => {
   if (loading) {
@@ -35,7 +36,7 @@ const BudgetKpis = ({ summary, settings, loading }) => {
       value: totalExpense,
       color: 'bg-[#FFBFC4]',
       textColor: 'text-gray-900',
-      Icon: ShoppingCart,
+      Icon: ExpenseTrendIcon,
       iconColor: 'text-rose-600',
       dataTestId: 'kpi-expenses'
     },

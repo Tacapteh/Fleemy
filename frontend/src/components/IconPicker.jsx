@@ -36,7 +36,7 @@ const IconPicker = ({ selectedIcon, onSelect, color = '#CCCCCC' }) => {
             style={{ backgroundColor: color }}
             data-testid="selected-icon-preview"
           >
-            {getTaskIcon(selectedIcon)}
+              {getTaskIcon(selectedIcon, { className: 'h-6 w-6' })}
           </div>
         )}
       </div>
@@ -84,7 +84,7 @@ const IconPicker = ({ selectedIcon, onSelect, color = '#CCCCCC' }) => {
               </h4>
             )}
             <div className="grid grid-cols-8 gap-2">
-              {Object.entries(category.icons).map(([key, emoji]) => (
+              {Object.keys(category.icons).map((key) => (
                 <button
                   key={key}
                   type="button"
@@ -99,7 +99,7 @@ const IconPicker = ({ selectedIcon, onSelect, color = '#CCCCCC' }) => {
                   role="option"
                   aria-selected={selectedIcon === key}
                 >
-                  {emoji}
+                  {getTaskIcon(key, { className: 'h-5 w-5' })}
                 </button>
               ))}
             </div>

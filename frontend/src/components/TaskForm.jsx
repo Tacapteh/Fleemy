@@ -234,7 +234,7 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
                       }}
                       title={normalizedKey}
                     >
-                      {getTaskIcon(iconKey)}
+                      {getTaskIcon(iconKey, { className: 'h-5 w-5' })}
                     </button>
                   );
                 })}
