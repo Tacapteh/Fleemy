@@ -36,9 +36,11 @@ export default function SendDocumentModal({
   const descriptionId = useId();
   const messageId = useId();
 
-  const documentLabel = type === 'invoice' ? 'facture' : 'devis';
-  const sendButtonLabel = `Envoyer la ${documentLabel}`;
-  const descriptionText = `Envoyer la ${documentLabel} par e-mail au client.`;
+  const isInvoice = type === 'invoice';
+  const documentLabel = isInvoice ? 'facture' : 'devis';
+  const documentArticle = isInvoice ? 'la' : 'le';
+  const sendButtonLabel = `Envoyer ${documentArticle} ${documentLabel}`;
+  const descriptionText = `Envoyer ${documentArticle} ${documentLabel} par e-mail au client.`;
 
   const isLoading = status === 'loading';
   const isSuccess = status === 'success';
@@ -158,7 +160,7 @@ export default function SendDocumentModal({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Envoyer la {documentLabel}
+              {`Envoyer ${documentArticle} ${documentLabel}`}
             </h2>
             <p
               id={descriptionId}
@@ -227,7 +229,7 @@ export default function SendDocumentModal({
               onChange={(event) => onBodyChange(event.target.value)}
               rows={6}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
-              placeholder={`Message accompagnant la ${documentLabel}`}
+              placeholder={`Message accompagnant ${documentArticle} ${documentLabel}`}
             />
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Modifiez le texte avant l'envoi. Les sauts de ligne sont conservés.
