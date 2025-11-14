@@ -8,6 +8,7 @@ import smtplib
 from datetime import datetime
 from email.message import EmailMessage
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
 
 from .pdf_utils import document_filename
 
@@ -137,8 +138,33 @@ def build_document_email(
 
     return message
 
+def _smtp_connection_from_url() -> Dict[str, Optional[Any]]:
+    """Extract connection settings from standard SMTP URL env vars."""
+
+    for name in ("SMTP_URL", "SMTP_URI", "MAIL_URL", "EMAIL_URL"):
+        raw = os.getenv(name)
+        if not raw:
+            continue
+        try:
+            parsed = urlparse(raw)
+        except ValueError:
+            logger.warning("Invalid SMTP URL in %s: %s", name, raw)
+            continue
+
+        if parsed.hostname:
+            return {
+                "host": parsed.hostname,
+                "port": parsed.port,
+            }
+
+    return {"host": None, "port": None}
+
 
 def _resolve_smtp_host() -> str:
+    connection = _smtp_connection_from_url()
+    if connection["host"]:
+        return connection["host"]
+
     host = _env_first(
         "SMTP_HOST",
         "SMTP_SERVER",
@@ -172,6 +198,10 @@ def _resolve_smtp_host() -> str:
 
 
 def _resolve_smtp_port(default_port: int) -> int:
+    connection = _smtp_connection_from_url()
+    if connection["port"]:
+        return int(connection["port"])
+
     port_value = _env_first(
         "SMTP_PORT",
         "MAIL_PORT",
