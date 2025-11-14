@@ -195,15 +195,26 @@ def _resolve_smtp_host() -> str:
     host = _env_first(
         "SMTP_HOST",
         "SMTP_SERVER",
+        "SMTP_ADDRESS",
+        "SMTP_SERVICE_HOST",
         "MAIL_HOST",
         "MAIL_SERVER",
+        "MAIL_ADDRESS",
         "EMAIL_HOST",
+        "EMAIL_SERVER",
+        "EMAIL_ADDRESS",
         "MAILGUN_SMTP_SERVER",
+        "MAILGUN_SMTP_HOST",
+        "MAILGUN_SMTP_ADDRESS",
         "SENDGRID_SMTP_HOST",
+        "SENDGRID_SMTP_SERVER",
+        "SENDGRID_SMTP_ADDRESS",
         "SENDINBLUE_SMTP_HOST",
         "SENDINBLUE_SMTP_SERVER",
+        "SENDINBLUE_SMTP_ADDRESS",
         "BREVO_SMTP_HOST",
         "BREVO_SMTP_SERVER",
+        "BREVO_SMTP_ADDRESS",
     )
     if host:
         return host
