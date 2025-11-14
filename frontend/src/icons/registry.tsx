@@ -52,6 +52,7 @@ import {
   Phone,
   PiggyBank,
   Presentation,
+  Rocket,
   Scale,
   Scissors,
   Search,
