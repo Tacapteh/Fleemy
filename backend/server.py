@@ -1044,14 +1044,25 @@ async def _create_notification_if_missing(
         if resource_id_value is not None:
             resource_id = str(resource_id_value)
             related_payload["resourceId"] = resource_id
-            query = query.where("relatedResource.resourceId", "==", resource_id)
 
     existing_snaps = await asyncio.to_thread(lambda: list(query.stream()))
     now = datetime.now(timezone.utc)
 
     if resource_id is not None:
-        if existing_snaps:
-            return False
+        for snap in existing_snaps:
+            try:
+                data = snap.to_dict() if hasattr(snap, "to_dict") else {}
+            except Exception:  # pragma: no cover - defensive
+                data = {}
+
+            if not isinstance(data, Mapping):
+                continue
+
+            existing_related = data.get("relatedResource")
+            if isinstance(existing_related, Mapping):
+                existing_resource_id = existing_related.get("resourceId") or existing_related.get("resource_id")
+                if existing_resource_id is not None and str(existing_resource_id) == resource_id:
+                    return False
     else:
         for snap in existing_snaps:
             try:
