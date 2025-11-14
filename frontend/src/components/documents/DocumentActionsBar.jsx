@@ -20,8 +20,9 @@ export default function DocumentActionsBar({
 }) {
   const isInvoice = type === 'invoice';
   const documentLabel = isInvoice ? 'facture' : 'devis';
-  const exportLabel = `Exporter la ${documentLabel} en PDF`;
-  const emailLabel = `Envoyer la ${documentLabel} par e-mail`;
+  const documentArticle = isInvoice ? 'la' : 'le';
+  const exportLabel = `Exporter ${documentArticle} ${documentLabel} en PDF`;
+  const emailLabel = `Envoyer ${documentArticle} ${documentLabel} par e-mail`;
 
   return (
     <div className={`${containerClasses} ${className}`}>
