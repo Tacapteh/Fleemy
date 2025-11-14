@@ -946,6 +946,453 @@ class NotificationCreateRequest(BaseModel):
     relatedResource: Optional[Dict[str, Any]] = None
 
 
+def _normalize_datetime_field(value: Any) -> Optional[datetime]:
+    """Normalize a Firestore datetime field to an aware ``datetime``."""
+
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+    normalized = _normalize_firestore_datetime(value)
+    if normalized:
+        return normalized
+
+    if isinstance(value, str):
+        parsed = _parse_iso_datetime(value)
+        if parsed:
+            return parsed
+
+    return None
+
+
+async def _get_user_team_ids(user_id: str) -> List[str]:
+    """Return the list of teams the user belongs to (owner or member)."""
+
+    try:
+        team_snapshots = await asyncio.to_thread(
+            lambda: list(db.collection("teams").stream())
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to list teams for notifications: %s", exc)
+        return []
+
+    team_ids: Set[str] = set()
+
+    for team_snap in team_snapshots:
+        team_id = _snapshot_document_id(team_snap)
+        if not team_id:
+            continue
+
+        try:
+            team_data = team_snap.to_dict() if hasattr(team_snap, "to_dict") else {}
+        except Exception:  # pragma: no cover - defensive
+            team_data = {}
+
+        owner_uid = (
+            team_data.get("owner_uid")
+            or team_data.get("ownerUid")
+            or team_data.get("ownerId")
+            or (team_data.get("owner") or {}).get("uid")
+        )
+        owner_uid = str(owner_uid) if owner_uid else None
+
+        is_member = owner_uid == user_id
+        if not is_member:
+            members = set(_normalize_member_ids(team_data.get("members")))
+            is_member = user_id in members
+
+        if not is_member:
+            team_doc = db.collection("teams").document(team_id)
+            membership_ref = team_doc.collection("memberships").document(user_id)
+            member_ref = team_doc.collection("members").document(user_id)
+            try:
+                membership_snap, member_snap = await asyncio.gather(
+                    asyncio.to_thread(membership_ref.get),
+                    asyncio.to_thread(member_ref.get),
+                )
+                is_member = getattr(membership_snap, "exists", False) or getattr(
+                    member_snap, "exists", False
+                )
+            except Exception:  # pragma: no cover - defensive
+                is_member = False
+
+        if is_member:
+            team_ids.add(team_id)
+
+    return sorted(team_ids)
+
+
+async def _create_notification_if_missing(
+    user_id: str,
+    notif_type: str,
+    title: str,
+    message: str,
+    related_resource: Optional[Dict[str, Any]] = None,
+    *,
+    dedupe_window: Optional[timedelta] = None,
+) -> bool:
+    """Create a notification while preventing duplicates for the same resource."""
+
+    notifications_ref = db.collection("notifications")
+    query = notifications_ref.where("userId", "==", user_id).where("type", "==", notif_type)
+
+    resource_id: Optional[str] = None
+    related_payload: Optional[Dict[str, Any]] = None
+
+    if related_resource:
+        related_payload = dict(related_resource)
+        resource_id_value = related_payload.get("resourceId") or related_payload.get("resource_id")
+        if resource_id_value is not None:
+            resource_id = str(resource_id_value)
+            related_payload["resourceId"] = resource_id
+            query = query.where("relatedResource.resourceId", "==", resource_id)
+
+    existing_snaps = await asyncio.to_thread(lambda: list(query.stream()))
+    now = datetime.now(timezone.utc)
+
+    if resource_id is not None:
+        if existing_snaps:
+            return False
+    else:
+        for snap in existing_snaps:
+            try:
+                data = snap.to_dict() if hasattr(snap, "to_dict") else {}
+            except Exception:  # pragma: no cover - defensive
+                data = {}
+
+            if not isinstance(data, Mapping):
+                continue
+
+            if dedupe_window:
+                created_at = _normalize_datetime_field(data.get("createdAt"))
+                if created_at and now - created_at <= dedupe_window:
+                    return False
+
+            if data.get("message") == message:
+                return False
+
+    doc_ref = notifications_ref.document(str(uuid.uuid4()))
+    payload = {
+        "userId": user_id,
+        "title": title,
+        "message": message,
+        "type": notif_type,
+        "createdAt": now,
+        "read": False,
+        "relatedResource": related_payload,
+    }
+
+    await asyncio.to_thread(doc_ref.set, payload)
+    logger.info("Created notification %s for user %s", doc_ref.id, user_id)
+    return True
+
+
+async def _generate_unpaid_event_notifications(user_id: str) -> int:
+    """Generate notifications for events waiting for payment."""
+
+    threshold = datetime.now(timezone.utc) - timedelta(days=7)
+    statuses = {"pending", "unpaid"}
+    created = 0
+    processed_ids: Set[str] = set()
+
+    async def _process_events(records: List[Tuple[Optional[str], Dict[str, Any]]]) -> None:
+        nonlocal created
+        for doc_id, data in records:
+            if not isinstance(data, Mapping):
+                continue
+
+            event_owner = str(
+                data.get("owner_id")
+                or data.get("ownerId")
+                or data.get("uid")
+                or data.get("user_id")
+                or data.get("userId")
+                or ""
+            )
+            if event_owner and event_owner != user_id:
+                continue
+
+            status = str(data.get("status") or "").lower()
+            if status not in statuses:
+                continue
+
+            created_at = _normalize_datetime_field(
+                data.get("created_at") or data.get("createdAt")
+            )
+            if not created_at:
+                created_at = _normalize_datetime_field(data.get("start"))
+
+            if not created_at or created_at > threshold:
+                continue
+
+            event_id = str(data.get("id") or doc_id or "").strip()
+            if not event_id or event_id in processed_ids:
+                continue
+
+            processed_ids.add(event_id)
+
+            client_name = (
+                data.get("client_name")
+                or data.get("client")
+                or data.get("clientName")
+                or "ce client"
+            )
+
+            day_label = data.get("day")
+            if not day_label and created_at:
+                day_label = created_at.strftime("%d/%m")
+
+            if day_label:
+                message = (
+                    f"L'intervention chez {client_name} du {day_label} est toujours marquée 'en attente'"
+                )
+            else:
+                message = (
+                    f"L'intervention chez {client_name} est toujours marquée 'en attente'"
+                )
+
+            related = {
+                "resourceType": "event",
+                "resourceId": event_id,
+                "clientId": data.get("client_id") or data.get("clientId"),
+                "clientName": client_name,
+            }
+
+            if await _create_notification_if_missing(
+                user_id,
+                "payment",
+                "Paiement en attente",
+                message,
+                related,
+            ):
+                created += 1
+
+    try:
+        personal_events = await stream_docs_with_ids(user_col(user_id, "events"))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to fetch personal events for %s: %s", user_id, exc)
+        personal_events = []
+
+    await _process_events(personal_events)
+
+    for team_id in await _get_user_team_ids(user_id):
+        try:
+            team_events = await stream_docs_with_ids(
+                team_col(team_id, "events").where("owner_id", "==", user_id)
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Unable to fetch team %s events for notifications (user %s): %s",
+                team_id,
+                user_id,
+                exc,
+            )
+            continue
+
+        await _process_events(team_events)
+
+    return created
+
+
+async def _generate_pending_quote_notifications(user_id: str) -> int:
+    """Generate notifications for quotes waiting for client validation."""
+
+    threshold = datetime.now(timezone.utc) - timedelta(days=3)
+    created = 0
+
+    try:
+        quote_docs = await stream_docs_with_ids(
+            user_col(user_id, "quotes").where("status", "==", "sent")
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to fetch quotes for %s: %s", user_id, exc)
+        return 0
+
+    for doc_id, data in quote_docs:
+        if not isinstance(data, Mapping):
+            continue
+
+        created_at = _normalize_datetime_field(
+            data.get("created_at") or data.get("createdAt")
+        )
+        if not created_at or created_at > threshold:
+            continue
+
+        quote_id = str(data.get("id") or doc_id or "").strip()
+        if not quote_id:
+            continue
+
+        quote_number = data.get("quote_number") or quote_id
+        client_name = (
+            data.get("client_name")
+            or data.get("clientName")
+            or "ce client"
+        )
+
+        related = {
+            "resourceType": "devis",
+            "resourceId": quote_id,
+            "clientId": data.get("client_id") or data.get("clientId"),
+            "clientName": client_name,
+        }
+
+        if await _create_notification_if_missing(
+            user_id,
+            "devis",
+            "Devis en attente",
+            f"Le devis {quote_number} attend validation depuis plus de 3 jours",
+            related,
+        ):
+            created += 1
+
+    return created
+
+
+async def _generate_upcoming_event_reminders(user_id: str) -> int:
+    """Generate notifications for events starting within the next hour."""
+
+    now = datetime.now(timezone.utc)
+    window_end = now + timedelta(hours=1)
+    created = 0
+    processed: Set[str] = set()
+
+    async def _process_planning(records: List[Tuple[Optional[str], Dict[str, Any]]]) -> None:
+        nonlocal created
+        for doc_id, data in records:
+            if not isinstance(data, Mapping):
+                continue
+
+            owner_id = str(
+                data.get("owner_uid")
+                or data.get("ownerId")
+                or data.get("owner_id")
+                or data.get("user_id")
+                or data.get("userId")
+                or ""
+            )
+            if owner_id and owner_id != user_id:
+                continue
+
+            start_dt = _normalize_datetime_field(data.get("start"))
+            if not start_dt:
+                continue
+
+            if start_dt < now or start_dt > window_end:
+                continue
+
+            status = str(data.get("status") or "").lower()
+            if status in {"cancelled", "canceled"}:
+                continue
+
+            event_id = str(
+                data.get("id")
+                or data.get("event_id")
+                or data.get("eventId")
+                or doc_id
+                or ""
+            ).strip()
+            if not event_id or event_id in processed:
+                continue
+
+            processed.add(event_id)
+
+            client_name = (
+                data.get("client")
+                or data.get("client_name")
+                or data.get("clientName")
+                or "ce client"
+            )
+
+            related = {
+                "resourceType": "event",
+                "resourceId": event_id,
+                "clientId": data.get("client_id") or data.get("clientId"),
+                "clientName": client_name,
+            }
+
+            if await _create_notification_if_missing(
+                user_id,
+                "rappel",
+                "Rendez-vous imminent",
+                f"Intervention chez {client_name} dans 1 heure",
+                related,
+                dedupe_window=timedelta(hours=1),
+            ):
+                created += 1
+
+    try:
+        personal_planning = await stream_docs_with_ids(
+            user_doc(user_id).collection("planningEvents")
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Unable to fetch planning events for %s: %s", user_id, exc)
+        personal_planning = []
+
+    await _process_planning(personal_planning)
+
+    for team_id in await _get_user_team_ids(user_id):
+        member_events_ref = (
+            db.collection("teams")
+            .document(team_id)
+            .collection("members")
+            .document(user_id)
+            .collection("planningEvents")
+        )
+
+        try:
+            team_planning = await stream_docs_with_ids(member_events_ref)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Unable to fetch planning events for team %s (user %s): %s",
+                team_id,
+                user_id,
+                exc,
+            )
+            continue
+
+        await _process_planning(team_planning)
+
+    return created
+
+
+async def apply_notification_rules_for_user(user_id: str) -> Dict[str, int]:
+    """Apply all notification business rules for a given user."""
+
+    results = {"payment": 0, "devis": 0, "rappel": 0}
+
+    try:
+        results["payment"] = await _generate_unpaid_event_notifications(user_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "Failed to generate payment notifications for %s: %s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+
+    try:
+        results["devis"] = await _generate_pending_quote_notifications(user_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "Failed to generate quote notifications for %s: %s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+
+    try:
+        results["rappel"] = await _generate_upcoming_event_reminders(user_id)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.error(
+            "Failed to generate reminder notifications for %s: %s",
+            user_id,
+            exc,
+            exc_info=True,
+        )
+
+    logger.debug("Notification rules applied for %s: %s", user_id, results)
+    return results
+
+
 # Firestore helper utilities
 def user_doc(uid: str):
     return db.collection("users").document(uid)
@@ -984,6 +1431,40 @@ def global_task_doc(year: int, week: int, owner_id: str, task_id: str):
 async def stream_docs(query):
     docs = await asyncio.to_thread(lambda: list(query.stream()))
     return [d.to_dict() for d in docs]
+
+
+def _snapshot_document_id(snapshot: Any) -> Optional[str]:
+    """Return the identifier of a Firestore snapshot as a clean string."""
+
+    doc_id = getattr(snapshot, "id", None)
+    if callable(doc_id):  # pragma: no cover - defensive guard for SDK variations
+        try:
+            doc_id = doc_id()
+        except TypeError:
+            doc_id = None
+
+    if doc_id is None:
+        return None
+
+    doc_id_str = str(doc_id).strip()
+    return doc_id_str or None
+
+
+async def stream_docs_with_ids(query) -> List[Tuple[Optional[str], Dict[str, Any]]]:
+    """Stream documents while keeping their Firestore identifiers."""
+
+    snapshots = await asyncio.to_thread(lambda: list(query.stream()))
+    results: List[Tuple[Optional[str], Dict[str, Any]]] = []
+
+    for snap in snapshots:
+        try:
+            payload = snap.to_dict() if hasattr(snap, "to_dict") else {}
+        except Exception:  # pragma: no cover - defensive fallback
+            payload = {}
+
+        results.append((_snapshot_document_id(snap), payload or {}))
+
+    return results
 
 
 _DAY_NAME_TO_ISO = {
@@ -4463,7 +4944,9 @@ async def list_notifications(
                 status_code=403,
                 detail="Vous n'êtes pas autorisé à lire les notifications d'un autre utilisateur"
             )
-        
+
+        await apply_notification_rules_for_user(userId)
+
         # Construction de la requête Firestore
         notifications_ref = db.collection("notifications")
         query = notifications_ref.where("userId", "==", userId)
