@@ -18,6 +18,7 @@ import { MoneyIcon } from "./components/icons/MoneyIcon";
 import { ReceiptIcon } from "./components/icons/ReceiptIcon";
 import { TrashIcon } from "./components/icons/TrashIcon";
 import { PlusCircleIcon } from "./components/icons/PlusCircleIcon";
+import { consumeInvoiceSeed } from "./utils/invoiceSeedStorage";
 
 const api = async ({ url, data, body, headers, ...options }) => {
   const init = { ...options };
@@ -5868,6 +5869,7 @@ const InvoiceModal = ({
   clients,
   quotes,
   defaultClientId,
+  prefillSeed,
 }) => {
   const [formData, setFormData] = useState({
     quote_id: "",
@@ -5888,6 +5890,66 @@ const InvoiceModal = ({
   const [appliedInitializationKey, setAppliedInitializationKey] = useState(
     null,
   );
+
+  const buildPrefilledItems = useCallback(
+    (seed, taxRateValue) => {
+      if (!seed) {
+        return { items: [], subtotal: 0 };
+      }
+      const tasks = Array.isArray(seed.tasks) ? seed.tasks : [];
+      const normalizedTasks = tasks
+        .map((task) => {
+          const price = Number(task?.price);
+          if (!Number.isFinite(price) || price <= 0) {
+            return null;
+          }
+          return {
+            description:
+              typeof task?.label === 'string' && task.label.trim()
+                ? `Tâche — ${task.label.trim()}`
+                : 'Tâche spécifique',
+            quantity: 1,
+            unit_price: Math.round(price * 100) / 100,
+            total: Math.round(price * 100) / 100,
+          };
+        })
+        .filter(Boolean);
+
+      const tasksTotal = normalizedTasks.reduce(
+        (sum, item) => sum + (Number(item.total) || 0),
+        0,
+      );
+      const totalAmount = Number(seed.totalAmount) || 0;
+      const servicesAmount = Number.isFinite(seed.servicesAmount)
+        ? seed.servicesAmount
+        : Math.max(0, totalAmount - tasksTotal);
+      const sanitizedServices = Math.round(servicesAmount * 100) / 100;
+      const totalHours = Number(seed.totalHours) || 0;
+      const items = [...normalizedTasks];
+
+      if (sanitizedServices > 0) {
+        const safeHours = totalHours > 0 ? Number(totalHours.toFixed(2)) : 1;
+        const unitPrice = safeHours > 0
+          ? Math.round((sanitizedServices / safeHours) * 100) / 100
+          : sanitizedServices;
+        const description = seed.periodLabel
+          ? `Prestations — ${seed.periodLabel}`
+          : 'Prestations réalisées';
+        items.unshift({
+          description,
+          quantity: safeHours,
+          unit_price: unitPrice,
+          total: sanitizedServices,
+        });
+      }
+
+      const subtotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+      return {
+        items,
+        subtotal: Math.round(subtotal * 100) / 100,
+        tax_amount: Math.round(((Math.round(subtotal * 100) / 100) * (taxRateValue / 100)) * 100) / 100,
+      };
+    }, []);
 
   const buildInitialFormData = useCallback(() => {
     const normalizedDefaultClientId = defaultClientId
@@ -5933,7 +5995,7 @@ const InvoiceModal = ({
       .toISOString()
       .split("T")[0];
 
-    return {
+    const baseFormData = {
       quote_id: "",
       client_id: normalizedDefaultClientId,
       client_name:
@@ -5948,7 +6010,52 @@ const InvoiceModal = ({
       tax_amount: 0,
       total: 0,
     };
-  }, [clients, defaultClientId, invoice]);
+
+    if (
+      prefillSeed &&
+      (!prefillSeed.clientId ||
+        !normalizedDefaultClientId ||
+        String(prefillSeed.clientId) === normalizedDefaultClientId)
+    ) {
+      const prefilled = buildPrefilledItems(
+        prefillSeed,
+        baseFormData.tax_rate || 0,
+      );
+      if (prefilled.items.length > 0) {
+        const subtotalValue = Math.round(prefilled.subtotal * 100) / 100;
+        const taxAmount = Math.round(subtotalValue * (baseFormData.tax_rate / 100) * 100) / 100;
+        const totalValue = Math.round((subtotalValue + taxAmount) * 100) / 100;
+        const inferredTitle = prefillSeed.periodLabel
+          ? `Facture ${
+              prefillSeed.clientLabel ? prefillSeed.clientLabel.trim() : ''
+            } — ${prefillSeed.periodLabel}`.trim()
+          : baseFormData.title;
+        return {
+          ...baseFormData,
+          client_name:
+            prefillSeed.clientLabel?.trim() || baseFormData.client_name,
+          title: inferredTitle || baseFormData.title,
+          items: prefilled.items,
+          subtotal: subtotalValue,
+          tax_amount: taxAmount,
+          total: totalValue,
+        };
+      }
+      return {
+        ...baseFormData,
+        client_name:
+          prefillSeed.clientLabel?.trim() || baseFormData.client_name,
+      };
+    }
+
+    return baseFormData;
+  }, [
+    clients,
+    defaultClientId,
+    invoice,
+    prefillSeed,
+    buildPrefilledItems,
+  ]);
 
   const currentInitializationKey = useMemo(() => {
     if (invoice && invoice.id != null) {
@@ -5957,8 +6064,11 @@ const InvoiceModal = ({
     const normalizedDefaultClientId = defaultClientId
       ? String(defaultClientId)
       : "";
-    return `new-${normalizedDefaultClientId}`;
-  }, [defaultClientId, invoice]);
+    const seedKey = prefillSeed?.clientId
+      ? `${prefillSeed.clientId}:${prefillSeed.savedAt || "seed"}`
+      : "no-seed";
+    return `new-${normalizedDefaultClientId}-${seedKey}`;
+  }, [defaultClientId, invoice, prefillSeed]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -6457,6 +6567,7 @@ const Invoices = ({
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [pendingClientId, setPendingClientId] = useState('');
+  const [invoiceSeed, setInvoiceSeed] = useState(null);
 
   const clientEmailMap = useMemo(() => {
     const map = new Map();
@@ -6561,6 +6672,8 @@ const Invoices = ({
 
       setPendingClientId(resolvedClientId);
       setEditingInvoice(null);
+      const seed = consumeInvoiceSeed(resolvedClientId);
+      setInvoiceSeed(seed || null);
       setShowInvoiceModal(true);
     },
     [clientId],
@@ -6569,6 +6682,7 @@ const Invoices = ({
   const handleEditInvoice = (invoice) => {
     setEditingInvoice(invoice);
     setPendingClientId('');
+    setInvoiceSeed(null);
     setShowInvoiceModal(true);
   };
 
@@ -6576,6 +6690,7 @@ const Invoices = ({
     setShowInvoiceModal(false);
     setEditingInvoice(null);
     setPendingClientId('');
+    setInvoiceSeed(null);
   }, []);
 
   const handleSaveInvoice = async (invoiceData) => {
@@ -6611,6 +6726,7 @@ const Invoices = ({
       }
       setShowInvoiceModal(false);
       setPendingClientId('');
+      setInvoiceSeed(null);
     } catch (error) {
       console.error("Error saving invoice:", error);
       showToast(
@@ -6963,6 +7079,7 @@ const Invoices = ({
           clients={clients}
           quotes={quotes}
           defaultClientId={pendingClientId}
+          prefillSeed={invoiceSeed}
         />
       )}
     </div>

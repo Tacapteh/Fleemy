@@ -1964,6 +1964,14 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     priority: normalizeTaskPriority(data.priority),
     status: normalizedStatus || (isDone ? "done" : "todo"),
     done: isDone,
+    priorityEnabled:
+      data.priority_enabled === false || data.priorityEnabled === false
+        ? false
+        : true,
+    statusEnabled:
+      data.status_enabled === false || data.statusEnabled === false
+        ? false
+        : true,
   };
 };
 
@@ -2210,6 +2218,20 @@ const buildWeeklyTaskPayload = (
     priority: normalizeTaskPriority(taskData?.priority),
     status: normalizeTaskStatus(taskData?.status),
   };
+
+  const priorityEnabled =
+    taskData?.priorityEnabled === false || taskData?.priority_enabled === false
+      ? false
+      : true;
+  const statusEnabled =
+    taskData?.statusEnabled === false || taskData?.status_enabled === false
+      ? false
+      : true;
+
+  payload.priorityEnabled = priorityEnabled;
+  payload.priority_enabled = priorityEnabled;
+  payload.statusEnabled = statusEnabled;
+  payload.status_enabled = statusEnabled;
 
   const normalizedCreationDate = normalizeTaskDateField(
     taskData?.dateISO ?? taskData?.dateIso ?? taskData?.date_iso ?? null

@@ -31,6 +31,7 @@ import { subscribeToUIEvent } from "../store/uiStore";
 import { contextStore } from "../stores/contextStore";
 import { ensureTeamsCache, readTeamsCache } from "../utils/teamCache";
 import { SectionHeaderRow, Calendar, StatusSummaryCard } from "../ui";
+import { persistInvoiceSeed } from "../utils/invoiceSeedStorage";
 
 const DAY_KEYS = [
   "monday",
@@ -1587,6 +1588,9 @@ export default function Planning() {
       const tasksArray = Array.isArray(tasksList) ? tasksList : [];
       const summaryMap = new Map();
 
+      const normalizeLabel = (value) =>
+        typeof value === "string" ? value.trim().toLowerCase() : "";
+
       const ensureEntry = (clientId, clientLabel) => {
         const normalizedLabel =
           typeof clientLabel === "string" && clientLabel.trim()
@@ -1618,6 +1622,47 @@ export default function Planning() {
         return entry;
       };
 
+      const findEntryByClientId = (clientId) => {
+        if (!clientId) {
+          return null;
+        }
+        const entry = summaryMap.get(`id:${clientId}`);
+        return entry || null;
+      };
+
+      const findEntryByClientLabel = (clientLabel) => {
+        const normalized = normalizeLabel(clientLabel);
+        if (!normalized) {
+          return null;
+        }
+        for (const entry of summaryMap.values()) {
+          if (normalizeLabel(entry.clientLabel) === normalized) {
+            return entry;
+          }
+        }
+        return null;
+      };
+
+      const resolveTaskPrice = (task) => {
+        const candidates = [
+          task?.price,
+          task?.amount,
+          task?.total,
+          task?.value,
+          task?.originalTask?.price,
+          task?.originalTask?.amount,
+          task?.originalTask?.total,
+          task?.originalTask?.value,
+        ];
+        for (const candidate of candidates) {
+          const numericValue = Number(candidate);
+          if (Number.isFinite(numericValue)) {
+            return numericValue;
+          }
+        }
+        return 0;
+      };
+
       eventsArray.forEach((slot) => {
         const info = resolveSlotBillingInfo(slot, hourlyRateValue);
         if (!info || info.type !== "event") {
@@ -1631,7 +1676,35 @@ export default function Planning() {
         }
       });
 
-      const findEntryForTask = (startDate, endDate) => {
+      const findEntryForTask = (startDate, endDate, task) => {
+        const directClientIdRaw =
+          (typeof task?.clientId === "string" && task.clientId.trim()) ||
+          (typeof task?.client_id === "string" && task.client_id.trim()) ||
+          (task?.client &&
+            typeof task.client === "object" &&
+            ((task.client.id && String(task.client.id)) ||
+              (task.client.client_id && String(task.client.client_id)))) ||
+          null;
+        if (directClientIdRaw) {
+          const directEntry = findEntryByClientId(String(directClientIdRaw));
+          if (directEntry) {
+            return directEntry;
+          }
+        }
+
+        const candidateLabel =
+          task?.clientLabel ||
+          task?.client_name ||
+          task?.client?.display_name ||
+          task?.client?.name ||
+          null;
+        if (candidateLabel) {
+          const entryByLabel = findEntryByClientLabel(candidateLabel);
+          if (entryByLabel) {
+            return entryByLabel;
+          }
+        }
+
         if (!startDate || !endDate) {
           return null;
         }
@@ -1649,9 +1722,7 @@ export default function Planning() {
       };
 
       tasksArray.forEach((task) => {
-        const price = Number(
-          task?.price ?? task?.amount ?? task?.total ?? task?.value ?? 0
-        );
+        const price = resolveTaskPrice(task);
         if (!Number.isFinite(price) || price <= 0) {
           return;
         }
@@ -1674,12 +1745,17 @@ export default function Planning() {
         ) {
           return;
         }
-        const targetEntry = findEntryForTask(taskStart, taskEnd);
+        const targetEntry = findEntryForTask(taskStart, taskEnd, task);
         if (!targetEntry) {
           return;
         }
         const label =
-          task?.title || task?.label || task?.taskLabel || "Tâche associée";
+          task?.title ||
+          task?.label ||
+          task?.taskLabel ||
+          task?.originalTask?.label ||
+          task?.originalTask?.title ||
+          "Tâche associée";
         const identifier =
           task?.id ||
           task?.occurrenceId ||
@@ -2372,13 +2448,40 @@ export default function Planning() {
         );
         return;
       }
+      const safeTasks = Array.isArray(clientSummary.tasks)
+        ? clientSummary.tasks.map((task) => ({
+            id: task?.id || task?.taskId || task?.occurrenceId || undefined,
+            label:
+              typeof task?.label === "string" && task.label.trim()
+                ? task.label.trim()
+                : "Tâche",
+            price: Number(task?.price) || 0,
+          }))
+        : [];
+      const tasksTotal = safeTasks.reduce(
+        (sum, task) => (Number.isFinite(task.price) ? sum + Math.max(task.price, 0) : sum),
+        0
+      );
+      persistInvoiceSeed({
+        clientId: clientSummary.clientId,
+        clientLabel: clientSummary.clientLabel,
+        totalHours: Number(clientSummary.totalHours) || 0,
+        totalAmount: Number(clientSummary.totalAmount) || 0,
+        tasks: safeTasks,
+        periodLabel: formatMonthLabel(currentDate),
+        periodStart:
+          currentMonthRange?.from instanceof Date
+            ? currentMonthRange.from.toISOString()
+            : null,
+        servicesAmount: Math.max(0, (Number(clientSummary.totalAmount) || 0) - tasksTotal),
+      });
       const params = new URLSearchParams();
       params.set("tab", "factures");
       params.set("create", "true");
       params.set("client", clientSummary.clientId);
       navigate(`/documents?${params.toString()}`);
     },
-    [navigate]
+    [navigate, currentDate, currentMonthRange]
   );
 
   const handleSaveEvent = useCallback(

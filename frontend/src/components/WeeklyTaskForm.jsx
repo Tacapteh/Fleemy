@@ -304,9 +304,10 @@ const WeeklyTaskForm = ({
   onSwitchToEvent,
 }) => {
   const settingsContext = useSettings() || {};
-  const { settings, showTaskStatusBadges } = settingsContext;
+  const { settings, showTaskStatusBadges, showTaskPriorityBadges } = settingsContext;
   const allowMinutes = settings?.enableMinutes === true;
-  const shouldShowStatusField = showTaskStatusBadges !== false;
+  const canConfigureStatus = showTaskStatusBadges !== false;
+  const canConfigurePriority = showTaskPriorityBadges !== false;
   const timeInputStep = allowMinutes ? 900 : 3600;
   const initialIconValue = initialTask?.icon || 'briefcase';
   const defaultIconKey = resolveTaskIconKey(initialIconValue);
@@ -323,10 +324,34 @@ const WeeklyTaskForm = ({
     icon: defaultIconKey,
     time_ranges: ensureTimeRanges(initialTask?.time_ranges, { allowMinutes }),
     priority: normalizePriorityValue(initialTask?.priority),
-    status: shouldShowStatusField
+    status: canConfigureStatus
       ? normalizeStatusValue(initialTask?.status)
       : 'todo',
   }));
+  const [priorityEnabled, setPriorityEnabled] = useState(() => {
+    if (!canConfigurePriority) {
+      return false;
+    }
+    if (typeof initialTask?.priorityEnabled === 'boolean') {
+      return initialTask.priorityEnabled;
+    }
+    if (typeof initialTask?.priority_enabled === 'boolean') {
+      return initialTask.priority_enabled;
+    }
+    return true;
+  });
+  const [statusEnabled, setStatusEnabled] = useState(() => {
+    if (!canConfigureStatus) {
+      return false;
+    }
+    if (typeof initialTask?.statusEnabled === 'boolean') {
+      return initialTask.statusEnabled;
+    }
+    if (typeof initialTask?.status_enabled === 'boolean') {
+      return initialTask.status_enabled;
+    }
+    return true;
+  });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -340,10 +365,17 @@ const WeeklyTaskForm = ({
   }, [allowMinutes]);
 
   useEffect(() => {
-    if (!shouldShowStatusField) {
+    if (!canConfigurePriority) {
+      setPriorityEnabled(false);
+    }
+  }, [canConfigurePriority]);
+
+  useEffect(() => {
+    if (!canConfigureStatus) {
+      setStatusEnabled(false);
       setTask((current) => ({ ...current, status: 'todo' }));
     }
-  }, [shouldShowStatusField]);
+  }, [canConfigureStatus]);
 
   const addTimeRange = () => {
     setTask((current) => ({
@@ -567,7 +599,7 @@ const WeeklyTaskForm = ({
         priceValueRaw = String(task.price);
       }
       const priceValue = priceValueRaw.trim();
-      const normalizedStatus = shouldShowStatusField
+      const normalizedStatus = canConfigureStatus && statusEnabled
         ? normalizeStatusValue(task.status)
         : 'todo';
 
@@ -578,6 +610,8 @@ const WeeklyTaskForm = ({
         price: priceValue ? parseFloat(priceValue) : null,
         priority: normalizePriorityValue(task.priority),
         status: normalizedStatus,
+        priorityEnabled: canConfigurePriority ? priorityEnabled : false,
+        statusEnabled: canConfigureStatus ? statusEnabled : false,
         ...(creationDateISO ? { dateISO: creationDateISO } : {}),
       };
 
@@ -814,23 +848,57 @@ const WeeklyTaskForm = ({
                 />
               </div>
 
+            {canConfigurePriority && (
               <div className="form-group">
-                <label className="form-label" htmlFor="task-priority">Priorité</label>
-                <select
-                  id="task-priority"
-                  value={task.priority}
-                  onChange={(e) => setTask({ ...task, priority: normalizePriorityValue(e.target.value) })}
-                  className="form-input"
-                >
-                  <option value="high">Importante (urgent)</option>
-                  <option value="medium">Moyenne (par défaut)</option>
-                  <option value="low">Faible</option>
-                </select>
+                <div className="flex items-center justify-between">
+                  <label className="form-label" htmlFor="task-priority">Priorité</label>
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4"
+                      checked={priorityEnabled}
+                      onChange={(e) => setPriorityEnabled(e.target.checked)}
+                      disabled={readOnly}
+                    />
+                    <span>Activer</span>
+                  </label>
+                </div>
+                {priorityEnabled ? (
+                  <select
+                    id="task-priority"
+                    value={task.priority}
+                    onChange={(e) => setTask({ ...task, priority: normalizePriorityValue(e.target.value) })}
+                    className="form-input"
+                    disabled={readOnly}
+                  >
+                    <option value="high">Importante (urgent)</option>
+                    <option value="medium">Moyenne (par défaut)</option>
+                    <option value="low">Faible</option>
+                  </select>
+                ) : (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Priorité désactivée pour cette tâche.
+                  </p>
+                )}
               </div>
+            )}
 
-              {shouldShowStatusField && (
-                <div className="form-group">
+            {canConfigureStatus && (
+              <div className="form-group">
+                <div className="flex items-center justify-between">
                   <label className="form-label" htmlFor="task-status">Avancement</label>
+                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="form-checkbox h-4 w-4"
+                      checked={statusEnabled}
+                      onChange={(e) => setStatusEnabled(e.target.checked)}
+                      disabled={readOnly}
+                    />
+                    <span>Activer</span>
+                  </label>
+                </div>
+                {statusEnabled ? (
                   <select
                     id="task-status"
                     value={task.status}
@@ -838,13 +906,19 @@ const WeeklyTaskForm = ({
                       setTask({ ...task, status: normalizeStatusValue(e.target.value) })
                     }
                     className="form-input"
+                    disabled={readOnly}
                   >
                     <option value="todo">À faire</option>
                     <option value="doing">En cours</option>
                     <option value="done">Terminé</option>
                   </select>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Avancement désactivé pour cette tâche.
+                  </p>
+                )}
+              </div>
+            )}
 
               <div className="form-group">
                 <label className="form-label">Icône</label>
