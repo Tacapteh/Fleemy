@@ -10,6 +10,7 @@ export default function WeeklyTaskModal({
   readOnly,
   weekStartISO,
   onSwitchToEvent,
+  onReturnToLinkedTasks,
 }) {
   if (!isOpen) return null;
 
@@ -29,6 +30,7 @@ export default function WeeklyTaskModal({
       onCancel={onClose}
       onDelete={onDelete}
       onSwitchToEvent={onSwitchToEvent}
+      onReturnToLinkedTasks={onReturnToLinkedTasks}
     />
   );
 }

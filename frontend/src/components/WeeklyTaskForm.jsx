@@ -302,6 +302,7 @@ const WeeklyTaskForm = ({
   readOnly = false,
   weekStartISO = null,
   onSwitchToEvent,
+  onReturnToLinkedTasks,
 }) => {
   const settingsContext = useSettings() || {};
   const { settings, showTaskStatusBadges, showTaskPriorityBadges } = settingsContext;
@@ -863,19 +864,21 @@ const WeeklyTaskForm = ({
                     <span>Activer</span>
                   </label>
                 </div>
-                {priorityEnabled ? (
-                  <select
-                    id="task-priority"
-                    value={task.priority}
-                    onChange={(e) => setTask({ ...task, priority: normalizePriorityValue(e.target.value) })}
-                    className="form-input"
-                    disabled={readOnly}
-                  >
-                    <option value="high">Importante (urgent)</option>
-                    <option value="medium">Moyenne (par défaut)</option>
-                    <option value="low">Faible</option>
-                  </select>
-                ) : (
+                <select
+                  id="task-priority"
+                  value={task.priority}
+                  onChange={(e) =>
+                    setTask({ ...task, priority: normalizePriorityValue(e.target.value) })
+                  }
+                  className={`form-input${!priorityEnabled ? ' opacity-60 cursor-not-allowed' : ''}`}
+                  disabled={readOnly || !priorityEnabled}
+                  aria-disabled={!priorityEnabled}
+                >
+                  <option value="high">Importante (urgent)</option>
+                  <option value="medium">Moyenne (par défaut)</option>
+                  <option value="low">Faible</option>
+                </select>
+                {!priorityEnabled && (
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Priorité désactivée pour cette tâche.
                   </p>
@@ -898,21 +901,21 @@ const WeeklyTaskForm = ({
                     <span>Activer</span>
                   </label>
                 </div>
-                {statusEnabled ? (
-                  <select
-                    id="task-status"
-                    value={task.status}
-                    onChange={(e) =>
-                      setTask({ ...task, status: normalizeStatusValue(e.target.value) })
-                    }
-                    className="form-input"
-                    disabled={readOnly}
-                  >
-                    <option value="todo">À faire</option>
-                    <option value="doing">En cours</option>
-                    <option value="done">Terminé</option>
-                  </select>
-                ) : (
+                <select
+                  id="task-status"
+                  value={task.status}
+                  onChange={(e) =>
+                    setTask({ ...task, status: normalizeStatusValue(e.target.value) })
+                  }
+                  className={`form-input${!statusEnabled ? ' opacity-60 cursor-not-allowed' : ''}`}
+                  disabled={readOnly || !statusEnabled}
+                  aria-disabled={!statusEnabled}
+                >
+                  <option value="todo">À faire</option>
+                  <option value="doing">En cours</option>
+                  <option value="done">Terminé</option>
+                </select>
+                {!statusEnabled && (
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     Avancement désactivé pour cette tâche.
                   </p>
@@ -1009,6 +1012,17 @@ const WeeklyTaskForm = ({
                 disabled={isSubmitting}
               >
                 Supprimer
+              </button>
+            )}
+
+            {typeof onReturnToLinkedTasks === 'function' && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={onReturnToLinkedTasks}
+                disabled={isSubmitting}
+              >
+                Revenir aux tâches liées
               </button>
             )}
 

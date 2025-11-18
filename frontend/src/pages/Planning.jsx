@@ -480,16 +480,27 @@ export default function Planning() {
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState(null);
 
-  const [modal, setModal] = useState({
+  const createInitialEventModalState = () => ({
     open: false,
     event: null,
     selectedDate: null,
     readOnly: false,
+    defaultTab: "event",
+    initialLinkedTaskId: null,
   });
-  const [weeklyTaskModal, setWeeklyTaskModal] = useState({
+
+  const createInitialWeeklyTaskModalState = () => ({
     open: false,
     task: null,
+    linkedEvent: null,
+    linkedTaskId: null,
+    linkedEventReadOnly: false,
   });
+
+  const [modal, setModal] = useState(createInitialEventModalState);
+  const [weeklyTaskModal, setWeeklyTaskModal] = useState(
+    createInitialWeeklyTaskModalState,
+  );
   const [isTransferringSoloWeek, setIsTransferringSoloWeek] = useState(false);
 
   const [members, setMembers] = useState([]);
@@ -2510,6 +2521,8 @@ export default function Planning() {
         event: null,
         selectedDate: baseDate,
         readOnly: false,
+        defaultTab: "event",
+        initialLinkedTaskId: null,
       });
     },
     [readOnly, planningContext]
@@ -2523,13 +2536,15 @@ export default function Planning() {
         event,
         selectedDate: new Date(event.start),
         readOnly,
+        defaultTab: "event",
+        initialLinkedTaskId: null,
       });
     },
     [readOnly]
   );
 
   const closeModal = useCallback(() => {
-    setModal({ open: false, event: null, selectedDate: null, readOnly: false });
+    setModal(createInitialEventModalState());
   }, []);
 
   const openWeeklyTaskModal = useCallback(() => {
@@ -2539,11 +2554,11 @@ export default function Planning() {
       planningTab === TEAM_PLANNING_TAB_SHARED
     )
       return;
-    setWeeklyTaskModal({ open: true, task: null });
+    setWeeklyTaskModal({ ...createInitialWeeklyTaskModalState(), open: true });
   }, [readOnly, planningContext, planningTab]);
 
   const closeWeeklyTaskModal = useCallback(() => {
-    setWeeklyTaskModal({ open: false, task: null });
+    setWeeklyTaskModal(createInitialWeeklyTaskModalState());
   }, []);
 
   const handleWeeklyTaskSaved = useCallback(
@@ -2616,8 +2631,17 @@ export default function Planning() {
       if (!matchedTask) {
         return;
       }
+      const linkedEvent = modal.event || null;
+      const linkedTaskId = matchedTask.id || taskId || null;
+      const linkedEventReadOnly = modal.readOnly || false;
       closeModal();
-      setWeeklyTaskModal({ open: true, task: matchedTask });
+      setWeeklyTaskModal({
+        open: true,
+        task: matchedTask,
+        linkedEvent,
+        linkedTaskId,
+        linkedEventReadOnly,
+      });
     },
     [
       closeModal,
@@ -2625,8 +2649,37 @@ export default function Planning() {
       planningContext,
       planningTab,
       readOnly,
+      modal.event,
+      modal.readOnly,
     ]
   );
+
+  const handleReturnToLinkedTasks = useCallback(() => {
+    const eventToReopen = weeklyTaskModal.linkedEvent;
+    const linkedTaskId = weeklyTaskModal.linkedTaskId || null;
+    const linkedEventReadOnly = weeklyTaskModal.linkedEventReadOnly || false;
+    closeWeeklyTaskModal();
+    if (!eventToReopen) {
+      return;
+    }
+    const selectedDate = eventToReopen?.start
+      ? new Date(eventToReopen.start)
+      : null;
+    setModal({
+      open: true,
+      event: eventToReopen,
+      selectedDate,
+      readOnly: linkedEventReadOnly || readOnly,
+      defaultTab: "tasks",
+      initialLinkedTaskId: linkedTaskId,
+    });
+  }, [
+    closeWeeklyTaskModal,
+    weeklyTaskModal.linkedEvent,
+    weeklyTaskModal.linkedTaskId,
+    weeklyTaskModal.linkedEventReadOnly,
+    readOnly,
+  ]);
 
   const handleInvoiceShortcut = useCallback(
     (clientSummary) => {
@@ -3913,6 +3966,8 @@ export default function Planning() {
         selectedDate={modal.selectedDate}
         event={modal.event}
         readOnly={modal.readOnly || readOnly}
+        initialLinkedTasksTab={modal.defaultTab}
+        initialLinkedTaskId={modal.initialLinkedTaskId}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
         attachedTasks={modalAttachedTasks}
@@ -3953,6 +4008,9 @@ export default function Planning() {
                 openCreateModal();
               }
             : undefined
+        }
+        onReturnToLinkedTasks={
+          weeklyTaskModal.linkedEvent ? handleReturnToLinkedTasks : undefined
         }
       />
     </div>

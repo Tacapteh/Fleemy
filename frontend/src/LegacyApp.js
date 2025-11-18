@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, useId } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useId,
+  useRef,
+} from "react";
 import useTeam from "./hooks/useTeam";
 import "./App.css";
 import { apiFetch } from "./lib/api";
@@ -767,12 +774,23 @@ const normalizeLinkedTask = (task, index = 0) => {
         ? task.iconId.trim()
         : undefined;
 
+  const priorityEnabled =
+    task.priorityEnabled === false || task.priority_enabled === false
+      ? false
+      : true;
+  const statusEnabled =
+    task.statusEnabled === false || task.status_enabled === false
+      ? false
+      : true;
+
   return {
     id: normalizedId,
     label,
     price: normalizeTaskPriceValue(task.price),
     status: normalizeTaskStatusValue(task.status),
     priority: normalizeTaskPriorityValue(task.priority),
+    priorityEnabled,
+    statusEnabled,
     done:
       task.done === true ||
       (typeof task.status === "string" && task.status.trim().toLowerCase() === "done"),
@@ -1148,6 +1166,8 @@ const EventModal = ({
   onSwitchToTask,
   attachedTasks = [],
   onEditLinkedTask,
+  initialLinkedTasksTab = "event",
+  initialLinkedTaskId = null,
 }) => {
   const [formData, setFormData] = useState({
     description: "",
@@ -1172,6 +1192,7 @@ const EventModal = ({
     }
     return window.matchMedia(`(max-width: ${MOBILE_VIEWPORT_WIDTH}px)`).matches;
   });
+  const wasOpenRef = useRef(false);
 
   const { settings } = useSettings();
   const allowMinutes = settings?.enableMinutes === true;
@@ -1560,19 +1581,53 @@ const EventModal = ({
     typeof onEditLinkedTask === "function" && !readOnly;
 
   useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = isOpen;
     if (!isOpen) {
       setActiveMobileTab("event");
       setSelectedTaskIndex(0);
       return;
     }
+    if (!wasOpen) {
+      const desiredTab =
+        initialLinkedTasksTab === "tasks" && canShowLinkedTasksTab
+          ? "tasks"
+          : "event";
+      setActiveMobileTab(desiredTab);
+      return;
+    }
     if (!canShowLinkedTasksTab && activeMobileTab !== "event") {
       setActiveMobileTab("event");
     }
-  }, [isOpen, canShowLinkedTasksTab, activeMobileTab]);
+  }, [
+    isOpen,
+    canShowLinkedTasksTab,
+    activeMobileTab,
+    initialLinkedTasksTab,
+  ]);
 
   useEffect(() => {
     setSelectedTaskIndex(0);
   }, [event]);
+
+  useEffect(() => {
+    if (!isOpen || !initialLinkedTaskId) {
+      return;
+    }
+    const normalizedTarget = String(initialLinkedTaskId).trim();
+    if (!normalizedTarget) {
+      return;
+    }
+    const matchingIndex = normalizedLinkedTasks.findIndex((task) => {
+      if (!task?.id) {
+        return false;
+      }
+      return String(task.id).trim() === normalizedTarget;
+    });
+    if (matchingIndex >= 0) {
+      setSelectedTaskIndex(matchingIndex);
+    }
+  }, [isOpen, initialLinkedTaskId, normalizedLinkedTasks]);
 
   useEffect(() => {
     if (selectedTaskIndex > normalizedLinkedTasks.length - 1) {
@@ -1591,18 +1646,36 @@ const EventModal = ({
     canShowLinkedTasksTab && formData.start && formData.end
       ? `${dayNames[formData.day] || ""} ${formData.start} - ${formData.end}`
       : null;
-  const selectedTaskStatusLabel = selectedTask
-    ? selectedTask.status && TASK_STATUS_LABELS[selectedTask.status]
-      ? TASK_STATUS_LABELS[selectedTask.status]
-      : selectedTask.done
-        ? TASK_STATUS_LABELS.done
-        : "Non précisé"
-    : null;
-  const selectedTaskPriorityLabel = selectedTask
-    ? selectedTask.priority && TASK_PRIORITY_LABELS[selectedTask.priority]
-      ? TASK_PRIORITY_LABELS[selectedTask.priority]
-      : TASK_PRIORITY_LABELS.medium
-    : null;
+  const selectedTaskStatusLabel = (() => {
+    if (!selectedTask) {
+      return null;
+    }
+    if (selectedTask.statusEnabled === false) {
+      return "Non suivi";
+    }
+    if (
+      selectedTask.status &&
+      TASK_STATUS_LABELS[selectedTask.status]
+    ) {
+      return TASK_STATUS_LABELS[selectedTask.status];
+    }
+    return selectedTask.done ? TASK_STATUS_LABELS.done : "Non précisé";
+  })();
+  const selectedTaskPriorityLabel = (() => {
+    if (!selectedTask) {
+      return null;
+    }
+    if (selectedTask.priorityEnabled === false) {
+      return "Désactivée";
+    }
+    if (
+      selectedTask.priority &&
+      TASK_PRIORITY_LABELS[selectedTask.priority]
+    ) {
+      return TASK_PRIORITY_LABELS[selectedTask.priority];
+    }
+    return TASK_PRIORITY_LABELS.medium;
+  })();
   const selectedTaskPriceLabel =
     selectedTask && selectedTask.price != null
       ? formatCurrency(selectedTask.price)
