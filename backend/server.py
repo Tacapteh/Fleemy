@@ -196,7 +196,9 @@ ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 ALLOWED_HEADERS = ["Authorization", "Content-Type", "X-Requested-With", "X-User-Id"]
 EXPOSE_HEADERS = ["Location"]
 MAX_AGE = 86400
-ALLOWED_ORIGIN_REGEX_PATTERN = r"https://([a-z0-9-]+\.)?fleemy\.fr"
+ALLOWED_ORIGIN_REGEX_PATTERN = (
+    r"https://((?:[a-z0-9-]+\.)?fleemy\.fr|[a-z0-9-]+\.preview\.emergentagent\.com)"
+)
 ALLOWED_ORIGIN_REGEX = re.compile(ALLOWED_ORIGIN_REGEX_PATTERN)
 ALLOWED_ORIGIN_SET = {origin for origin in ALLOWED_ORIGINS}
 
