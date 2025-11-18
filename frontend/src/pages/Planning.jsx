@@ -420,9 +420,21 @@ export default function Planning() {
   const rawViewParam = (searchParams.get("view") || "").toLowerCase();
   const viewParam = rawViewParam === "month" ? "month" : "week";
   const [view, setView] = useState(viewParam);
-  const [planningTab, setPlanningTab] = useState(
+  const [planningTabState, setPlanningTabState] = useState(
     isTeamContext ? TEAM_PLANNING_TAB_SHARED : TEAM_PLANNING_TAB_PERSONAL
   );
+  const [planningTabManuallySelected, setPlanningTabManuallySelected] =
+    useState(false);
+
+  const setPlanningTab = useCallback((nextTab) => {
+    setPlanningTabManuallySelected(true);
+    setPlanningTabState(nextTab);
+  }, []);
+
+  const setPlanningTabAuto = useCallback((nextTab) => {
+    setPlanningTabManuallySelected(false);
+    setPlanningTabState(nextTab);
+  }, []);
 
   useEffect(() => {
     if (view !== viewParam) {
@@ -432,11 +444,18 @@ export default function Planning() {
 
   useEffect(() => {
     if (isTeamContext) {
-      setPlanningTab(TEAM_PLANNING_TAB_SHARED);
+      setPlanningTabAuto(TEAM_PLANNING_TAB_SHARED);
     } else {
-      setPlanningTab(TEAM_PLANNING_TAB_PERSONAL);
+      setPlanningTabAuto(TEAM_PLANNING_TAB_PERSONAL);
     }
-  }, [isTeamContext]);
+  }, [isTeamContext, setPlanningTabAuto]);
+
+  useEffect(() => {
+    if (!isTeamContext || !teamId) {
+      return;
+    }
+    setPlanningTabAuto(TEAM_PLANNING_TAB_SHARED);
+  }, [isTeamContext, teamId, setPlanningTabAuto]);
 
   const handleViewChange = useCallback(
     (nextView) => {
@@ -562,11 +581,43 @@ export default function Planning() {
     );
   }, [isTeamContext, resolvedTeamName, resolvedTeamFromList]);
 
-  useEffect(() => {
-    if (planningTab === TEAM_PLANNING_TAB_SHARED && !sharedTeamId) {
-      setPlanningTab(TEAM_PLANNING_TAB_PERSONAL);
+  const planningTab = useMemo(() => {
+    if (!isTeamContext) {
+      return planningTabState;
     }
-  }, [planningTab, sharedTeamId]);
+    if (!sharedTeamId) {
+      return TEAM_PLANNING_TAB_PERSONAL;
+    }
+    if (
+      !planningTabManuallySelected &&
+      planningTabState === TEAM_PLANNING_TAB_PERSONAL
+    ) {
+      return TEAM_PLANNING_TAB_SHARED;
+    }
+    return planningTabState;
+  }, [
+    isTeamContext,
+    planningTabState,
+    planningTabManuallySelected,
+    sharedTeamId,
+  ]);
+
+  useEffect(() => {
+    if (!isTeamContext) {
+      return;
+    }
+    if (
+      planningTabState === TEAM_PLANNING_TAB_SHARED &&
+      !sharedTeamId
+    ) {
+      setPlanningTabAuto(TEAM_PLANNING_TAB_PERSONAL);
+    }
+  }, [
+    isTeamContext,
+    planningTabState,
+    sharedTeamId,
+    setPlanningTabAuto,
+  ]);
 
   const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
   const weekEnd = useMemo(() => endOfWeek(weekStart), [weekStart]);
@@ -2012,8 +2063,15 @@ export default function Planning() {
         id: entry.id || `${entry.start.getTime()}-${entry.end.getTime()}`,
         start: entry.start,
         end: entry.end,
-        title: entry.title || entry.client || "Bloc partagé",
-        client: entry.createdByName || entry.title || "Membre",
+        title: entry.title || entry.clientName || "Bloc partagé",
+        client:
+          entry.clientName ||
+          entry.client ||
+          entry.createdByName ||
+          entry.title ||
+          "Membre",
+        description:
+          entry.description || entry.title || entry.clientName || "Bloc partagé",
         color: entry.color || "#2563eb",
         status: entry.status || entry.type || "event",
         type: entry.type || "event",
@@ -2181,6 +2239,42 @@ export default function Planning() {
 
   const activeWeeklyTasks =
     planningTab === TEAM_PLANNING_TAB_SHARED ? [] : weeklyTasks;
+  const findTaskByIdentifier = useCallback(
+    (identifier) => {
+      if (
+        !identifier ||
+        !Array.isArray(activeWeeklyTasks) ||
+        activeWeeklyTasks.length === 0
+      ) {
+        return null;
+      }
+      const normalizedTarget = String(identifier).trim();
+      if (!normalizedTarget) {
+        return null;
+      }
+      const matchedTask =
+        activeWeeklyTasks.find((task) => {
+          if (!task) {
+            return false;
+          }
+          const candidates = [
+            task.id,
+            task.taskId,
+            task.task_id,
+            task.occurrenceId,
+            task.occurrence_id,
+          ];
+          return candidates.some((candidate) => {
+            if (candidate == null) {
+              return false;
+            }
+            return String(candidate).trim() === normalizedTarget;
+          });
+        }) || null;
+      return matchedTask;
+    },
+    [activeWeeklyTasks]
+  );
   const showTeamWeeklyTasksEmptyState =
     isViewingOtherTeamMember &&
     !tasksLoading &&
@@ -2467,6 +2561,73 @@ export default function Planning() {
     [closeWeeklyTaskModal]
   );
 
+  const modalAttachedTasks = useMemo(() => {
+    if (
+      !modal.event ||
+      !Array.isArray(modal.event.attachedTaskBadges) ||
+      modal.event.attachedTaskBadges.length === 0
+    ) {
+      return [];
+    }
+    const uniqueTasks = [];
+    const seen = new Set();
+    modal.event.attachedTaskBadges.forEach((badge) => {
+      if (!badge) {
+        return;
+      }
+      const identifier =
+        badge.taskId ?? badge.id ?? badge.task_id ?? badge.taskID ?? null;
+      const matchedTask = findTaskByIdentifier(identifier);
+      if (!matchedTask) {
+        return;
+      }
+      const candidateKeys = [
+        matchedTask.id,
+        matchedTask.taskId,
+        matchedTask.task_id,
+        matchedTask.occurrenceId,
+        matchedTask.occurrence_id,
+        identifier,
+      ]
+        .map((value) => (value == null ? null : String(value).trim()))
+        .filter(Boolean);
+      const key = candidateKeys[0];
+      if (key && seen.has(key)) {
+        return;
+      }
+      if (key) {
+        seen.add(key);
+      }
+      uniqueTasks.push(matchedTask);
+    });
+    return uniqueTasks;
+  }, [findTaskByIdentifier, modal.event]);
+
+  const handleLinkedTaskEdit = useCallback(
+    (taskId) => {
+      if (
+        readOnly ||
+        !planningContext ||
+        planningTab === TEAM_PLANNING_TAB_SHARED
+      ) {
+        return;
+      }
+      const matchedTask = findTaskByIdentifier(taskId);
+      if (!matchedTask) {
+        return;
+      }
+      closeModal();
+      setWeeklyTaskModal({ open: true, task: matchedTask });
+    },
+    [
+      closeModal,
+      findTaskByIdentifier,
+      planningContext,
+      planningTab,
+      readOnly,
+    ]
+  );
+
   const handleInvoiceShortcut = useCallback(
     (clientSummary) => {
       if (!clientSummary?.clientId) {
@@ -2560,8 +2721,21 @@ export default function Planning() {
       const sanitizedClientName = shouldClearClient
         ? ""
         : data.client_name || "";
+      const normalizedClientId =
+        typeof sanitizedClientId === "string"
+          ? sanitizedClientId.trim()
+          : "";
+      const normalizedClientName =
+        typeof sanitizedClientName === "string"
+          ? sanitizedClientName.trim()
+          : "";
+      const normalizedDescription =
+        typeof data.description === "string" ? data.description.trim() : "";
       const resolvedTitle =
-        data.description || data.title || sanitizedClientName || "Bloc";
+        normalizedDescription ||
+        data.title ||
+        normalizedClientName ||
+        "Bloc";
 
       if (planningTab === TEAM_PLANNING_TAB_SHARED) {
         if (!user?.uid || !sharedTeamId) {
@@ -2613,6 +2787,9 @@ export default function Planning() {
             price: Number.isFinite(Number(data.price))
               ? Number(data.price)
               : null,
+            description: normalizedDescription || null,
+            clientId: normalizedClientId || null,
+            clientName: normalizedClientName || null,
             createdBy: user.uid,
             createdByName: user.displayName || user.email || "Moi",
             createdByInitials: computeInitials(user.displayName, user.email),
@@ -2639,15 +2816,15 @@ export default function Planning() {
             type: eventType,
             client: shouldClearClient
               ? ""
-              : sanitizedClientName || resolvedTitle,
+              : normalizedClientName || resolvedTitle,
             status: resolvedStatus,
             payment_status: resolvedStatus,
             hourly_rate: shouldClearClient ? 0 : data.hourly_rate || 50,
             duration: Math.round((end - start) / (60 * 1000)),
             task_id: shouldClearClient ? null : data.task_id || null,
-            description: data.description || "",
-            client_id: sanitizedClientId,
-            client_name: sanitizedClientName,
+            description: normalizedDescription || "",
+            client_id: normalizedClientId,
+            client_name: normalizedClientName,
             day: DAY_KEYS[dayIndex] || "monday",
             team_planning_id: teamEntryId,
             synced: true,
@@ -2870,6 +3047,44 @@ export default function Planning() {
           }
         }
 
+        const clientIdCandidates = [
+          slot.client_id,
+          slot.clientId,
+          slot.client?.id,
+          slot.client?.client_id,
+        ];
+        let clientId = null;
+        for (const candidate of clientIdCandidates) {
+          if (candidate == null) {
+            continue;
+          }
+          const normalized = String(candidate).trim();
+          if (normalized) {
+            clientId = normalized;
+            break;
+          }
+        }
+
+        const clientNameCandidates = [
+          slot.client_name,
+          slot.clientName,
+          slot.client_label,
+          slot.clientLabel,
+          typeof slot.client === "string" ? slot.client : null,
+          slot.client?.display_name,
+          slot.client?.name,
+        ];
+        let clientName = "";
+        for (const candidate of clientNameCandidates) {
+          if (typeof candidate === "string" && candidate.trim()) {
+            clientName = candidate.trim();
+            break;
+          }
+        }
+
+        const normalizedDescription =
+          typeof slot.description === "string" ? slot.description.trim() : "";
+
         const priceCandidates = [
           slot.price,
           slot.total,
@@ -2905,6 +3120,9 @@ export default function Planning() {
               (typeof slot.color === "string" && slot.color.trim()) ||
               "#2563eb",
             price,
+            description: normalizedDescription || null,
+            clientId,
+            clientName: clientName || null,
             createdBy: user?.uid || null,
             createdByName: creatorName,
             createdByInitials: computeInitials(user?.displayName, user?.email),
@@ -3697,7 +3915,12 @@ export default function Planning() {
         readOnly={modal.readOnly || readOnly}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
-        attachedTasks={modal.event?.attachedTaskBadges || []}
+        attachedTasks={modalAttachedTasks}
+        onEditLinkedTask={
+          planningTab === TEAM_PLANNING_TAB_SHARED || !planningContext
+            ? undefined
+            : handleLinkedTaskEdit
+        }
         onSwitchToTask={
           !readOnly &&
           planningContext &&

@@ -175,3 +175,46 @@ def test_team_planning_delete_normalizes_entry_id():
         .document("event-456")
     )
     assert not doc_ref.get().exists
+
+
+def test_team_planning_persists_client_and_description():
+    client = TestClient(app)
+    team_id = "team-client-description"
+    _create_team(team_id)
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "title": "Consultation",
+        "type": "event",
+        "start": now.isoformat(),
+        "end": (now + timedelta(hours=2)).isoformat(),
+        "teamId": team_id,
+        "description": "Audit UX",
+        "clientId": "client-xyz",
+        "clientName": "Studio Nova",
+    }
+
+    response = client.post(
+        f"/api/teams/{team_id}/planning",
+        json=payload,
+        headers=_make_headers(),
+    )
+
+    assert response.status_code == 200
+    item = response.json()["item"]
+    assert item["clientId"] == payload["clientId"]
+    assert item["clientName"] == payload["clientName"]
+    assert item["description"] == payload["description"]
+
+    listing = client.get(
+        f"/api/teams/{team_id}/planning",
+        headers=_make_headers(),
+    )
+
+    assert listing.status_code == 200
+    entries = listing.json().get("items") or []
+    assert entries, "Expected at least one planning entry"
+    stored = entries[0]
+    assert stored["clientId"] == payload["clientId"]
+    assert stored["clientName"] == payload["clientName"]
+    assert stored["description"] == payload["description"]

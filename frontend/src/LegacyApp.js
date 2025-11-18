@@ -1147,6 +1147,7 @@ const EventModal = ({
   navigate,
   onSwitchToTask,
   attachedTasks = [],
+  onEditLinkedTask,
 }) => {
   const [formData, setFormData] = useState({
     description: "",
@@ -1555,6 +1556,8 @@ const EventModal = ({
     typeof onSwitchToTask === "function" && !event && !readOnly;
   const canShowLinkedTasksTab =
     Boolean(event) && !shouldShowTaskTab && isMobileLayout && hasLinkedTasks;
+  const canEditLinkedTasks =
+    typeof onEditLinkedTask === "function" && !readOnly;
 
   useEffect(() => {
     if (!isOpen) {
@@ -2103,6 +2106,15 @@ const EventModal = ({
                 </p>
               )}
             </div>
+            {canEditLinkedTasks && selectedTask.id && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => onEditLinkedTask(selectedTask.id)}
+              >
+                Modifier cette tâche
+              </button>
+            )}
           </div>
         )}
       </div>
