@@ -117,22 +117,72 @@ logger = logging.getLogger(__name__)
 logger.info("Loaded environment from %s", ENV_PATH)
 
 # For testing purposes, use in-memory database
-try:
-    if not firebase_admin._apps:
-        cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if cred_path and os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
-            db = firestore.client()
+def _load_service_account_credentials():
+    """Return Firebase credentials from JSON env or file when available."""
+
+    json_payload = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if json_payload:
+        try:
+            data = json.loads(json_payload)
+        except json.JSONDecodeError:
+            logger.error("Invalid FIREBASE_SERVICE_ACCOUNT_JSON payload")
         else:
-            # Use in-memory database for testing
-            from firebase import InMemoryFirestore
-            db = InMemoryFirestore()
-            logger.info("Using in-memory Firestore for testing")
+            project_id = os.getenv("FIREBASE_PROJECT_ID")
+            client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
+            if project_id and not data.get("project_id"):
+                data["project_id"] = project_id
+            if client_email and not data.get("client_email"):
+                data["client_email"] = client_email
+            logger.info("Using inline Firebase service account credentials from env")
+            return credentials.Certificate(data)
+
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        logger.info("Using Firebase service account file at %s", cred_path)
+        return credentials.Certificate(cred_path)
+
+    return None
+
+
+def _ensure_firebase_app_initialized():
+    cred = _load_service_account_credentials()
+    project_id = os.getenv("FIREBASE_PROJECT_ID")
+
+    if not firebase_admin._apps:
+        if cred is not None:
+            firebase_admin.initialize_app(cred)
+            logger.info("Firebase app initialized from provided credentials")
+        elif project_id:
+            firebase_admin.initialize_app(options={"projectId": project_id})
+            logger.warning(
+                "Firebase app initialized without explicit credentials (project_id=%s)",
+                project_id,
+            )
+        else:
+            logger.warning("No Firebase credentials or project ID provided")
+
+    return cred is not None
+
+
+try:
+    has_credentials = _ensure_firebase_app_initialized()
+    try:
+        db = firestore.client()
+    except Exception as firestore_error:
+        if has_credentials:
+            raise
+        logger.warning(
+            "Firestore client unavailable (%s), using in-memory store", firestore_error
+        )
+        from firebase import InMemoryFirestore
+
+        db = InMemoryFirestore()
+        logger.info("Using in-memory Firestore for testing")
 except Exception as e:
     logger.error(f"Firebase initialization failed: {e}")
     # Fallback to in-memory database
     from .firebase import InMemoryFirestore
+
     db = InMemoryFirestore()
     logger.info("Using in-memory Firestore fallback")
 
