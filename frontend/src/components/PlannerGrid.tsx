@@ -908,16 +908,25 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                   const priorityDisplay = showPriorityBadges
                                     ? getPriorityDisplay(badge.priority)
                                     : null;
-                                  const statusKey: TaskStatusKey = resolveEffectiveTaskStatus(
-                                    badge.status,
-                                    badge.done,
-                                  );
-                                  const statusDisplay = showStatusBadges
-                                    ? TASK_STATUS_DISPLAY[statusKey]
-                                    : null;
-                                  const statusIndicatorStyle = statusDisplay
-                                    ? TASK_STATUS_INDICATOR_STYLES[statusKey]
-                                    : null;
+                                  const badgeStatusRaw =
+                                    typeof badge.status === 'string'
+                                      ? badge.status.trim().toLowerCase()
+                                      : undefined;
+                                  const hasBadgeStatus =
+                                    badgeStatusRaw === 'todo' ||
+                                    badgeStatusRaw === 'doing' ||
+                                    badgeStatusRaw === 'done';
+                                  const statusKey: TaskStatusKey | undefined = hasBadgeStatus
+                                    ? resolveEffectiveTaskStatus(badgeStatusRaw, badge.done)
+                                    : undefined;
+                                  const statusDisplay =
+                                    showStatusBadges && statusKey
+                                      ? TASK_STATUS_DISPLAY[statusKey]
+                                      : null;
+                                  const statusIndicatorStyle =
+                                    statusDisplay && statusKey
+                                      ? TASK_STATUS_INDICATOR_STYLES[statusKey]
+                                      : null;
 
                                   const normalizedLabel =
                                     typeof badge.label === 'string' && badge.label.trim().length > 0
@@ -944,7 +953,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                       aria-label={badgeAriaLabel}
                                     >
                                       <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
-                                      {statusDisplay && statusIndicatorStyle ? (
+                                      {showStatusBadges && statusDisplay && statusIndicatorStyle ? (
                                         <>
                                           <span className="sr-only">{statusDisplay.srLabel}</span>
                                           <span
@@ -998,17 +1007,36 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                             typeof slot.status === 'string'
                               ? slot.status.trim().toLowerCase()
                               : undefined;
-                          const rawStatus =
+                          const taskStatusRaw =
                             typeof task.status === 'string'
                               ? task.status.trim().toLowerCase()
-                              : slotStatusRaw;
+                              : undefined;
                           const slotDone = slot.done === true;
-                          const statusKey: TaskStatusKey = resolveEffectiveTaskStatus(
-                            rawStatus,
-                            task.done === true || slotDone,
-                          );
+                          const isStatusDisabled = task.status === null;
+                          const hasTaskStatus =
+                            taskStatusRaw === 'todo' ||
+                            taskStatusRaw === 'doing' ||
+                            taskStatusRaw === 'done';
+                          let statusKey: TaskStatusKey | undefined;
+                          if (!isStatusDisabled) {
+                            if (hasTaskStatus) {
+                              statusKey = resolveEffectiveTaskStatus(
+                                taskStatusRaw,
+                                task.done === true || slotDone,
+                              );
+                            } else if (slotStatusRaw) {
+                              statusKey = resolveEffectiveTaskStatus(
+                                slotStatusRaw,
+                                task.done === true || slotDone,
+                              );
+                            } else if (task.done === true || slotDone) {
+                              statusKey = 'done';
+                            }
+                          }
                           const statusDisplay =
-                            showStatusBadges && !isAbsenceTask ? TASK_STATUS_DISPLAY[statusKey] : null;
+                            showStatusBadges && !isAbsenceTask && statusKey
+                              ? TASK_STATUS_DISPLAY[statusKey]
+                              : null;
                           const StatusIcon = statusDisplay?.iconComponent;
                           
                           const formattedPrice =
@@ -1049,7 +1077,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                 <div className="flex min-w-0 items-start gap-2">
                                   <div className="min-w-0 flex-1">
                                     <span className="font-medium truncate block">{task.label}</span>
-                                    {statusDisplay && StatusIcon ? (
+                                    {showStatusBadges && statusDisplay && StatusIcon ? (
                                       <span
                                         className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusDisplay.chipClass}`}
                                       >

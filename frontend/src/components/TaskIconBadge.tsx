@@ -53,9 +53,21 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   const IconComponent: LucideIcon = getIcon(iconId ?? undefined);
   const safeLabel = (label && label.trim()) || 'Tâche';
   const formattedPrice = formatPrice(price);
-  const statusKey: TaskStatusKey = resolveEffectiveTaskStatus(status ?? undefined, done === true);
-  const statusDisplay = TASK_STATUS_DISPLAY[statusKey];
-  const statusIndicatorStyle = TASK_STATUS_INDICATOR_STYLES[statusKey];
+  const normalizedStatus =
+    typeof status === 'string' && status.trim().length > 0
+      ? status.trim().toLowerCase()
+      : undefined;
+  const hasExplicitStatus =
+    normalizedStatus === 'todo' ||
+    normalizedStatus === 'doing' ||
+    normalizedStatus === 'done';
+  const statusKey: TaskStatusKey | undefined = hasExplicitStatus
+    ? resolveEffectiveTaskStatus(normalizedStatus, done === true)
+    : undefined;
+  const statusDisplay = statusKey ? TASK_STATUS_DISPLAY[statusKey] : null;
+  const statusIndicatorStyle = statusKey
+    ? TASK_STATUS_INDICATOR_STYLES[statusKey]
+    : null;
 
   const { settings, showTaskStatusBadges } = useSettings();
   const showStatusBadges = showTaskStatusBadges !== false;

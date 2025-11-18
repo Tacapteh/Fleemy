@@ -143,8 +143,8 @@ export interface TaskOccurrence {
   price?: number | string | null;
   readOnly?: boolean;
   attachedToEvent?: boolean;
-  priority?: "high" | "medium" | "low";
-  status?: "todo" | "doing" | "done";
+  priority?: "high" | "medium" | "low" | null;
+  status?: "todo" | "doing" | "done" | null;
   done?: boolean;
   teamParticipants?: TeamParticipantBadge[];
   [key: string]: unknown;
@@ -156,8 +156,8 @@ export interface AttachedTaskBadge {
   label: string;
   price?: number;
   color?: string;
-  priority?: "high" | "medium" | "low";
-  status?: "todo" | "doing" | "done";
+  priority?: "high" | "medium" | "low" | null;
+  status?: "todo" | "doing" | "done" | null;
   done?: boolean;
 }
 
@@ -193,7 +193,12 @@ const clampDateToMidnight = (value: Date): Date => {
   return copy;
 };
 
-const normalizeTaskPriority = (value: unknown): "high" | "medium" | "low" => {
+const normalizeTaskPriority = (
+  value: unknown
+): "high" | "medium" | "low" | null => {
+  if (value == null) {
+    return null;
+  }
   if (typeof value !== "string") {
     return "medium";
   }
@@ -527,14 +532,34 @@ const expandTaskOccurrences = (
     const task = taskRaw as Partial<WeeklyTaskDefinition> &
       Partial<TaskOccurrence>;
     const taskRecord = task as Record<string, unknown>;
+    const isTaskDone = task.done === true || taskRecord?.done === true;
+
+    const priorityDisabled =
+      task.priority === null ||
+      taskRecord?.priority === null ||
+      task.priorityEnabled === false ||
+      task.priority_enabled === false;
+    const resolvedPriority = priorityDisabled
+      ? null
+      : normalizeTaskPriority(task.priority ?? taskRecord?.priority);
+
+    const statusDisabled =
+      task.status === null ||
+      taskRecord?.status === null ||
+      task.statusEnabled === false ||
+      task.status_enabled === false;
     const rawStatusValue =
       typeof task.status === "string"
         ? task.status
         : typeof taskRecord?.status === "string"
           ? (taskRecord.status as string)
           : undefined;
-    const normalizedStatus = normalizeTaskStatus(rawStatusValue);
-    const isTaskDone = task.done === true || taskRecord?.done === true;
+    const normalizedStatus = !statusDisabled
+      ? normalizeTaskStatus(rawStatusValue)
+      : undefined;
+    const resolvedStatus = statusDisabled
+      ? null
+      : normalizedStatus ?? (isTaskDone ? "done" : undefined);
     const taskWeekday = resolveDayIndex(
       taskRecord?.weekday ??
         taskRecord?.week_day ??
@@ -577,8 +602,8 @@ const expandTaskOccurrences = (
         price: task.price,
         readOnly: task.readOnly,
         attachedToEvent: false,
-        priority: normalizeTaskPriority(task.priority),
-        status: normalizedStatus ?? (isTaskDone ? "done" : undefined),
+        priority: resolvedPriority,
+        status: resolvedStatus,
         done: isTaskDone,
       };
       occurrenceMap.set(occId, occurrence);
@@ -653,8 +678,8 @@ const expandTaskOccurrences = (
         price: task.price,
         readOnly: task.readOnly,
         attachedToEvent: false,
-        priority: normalizeTaskPriority(task.priority),
-        status: normalizedStatus ?? (isTaskDone ? "done" : undefined),
+        priority: resolvedPriority,
+        status: resolvedStatus,
         done: isTaskDone,
       };
       occurrenceMap.set(occId, occurrence);
