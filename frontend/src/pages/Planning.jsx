@@ -471,6 +471,7 @@ export default function Planning() {
     open: false,
     task: null,
   });
+  const [isTransferringSoloWeek, setIsTransferringSoloWeek] = useState(false);
 
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -2767,59 +2768,8 @@ export default function Planning() {
           synced: Boolean(data.synced),
         };
 
-        const savedEvent = await saveEventNew(planningContext, payload);
+        await saveEventNew(planningContext, payload);
         requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
-        const savedPersonalId = savedEvent?.id || payload.id || null;
-
-        if (sharedTeamId && !data.synced) {
-          try {
-            const teamPayload = {
-              id: data.teamPlanningId || data.team_planning_id || null,
-              title: resolvedTitle,
-              type: "event",
-              start: start.toISOString(),
-              end: end.toISOString(),
-              status: resolvedStatus,
-              color: data.color || "#2563eb",
-              price: Number.isFinite(Number(data.price))
-                ? Number(data.price)
-                : null,
-              createdBy: user?.uid || null,
-              createdByName: user?.displayName || user?.email || "Moi",
-              createdByInitials: computeInitials(
-                user?.displayName,
-                user?.email
-              ),
-              teamId: sharedTeamId,
-              synced: true,
-              personalEventId: savedPersonalId || data.id || null,
-            };
-
-            const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
-              method: "POST",
-              body: JSON.stringify(teamPayload),
-            });
-
-            if (response?.item?.id && savedPersonalId) {
-              try {
-                await saveEventNew(planningContext, {
-                  id: savedPersonalId,
-                  team_planning_id: response.item.id,
-                  synced: true,
-                });
-              } catch (attachError) {
-                console.warn(
-                  "Unable to attach team planning identifier to event",
-                  attachError
-                );
-              }
-            }
-
-            requestTeamPlanningRefresh();
-          } catch (teamSyncError) {
-            console.error("team planning sync error", teamSyncError);
-          }
-        }
 
         showToast("Événement sauvegardé avec succès");
       } catch (error) {
@@ -2837,7 +2787,6 @@ export default function Planning() {
       weekStart,
       weekEnd,
       requestWeekSlotsRefresh,
-      requestTeamPlanningRefresh,
       closeModal,
       sharedTeamId,
       user?.uid,
@@ -2845,6 +2794,194 @@ export default function Planning() {
       user?.email,
     ]
   );
+
+  const handleTransferSoloWeekToTeam = useCallback(async () => {
+    if (
+      planningTab === TEAM_PLANNING_TAB_SHARED ||
+      !sharedTeamId ||
+      !planningContext ||
+      readOnly ||
+      isTransferringSoloWeek
+    ) {
+      return;
+    }
+
+    if (!Array.isArray(events) || events.length === 0) {
+      showToast(
+        "Aucun événement du planning solo n'est disponible pour le transfert",
+        true
+      );
+      return;
+    }
+
+    const eligibleEvents = events
+      .map((slot) => {
+        if (!slot) {
+          return null;
+        }
+
+        const type =
+          typeof slot.type === "string" ? slot.type.trim().toLowerCase() : "";
+        if (type === "absence" || type === "task" || type === "weekly_task" || type === "weekly-task") {
+          return null;
+        }
+
+        const alreadySynced =
+          slot.synced === true ||
+          Boolean(slot.team_planning_id) ||
+          Boolean(slot.teamPlanningId);
+        if (alreadySynced) {
+          return null;
+        }
+
+        const startDate = getSlotStartDate(slot);
+        const endDate = getSlotEndDate(slot);
+        if (!startDate || !endDate || endDate <= startDate) {
+          return null;
+        }
+
+        const statusCandidates = [
+          slot.payment_status,
+          slot.paymentStatus,
+          slot.status,
+        ];
+        let status = "unpaid";
+        for (const candidate of statusCandidates) {
+          if (typeof candidate === "string" && candidate.trim()) {
+            status = candidate.trim();
+            break;
+          }
+        }
+
+        const titleCandidates = [
+          slot.description,
+          slot.title,
+          slot.client_name,
+          slot.clientName,
+          slot.client?.display_name,
+          slot.client?.name,
+          slot.client,
+        ];
+        let title = "Bloc";
+        for (const candidate of titleCandidates) {
+          if (typeof candidate === "string" && candidate.trim()) {
+            title = candidate.trim();
+            break;
+          }
+        }
+
+        const priceCandidates = [
+          slot.price,
+          slot.total,
+          slot.amount,
+          slot.value,
+          slot.hourly_rate,
+          slot.hourlyRate,
+        ];
+        let price = null;
+        for (const candidate of priceCandidates) {
+          const numeric = Number(candidate);
+          if (Number.isFinite(numeric)) {
+            price = numeric;
+            break;
+          }
+        }
+
+        const personalEventId =
+          typeof slot.id === "string" && slot.id.trim() ? slot.id.trim() : null;
+
+        const creatorName = user?.displayName || user?.email || "Moi";
+
+        return {
+          personalEventId,
+          payload: {
+            id: slot.teamPlanningId || slot.team_planning_id || null,
+            title,
+            type: "event",
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+            status,
+            color:
+              (typeof slot.color === "string" && slot.color.trim()) ||
+              "#2563eb",
+            price,
+            createdBy: user?.uid || null,
+            createdByName: creatorName,
+            createdByInitials: computeInitials(user?.displayName, user?.email),
+            teamId: sharedTeamId,
+            synced: true,
+            personalEventId,
+          },
+        };
+      })
+      .filter(Boolean);
+
+    if (!eligibleEvents.length) {
+      showToast(
+        "Aucun nouvel événement à transférer vers le planning d'équipe",
+        true
+      );
+      return;
+    }
+
+    setIsTransferringSoloWeek(true);
+    try {
+      let transferredCount = 0;
+      for (const entry of eligibleEvents) {
+        const response = await apiFetch(`/teams/${sharedTeamId}/planning`, {
+          method: "POST",
+          body: JSON.stringify(entry.payload),
+        });
+        transferredCount += 1;
+
+        if (response?.item?.id && entry.personalEventId) {
+          try {
+            await saveEventNew(planningContext, {
+              id: entry.personalEventId,
+              team_planning_id: response.item.id,
+              synced: true,
+            });
+          } catch (attachError) {
+            console.warn(
+              "Unable to attach team planning identifier during transfer",
+              attachError
+            );
+          }
+        }
+      }
+
+      requestTeamPlanningRefresh();
+      requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
+
+      showToast(
+        transferredCount > 1
+          ? `${transferredCount} événements transférés vers le planning d'équipe`
+          : "Événement transféré vers le planning d'équipe"
+      );
+    } catch (error) {
+      console.error("solo planning transfer error", error);
+      showToast(
+        "Impossible de transférer le planning solo vers le planning d'équipe",
+        true
+      );
+    } finally {
+      setIsTransferringSoloWeek(false);
+    }
+  }, [
+    planningTab,
+    sharedTeamId,
+    planningContext,
+    readOnly,
+    isTransferringSoloWeek,
+    events,
+    user?.displayName,
+    user?.email,
+    user?.uid,
+    requestTeamPlanningRefresh,
+    requestWeekSlotsRefresh,
+    weekStart,
+    weekEnd,
+  ]);
 
   const handleDeleteEvent = useCallback(
     async (id) => {
@@ -3064,6 +3201,21 @@ export default function Planning() {
       : isTeamContext
         ? "Consultez et organisez les plannings de votre équipe"
         : "Gérez vos événements et vos tâches hebdomadaires";
+  const canTransferSoloWeek =
+    isTeamContext &&
+    !!sharedTeamId &&
+    planningTab !== TEAM_PLANNING_TAB_SHARED &&
+    !readOnly &&
+    Boolean(planningContext);
+  const transferButtonDisabled =
+    !canTransferSoloWeek ||
+    isTransferringSoloWeek ||
+    eventsLoading ||
+    !Array.isArray(events) ||
+    events.length === 0;
+  const transferButtonLabel = isTransferringSoloWeek
+    ? "Transfert en cours…"
+    : "Transférer ma semaine vers l'équipe";
 
   return (
     <div className="space-y-6 text-slate-900 dark:text-slate-100">
@@ -3199,8 +3351,33 @@ export default function Planning() {
           >
             + Créer
           </button>
+          {canTransferSoloWeek && (
+            <button
+              type="button"
+              onClick={handleTransferSoloWeekToTeam}
+              disabled={transferButtonDisabled}
+              aria-disabled={transferButtonDisabled}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500 px-4 py-2 text-sm font-semibold text-blue-600 shadow-sm transition-colors transition-shadow duration-150 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-500/10 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {transferButtonLabel}
+            </button>
+          )}
         </div>
       </div>
+
+      {canTransferSoloWeek && (
+        <div className="flex flex-wrap items-center justify-end gap-2 md:hidden">
+          <button
+            type="button"
+            onClick={handleTransferSoloWeekToTeam}
+            disabled={transferButtonDisabled}
+            aria-disabled={transferButtonDisabled}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500 px-4 py-2 text-sm font-semibold text-blue-600 shadow-sm transition-colors transition-shadow duration-150 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-500/10 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {transferButtonLabel}
+          </button>
+        </div>
+      )}
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
         {view === "week" ? (
