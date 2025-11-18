@@ -2295,15 +2295,42 @@ export default function Planning() {
       return a.label.localeCompare(b.label, "fr");
     });
 
-    const total = items.reduce((sum, item) => sum + item.price, 0);
+    const labelMap = new Map();
+    const aggregatedItems = [];
+
+    items.forEach((item) => {
+      const normalizedLabel = item.label.toLowerCase();
+      let entry = labelMap.get(normalizedLabel);
+      if (!entry) {
+        entry = {
+          key: normalizedLabel,
+          baseLabel: item.label,
+          icon: item.icon || null,
+          price: 0,
+          count: 0,
+        };
+        labelMap.set(normalizedLabel, entry);
+        aggregatedItems.push(entry);
+      }
+      entry.price += item.price;
+      entry.count += 1;
+      if (!entry.icon && item.icon) {
+        entry.icon = item.icon;
+      }
+    });
+
+    const total = aggregatedItems.reduce((sum, entry) => sum + entry.price, 0);
 
     return {
       total,
-      items: items.map(({ id, icon, label, price }) => ({
-        id,
-        icon,
-        label,
-        price,
+      items: aggregatedItems.map((entry, index) => ({
+        id: `${entry.key}-${index}`,
+        icon: entry.icon,
+        label:
+          entry.count > 1
+            ? `${entry.baseLabel} x${entry.count}`
+            : entry.baseLabel,
+        price: Math.round(entry.price * 100) / 100,
       })),
     };
   }, [activeTaskOccurrences]);
