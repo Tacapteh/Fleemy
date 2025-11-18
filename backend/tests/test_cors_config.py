@@ -27,3 +27,12 @@ def test_parse_allowed_origins_includes_defaults(monkeypatch, env_value, expecte
         for custom in [value.strip() for value in env_value.split(",") if value.strip()]:
             assert origins.count(custom) == 1
     assert origins[0] == expected_first
+
+
+def test_preview_environment_origin_allowed():
+    preview_origin = "https://money-manager-1265.preview.emergentagent.com"
+    assert server_module._is_origin_allowed(preview_origin)
+
+
+def test_unrelated_origin_still_blocked():
+    assert not server_module._is_origin_allowed("https://example.preview.other.com")
