@@ -207,7 +207,11 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
           <DropdownMenu.Trigger
             asChild
             onPointerDown={(event) => {
-              if (event.button === 0) {
+              const isMousePointer =
+                typeof event.pointerType === 'string'
+                  ? event.pointerType === 'mouse'
+                  : true;
+              if (isMousePointer && event.button === 0) {
                 event.preventDefault();
               }
             }}

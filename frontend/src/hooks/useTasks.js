@@ -53,11 +53,21 @@ const withNormalizedPriority = (task) => {
 
   const normalizedStatus = normalizeTaskStatus(task.status);
   const isDone = task.done === true;
+  const priorityEnabled =
+    task.priorityEnabled === false || task.priority_enabled === false
+      ? false
+      : true;
+  const statusEnabled =
+    task.statusEnabled === false || task.status_enabled === false
+      ? false
+      : true;
 
   return {
     ...task,
-    priority: normalizeTaskPriority(task.priority),
-    status: normalizedStatus ?? (isDone ? 'done' : 'todo'),
+    priority: priorityEnabled ? normalizeTaskPriority(task.priority) : null,
+    status: statusEnabled ? normalizedStatus ?? (isDone ? 'done' : 'todo') : null,
+    priorityEnabled,
+    statusEnabled,
     done: isDone,
   };
 };
@@ -399,6 +409,14 @@ export default function useTasks(context, weekStartISO) {
 
         const normalizedStatus = normalizeTaskStatus(task.status);
         const isDone = task.done === true;
+        const priorityEnabled =
+          task.priorityEnabled === false || task.priority_enabled === false
+            ? false
+            : true;
+        const statusEnabled =
+          task.statusEnabled === false || task.status_enabled === false
+            ? false
+            : true;
 
         results.push({
           taskId: task.id,
@@ -414,9 +432,11 @@ export default function useTasks(context, weekStartISO) {
           readOnly: Boolean(task.readOnly),
           weekly: true,
           taskDateISO: dateIso,
-          priority: normalizeTaskPriority(task.priority),
-          status: normalizedStatus ?? (isDone ? 'done' : 'todo'),
+          priority: priorityEnabled ? normalizeTaskPriority(task.priority) : null,
+          status: statusEnabled ? normalizedStatus ?? (isDone ? 'done' : 'todo') : null,
           done: isDone,
+          priorityEnabled,
+          statusEnabled,
         });
       });
     });
