@@ -513,6 +513,9 @@ class TeamPlanningEntry(BaseModel):
     color: Optional[str] = None
     status: Optional[str] = None
     price: Optional[float] = None
+    description: Optional[str] = None
+    clientId: Optional[str] = None
+    clientName: Optional[str] = None
     createdBy: Optional[str] = None
     createdByName: Optional[str] = None
     createdByInitials: Optional[str] = None
@@ -1759,6 +1762,11 @@ def _serialize_team_planning_doc(doc_snap) -> Dict[str, Any]:
         'color': data.get('color'),
         'status': data.get('status'),
         'price': data.get('price'),
+        'description': data.get('description'),
+        'clientId': data.get('clientId') or data.get('client_id'),
+        'clientName': data.get('clientName')
+        or data.get('client_name')
+        or data.get('client'),
         'createdBy': data.get('createdBy'),
         'createdByName': data.get('createdByName'),
         'createdByInitials': data.get('createdByInitials'),
@@ -1814,6 +1822,9 @@ def _build_team_planning_payload(entry: TeamPlanningEntry, creator: CreatorDefau
         "color": entry.color or None,
         "status": entry.status or None,
         "price": float(entry.price) if entry.price is not None else None,
+        "description": (entry.description or None),
+        "clientId": (entry.clientId or None),
+        "clientName": (entry.clientName or None),
         "createdBy": created_by,
         "createdByName": created_name,
         "createdByInitials": created_initials,
@@ -1849,6 +1860,9 @@ def _serialize_team_planning_entry_fallback(
         "color": entry.color or None,
         "status": entry.status or None,
         "price": float(entry.price) if entry.price is not None else None,
+        "description": entry.description or None,
+        "clientId": entry.clientId or None,
+        "clientName": entry.clientName or None,
         "createdBy": entry.createdBy or creator.get("uid"),
         "createdByName": entry.createdByName or creator.get("name"),
         "createdByInitials": entry.createdByInitials or creator.get("initials"),
@@ -4492,7 +4506,7 @@ async def upsert_team_planning_entry(
         raise HTTPException(status_code=500, detail="Impossible d'enregistrer le bloc d'équipe")
 
 
-@api_router.delete("/teams/{team_id}/planning/{entry_id}")
+@api_router.delete("/teams/{team_id}/planning/{entry_id:path}")
 async def delete_team_planning_entry(
     team_id: str,
     entry_id: str,

@@ -1034,6 +1034,24 @@ const normalizeTeamPlanningRecord = (
   }
 
   const priceValue = Number(data.price);
+  const description =
+    typeof data.description === "string" ? data.description : null;
+  const clientIdRaw =
+    data.clientId || data.client_id ||
+    (data.client && typeof data.client === "object"
+      ? data.client.id || data.client.client_id
+      : null);
+  const clientId =
+    typeof clientIdRaw === "string" && clientIdRaw.trim()
+      ? clientIdRaw.trim()
+      : null;
+  const clientNameRaw =
+    data.clientName || data.client_name ||
+    (typeof data.client === "string" ? data.client : null);
+  const clientName =
+    typeof clientNameRaw === "string" && clientNameRaw.trim()
+      ? clientNameRaw.trim()
+      : null;
 
   return {
     id: typeof id === "string" ? id : null,
@@ -1044,6 +1062,10 @@ const normalizeTeamPlanningRecord = (
     color: typeof data.color === "string" && data.color ? data.color : null,
     status: typeof data.status === "string" ? data.status : null,
     price: Number.isFinite(priceValue) ? priceValue : null,
+    description,
+    clientId,
+    clientName,
+    client: clientName,
     createdBy: typeof data.createdBy === "string" ? data.createdBy : null,
     createdByName:
       typeof data.createdByName === "string" ? data.createdByName : null,
