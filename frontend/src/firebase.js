@@ -2335,6 +2335,20 @@ const saveWeeklyTaskViaApiFallback = async (
     member_uid: ownerUid,
   };
 
+  const priorityEnabled =
+    taskData?.priorityEnabled === false || taskData?.priority_enabled === false
+      ? false
+      : true;
+  const statusEnabled =
+    taskData?.statusEnabled === false || taskData?.status_enabled === false
+      ? false
+      : true;
+
+  body.priorityEnabled = priorityEnabled;
+  body.priority_enabled = priorityEnabled;
+  body.statusEnabled = statusEnabled;
+  body.status_enabled = statusEnabled;
+
   const primaryRange = sanitizedRanges[0];
 
   if (primaryRange?.start) {
