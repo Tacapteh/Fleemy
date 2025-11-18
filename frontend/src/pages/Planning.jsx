@@ -3697,6 +3697,7 @@ export default function Planning() {
         readOnly={modal.readOnly || readOnly}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
+        attachedTasks={modal.event?.attachedTaskBadges || []}
         onSwitchToTask={
           !readOnly &&
           planningContext &&

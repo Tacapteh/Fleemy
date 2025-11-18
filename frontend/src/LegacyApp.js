@@ -678,6 +678,112 @@ const englishDayNames = [
   "sunday",
 ];
 
+const TASK_STATUS_LABELS = {
+  todo: "À faire",
+  doing: "En cours",
+  done: "Terminée",
+};
+
+const TASK_PRIORITY_LABELS = {
+  high: "Haute",
+  medium: "Normale",
+  low: "Basse",
+};
+
+const MOBILE_VIEWPORT_WIDTH = 768;
+
+const normalizeTaskStatusValue = (value) => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "todo" || normalized === "doing" || normalized === "done") {
+    return normalized;
+  }
+  return undefined;
+};
+
+const normalizeTaskPriorityValue = (value) => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "high" || normalized === "low") {
+    return normalized;
+  }
+  return "medium";
+};
+
+const normalizeTaskPriceValue = (value) => {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.replace(",", ".");
+    const parsed = Number(normalized);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
+const normalizeLinkedTask = (task, index = 0) => {
+  if (!task || typeof task !== "object") {
+    return null;
+  }
+
+  const labelFromTask =
+    typeof task.label === "string" && task.label.trim().length > 0
+      ? task.label.trim()
+      : null;
+  const labelFromName =
+    typeof task.name === "string" && task.name.trim().length > 0
+      ? task.name.trim()
+      : null;
+  const label = labelFromTask || labelFromName || `Tâche ${index + 1}`;
+
+  const idCandidates = [task.taskId, task.id, task.occurrenceId];
+  const resolvedId = idCandidates.find((candidate) => {
+    if (typeof candidate === "number") {
+      return true;
+    }
+    if (typeof candidate === "string" && candidate.trim()) {
+      return true;
+    }
+    return false;
+  });
+  const normalizedId =
+    typeof resolvedId === "number"
+      ? resolvedId.toString()
+      : typeof resolvedId === "string"
+        ? resolvedId.trim()
+        : `task-${index}`;
+
+  const iconCandidate =
+    typeof task.icon === "string" && task.icon.trim()
+      ? task.icon.trim()
+      : typeof task.iconId === "string" && task.iconId.trim()
+        ? task.iconId.trim()
+        : undefined;
+
+  return {
+    id: normalizedId,
+    label,
+    price: normalizeTaskPriceValue(task.price),
+    status: normalizeTaskStatusValue(task.status),
+    priority: normalizeTaskPriorityValue(task.priority),
+    done:
+      task.done === true ||
+      (typeof task.status === "string" && task.status.trim().toLowerCase() === "done"),
+    icon: iconCandidate,
+    color:
+      typeof task.color === "string" && task.color.trim().length > 0
+        ? task.color.trim()
+        : undefined,
+  };
+};
+
 const toDateValue = (value) => {
   if (!value) {
     return null;
@@ -1040,6 +1146,7 @@ const EventModal = ({
   readOnly,
   navigate,
   onSwitchToTask,
+  attachedTasks = [],
 }) => {
   const [formData, setFormData] = useState({
     description: "",
@@ -1056,6 +1163,14 @@ const EventModal = ({
   const clientFieldId = useId();
   const eventTypeFieldId = useId();
   const clientErrorId = `${clientFieldId}-error`;
+  const [activeMobileTab, setActiveMobileTab] = useState("event");
+  const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
+  const [isMobileLayout, setIsMobileLayout] = useState(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return false;
+    }
+    return window.matchMedia(`(max-width: ${MOBILE_VIEWPORT_WIDTH}px)`).matches;
+  });
 
   const { settings } = useSettings();
   const allowMinutes = settings?.enableMinutes === true;
@@ -1306,6 +1421,46 @@ const EventModal = ({
   const shouldShowDocumentsHint =
     !isAbsenceEvent && normalizedClientIdForDocs.length === 0;
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+    const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_VIEWPORT_WIDTH}px)`);
+    const handleChange = (mqEvent) => {
+      setIsMobileLayout(mqEvent.matches);
+    };
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+    } else if (typeof mediaQuery.addListener === "function") {
+      mediaQuery.addListener(handleChange);
+    }
+    setIsMobileLayout(mediaQuery.matches);
+    return () => {
+      if (typeof mediaQuery.removeEventListener === "function") {
+        mediaQuery.removeEventListener("change", handleChange);
+      } else if (typeof mediaQuery.removeListener === "function") {
+        mediaQuery.removeListener(handleChange);
+      }
+    };
+  }, []);
+
+  const normalizedLinkedTasks = useMemo(() => {
+    const directTasks = Array.isArray(attachedTasks) ? attachedTasks : [];
+    if (directTasks.length > 0) {
+      return directTasks
+        .map((task, index) => normalizeLinkedTask(task, index))
+        .filter(Boolean);
+    }
+    if (event && Array.isArray(event.attachedTaskBadges)) {
+      return event.attachedTaskBadges
+        .map((task, index) => normalizeLinkedTask(task, index))
+        .filter(Boolean);
+    }
+    return [];
+  }, [attachedTasks, event]);
+
+  const hasLinkedTasks = normalizedLinkedTasks.length > 0;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -1398,6 +1553,61 @@ const EventModal = ({
 
   const shouldShowTaskTab =
     typeof onSwitchToTask === "function" && !event && !readOnly;
+  const canShowLinkedTasksTab =
+    Boolean(event) && !shouldShowTaskTab && isMobileLayout && hasLinkedTasks;
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActiveMobileTab("event");
+      setSelectedTaskIndex(0);
+      return;
+    }
+    if (!canShowLinkedTasksTab && activeMobileTab !== "event") {
+      setActiveMobileTab("event");
+    }
+  }, [isOpen, canShowLinkedTasksTab, activeMobileTab]);
+
+  useEffect(() => {
+    setSelectedTaskIndex(0);
+  }, [event]);
+
+  useEffect(() => {
+    if (selectedTaskIndex > normalizedLinkedTasks.length - 1) {
+      setSelectedTaskIndex(
+        normalizedLinkedTasks.length > 0 ? normalizedLinkedTasks.length - 1 : 0,
+      );
+    }
+  }, [normalizedLinkedTasks.length, selectedTaskIndex]);
+
+  const selectedTask =
+    normalizedLinkedTasks.length > 0
+      ? normalizedLinkedTasks[Math.min(selectedTaskIndex, normalizedLinkedTasks.length - 1)]
+      : null;
+
+  const sharedSlotLabel =
+    canShowLinkedTasksTab && formData.start && formData.end
+      ? `${dayNames[formData.day] || ""} ${formData.start} - ${formData.end}`
+      : null;
+  const selectedTaskStatusLabel = selectedTask
+    ? selectedTask.status && TASK_STATUS_LABELS[selectedTask.status]
+      ? TASK_STATUS_LABELS[selectedTask.status]
+      : selectedTask.done
+        ? TASK_STATUS_LABELS.done
+        : "Non précisé"
+    : null;
+  const selectedTaskPriorityLabel = selectedTask
+    ? selectedTask.priority && TASK_PRIORITY_LABELS[selectedTask.priority]
+      ? TASK_PRIORITY_LABELS[selectedTask.priority]
+      : TASK_PRIORITY_LABELS.medium
+    : null;
+  const selectedTaskPriceLabel =
+    selectedTask && selectedTask.price != null
+      ? formatCurrency(selectedTask.price)
+      : "Non renseigné";
+  const linkedTasksTabLabel =
+    normalizedLinkedTasks.length > 1
+      ? `Tâches (${normalizedLinkedTasks.length})`
+      : "Tâches";
 
   if (!isOpen) return null;
 
@@ -1431,7 +1641,37 @@ const EventModal = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        {!shouldShowTaskTab && canShowLinkedTasksTab && (
+          <div
+            className="modal-tab-group"
+            role="group"
+            aria-label="Consulter l'événement ou les tâches liées"
+          >
+            <button
+              type="button"
+              className={`modal-tab ${
+                activeMobileTab === "event" ? "is-active" : ""
+              }`}
+              onClick={() => setActiveMobileTab("event")}
+              aria-pressed={activeMobileTab === "event"}
+            >
+              Événement
+            </button>
+            <button
+              type="button"
+              className={`modal-tab ${
+                activeMobileTab === "tasks" ? "is-active" : ""
+              }`}
+              onClick={() => setActiveMobileTab("tasks")}
+              aria-pressed={activeMobileTab === "tasks"}
+            >
+              {linkedTasksTabLabel}
+            </button>
+          </div>
+        )}
+
+        {(!canShowLinkedTasksTab || activeMobileTab === "event") && (
+          <form onSubmit={handleSubmit}>
           <fieldset disabled={readOnly}>
             <div className="form-group">
               <label className="form-label">Description</label>
@@ -1739,7 +1979,132 @@ const EventModal = ({
               </button>
             )}
           </div>
-        </form>
+          </form>
+        )}
+
+        {canShowLinkedTasksTab && activeMobileTab === "tasks" && selectedTask && (
+          <div
+            className="mobile-task-panel"
+            style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "16px" }}
+          >
+            <div className="form-group">
+              <label className="form-label">
+                {normalizedLinkedTasks.length > 1
+                  ? "Sélectionner une tâche liée"
+                  : "Tâche liée"}
+              </label>
+              {normalizedLinkedTasks.length > 1 ? (
+                <select
+                  className="form-input"
+                  value={selectedTaskIndex}
+                  onChange={(e) => setSelectedTaskIndex(parseInt(e.target.value, 10) || 0)}
+                >
+                  {normalizedLinkedTasks.map((task, index) => (
+                    <option key={task.id || `linked-task-${index}`} value={index}>
+                      {task.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div
+                  className="form-input"
+                  style={{ cursor: "default", userSelect: "none" }}
+                >
+                  {selectedTask.label}
+                </div>
+              )}
+            </div>
+
+            <div
+              className="task-info-card"
+              style={{
+                border: "1px solid rgba(148, 163, 184, 0.4)",
+                borderRadius: "12px",
+                padding: "16px",
+                backgroundColor: "rgba(248, 250, 252, 0.95)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginBottom: "12px",
+                }}
+              >
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "9999px",
+                    backgroundColor: selectedTask.color || "#2563eb",
+                    color: "#fff",
+                    fontWeight: 600,
+                    fontSize: "18px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {(selectedTask.label || "T").charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p style={{ fontWeight: 600, margin: 0 }}>{selectedTask.label}</p>
+                  <p style={{ margin: 0, color: "#0f172a" }}>{selectedTaskPriceLabel}</p>
+                </div>
+              </div>
+
+              <dl
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "16px",
+                  margin: 0,
+                }}
+              >
+                <div style={{ flex: "1 1 45%" }}>
+                  <dt style={{ fontSize: "12px", textTransform: "uppercase", color: "#475569", marginBottom: "4px" }}>
+                    Statut
+                  </dt>
+                  <dd style={{ margin: 0, fontWeight: 600 }}>
+                    {selectedTaskStatusLabel}
+                  </dd>
+                </div>
+                <div style={{ flex: "1 1 45%" }}>
+                  <dt style={{ fontSize: "12px", textTransform: "uppercase", color: "#475569", marginBottom: "4px" }}>
+                    Priorité
+                  </dt>
+                  <dd style={{ margin: 0, fontWeight: 600 }}>
+                    {selectedTaskPriorityLabel}
+                  </dd>
+                </div>
+                <div style={{ flex: "1 1 45%" }}>
+                  <dt style={{ fontSize: "12px", textTransform: "uppercase", color: "#475569", marginBottom: "4px" }}>
+                    Terminée
+                  </dt>
+                  <dd style={{ margin: 0, fontWeight: 600 }}>
+                    {selectedTask.done ? "Oui" : "Non"}
+                  </dd>
+                </div>
+                {sharedSlotLabel && (
+                  <div style={{ flex: "1 1 45%" }}>
+                    <dt style={{ fontSize: "12px", textTransform: "uppercase", color: "#475569", marginBottom: "4px" }}>
+                      Créneau
+                    </dt>
+                    <dd style={{ margin: 0, fontWeight: 600 }}>{sharedSlotLabel}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {normalizedLinkedTasks.length > 1 && (
+                <p style={{ marginTop: "12px", fontSize: "12px", color: "#475569" }}>
+                  Ce créneau contient {normalizedLinkedTasks.length} tâches planifiées.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -4110,6 +4475,50 @@ const Planning = ({ user }) => {
     setDayEventsModal({ isOpen: true, events: dayEvents, date });
   };
 
+  const modalAttachedTasks = useMemo(() => {
+    if (!eventModal.event) {
+      return [];
+    }
+    const startTime =
+      eventModal.event.start ||
+      eventModal.event.start_time ||
+      eventModal.event.startTime;
+    if (!startTime) {
+      return [];
+    }
+    let dayIndex = -1;
+    if (typeof eventModal.event.day === "number") {
+      dayIndex = eventModal.event.day;
+    } else if (typeof eventModal.event.day === "string") {
+      const normalized = eventModal.event.day.toLowerCase();
+      dayIndex = englishDayNames.indexOf(normalized);
+    }
+    if (dayIndex < 0 || dayIndex > 6) {
+      return [];
+    }
+    const dayKey = englishDayNames[dayIndex];
+    if (!dayKey) {
+      return [];
+    }
+
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
+    return safeTasks.filter((task) =>
+      Array.isArray(task.time_slots) &&
+      task.time_slots.some((slot) => {
+        if (!slot || typeof slot.start !== "string") {
+          return false;
+        }
+        const slotDay =
+          typeof slot.day === "string"
+            ? slot.day.toLowerCase()
+            : typeof slot.day === "number" && englishDayNames[slot.day]
+              ? englishDayNames[slot.day]
+              : null;
+        return slotDay === dayKey && slot.start === startTime;
+      }),
+    );
+  }, [eventModal.event, tasks]);
+
   const handleEventClick = (event) => {
     if (!isReadOnly) {
       // Only allow editing own events
@@ -4374,6 +4783,7 @@ const Planning = ({ user }) => {
         event={eventModal.event}
         timeSlot={eventModal.timeSlot}
         selectedDate={eventModal.selectedDate}
+        attachedTasks={modalAttachedTasks}
       />
 
       <DayEventsModal
