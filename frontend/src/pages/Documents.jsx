@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useLocation,
   useNavigate,
@@ -7,6 +7,7 @@ import {
 import { CardSection, SectionHeaderRow, FileText as FileTextIcon } from '../ui';
 import QuotesContent from '../components/documents/QuotesContent';
 import InvoicesContent from '../components/documents/InvoicesContent';
+import useClients from '../hooks/useClients';
 
 const TAB_QUERY_VALUE = {
   quotes: 'devis',
@@ -131,6 +132,83 @@ export default function Documents() {
   const activeCreateHandler = activeTab === 'quotes' ? quoteCreateHandler : invoiceCreateHandler;
   const hasClientSelection = Boolean(currentClientFilter);
 
+  const {
+    clients: availableClients,
+    loading: clientLookupLoading,
+    loadClients: loadAvailableClients,
+  } = useClients(user, {
+    page: 1,
+    limit: 1000,
+    include_archived: true,
+    autoLoad: false,
+  });
+
+  const clientLookupAttemptedRef = useRef('');
+
+  const normalizedClientId = useMemo(() => {
+    if (!currentClientFilter) {
+      return '';
+    }
+    const trimmed = currentClientFilter.trim();
+    if (!trimmed) {
+      return '';
+    }
+    const slashIndex = trimmed.lastIndexOf('/');
+    const baseValue = slashIndex >= 0 ? trimmed.slice(slashIndex + 1) : trimmed;
+    const colonIndex = baseValue.lastIndexOf(':');
+    return colonIndex >= 0 ? baseValue.slice(colonIndex + 1) : baseValue;
+  }, [currentClientFilter]);
+
+  const resolvedClient = useMemo(() => {
+    if (!currentClientFilter) {
+      return null;
+    }
+    const lookupTargets = [currentClientFilter, normalizedClientId].filter(Boolean);
+    return (
+      availableClients.find((client) => {
+        const candidateIds = [client?.id, client?.client_id]
+          .map((value) => (value != null ? String(value) : ''))
+          .filter(Boolean);
+        return lookupTargets.some((target) =>
+          candidateIds.some((candidate) => candidate === target),
+        );
+      }) || null
+    );
+  }, [availableClients, currentClientFilter, normalizedClientId]);
+
+  useEffect(() => {
+    if (!currentClientFilter) {
+      clientLookupAttemptedRef.current = '';
+      return;
+    }
+    if (resolvedClient || clientLookupLoading) {
+      return;
+    }
+    if (clientLookupAttemptedRef.current === currentClientFilter) {
+      return;
+    }
+    clientLookupAttemptedRef.current = currentClientFilter;
+    loadAvailableClients();
+  }, [
+    clientLookupAttemptedRef,
+    clientLookupLoading,
+    currentClientFilter,
+    loadAvailableClients,
+    resolvedClient,
+  ]);
+
+  const resolvedClientLabel = useMemo(() => {
+    if (!resolvedClient) {
+      return '';
+    }
+    return (
+      resolvedClient.display_name ||
+      resolvedClient.name ||
+      resolvedClient.company ||
+      ''
+    );
+  }, [resolvedClient]);
+
   const handleLaunchCreateIntent = useCallback(() => {
     if (!activeCreateHandler) {
       return;
@@ -206,8 +284,8 @@ export default function Documents() {
             >
               <span className="font-semibold">Client sélectionné : </span>
               <span>
-                {/* TODO: remplacer par le nom du client lorsque disponible dans ce composant. */}
-                Client sélectionné (ID: {currentClientFilter})
+                {resolvedClientLabel ||
+                  (clientLookupLoading ? 'Chargement du client…' : 'Client introuvable')}
               </span>
             </div>
           )}
@@ -222,7 +300,13 @@ export default function Documents() {
                   <p className="font-semibold">{createIntentDescription}</p>
                   {hasClientSelection && (
                     <p className="text-sm">
-                      Client ciblé : <span className="font-medium">{currentClientFilter}</span>
+                      Client ciblé :{' '}
+                      <span className="font-medium">
+                        {resolvedClientLabel ||
+                          (clientLookupLoading
+                            ? 'Chargement du client…'
+                            : 'Client introuvable')}
+                      </span>
                     </p>
                   )}
                 </div>

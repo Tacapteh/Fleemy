@@ -4977,9 +4977,13 @@ const QuoteModal = ({
     }));
   };
 
-  const calculateTotals = (items) => {
+  const calculateTotals = (items, overrideTaxRate) => {
     const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
-    const tax_amount = subtotal * (formData.tax_rate / 100);
+    const effectiveTaxRate =
+      typeof overrideTaxRate === "number" && !Number.isNaN(overrideTaxRate)
+        ? overrideTaxRate
+        : formData.tax_rate;
+    const tax_amount = subtotal * (effectiveTaxRate / 100);
     const total = subtotal + tax_amount;
 
     setFormData((prev) => ({
@@ -5031,11 +5035,13 @@ const QuoteModal = ({
   };
 
   const handleTaxRateChange = (rate) => {
+    const normalizedRate =
+      typeof rate === "number" && !Number.isNaN(rate) ? rate : 0;
     setFormData((prev) => ({
       ...prev,
-      tax_rate: rate,
+      tax_rate: normalizedRate,
     }));
-    calculateTotals(formData.items);
+    calculateTotals(formData.items, normalizedRate);
   };
 
   const handleSubmit = () => {
@@ -6188,9 +6194,13 @@ const InvoiceModal = ({
     calculateTotals(newItems);
   };
 
-  const calculateTotals = (items) => {
+  const calculateTotals = (items, overrideTaxRate) => {
     const subtotal = items.reduce((sum, item) => sum + (item.total || 0), 0);
-    const tax_amount = subtotal * (formData.tax_rate / 100);
+    const effectiveTaxRate =
+      typeof overrideTaxRate === "number" && !Number.isNaN(overrideTaxRate)
+        ? overrideTaxRate
+        : formData.tax_rate;
+    const tax_amount = subtotal * (effectiveTaxRate / 100);
     const total = subtotal + tax_amount;
 
     setFormData((prev) => ({
@@ -6224,11 +6234,13 @@ const InvoiceModal = ({
   };
 
   const handleTaxRateChange = (taxRate) => {
+    const normalizedRate =
+      typeof taxRate === "number" && !Number.isNaN(taxRate) ? taxRate : 0;
     setFormData((prev) => ({
       ...prev,
-      tax_rate: taxRate,
+      tax_rate: normalizedRate,
     }));
-    calculateTotals(formData.items);
+    calculateTotals(formData.items, normalizedRate);
   };
 
   const handleSubmit = () => {
