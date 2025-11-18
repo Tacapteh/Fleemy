@@ -421,7 +421,7 @@ export default function Planning() {
   const viewParam = rawViewParam === "month" ? "month" : "week";
   const [view, setView] = useState(viewParam);
   const [planningTabState, setPlanningTabState] = useState(
-    isTeamContext ? TEAM_PLANNING_TAB_SHARED : TEAM_PLANNING_TAB_PERSONAL
+    TEAM_PLANNING_TAB_PERSONAL
   );
   const [planningTabManuallySelected, setPlanningTabManuallySelected] =
     useState(false);
@@ -443,18 +443,7 @@ export default function Planning() {
   }, [viewParam, view]);
 
   useEffect(() => {
-    if (isTeamContext) {
-      setPlanningTabAuto(TEAM_PLANNING_TAB_SHARED);
-    } else {
-      setPlanningTabAuto(TEAM_PLANNING_TAB_PERSONAL);
-    }
-  }, [isTeamContext, setPlanningTabAuto]);
-
-  useEffect(() => {
-    if (!isTeamContext || !teamId) {
-      return;
-    }
-    setPlanningTabAuto(TEAM_PLANNING_TAB_SHARED);
+    setPlanningTabAuto(TEAM_PLANNING_TAB_PERSONAL);
   }, [isTeamContext, teamId, setPlanningTabAuto]);
 
   const handleViewChange = useCallback(
@@ -599,19 +588,8 @@ export default function Planning() {
     if (!sharedTeamId) {
       return TEAM_PLANNING_TAB_PERSONAL;
     }
-    if (
-      !planningTabManuallySelected &&
-      planningTabState === TEAM_PLANNING_TAB_PERSONAL
-    ) {
-      return TEAM_PLANNING_TAB_SHARED;
-    }
     return planningTabState;
-  }, [
-    isTeamContext,
-    planningTabState,
-    planningTabManuallySelected,
-    sharedTeamId,
-  ]);
+  }, [isTeamContext, planningTabState, sharedTeamId]);
 
   useEffect(() => {
     if (!isTeamContext) {
