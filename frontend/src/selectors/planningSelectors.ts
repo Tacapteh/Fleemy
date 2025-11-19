@@ -4,6 +4,7 @@
  */
 
 import { useMemo } from "react";
+import { isPriorityToggleDisabled } from "../utils/priorityFlags";
 
 /**
  * Crée un map client_id -> client pour résolution rapide
@@ -161,6 +162,8 @@ export interface AttachedTaskBadge {
   price?: number;
   color?: string;
   priority?: "high" | "medium" | "low" | null;
+  priorityEnabled?: boolean | string | null;
+  priority_enabled?: boolean | string | null;
   status?: "todo" | "doing" | "done" | null;
   done?: boolean;
 }
@@ -539,10 +542,12 @@ const expandTaskOccurrences = (
     const isTaskDone = task.done === true || taskRecord?.done === true;
 
     const priorityDisabled =
-      task.priority === null ||
+      task.priority == null ||
       taskRecord?.priority === null ||
-      task.priorityEnabled === false ||
-      task.priority_enabled === false;
+      isPriorityToggleDisabled(task.priorityEnabled) ||
+      isPriorityToggleDisabled(task.priority_enabled) ||
+      isPriorityToggleDisabled(taskRecord?.priorityEnabled) ||
+      isPriorityToggleDisabled(taskRecord?.priority_enabled);
     const resolvedPriority = priorityDisabled
       ? null
       : normalizeTaskPriority(task.priority ?? taskRecord?.priority);
@@ -759,8 +764,8 @@ export const computeDisplayBlocks = (
       const priorityDisabled =
         occurrence.priority == null ||
         occurrenceRecord.priority === null ||
-        occurrenceRecord.priorityEnabled === false ||
-        occurrenceRecord.priority_enabled === false;
+        isPriorityToggleDisabled(occurrenceRecord.priorityEnabled) ||
+        isPriorityToggleDisabled(occurrenceRecord.priority_enabled);
       const normalizedPriority =
         priorityDisabled || typeof occurrence.priority !== "string"
           ? null
@@ -785,6 +790,8 @@ export const computeDisplayBlocks = (
         color:
           typeof occurrence.color === "string" ? occurrence.color : undefined,
         priority: normalizedPriority,
+        priorityEnabled: priorityDisabled ? false : true,
+        priority_enabled: priorityDisabled ? false : true,
         status: resolvedStatus,
         done: occurrence.done === true,
       });

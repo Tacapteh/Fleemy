@@ -6,6 +6,7 @@ import { getIcon } from '../icons/registry';
 import { getTaskColor } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 import { getPriorityDisplay } from '../utils/priorityDisplay';
+import { isPriorityToggleDisabled } from '../utils/priorityFlags';
 import {
   TASK_STATUS_DISPLAY,
   TASK_STATUS_INDICATOR_STYLES,
@@ -23,6 +24,8 @@ interface TaskIconBadgeProps {
   onDelete?: (taskId: string) => void;
   readOnly?: boolean;
   priority?: 'high' | 'medium' | 'low' | null;
+  priorityEnabled?: boolean | string | null;
+  priority_enabled?: boolean | string | null;
   status?: 'todo' | 'doing' | 'done' | null;
   done?: boolean | null;
 }
@@ -47,6 +50,8 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   readOnly = false,
   colorKey,
   priority,
+  priorityEnabled,
+  priority_enabled,
   status,
   done,
 }) => {
@@ -82,9 +87,14 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
   }
   const tooltipContent = tooltipParts.join(' — ');
 
-  const normalizedPriority = priority === 'high' || priority === 'medium' || priority === 'low'
-    ? priority
-    : undefined;
+  const priorityDisabled =
+    priority == null ||
+    isPriorityToggleDisabled(priorityEnabled) ||
+    isPriorityToggleDisabled(priority_enabled);
+  const normalizedPriority =
+    !priorityDisabled && (priority === 'high' || priority === 'medium' || priority === 'low')
+      ? priority
+      : undefined;
 
   const priorityDisplay = showPriorityBadges && normalizedPriority
     ? getPriorityDisplay(normalizedPriority)
