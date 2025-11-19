@@ -1185,6 +1185,7 @@ const EventModal = ({
   const eventTypeFieldId = useId();
   const clientErrorId = `${clientFieldId}-error`;
   const [activeMobileTab, setActiveMobileTab] = useState("event");
+  const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const [selectedTaskIndex, setSelectedTaskIndex] = useState(0);
   const [isMobileLayout, setIsMobileLayout] = useState(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -1580,12 +1581,18 @@ const EventModal = ({
   const canEditLinkedTasks =
     typeof onEditLinkedTask === "function" && !readOnly;
 
+  const handleMobileTabSelect = useCallback((targetTab) => {
+    setActiveMobileTab(targetTab);
+    setHasUserSelectedTab(true);
+  }, []);
+
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = isOpen;
     if (!isOpen) {
       setActiveMobileTab("event");
       setSelectedTaskIndex(0);
+      setHasUserSelectedTab(false);
       return;
     }
     if (!wasOpen) {
@@ -1604,6 +1611,23 @@ const EventModal = ({
     canShowLinkedTasksTab,
     activeMobileTab,
     initialLinkedTasksTab,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      hasUserSelectedTab ||
+      initialLinkedTasksTab !== "tasks" ||
+      !canShowLinkedTasksTab
+    ) {
+      return;
+    }
+    setActiveMobileTab("tasks");
+  }, [
+    isOpen,
+    hasUserSelectedTab,
+    initialLinkedTasksTab,
+    canShowLinkedTasksTab,
   ]);
 
   useEffect(() => {
@@ -1728,7 +1752,7 @@ const EventModal = ({
               className={`modal-tab ${
                 activeMobileTab === "event" ? "is-active" : ""
               }`}
-              onClick={() => setActiveMobileTab("event")}
+              onClick={() => handleMobileTabSelect("event")}
               aria-pressed={activeMobileTab === "event"}
             >
               Événement
@@ -1738,7 +1762,7 @@ const EventModal = ({
               className={`modal-tab ${
                 activeMobileTab === "tasks" ? "is-active" : ""
               }`}
-              onClick={() => setActiveMobileTab("tasks")}
+              onClick={() => handleMobileTabSelect("tasks")}
               aria-pressed={activeMobileTab === "tasks"}
             >
               {linkedTasksTabLabel}
