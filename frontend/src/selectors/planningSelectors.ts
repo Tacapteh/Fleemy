@@ -751,6 +751,11 @@ export const computeDisplayBlocks = (
           : "Tâche";
       const price = normalizeBadgePrice(occurrence.price);
 
+      const normalizedPriority =
+        typeof occurrence.priority === "string"
+          ? normalizeTaskPriority(occurrence.priority)
+          : null;
+
       badges.push({
         taskId: occurrence.taskId,
         iconId,
@@ -758,7 +763,7 @@ export const computeDisplayBlocks = (
         price,
         color:
           typeof occurrence.color === "string" ? occurrence.color : undefined,
-        priority: normalizeTaskPriority(occurrence.priority),
+        priority: normalizedPriority,
         status:
           occurrence.status === "todo" ||
           occurrence.status === "doing" ||
