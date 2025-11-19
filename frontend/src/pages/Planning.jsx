@@ -474,7 +474,6 @@ export default function Planning() {
     event: null,
     selectedDate: null,
     readOnly: false,
-    defaultTab: "event",
     initialLinkedTaskId: null,
   });
 
@@ -485,6 +484,7 @@ const createInitialWeeklyTaskModalState = () => ({
   linkedTaskId: null,
   linkedEventReadOnly: false,
   defaultDayIndex: null,
+  linkedTasks: [],
 });
 
   const [modal, setModal] = useState(createInitialEventModalState);
@@ -2526,7 +2526,6 @@ const createInitialWeeklyTaskModalState = () => ({
         event: null,
         selectedDate: baseDate,
         readOnly: false,
-        defaultTab: "event",
         initialLinkedTaskId: null,
       });
     },
@@ -2536,15 +2535,11 @@ const createInitialWeeklyTaskModalState = () => ({
   const openEventModal = useCallback(
     (event) => {
       if (!event) return;
-      const hasLinkedTasks = Array.isArray(event.attachedTaskBadges)
-        ? event.attachedTaskBadges.length > 0
-        : false;
       setModal({
         open: true,
         event,
         selectedDate: new Date(event.start),
         readOnly,
-        defaultTab: hasLinkedTasks ? "tasks" : "event",
         initialLinkedTaskId: null,
       });
     },
@@ -2636,25 +2631,41 @@ const createInitialWeeklyTaskModalState = () => ({
       if (
         readOnly ||
         !planningContext ||
-        planningTab === TEAM_PLANNING_TAB_SHARED
+        planningTab === TEAM_PLANNING_TAB_SHARED ||
+        !modalAttachedTasks.length
       ) {
         return;
       }
-      const matchedTask = findTaskByIdentifier(taskId);
+      const normalizedTarget =
+        taskId == null ? "" : String(taskId).trim();
+      let matchedTask = normalizedTarget
+        ? findTaskByIdentifier(normalizedTarget)
+        : null;
+      if (!matchedTask) {
+        matchedTask = modalAttachedTasks[0] || null;
+      }
       if (!matchedTask) {
         return;
       }
       const linkedEvent = modal.event || null;
-      const linkedTaskId = matchedTask.id || taskId || null;
       const linkedEventReadOnly = modal.readOnly || false;
+      const resolvedLinkedTaskId =
+        matchedTask.id ||
+        matchedTask.taskId ||
+        matchedTask.task_id ||
+        matchedTask.occurrenceId ||
+        matchedTask.occurrence_id ||
+        normalizedTarget ||
+        null;
       closeModal();
       setWeeklyTaskModal({
         ...createInitialWeeklyTaskModalState(),
         open: true,
         task: matchedTask,
         linkedEvent,
-        linkedTaskId,
+        linkedTaskId: resolvedLinkedTaskId,
         linkedEventReadOnly,
+        linkedTasks: modalAttachedTasks,
       });
     },
     [
@@ -2665,6 +2676,7 @@ const createInitialWeeklyTaskModalState = () => ({
       readOnly,
       modal.event,
       modal.readOnly,
+      modalAttachedTasks,
     ]
   );
 
@@ -2684,7 +2696,6 @@ const createInitialWeeklyTaskModalState = () => ({
       event: eventToReopen,
       selectedDate,
       readOnly: linkedEventReadOnly || readOnly,
-      defaultTab: "tasks",
       initialLinkedTaskId: linkedTaskId,
     });
   }, [
@@ -2694,6 +2705,16 @@ const createInitialWeeklyTaskModalState = () => ({
     weeklyTaskModal.linkedEventReadOnly,
     readOnly,
   ]);
+
+  const handleLinkedTaskSelectionChange = useCallback(
+    (taskId) => {
+      setWeeklyTaskModal((current) => ({
+        ...current,
+        linkedTaskId: taskId || null,
+      }));
+    },
+    [setWeeklyTaskModal],
+  );
 
   const handleInvoiceShortcut = useCallback(
     (clientSummary) => {
@@ -3984,7 +4005,6 @@ const createInitialWeeklyTaskModalState = () => ({
         selectedDate={modal.selectedDate}
         event={modal.event}
         readOnly={modal.readOnly || readOnly}
-        initialLinkedTasksTab={modal.defaultTab}
         initialLinkedTaskId={modal.initialLinkedTaskId}
         onSave={handleSaveEvent}
         onDelete={handleDeleteEvent}
@@ -4032,6 +4052,9 @@ const createInitialWeeklyTaskModalState = () => ({
         onReturnToLinkedTasks={
           weeklyTaskModal.linkedEvent ? handleReturnToLinkedTasks : undefined
         }
+        linkedTasks={weeklyTaskModal.linkedTasks}
+        initialLinkedTaskId={weeklyTaskModal.linkedTaskId}
+        onLinkedTaskSelectionChange={handleLinkedTaskSelectionChange}
       />
     </div>
   );
