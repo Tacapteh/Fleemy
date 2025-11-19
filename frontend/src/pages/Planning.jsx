@@ -2730,6 +2730,21 @@ const createInitialWeeklyTaskModalState = () => ({
     weeklyTaskModal.linkedEventReadOnly,
   ]);
 
+  const handleWeeklyTaskSwitchToEvent = useCallback(() => {
+    if (weeklyTaskModal.linkedEvent) {
+      handleReturnToLinkedTasks();
+      return;
+    }
+
+    closeWeeklyTaskModal();
+    openCreateModal();
+  }, [
+    closeWeeklyTaskModal,
+    handleReturnToLinkedTasks,
+    openCreateModal,
+    weeklyTaskModal.linkedEvent,
+  ]);
+
   const handleLinkedTaskSelectionChange = useCallback(
     (taskId) => {
       setWeeklyTaskModal((current) => ({
@@ -4067,10 +4082,7 @@ const createInitialWeeklyTaskModalState = () => ({
         defaultDayIndex={weeklyTaskModal.defaultDayIndex}
         onSwitchToEvent={
           !readOnly && planningContext
-            ? () => {
-                closeWeeklyTaskModal();
-                openCreateModal();
-              }
+            ? handleWeeklyTaskSwitchToEvent
             : undefined
         }
         onReturnToLinkedTasks={
