@@ -105,7 +105,10 @@ const minutesToTimeString = (totalMinutes) => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
-const createDefaultTimeRange = () => ({ ...DEFAULT_TIME_RANGE });
+const createDefaultTimeRange = (overrides = {}) => ({
+  ...DEFAULT_TIME_RANGE,
+  ...overrides,
+});
 
 const toDayIndex = (value) => {
   if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 6) {
@@ -279,8 +282,18 @@ const normalizeTimeRange = (
   return { day, start: finalStart, end: finalEnd };
 };
 
-const ensureTimeRanges = (ranges, { allowMinutes = false } = {}) => {
+const ensureTimeRanges = (
+  ranges,
+  { allowMinutes = false, defaultDayIndex = null } = {}
+) => {
   if (!Array.isArray(ranges)) {
+    if (
+      typeof defaultDayIndex === 'number' &&
+      defaultDayIndex >= 0 &&
+      defaultDayIndex <= 6
+    ) {
+      return [createDefaultTimeRange({ day: defaultDayIndex })];
+    }
     return [createDefaultTimeRange()];
   }
 
@@ -288,6 +301,13 @@ const ensureTimeRanges = (ranges, { allowMinutes = false } = {}) => {
     .map((range) => normalizeTimeRange(range, { adjustEndIfNeeded: true, allowMinutes }))
     .filter(Boolean);
   if (!normalized.length) {
+    if (
+      typeof defaultDayIndex === 'number' &&
+      defaultDayIndex >= 0 &&
+      defaultDayIndex <= 6
+    ) {
+      return [createDefaultTimeRange({ day: defaultDayIndex })];
+    }
     return [createDefaultTimeRange()];
   }
   return normalized;
@@ -301,6 +321,7 @@ const WeeklyTaskForm = ({
   context,
   readOnly = false,
   weekStartISO = null,
+  defaultDayIndex = null,
   onSwitchToEvent,
   onReturnToLinkedTasks,
 }) => {
@@ -323,7 +344,10 @@ const WeeklyTaskForm = ({
         : '',
     color: initialTask?.color || DEFAULT_TASK_COLOR,
     icon: defaultIconKey,
-    time_ranges: ensureTimeRanges(initialTask?.time_ranges, { allowMinutes }),
+    time_ranges: ensureTimeRanges(initialTask?.time_ranges, {
+      allowMinutes,
+      defaultDayIndex,
+    }),
     priority: normalizePriorityValue(initialTask?.priority),
     status: canConfigureStatus
       ? normalizeStatusValue(initialTask?.status)

@@ -69,8 +69,9 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
     ? TASK_STATUS_INDICATOR_STYLES[statusKey]
     : null;
 
-  const { settings, showTaskStatusBadges } = useSettings();
-  const showStatusBadges = showTaskStatusBadges !== false;
+  const settingsContext = useSettings();
+  const showStatusBadges = settingsContext?.showTaskStatusBadges !== false;
+  const showPriorityBadges = settingsContext?.showTaskPriorityBadges !== false;
 
   const tooltipParts = [safeLabel];
   if (showStatusBadges && statusDisplay) {
@@ -80,8 +81,6 @@ const TaskIconBadge: React.FC<TaskIconBadgeProps> = ({
     tooltipParts.push(`${formattedPrice} €`);
   }
   const tooltipContent = tooltipParts.join(' — ');
-
-  const showPriorityBadges = settings?.showTaskPriorityBadges !== false;
 
   const normalizedPriority = priority === 'high' || priority === 'medium' || priority === 'low'
     ? priority

@@ -9,6 +9,7 @@ export default function WeeklyTaskModal({
   context,
   readOnly,
   weekStartISO,
+  defaultDayIndex = null,
   onSwitchToEvent,
   onReturnToLinkedTasks,
 }) {
@@ -26,6 +27,7 @@ export default function WeeklyTaskModal({
       context={context}
       readOnly={readOnly}
       weekStartISO={weekStartISO}
+      defaultDayIndex={defaultDayIndex}
       onSave={handleSave}
       onCancel={onClose}
       onDelete={onDelete}
