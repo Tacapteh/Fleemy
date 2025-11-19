@@ -146,6 +146,10 @@ export interface TaskOccurrence {
   priority?: "high" | "medium" | "low" | null;
   status?: "todo" | "doing" | "done" | null;
   done?: boolean;
+  priorityEnabled?: boolean;
+  priority_enabled?: boolean;
+  statusEnabled?: boolean;
+  status_enabled?: boolean;
   teamParticipants?: TeamParticipantBadge[];
   [key: string]: unknown;
 }
@@ -751,10 +755,27 @@ export const computeDisplayBlocks = (
           : "Tâche";
       const price = normalizeBadgePrice(occurrence.price);
 
+      const occurrenceRecord = occurrence as Record<string, unknown>;
+      const priorityDisabled =
+        occurrence.priority == null ||
+        occurrenceRecord.priority === null ||
+        occurrenceRecord.priorityEnabled === false ||
+        occurrenceRecord.priority_enabled === false;
       const normalizedPriority =
-        typeof occurrence.priority === "string"
-          ? normalizeTaskPriority(occurrence.priority)
-          : null;
+        priorityDisabled || typeof occurrence.priority !== "string"
+          ? null
+          : normalizeTaskPriority(occurrence.priority);
+
+      const statusDisabled =
+        occurrence.status == null ||
+        occurrenceRecord.status === null ||
+        occurrenceRecord.statusEnabled === false ||
+        occurrenceRecord.status_enabled === false;
+      const normalizedStatus =
+        statusDisabled || typeof occurrence.status !== "string"
+          ? undefined
+          : normalizeTaskStatus(occurrence.status);
+      const resolvedStatus = statusDisabled ? undefined : normalizedStatus;
 
       badges.push({
         taskId: occurrence.taskId,
@@ -764,12 +785,7 @@ export const computeDisplayBlocks = (
         color:
           typeof occurrence.color === "string" ? occurrence.color : undefined,
         priority: normalizedPriority,
-        status:
-          occurrence.status === "todo" ||
-          occurrence.status === "doing" ||
-          occurrence.status === "done"
-            ? occurrence.status
-            : undefined,
+        status: resolvedStatus,
         done: occurrence.done === true,
       });
     });
