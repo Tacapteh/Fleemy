@@ -107,6 +107,9 @@ const TaskModalStyles = () => (
       background: #f8f9fa;
       border: 1px solid #dee2e6;
       border-radius: 8px;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .dark .weekly-task-range {
@@ -120,6 +123,18 @@ const TaskModalStyles = () => (
       grid-template-columns: minmax(140px, 1.3fr) auto minmax(140px, 1.3fr);
       gap: 12px;
       align-items: center;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .weekly-task-range-controls .form-input,
+    .weekly-task-range-controls select,
+    .weekly-task-range-controls input {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
     }
 
     .weekly-task-range-controls .form-input {

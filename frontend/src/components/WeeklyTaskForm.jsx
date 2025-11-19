@@ -920,6 +920,13 @@ const WeeklyTaskForm = ({
   const canSwitchToEvent =
     typeof onSwitchToEvent === 'function' && !readOnly;
 
+  const shouldShowLinkedTaskCountInTab =
+    typeof onReturnToLinkedTasks === 'function' &&
+    normalizedLinkedTasks.length > 0;
+  const taskTabLabel = shouldShowLinkedTaskCountInTab
+    ? `Tâches (${normalizedLinkedTasks.length})`
+    : 'Tâche';
+
   return (
     <div className="modal-overlay weekly-task-overlay">
       <div className="modal-content weekly-task-modal dark:bg-slate-900 dark:text-slate-100">
@@ -948,10 +955,10 @@ const WeeklyTaskForm = ({
               className="modal-tab is-active"
               aria-current="page"
             >
-              Tâche
+              {taskTabLabel}
             </button>
-          </div>
-        )}
+         </div>
+       )}
 
         <form onSubmit={handleSubmit} className="weekly-task-form">
           {readOnly && (
