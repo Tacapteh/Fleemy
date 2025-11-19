@@ -17,6 +17,7 @@ import {
   useFirebaseUser,
   saveEventNew,
   deleteEventNew,
+  saveWeeklyTask,
   deleteWeeklyTask,
   setTeamContext,
   listenTeamMemberships,
@@ -492,6 +493,8 @@ const createInitialWeeklyTaskModalState = () => ({
     createInitialWeeklyTaskModalState,
   );
   const [isTransferringSoloWeek, setIsTransferringSoloWeek] = useState(false);
+  const [dayDuplicationSource, setDayDuplicationSource] = useState(null);
+  const [isDuplicatingDay, setIsDuplicatingDay] = useState(false);
 
   const [members, setMembers] = useState([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -2442,6 +2445,30 @@ const createInitialWeeklyTaskModalState = () => ({
     return jsDay - 1;
   }, []);
 
+  const normalizeDayDate = useCallback((value) => {
+    if (!value) {
+      return null;
+    }
+    const candidate = value instanceof Date ? new Date(value) : new Date(value);
+    if (Number.isNaN(candidate.getTime())) {
+      return null;
+    }
+    candidate.setHours(0, 0, 0, 0);
+    return candidate;
+  }, []);
+
+  const isSameDayDate = useCallback(
+    (a, b) => {
+      const first = normalizeDayDate(a);
+      const second = normalizeDayDate(b);
+      if (!first || !second) {
+        return false;
+      }
+      return first.getTime() === second.getTime();
+    },
+    [normalizeDayDate],
+  );
+
   const handleDeleteWeeklyTask = useCallback(
     async (taskId) => {
       if (readOnly) {
@@ -2582,6 +2609,297 @@ const createInitialWeeklyTaskModalState = () => ({
       showToast(message);
     },
     [closeWeeklyTaskModal]
+  );
+
+  const duplicateEventsForDay = useCallback(
+    async (sourceDayIndex, targetDayIndex, targetDate) => {
+      if (!planningContext) {
+        return 0;
+      }
+
+      const eventsToCopy = Array.isArray(activeEvents)
+        ? activeEvents.filter((slot) => {
+            const startDate = getSlotStartDate(slot);
+            return (
+              startDate && resolveDayIndexFromDate(startDate) === sourceDayIndex
+            );
+          })
+        : [];
+
+      if (!eventsToCopy.length) {
+        return 0;
+      }
+
+      let created = 0;
+
+      for (const slot of eventsToCopy) {
+        const startDate = getSlotStartDate(slot);
+        const endDate = getSlotEndDate(slot);
+
+        if (!startDate || !endDate || endDate <= startDate) {
+          continue;
+        }
+
+        const typeValue =
+          typeof slot.type === "string" ? slot.type.trim().toLowerCase() : "";
+
+        if (["task", "weekly_task", "weekly-task"].includes(typeValue)) {
+          continue;
+        }
+
+        const targetStart = new Date(targetDate);
+        targetStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+
+        const targetEnd = new Date(targetDate);
+        targetEnd.setHours(endDate.getHours(), endDate.getMinutes(), 0, 0);
+
+        if (targetEnd <= targetStart) {
+          targetEnd.setTime(
+            targetStart.getTime() +
+              Math.max(endDate.getTime() - startDate.getTime(), 15 * 60 * 1000),
+          );
+        }
+
+        const normalizedStatus =
+          (typeof slot.payment_status === "string" && slot.payment_status.trim()) ||
+          (typeof slot.status === "string" && slot.status.trim()) ||
+          (typeValue === "absence" ? "not_worked" : "unpaid");
+
+        const resolvedClientId =
+          (typeof slot.client_id === "string" && slot.client_id.trim()) ||
+          (typeof slot.clientId === "string" && slot.clientId.trim()) ||
+          "";
+
+        const resolvedClientName = [slot.client_name, slot.client, slot.title]
+          .filter((candidate) => typeof candidate === "string" && candidate.trim())
+          .map((candidate) => candidate.trim())[0];
+
+        const payload = {
+          start: targetStart.toISOString(),
+          end: targetEnd.toISOString(),
+          type: typeValue === "absence" ? "absence" : "normal",
+          status: normalizedStatus,
+          payment_status: normalizedStatus,
+          client_id: resolvedClientId,
+          client_name: resolvedClientName || "",
+          client:
+            typeValue === "absence"
+              ? ""
+              : resolvedClientName || slot.client || slot.title || "Bloc",
+          description: typeof slot.description === "string" ? slot.description : "",
+          color: slot.color || undefined,
+          hourly_rate: slot.hourly_rate || slot.rate || slot.price_per_hour || 50,
+          duration: Math.round((targetEnd - targetStart) / (60 * 1000)),
+          task_id: typeValue === "absence" ? null : slot.task_id || slot.taskId || null,
+          day: DAY_KEYS[targetDayIndex] || "monday",
+          synced: false,
+        };
+
+        try {
+          await saveEventNew(planningContext, payload);
+          created += 1;
+        } catch (error) {
+          console.error("duplicateEventsForDay error", error);
+        }
+      }
+
+      return created;
+    },
+    [activeEvents, planningContext, resolveDayIndexFromDate, saveEventNew],
+  );
+
+  const duplicateWeeklyTasksForDay = useCallback(
+    async (sourceDayIndex, targetDayIndex) => {
+      if (!planningContext || planningTab === TEAM_PLANNING_TAB_SHARED) {
+        return 0;
+      }
+
+      const normalizeRangeDay = (range) => {
+        if (!range) return null;
+        const raw = range.day ?? range.dayIndex ?? range.weekday;
+        if (typeof raw === "number") {
+          if (raw >= 1 && raw <= 7) {
+            return (raw + 6) % 7;
+          }
+          return raw >= 0 && raw <= 6 ? raw : null;
+        }
+        if (typeof raw === "string") {
+          const trimmed = raw.trim().toLowerCase();
+          if (/^\d+$/.test(trimmed)) {
+            const numeric = parseInt(trimmed, 10);
+            if (!Number.isNaN(numeric)) {
+              if (numeric >= 1 && numeric <= 7) {
+                return (numeric + 6) % 7;
+              }
+              if (numeric >= 0 && numeric <= 6) {
+                return numeric;
+              }
+            }
+          }
+          const indexFromKey = DAY_KEYS.indexOf(trimmed);
+          if (indexFromKey >= 0) {
+            return indexFromKey;
+          }
+        }
+        return null;
+      };
+
+      const tasksToDuplicate = Array.isArray(activeWeeklyTasks)
+        ? activeWeeklyTasks.filter(
+            (task) =>
+              task &&
+              Array.isArray(task.time_ranges) &&
+              task.time_ranges.some((range) => normalizeRangeDay(range) === sourceDayIndex),
+          )
+        : [];
+
+      if (!tasksToDuplicate.length) {
+        return 0;
+      }
+
+      let created = 0;
+
+      for (const task of tasksToDuplicate) {
+        const rangesForDay = task.time_ranges.filter(
+          (range) => normalizeRangeDay(range) === sourceDayIndex,
+        );
+
+        if (!rangesForDay.length) {
+          continue;
+        }
+
+        const duplicatedRanges = rangesForDay.map((range) => ({
+          ...range,
+          day: targetDayIndex,
+          weekday: targetDayIndex,
+          task_date: null,
+          taskDate: null,
+          task_day_iso: null,
+          taskDayIso: null,
+          taskDayISO: null,
+        }));
+
+        const { id, occurrenceId, time_ranges, timeRanges, ...rest } = task;
+
+        try {
+          await saveWeeklyTask(planningContext, {
+            ...rest,
+            time_ranges: duplicatedRanges,
+            weekday: targetDayIndex,
+          });
+          created += 1;
+        } catch (error) {
+          console.error("duplicateWeeklyTasksForDay error", error);
+        }
+      }
+
+      return created;
+    },
+    [activeWeeklyTasks, planningContext, planningTab, saveWeeklyTask],
+  );
+
+  const handleSelectDayForDuplication = useCallback(
+    (dayDate) => {
+      if (readOnly || planningTab === TEAM_PLANNING_TAB_SHARED || !planningContext) {
+        showToast(
+          "La duplication n'est pas disponible dans ce mode ou en lecture seule",
+          true,
+        );
+        return;
+      }
+      const normalized = normalizeDayDate(dayDate);
+      if (!normalized) {
+        return;
+      }
+      setDayDuplicationSource(normalized);
+
+      const label = normalized.toLocaleDateString("fr-FR", {
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+      });
+      showToast(`Journée sélectionnée : ${label}`);
+    },
+    [normalizeDayDate, planningContext, planningTab, readOnly, showToast],
+  );
+
+  const handleDuplicateDayToTarget = useCallback(
+    async (targetDate) => {
+      if (readOnly || planningTab === TEAM_PLANNING_TAB_SHARED || !planningContext) {
+        showToast(
+          "La duplication n'est pas disponible dans ce mode ou en lecture seule",
+          true,
+        );
+        return;
+      }
+
+      const normalizedSource = normalizeDayDate(dayDuplicationSource);
+      const normalizedTarget = normalizeDayDate(targetDate);
+
+      if (!normalizedSource) {
+        showToast("Sélectionnez d'abord la journée à dupliquer", true);
+        return;
+      }
+
+      if (!normalizedTarget) {
+        return;
+      }
+
+      if (isSameDayDate(normalizedSource, normalizedTarget)) {
+        showToast("Choisissez une journée différente pour la duplication", true);
+        return;
+      }
+
+      const sourceDayIndex = resolveDayIndexFromDate(normalizedSource);
+      const targetDayIndex = resolveDayIndexFromDate(normalizedTarget);
+
+      if (sourceDayIndex === null || targetDayIndex === null) {
+        showToast("Jour de duplication invalide", true);
+        return;
+      }
+
+      setIsDuplicatingDay(true);
+
+      try {
+        const [createdEvents, createdTasks] = await Promise.all([
+          duplicateEventsForDay(sourceDayIndex, targetDayIndex, normalizedTarget),
+          duplicateWeeklyTasksForDay(sourceDayIndex, targetDayIndex),
+        ]);
+
+        if (createdEvents === 0 && createdTasks === 0) {
+          showToast("Aucun élément à dupliquer pour cette journée", true);
+          return;
+        }
+
+        requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
+
+        const eventLabel = createdEvents > 1 ? "blocs" : "bloc";
+        const taskLabel = createdTasks > 1 ? "tâches" : "tâche";
+        showToast(
+          `Duplication terminée (${createdEvents} ${eventLabel}, ${createdTasks} ${taskLabel})`,
+        );
+      } catch (error) {
+        console.error("handleDuplicateDayToTarget error", error);
+        showToast("Impossible de dupliquer la journée", true);
+      } finally {
+        setIsDuplicatingDay(false);
+      }
+    },
+    [
+      dayDuplicationSource,
+      duplicateEventsForDay,
+      duplicateWeeklyTasksForDay,
+      isSameDayDate,
+      normalizeDayDate,
+      planningContext,
+      planningTab,
+      readOnly,
+      showToast,
+      requestWeekSlotsRefresh,
+      resolveDayIndexFromDate,
+      weekEnd,
+      weekStart,
+    ],
   );
 
   const modalAttachedTasks = useMemo(() => {
@@ -3747,6 +4065,10 @@ const createInitialWeeklyTaskModalState = () => ({
               }
             }}
             isReadOnlyMode={readOnly}
+            duplicationSourceDate={dayDuplicationSource}
+            onDayCopy={handleSelectDayForDuplication}
+            onDayDuplicate={handleDuplicateDayToTarget}
+            isDuplicatingDay={isDuplicatingDay}
           />
         ) : (
           <MonthGrid
