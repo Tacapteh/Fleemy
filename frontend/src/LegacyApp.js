@@ -1543,7 +1543,7 @@ const EventModal = ({
     typeof onEditLinkedTask === "function" && !readOnly && hasLinkedTasks;
   const shouldDisplayModalTabs = shouldShowTaskTab || canEditLinkedTasks;
   const taskTabLabel = canEditLinkedTasks
-    ? `Tâches x${normalizedLinkedTasks.length}`
+    ? `Tâches (${normalizedLinkedTasks.length})`
     : "Tâches";
   const preferredLinkedTaskId = useMemo(() => {
     if (!hasLinkedTasks) {
