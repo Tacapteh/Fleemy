@@ -478,13 +478,14 @@ export default function Planning() {
     initialLinkedTaskId: null,
   });
 
-  const createInitialWeeklyTaskModalState = () => ({
-    open: false,
-    task: null,
-    linkedEvent: null,
-    linkedTaskId: null,
-    linkedEventReadOnly: false,
-  });
+const createInitialWeeklyTaskModalState = () => ({
+  open: false,
+  task: null,
+  linkedEvent: null,
+  linkedTaskId: null,
+  linkedEventReadOnly: false,
+  defaultDayIndex: null,
+});
 
   const [modal, setModal] = useState(createInitialEventModalState);
   const [weeklyTaskModal, setWeeklyTaskModal] = useState(
@@ -2419,6 +2420,28 @@ export default function Planning() {
     };
   }, [activeTaskOccurrences]);
 
+  const resolveDayIndexFromDate = useCallback((value) => {
+    if (!value) {
+      return null;
+    }
+    let candidate;
+    if (value instanceof Date) {
+      candidate = new Date(value.getTime());
+    } else if (typeof value === "number" || typeof value === "string") {
+      candidate = new Date(value);
+    } else {
+      return null;
+    }
+    if (Number.isNaN(candidate.getTime())) {
+      return null;
+    }
+    const jsDay = candidate.getDay();
+    if (jsDay === 0) {
+      return 6;
+    }
+    return jsDay - 1;
+  }, []);
+
   const handleDeleteWeeklyTask = useCallback(
     async (taskId) => {
       if (readOnly) {
@@ -2436,7 +2459,7 @@ export default function Planning() {
         console.error("deleteWeeklyTask error", error);
         showToast("Erreur lors de la suppression de la tâche", true);
       } finally {
-        setWeeklyTaskModal({ open: false, task: null });
+        setWeeklyTaskModal(createInitialWeeklyTaskModalState());
       }
     },
     [planningContext, planningTab, readOnly]
@@ -2452,7 +2475,11 @@ export default function Planning() {
       if (!taskId) return;
       const original = activeWeeklyTasks.find((task) => task.id === taskId);
       if (original) {
-        setWeeklyTaskModal({ open: true, task: original });
+        setWeeklyTaskModal({
+          ...createInitialWeeklyTaskModalState(),
+          open: true,
+          task: original,
+        });
       }
     });
 
@@ -2525,15 +2552,20 @@ export default function Planning() {
     setModal(createInitialEventModalState());
   }, []);
 
-  const openWeeklyTaskModal = useCallback(() => {
+  const openWeeklyTaskModal = useCallback((defaultDate = null) => {
     if (
       readOnly ||
       !planningContext ||
       planningTab === TEAM_PLANNING_TAB_SHARED
     )
       return;
-    setWeeklyTaskModal({ ...createInitialWeeklyTaskModalState(), open: true });
-  }, [readOnly, planningContext, planningTab]);
+    const defaultDayIndex = resolveDayIndexFromDate(defaultDate);
+    setWeeklyTaskModal({
+      ...createInitialWeeklyTaskModalState(),
+      open: true,
+      defaultDayIndex,
+    });
+  }, [readOnly, planningContext, planningTab, resolveDayIndexFromDate]);
 
   const closeWeeklyTaskModal = useCallback(() => {
     setWeeklyTaskModal(createInitialWeeklyTaskModalState());
@@ -2614,6 +2646,7 @@ export default function Planning() {
       const linkedEventReadOnly = modal.readOnly || false;
       closeModal();
       setWeeklyTaskModal({
+        ...createInitialWeeklyTaskModalState(),
         open: true,
         task: matchedTask,
         linkedEvent,
@@ -3643,7 +3676,11 @@ export default function Planning() {
                 (task) => task.id === occurrence.taskId
               );
               if (original) {
-                setWeeklyTaskModal({ open: true, task: original });
+                setWeeklyTaskModal({
+                  ...createInitialWeeklyTaskModalState(),
+                  open: true,
+                  task: original,
+                });
               }
             }}
             isReadOnlyMode={readOnly}
@@ -3959,8 +3996,9 @@ export default function Planning() {
           planningContext &&
           planningTab !== TEAM_PLANNING_TAB_SHARED
             ? () => {
+                const defaultDate = modal.selectedDate || null;
                 closeModal();
-                openWeeklyTaskModal();
+                openWeeklyTaskModal(defaultDate);
               }
             : undefined
         }
@@ -3979,6 +4017,7 @@ export default function Planning() {
         context={planningContext}
         readOnly={readOnly}
         weekStartISO={weekStartISO}
+        defaultDayIndex={weeklyTaskModal.defaultDayIndex}
         onSwitchToEvent={
           !readOnly && planningContext
             ? () => {
