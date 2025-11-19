@@ -478,6 +478,7 @@ const WeeklyTaskForm = ({
   const [selectedLinkedTaskId, setSelectedLinkedTaskId] = useState(
     getDefaultLinkedTaskOptionId,
   );
+  const [hasUserSelectedLinkedTask, setHasUserSelectedLinkedTask] = useState(false);
 
   useEffect(() => {
     if (!normalizedLinkedTasks.length) {
@@ -486,30 +487,48 @@ const WeeklyTaskForm = ({
       }
       return;
     }
+
     const preferredId =
       normalizeLinkedTaskIdentifier(initialLinkedTaskId) ||
       normalizeLinkedTaskIdentifier(initialTask);
-    if (preferredId) {
-      const matched = normalizedLinkedTasks.find(
-        (entry) => entry.normalizedId === preferredId,
-      );
-      if (matched && matched.optionId !== selectedLinkedTaskId) {
-        setSelectedLinkedTaskId(matched.optionId);
-        return;
-      }
-    }
+    const preferredEntry = preferredId
+      ? normalizedLinkedTasks.find((entry) => entry.normalizedId === preferredId)
+      : null;
+
     const stillValid = normalizedLinkedTasks.some(
       (entry) => entry.optionId === selectedLinkedTaskId,
     );
+
     if (!stillValid) {
-      setSelectedLinkedTaskId(normalizedLinkedTasks[0].optionId);
+      if (!hasUserSelectedLinkedTask && preferredEntry) {
+        setSelectedLinkedTaskId(preferredEntry.optionId);
+        return;
+      }
+      const fallbackId = preferredEntry?.optionId || normalizedLinkedTasks[0].optionId;
+      if (fallbackId !== selectedLinkedTaskId) {
+        setSelectedLinkedTaskId(fallbackId);
+      }
+      return;
+    }
+
+    if (
+      !hasUserSelectedLinkedTask &&
+      preferredEntry &&
+      preferredEntry.optionId !== selectedLinkedTaskId
+    ) {
+      setSelectedLinkedTaskId(preferredEntry.optionId);
     }
   }, [
     initialLinkedTaskId,
     initialTask,
     normalizedLinkedTasks,
     selectedLinkedTaskId,
+    hasUserSelectedLinkedTask,
   ]);
+
+  useEffect(() => {
+    setHasUserSelectedLinkedTask(false);
+  }, [initialLinkedTaskId, initialTask, normalizedLinkedTasks]);
 
   const selectedLinkedTaskEntry = useMemo(() => {
     if (!selectedLinkedTaskId) {
@@ -561,6 +580,7 @@ const WeeklyTaskForm = ({
   );
 
   const handleLinkedTaskSelectorChange = (event) => {
+    setHasUserSelectedLinkedTask(true);
     setSelectedLinkedTaskId(event.target.value || null);
   };
 
