@@ -161,19 +161,21 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
         {!isAbsence && event.attachedTaskBadges.length > 0 && (
           <div className="event-chip-badge absolute bottom-1 right-1 flex items-center justify-end gap-1">
             {event.attachedTaskBadges.map((badge) => (
-              <TaskIconBadge
-                key={badge.taskId}
-                taskId={badge.taskId}
-                iconId={badge.iconId}
-                label={badge.label}
-                price={badge.price}
-                colorKey={badge.color}
-                priority={badge.priority}
-                status={badge.status}
-                done={badge.done}
-                onEdit={openTaskModal}
-                onDelete={confirmDeleteTask}
-                readOnly={isReadOnly}
+                <TaskIconBadge
+                  key={badge.taskId}
+                  taskId={badge.taskId}
+                  iconId={badge.iconId}
+                  label={badge.label}
+                  price={badge.price}
+                  colorKey={badge.color}
+                  priority={badge.priority}
+                  priorityEnabled={badge.priorityEnabled}
+                  priority_enabled={badge.priority_enabled}
+                  status={badge.status}
+                  done={badge.done}
+                  onEdit={openTaskModal}
+                  onDelete={confirmDeleteTask}
+                  readOnly={isReadOnly}
               />
             ))}
           </div>

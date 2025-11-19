@@ -7,6 +7,7 @@ import { getIcon } from '../icons/registry';
 import { useSettings } from '../context/SettingsContext';
 import PriorityNumberBadge from './PriorityNumberBadge';
 import { getPriorityDisplay } from '../utils/priorityDisplay';
+import { isPriorityToggleDisabled } from '../utils/priorityFlags';
 import {
   selectDisplayModel,
   DisplayEvent,
@@ -905,9 +906,14 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                 {slot.eventTaskBadges.map((badge) => {
                                   const IconComponent = getIcon(badge.iconId ?? undefined);
                                   const badgeColors = getTaskColor(badge.color);
-                                  const priorityDisplay = showPriorityBadges
-                                    ? getPriorityDisplay(badge.priority)
-                                    : null;
+                                  const priorityDisabled =
+                                    badge.priority == null ||
+                                    isPriorityToggleDisabled(badge.priorityEnabled) ||
+                                    isPriorityToggleDisabled(badge.priority_enabled);
+                                  const priorityDisplay =
+                                    showPriorityBadges && !priorityDisabled && badge.priority
+                                      ? getPriorityDisplay(badge.priority)
+                                      : null;
                                   const badgeStatusRaw =
                                     typeof badge.status === 'string'
                                       ? badge.status.trim().toLowerCase()
@@ -997,8 +1003,13 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                           const IconComponent = getIcon(task.icon ?? undefined);
                           const colors = getTaskColor(task.color);
 
+                          const priorityDisabled =
+                            task.priority == null ||
+                            isPriorityToggleDisabled(task.priorityEnabled) ||
+                            isPriorityToggleDisabled(task.priority_enabled);
                           const priorityLevel =
-                            task.priority === 'high' || task.priority === 'medium' || task.priority === 'low'
+                            !priorityDisabled &&
+                            (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low')
                               ? task.priority
                               : null;
                           const isAbsenceTask =
@@ -1274,9 +1285,14 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                       {event.attachedTaskBadges.map((badge) => {
                                         const IconComponent = getIcon(badge.iconId ?? undefined);
                                         const badgeColors = getTaskColor(badge.color);
-                                        const priorityDisplay = showPriorityBadges
-                                          ? getPriorityDisplay(badge.priority)
-                                          : null;
+                                        const priorityDisabled =
+                                          badge.priority == null ||
+                                          isPriorityToggleDisabled(badge.priorityEnabled) ||
+                                          isPriorityToggleDisabled(badge.priority_enabled);
+                                        const priorityDisplay =
+                                          showPriorityBadges && !priorityDisabled && badge.priority
+                                            ? getPriorityDisplay(badge.priority)
+                                            : null;
 
                                         return (
                                           <span

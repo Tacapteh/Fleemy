@@ -25,6 +25,7 @@ import { ReceiptIcon } from "./components/icons/ReceiptIcon";
 import { TrashIcon } from "./components/icons/TrashIcon";
 import { PlusCircleIcon } from "./components/icons/PlusCircleIcon";
 import { consumeInvoiceSeed } from "./utils/invoiceSeedStorage";
+import { isPriorityToggleDisabled } from "./utils/priorityFlags";
 
 const api = async ({ url, data, body, headers, ...options }) => {
   const init = { ...options };
@@ -772,7 +773,8 @@ const normalizeLinkedTask = (task, index = 0) => {
         : undefined;
 
   const priorityEnabled =
-    task.priorityEnabled === false || task.priority_enabled === false
+    isPriorityToggleDisabled(task.priorityEnabled) ||
+    isPriorityToggleDisabled(task.priority_enabled)
       ? false
       : true;
   const statusEnabled =

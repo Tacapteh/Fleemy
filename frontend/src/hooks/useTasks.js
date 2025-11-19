@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchWeeklyTasksOnce, watchWeeklyTasksForContext } from '../firebase';
+import { isPriorityToggleDisabled } from '../utils/priorityFlags';
 import { getCachedPlanningData, setCachedPlanningData } from '../utils/planningCache';
 
 const DAY_NAME_TO_INDEX = {
@@ -54,7 +55,8 @@ const withNormalizedPriority = (task) => {
   const normalizedStatus = normalizeTaskStatus(task.status);
   const isDone = task.done === true;
   const priorityEnabled =
-    task.priorityEnabled === false || task.priority_enabled === false
+    isPriorityToggleDisabled(task.priorityEnabled) ||
+    isPriorityToggleDisabled(task.priority_enabled)
       ? false
       : true;
   const statusEnabled =
@@ -410,7 +412,8 @@ export default function useTasks(context, weekStartISO) {
         const normalizedStatus = normalizeTaskStatus(task.status);
         const isDone = task.done === true;
         const priorityEnabled =
-          task.priorityEnabled === false || task.priority_enabled === false
+          isPriorityToggleDisabled(task.priorityEnabled) ||
+          isPriorityToggleDisabled(task.priority_enabled)
             ? false
             : true;
         const statusEnabled =

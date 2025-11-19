@@ -32,6 +32,7 @@ import {
   documentId,
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
+import { isPriorityToggleDisabled } from "./utils/priorityFlags";
 
 const sanitizeConfigValue = (value) => {
   if (value == null) {
@@ -1987,7 +1988,8 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     status: normalizedStatus || (isDone ? "done" : "todo"),
     done: isDone,
     priorityEnabled:
-      data.priority_enabled === false || data.priorityEnabled === false
+      isPriorityToggleDisabled(data.priority_enabled) ||
+      isPriorityToggleDisabled(data.priorityEnabled)
         ? false
         : true,
     statusEnabled:
@@ -2242,7 +2244,8 @@ const buildWeeklyTaskPayload = (
   };
 
   const priorityEnabled =
-    taskData?.priorityEnabled === false || taskData?.priority_enabled === false
+    isPriorityToggleDisabled(taskData?.priorityEnabled) ||
+    isPriorityToggleDisabled(taskData?.priority_enabled)
       ? false
       : true;
   const statusEnabled =
@@ -2358,7 +2361,8 @@ const saveWeeklyTaskViaApiFallback = async (
   };
 
   const priorityEnabled =
-    taskData?.priorityEnabled === false || taskData?.priority_enabled === false
+    isPriorityToggleDisabled(taskData?.priorityEnabled) ||
+    isPriorityToggleDisabled(taskData?.priority_enabled)
       ? false
       : true;
   const statusEnabled =
