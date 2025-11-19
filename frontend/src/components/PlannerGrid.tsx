@@ -914,16 +914,51 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                   {/* En-tête du jour */}
                   <div className="text-base font-semibold text-white flex items-center justify-between mb-2">
                     <span>{day.name} {day.date.getDate()}</span>
-                    {!isReadOnlyMode && (
-                      <button
-                        type="button"
-                        onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
-                        className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
-                        aria-label="Créer un événement"
-                      >
-                        +
-                      </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {!isReadOnlyMode && onDayCopy ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className={`inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 p-1 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                              isSameDayDate(normalizedDuplicationSource, day.date)
+                                ? 'bg-blue-600 text-white border-blue-500'
+                                : ''
+                            }`}
+                            onClick={() => onDayCopy?.(day.date)}
+                            title="Choisir cette journée comme source"
+                            aria-label="Choisir cette journée comme source"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          {onDayDuplicate && (
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 p-1 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => onDayDuplicate?.(day.date)}
+                              title="Dupliquer vers cette journée"
+                              aria-label="Dupliquer vers cette journée"
+                              disabled={
+                                !normalizedDuplicationSource ||
+                                isSameDayDate(normalizedDuplicationSource, day.date) ||
+                                isDuplicatingDay
+                              }
+                            >
+                              <ArrowRightCircle size={16} />
+                            </button>
+                          )}
+                        </div>
+                      ) : null}
+                      {!isReadOnlyMode && (
+                        <button
+                          type="button"
+                          onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
+                          className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
+                          aria-label="Créer un événement"
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2 mb-3">
