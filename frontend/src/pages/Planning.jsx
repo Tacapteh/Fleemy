@@ -2536,12 +2536,15 @@ const createInitialWeeklyTaskModalState = () => ({
   const openEventModal = useCallback(
     (event) => {
       if (!event) return;
+      const hasLinkedTasks = Array.isArray(event.attachedTaskBadges)
+        ? event.attachedTaskBadges.length > 0
+        : false;
       setModal({
         open: true,
         event,
         selectedDate: new Date(event.start),
         readOnly,
-        defaultTab: "event",
+        defaultTab: hasLinkedTasks ? "tasks" : "event",
         initialLinkedTaskId: null,
       });
     },
