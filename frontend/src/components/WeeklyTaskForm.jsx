@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { saveWeeklyTask } from '../firebase';
 import {
   TASK_ICON_CATEGORIES,
@@ -313,6 +313,94 @@ const ensureTimeRanges = (
   return normalized;
 };
 
+const normalizeLinkedTaskIdentifier = (candidate) => {
+  if (candidate == null) {
+    return null;
+  }
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+    return trimmed || null;
+  }
+  if (typeof candidate === 'number') {
+    return Number.isNaN(candidate) ? null : String(candidate);
+  }
+  if (typeof candidate === 'object') {
+    const possibleKeys = [
+      candidate.id,
+      candidate.taskId,
+      candidate.task_id,
+      candidate.occurrenceId,
+      candidate.occurrence_id,
+    ];
+    for (let i = 0; i < possibleKeys.length; i += 1) {
+      const normalized = normalizeLinkedTaskIdentifier(possibleKeys[i]);
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+  return null;
+};
+
+const buildTaskStateFromInitial = (
+  sourceTask,
+  { allowMinutes = false, defaultDayIndex = null, canConfigureStatus = true } = {},
+) => {
+  const iconKey = resolveTaskIconKey(sourceTask?.icon || 'briefcase');
+  return {
+    label: sourceTask?.label || '',
+    price:
+      sourceTask?.price != null && sourceTask.price !== ''
+        ? String(sourceTask.price)
+        : '',
+    color: sourceTask?.color || DEFAULT_TASK_COLOR,
+    icon: iconKey,
+    time_ranges: ensureTimeRanges(sourceTask?.time_ranges, {
+      allowMinutes,
+      defaultDayIndex,
+    }),
+    priority: normalizePriorityValue(sourceTask?.priority),
+    status: canConfigureStatus
+      ? normalizeStatusValue(sourceTask?.status)
+      : 'todo',
+  };
+};
+
+const resolvePriorityEnabledFromInitial = (sourceTask, canConfigurePriority) => {
+  if (!canConfigurePriority) {
+    return false;
+  }
+  if (typeof sourceTask?.priorityEnabled === 'boolean') {
+    return sourceTask.priorityEnabled;
+  }
+  if (typeof sourceTask?.priority_enabled === 'boolean') {
+    return sourceTask.priority_enabled;
+  }
+  return true;
+};
+
+const resolveStatusEnabledFromInitial = (sourceTask, canConfigureStatus) => {
+  if (!canConfigureStatus) {
+    return false;
+  }
+  if (typeof sourceTask?.statusEnabled === 'boolean') {
+    return sourceTask.statusEnabled;
+  }
+  if (typeof sourceTask?.status_enabled === 'boolean') {
+    return sourceTask.status_enabled;
+  }
+  return true;
+};
+
+const resolveIconCategoryFromInitial = (sourceTask) => {
+  const iconKey = resolveTaskIconKey(sourceTask?.icon || 'briefcase');
+  return (
+    resolveTaskIconCategory(iconKey) ||
+    TASK_ICON_CATEGORIES[0]?.key ||
+    'work_general'
+  );
+};
+
 const WeeklyTaskForm = ({
   initialTask = null,
   onSave,
@@ -324,6 +412,9 @@ const WeeklyTaskForm = ({
   defaultDayIndex = null,
   onSwitchToEvent,
   onReturnToLinkedTasks,
+  linkedTasks = [],
+  initialLinkedTaskId = null,
+  onLinkedTaskSelectionChange,
 }) => {
   const settingsContext = useSettings() || {};
   const { settings, showTaskStatusBadges, showTaskPriorityBadges } = settingsContext;
@@ -331,56 +422,172 @@ const WeeklyTaskForm = ({
   const canConfigureStatus = showTaskStatusBadges !== false;
   const canConfigurePriority = showTaskPriorityBadges !== false;
   const timeInputStep = allowMinutes ? 900 : 3600;
-  const initialIconValue = initialTask?.icon || 'briefcase';
-  const defaultIconKey = resolveTaskIconKey(initialIconValue);
-  const defaultIconCategory =
-    resolveTaskIconCategory(initialIconValue) || TASK_ICON_CATEGORIES[0]?.key || 'work_general';
+  const normalizedLinkedTasks = useMemo(() => {
+    if (!Array.isArray(linkedTasks)) {
+      return [];
+    }
+    const seen = new Set();
+    return linkedTasks
+      .map((taskItem, index) => {
+        if (!taskItem) {
+          return null;
+        }
+        const normalizedId = normalizeLinkedTaskIdentifier(taskItem);
+        const baseOptionId = normalizedId || `linked-task-${index}`;
+        let optionId = baseOptionId;
+        let suffix = 1;
+        while (seen.has(optionId)) {
+          optionId = `${baseOptionId}-${suffix}`;
+          suffix += 1;
+        }
+        seen.add(optionId);
+        const label =
+          typeof taskItem.label === 'string' && taskItem.label.trim()
+            ? taskItem.label.trim()
+            : typeof taskItem.name === 'string' && taskItem.name.trim()
+              ? taskItem.name.trim()
+              : `Tâche ${index + 1}`;
+        return {
+          optionId,
+          normalizedId,
+          label,
+          task: taskItem,
+        };
+      })
+      .filter(Boolean);
+  }, [linkedTasks]);
 
-  const [task, setTask] = useState(() => ({
-    label: initialTask?.label || '',
-    price:
-      initialTask?.price != null && initialTask.price !== ''
-        ? String(initialTask.price)
-        : '',
-    color: initialTask?.color || DEFAULT_TASK_COLOR,
-    icon: defaultIconKey,
-    time_ranges: ensureTimeRanges(initialTask?.time_ranges, {
+  const getDefaultLinkedTaskOptionId = () => {
+    if (!normalizedLinkedTasks.length) {
+      return null;
+    }
+    const preferredId =
+      normalizeLinkedTaskIdentifier(initialLinkedTaskId) ||
+      normalizeLinkedTaskIdentifier(initialTask);
+    if (preferredId) {
+      const matched = normalizedLinkedTasks.find(
+        (entry) => entry.normalizedId === preferredId,
+      );
+      if (matched) {
+        return matched.optionId;
+      }
+    }
+    return normalizedLinkedTasks[0].optionId;
+  };
+
+  const [selectedLinkedTaskId, setSelectedLinkedTaskId] = useState(
+    getDefaultLinkedTaskOptionId,
+  );
+
+  useEffect(() => {
+    if (!normalizedLinkedTasks.length) {
+      if (selectedLinkedTaskId !== null) {
+        setSelectedLinkedTaskId(null);
+      }
+      return;
+    }
+    const preferredId =
+      normalizeLinkedTaskIdentifier(initialLinkedTaskId) ||
+      normalizeLinkedTaskIdentifier(initialTask);
+    if (preferredId) {
+      const matched = normalizedLinkedTasks.find(
+        (entry) => entry.normalizedId === preferredId,
+      );
+      if (matched && matched.optionId !== selectedLinkedTaskId) {
+        setSelectedLinkedTaskId(matched.optionId);
+        return;
+      }
+    }
+    const stillValid = normalizedLinkedTasks.some(
+      (entry) => entry.optionId === selectedLinkedTaskId,
+    );
+    if (!stillValid) {
+      setSelectedLinkedTaskId(normalizedLinkedTasks[0].optionId);
+    }
+  }, [
+    initialLinkedTaskId,
+    initialTask,
+    normalizedLinkedTasks,
+    selectedLinkedTaskId,
+  ]);
+
+  const selectedLinkedTaskEntry = useMemo(() => {
+    if (!selectedLinkedTaskId) {
+      return null;
+    }
+    return (
+      normalizedLinkedTasks.find(
+        (entry) => entry.optionId === selectedLinkedTaskId,
+      ) || null
+    );
+  }, [normalizedLinkedTasks, selectedLinkedTaskId]);
+
+  useEffect(() => {
+    if (typeof onLinkedTaskSelectionChange === 'function') {
+      onLinkedTaskSelectionChange(
+        selectedLinkedTaskEntry?.normalizedId || null,
+      );
+    }
+  }, [selectedLinkedTaskEntry, onLinkedTaskSelectionChange]);
+
+  const currentInitialTask = useMemo(() => {
+    if (selectedLinkedTaskEntry?.task) {
+      return selectedLinkedTaskEntry.task;
+    }
+    if (initialTask) {
+      return initialTask;
+    }
+    return normalizedLinkedTasks[0]?.task || null;
+  }, [selectedLinkedTaskEntry, initialTask, normalizedLinkedTasks]);
+
+  const [task, setTask] = useState(() =>
+    buildTaskStateFromInitial(currentInitialTask, {
       allowMinutes,
       defaultDayIndex,
+      canConfigureStatus,
     }),
-    priority: normalizePriorityValue(initialTask?.priority),
-    status: canConfigureStatus
-      ? normalizeStatusValue(initialTask?.status)
-      : 'todo',
-  }));
-  const [priorityEnabled, setPriorityEnabled] = useState(() => {
-    if (!canConfigurePriority) {
-      return false;
-    }
-    if (typeof initialTask?.priorityEnabled === 'boolean') {
-      return initialTask.priorityEnabled;
-    }
-    if (typeof initialTask?.priority_enabled === 'boolean') {
-      return initialTask.priority_enabled;
-    }
-    return true;
-  });
-  const [statusEnabled, setStatusEnabled] = useState(() => {
-    if (!canConfigureStatus) {
-      return false;
-    }
-    if (typeof initialTask?.statusEnabled === 'boolean') {
-      return initialTask.statusEnabled;
-    }
-    if (typeof initialTask?.status_enabled === 'boolean') {
-      return initialTask.status_enabled;
-    }
-    return true;
-  });
+  );
+  const [priorityEnabled, setPriorityEnabled] = useState(() =>
+    resolvePriorityEnabledFromInitial(currentInitialTask, canConfigurePriority),
+  );
+  const [statusEnabled, setStatusEnabled] = useState(() =>
+    resolveStatusEnabledFromInitial(currentInitialTask, canConfigureStatus),
+  );
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [selectedIconCategory, setSelectedIconCategory] = useState(defaultIconCategory);
+  const [selectedIconCategory, setSelectedIconCategory] = useState(
+    resolveIconCategoryFromInitial(currentInitialTask),
+  );
+
+  const handleLinkedTaskSelectorChange = (event) => {
+    setSelectedLinkedTaskId(event.target.value || null);
+  };
+
+  useEffect(() => {
+    setTask(
+      buildTaskStateFromInitial(currentInitialTask, {
+        allowMinutes,
+        defaultDayIndex,
+        canConfigureStatus,
+      }),
+    );
+    setPriorityEnabled(
+      resolvePriorityEnabledFromInitial(currentInitialTask, canConfigurePriority),
+    );
+    setStatusEnabled(
+      resolveStatusEnabledFromInitial(currentInitialTask, canConfigureStatus),
+    );
+    setSelectedIconCategory(
+      resolveIconCategoryFromInitial(currentInitialTask),
+    );
+  }, [
+    currentInitialTask,
+    allowMinutes,
+    defaultDayIndex,
+    canConfigurePriority,
+    canConfigureStatus,
+  ]);
 
   useEffect(() => {
     setTask((current) => ({
@@ -566,14 +773,14 @@ const WeeklyTaskForm = ({
         }
       }
 
-      const isEditing = Boolean(initialTask?.id);
+      const isEditing = Boolean(currentInitialTask?.id);
       const existingCreationDate = normalizeTaskDateInput(
-        initialTask?.dateISO ??
-          initialTask?.dateIso ??
-          initialTask?.date_iso ??
-          initialTask?.taskDate ??
-          initialTask?.task_date ??
-          initialTask?.task_day_iso ??
+        currentInitialTask?.dateISO ??
+          currentInitialTask?.dateIso ??
+          currentInitialTask?.date_iso ??
+          currentInitialTask?.taskDate ??
+          currentInitialTask?.task_date ??
+          currentInitialTask?.task_day_iso ??
           null,
       );
 
@@ -596,7 +803,7 @@ const WeeklyTaskForm = ({
         }
 
         if (!computedDate) {
-          const originalRange = initialTask?.time_ranges?.[index];
+          const originalRange = currentInitialTask?.time_ranges?.[index];
           const legacyDate =
             originalRange?.task_date ||
             originalRange?.taskDate ||
@@ -631,7 +838,7 @@ const WeeklyTaskForm = ({
       const taskData = {
         ...task,
         time_ranges: rangesWithDates,
-        id: initialTask?.id || undefined,
+        id: currentInitialTask?.id || undefined,
         price: priceValue ? parseFloat(priceValue) : null,
         priority: normalizePriorityValue(task.priority),
         status: normalizedStatus,
@@ -697,7 +904,9 @@ const WeeklyTaskForm = ({
     <div className="modal-overlay weekly-task-overlay">
       <div className="modal-content weekly-task-modal dark:bg-slate-900 dark:text-slate-100">
         <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
-          {initialTask ? 'Modifier la tâche hebdomadaire' : 'Nouvelle tâche hebdomadaire'}
+          {currentInitialTask
+            ? 'Modifier la tâche hebdomadaire'
+            : 'Nouvelle tâche hebdomadaire'}
         </h2>
 
         {canSwitchToEvent && (
@@ -738,6 +947,29 @@ const WeeklyTaskForm = ({
           )}
 
           <fieldset className="weekly-task-fieldset" disabled={readOnly || isSubmitting}>
+            {normalizedLinkedTasks.length > 0 && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="linked-task-selector">
+                  Tâche liée à modifier
+                </label>
+                <select
+                  id="linked-task-selector"
+                  className="form-input"
+                  value={selectedLinkedTaskId || ''}
+                  onChange={handleLinkedTaskSelectorChange}
+                >
+                  {normalizedLinkedTasks.map((entry) => (
+                    <option key={entry.optionId} value={entry.optionId}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="weekly-task-hint">
+                  Sélectionnez la tâche liée que vous souhaitez mettre à jour.
+                </p>
+              </div>
+            )}
+
             <div className="form-group">
               <label className="form-label" htmlFor="task-label">Libellé *</label>
               <input
@@ -1028,11 +1260,11 @@ const WeeklyTaskForm = ({
           </fieldset>
 
           <div className="modal-actions weekly-task-actions">
-            {onDelete && initialTask && !readOnly && (
+            {onDelete && currentInitialTask && !readOnly && (
               <button
                 type="button"
                 className="btn btn-danger"
-                onClick={() => onDelete(initialTask)}
+                onClick={() => onDelete(currentInitialTask)}
                 disabled={isSubmitting}
               >
                 Supprimer

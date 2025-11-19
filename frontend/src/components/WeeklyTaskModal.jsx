@@ -12,6 +12,9 @@ export default function WeeklyTaskModal({
   defaultDayIndex = null,
   onSwitchToEvent,
   onReturnToLinkedTasks,
+  linkedTasks = [],
+  initialLinkedTaskId = null,
+  onLinkedTaskSelectionChange,
 }) {
   if (!isOpen) return null;
 
@@ -33,6 +36,9 @@ export default function WeeklyTaskModal({
       onDelete={onDelete}
       onSwitchToEvent={onSwitchToEvent}
       onReturnToLinkedTasks={onReturnToLinkedTasks}
+      linkedTasks={linkedTasks}
+      initialLinkedTaskId={initialLinkedTaskId}
+      onLinkedTaskSelectionChange={onLinkedTaskSelectionChange}
     />
   );
 }
