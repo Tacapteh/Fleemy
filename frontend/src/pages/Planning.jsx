@@ -2657,7 +2657,6 @@ const createInitialWeeklyTaskModalState = () => ({
         matchedTask.occurrence_id ||
         normalizedTarget ||
         null;
-      closeModal();
       setWeeklyTaskModal({
         ...createInitialWeeklyTaskModalState(),
         open: true,
@@ -2669,7 +2668,6 @@ const createInitialWeeklyTaskModalState = () => ({
       });
     },
     [
-      closeModal,
       findTaskByIdentifier,
       planningContext,
       planningTab,
@@ -2691,19 +2689,45 @@ const createInitialWeeklyTaskModalState = () => ({
     const selectedDate = eventToReopen?.start
       ? new Date(eventToReopen.start)
       : null;
-    setModal({
-      open: true,
-      event: eventToReopen,
-      selectedDate,
-      readOnly: linkedEventReadOnly || readOnly,
-      initialLinkedTaskId: linkedTaskId,
+    setModal((current) => {
+      const currentEvent = current?.event || null;
+      const currentEventId =
+        currentEvent?.id == null
+          ? null
+          : String(currentEvent.id).trim();
+      const reopeningEventId =
+        eventToReopen?.id == null
+          ? null
+          : String(eventToReopen.id).trim();
+      const isSameEvent =
+        Boolean(current.open && currentEvent && eventToReopen) &&
+        (currentEvent === eventToReopen ||
+          (currentEventId && reopeningEventId &&
+            currentEventId === reopeningEventId));
+
+      if (isSameEvent) {
+        return {
+          ...current,
+          readOnly: linkedEventReadOnly || current.readOnly || readOnly,
+          initialLinkedTaskId: linkedTaskId,
+        };
+      }
+
+      return {
+        open: true,
+        event: eventToReopen,
+        selectedDate,
+        readOnly: linkedEventReadOnly || readOnly,
+        initialLinkedTaskId: linkedTaskId,
+      };
     });
   }, [
     closeWeeklyTaskModal,
+    readOnly,
+    setModal,
     weeklyTaskModal.linkedEvent,
     weeklyTaskModal.linkedTaskId,
     weeklyTaskModal.linkedEventReadOnly,
-    readOnly,
   ]);
 
   const handleLinkedTaskSelectionChange = useCallback(
