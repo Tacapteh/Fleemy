@@ -1541,6 +1541,10 @@ const EventModal = ({
     typeof onSwitchToTask === "function" && !event && !readOnly;
   const canEditLinkedTasks =
     typeof onEditLinkedTask === "function" && !readOnly && hasLinkedTasks;
+  const shouldDisplayModalTabs = shouldShowTaskTab || canEditLinkedTasks;
+  const taskTabLabel = canEditLinkedTasks
+    ? `Tâches x${normalizedLinkedTasks.length}`
+    : "Tâches";
   const preferredLinkedTaskId = useMemo(() => {
     if (!hasLinkedTasks) {
       return null;
@@ -1573,6 +1577,17 @@ const EventModal = ({
     }
   }, [canEditLinkedTasks, normalizedLinkedTasks, onEditLinkedTask, preferredLinkedTaskId]);
 
+  const handleTaskTabClick = useCallback(() => {
+    if (canEditLinkedTasks) {
+      handleEditLinkedTasksClick();
+      return;
+    }
+
+    if (shouldShowTaskTab) {
+      handleSwitchToTask();
+    }
+  }, [canEditLinkedTasks, handleEditLinkedTasksClick, handleSwitchToTask, shouldShowTaskTab]);
+
   if (!isOpen) return null;
 
   return (
@@ -1582,11 +1597,11 @@ const EventModal = ({
           {event ? "Modifier l'événement" : "Nouvel événement"}
         </h2>
 
-        {shouldShowTaskTab && (
+        {shouldDisplayModalTabs && (
           <div
             className="modal-tab-group"
             role="group"
-            aria-label="Choisir le type de création"
+            aria-label="Navigation événement et tâches"
           >
             <button
               type="button"
@@ -1598,9 +1613,9 @@ const EventModal = ({
             <button
               type="button"
               className="modal-tab"
-              onClick={handleSwitchToTask}
+              onClick={handleTaskTabClick}
             >
-              Tâche
+              {taskTabLabel}
             </button>
           </div>
         )}
@@ -1877,45 +1892,6 @@ const EventModal = ({
               </select>
             </div>
           </fieldset>
-
-          {canEditLinkedTasks && (
-            <div
-              className="linked-tasks-edit-card"
-              style={{
-                marginTop: "16px",
-                border: "1px solid rgba(148, 163, 184, 0.4)",
-                borderRadius: "12px",
-                padding: "16px",
-                backgroundColor: "rgba(248, 250, 252, 0.95)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "12px",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  color: "#0f172a",
-                  fontSize: "14px",
-                  lineHeight: 1.5,
-                }}
-              >
-                {normalizedLinkedTasks.length > 1
-                  ? `Ce créneau contient ${normalizedLinkedTasks.length} tâches planifiées.`
-                  : "Ce créneau contient une tâche planifiée."}
-                <br />
-                Utilisez le bouton ci-dessous pour modifier rapidement la tâche souhaitée.
-              </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleEditLinkedTasksClick}
-                disabled={loading}
-              >
-                Modifier les tâches liées
-              </button>
-            </div>
-          )}
 
           <div className="modal-actions">
             <button
