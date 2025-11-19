@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
+import { ArrowRightCircle, Copy } from 'lucide-react';
 import '../styles/WeeklyGrid.css';
 import { useFirebaseUser } from '../firebase';
 import { calculateHeight, calculateTopPosition } from '../utils/time';
@@ -101,6 +102,10 @@ interface PlannerGridProps {
   onEventClick?: (event: DisplayEvent) => void;
   onTaskClick?: (task: TaskOccurrence) => void;
   isReadOnlyMode?: boolean;
+  duplicationSourceDate?: Date | null;
+  onDayCopy?: (day: Date) => void;
+  onDayDuplicate?: (day: Date) => void;
+  isDuplicatingDay?: boolean;
 }
 
 interface EventLayout {
@@ -357,6 +362,22 @@ const createDateRange = (weekStart: Date): DateRange => {
   return { from, to };
 };
 
+const normalizeDayDate = (value: Date | null) => {
+  if (!(value instanceof Date)) {
+    return null;
+  }
+  const normalized = new Date(value);
+  normalized.setHours(0, 0, 0, 0);
+  return normalized;
+};
+
+const isSameDayDate = (a: Date | null, b: Date | null) => {
+  const first = normalizeDayDate(a);
+  const second = normalizeDayDate(b);
+  if (!first || !second) return false;
+  return first.getTime() === second.getTime();
+};
+
 const PlannerGrid: React.FC<PlannerGridProps> = ({
   events = [],
   tasks = [],
@@ -365,6 +386,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   onEventClick,
   onTaskClick,
   isReadOnlyMode = false,
+  duplicationSourceDate = null,
+  onDayCopy,
+  onDayDuplicate,
+  isDuplicatingDay = false,
 }) => {
   const user = useFirebaseUser();
   const settingsContext = useSettings();
@@ -417,6 +442,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     [gridColumnCount]
   );
   const normalizedWeekStart = useMemo(() => ensureDate(weekStart), [weekStart]);
+  const normalizedDuplicationSource = useMemo(
+    () => normalizeDayDate(duplicationSourceDate),
+    [duplicationSourceDate]
+  );
   const [isMobileLayout, setIsMobileLayout] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return false;
@@ -786,7 +815,42 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         <div className="week-day-headers">
           {days.map((day) => (
             <div key={day.name} className="day-header-label dark:text-slate-100">
-              {day.name} {day.date.getDate()}
+              <span>
+                {day.name} {day.date.getDate()}
+              </span>
+              {!isReadOnlyMode && onDayCopy ? (
+                <div className="day-header-actions">
+                  <button
+                    type="button"
+                    className={`day-header-button ${
+                      isSameDayDate(normalizedDuplicationSource, day.date)
+                        ? 'active'
+                        : ''
+                    }`}
+                    onClick={() => onDayCopy?.(day.date)}
+                    title="Choisir cette journée comme source"
+                    aria-label="Choisir cette journée comme source"
+                  >
+                    <Copy size={16} />
+                  </button>
+                  {onDayDuplicate && (
+                    <button
+                      type="button"
+                      className="day-header-button"
+                      onClick={() => onDayDuplicate?.(day.date)}
+                      title="Dupliquer vers cette journée"
+                      aria-label="Dupliquer vers cette journée"
+                      disabled={
+                        !normalizedDuplicationSource ||
+                        isSameDayDate(normalizedDuplicationSource, day.date) ||
+                        isDuplicatingDay
+                      }
+                    >
+                      <ArrowRightCircle size={16} />
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
