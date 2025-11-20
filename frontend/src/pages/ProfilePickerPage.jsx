@@ -163,10 +163,12 @@ const ProfilePickerPage = () => {
         }
         source = 'firestore';
         let fallbackTeams = [];
+        let fallbackFailed = false;
         try {
           fallbackTeams = await fetchUserTeamsFromFirestore();
         } catch (fallbackError) {
           console.warn('Fallback Firestore teams fetch failed', fallbackError);
+          fallbackFailed = true;
         }
 
         const normalizedFallback = Array.isArray(fallbackTeams)
@@ -192,10 +194,18 @@ const ProfilePickerPage = () => {
             setTeams(normalizedFallback);
             setError('');
             writeTeamsCache(normalizedFallback);
-          } else if (!silent) {
+          } else if (fallbackFailed && !silent) {
             setTeams([]);
             setError("Impossible de charger vos équipes pour l'instant");
             clearTeamsCache();
+          } else {
+            setTeams([]);
+            if (!silent) {
+              setError('');
+            }
+            if (!fallbackFailed) {
+              writeTeamsCache([]);
+            }
           }
         }
       } finally {
