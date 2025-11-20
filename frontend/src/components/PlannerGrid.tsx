@@ -96,7 +96,7 @@ const resolveDayEventConflicts = (eventsForDay: DisplayEvent[]): DisplayEvent[] 
 
 interface PlannerGridProps {
   events?: PlannerEventInput[];
-  tasks?: unknown[];
+  tasks?: TaskOccurrence[];
   weekStart: Date | string | { toDate: () => Date };
   onSlotSelect?: (start: Date) => void;
   onEventClick?: (event: DisplayEvent) => void;
