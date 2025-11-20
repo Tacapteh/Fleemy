@@ -3124,6 +3124,30 @@ const createInitialWeeklyTaskModalState = () => ({
         return;
       }
 
+      const resolveEventId = (value) => {
+        if (!value || typeof value !== "object") {
+          return null;
+        }
+
+        const candidateKeys = [
+          "id",
+          "eventId",
+          "event_id",
+          "uid",
+          "_id",
+          "sourceId",
+        ];
+
+        for (const key of candidateKeys) {
+          const candidate = value?.[key];
+          if (typeof candidate === "string" && candidate.trim()) {
+            return candidate.trim();
+          }
+        }
+
+        return null;
+      };
+
       const dayIndex = data.day ?? data.dayIndex ?? 0;
       const eventDate = new Date(weekStart);
       eventDate.setDate(weekStart.getDate() + dayIndex);
@@ -3371,7 +3395,7 @@ const createInitialWeeklyTaskModalState = () => ({
 
       try {
         const payload = {
-          id: data.id,
+          id: resolveEventId(data) || resolveEventId(modal.event),
           start: start.toISOString(),
           end: end.toISOString(),
           type: eventType,
