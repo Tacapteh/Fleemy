@@ -326,6 +326,17 @@ function AppWithSettings() {
               }
             />
             <Route
+              path="/planning"
+              element={
+                <AuthGuard user={user}>
+                  <Suspense fallback={<PageLoader message="Chargement du planning..." />}>
+                    <Planning />
+                  </Suspense>
+                </AuthGuard>
+              }
+            />
+            <Route path="/Planning" element={<Navigate to="/planning" replace />} />
+            <Route
               path="/team/:teamId"
               element={
                 <AuthGuard user={user}>
