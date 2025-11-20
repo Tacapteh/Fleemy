@@ -2307,9 +2307,22 @@ export default function Planning() {
     return taskOccurrences;
   }, [planningTab, teamTaskOccurrences, taskOccurrences]);
 
-  const isValidDateValue = useCallback((value) => {
-    return value instanceof Date && !Number.isNaN(value.getTime());
+  const coerceDateValue = useCallback((value) => {
+    if (value instanceof Date) {
+      return value;
+    }
+
+    if (value && typeof value === "object" && typeof value.toDate === "function") {
+      return value.toDate();
+    }
+
+    return null;
   }, []);
+
+  const isValidDateValue = useCallback((value) => {
+    const date = coerceDateValue(value);
+    return date instanceof Date && !Number.isNaN(date.getTime());
+  }, [coerceDateValue]);
 
   const sanitizedActiveEvents = useMemo(() => {
     if (!Array.isArray(activeEvents)) {
@@ -2326,10 +2339,31 @@ export default function Planning() {
       return [];
     }
 
-    return activeTaskOccurrences.filter((occurrence) =>
-      isValidDateValue(occurrence?.start) && isValidDateValue(occurrence?.end)
-    );
-  }, [activeTaskOccurrences, isValidDateValue]);
+    const normalized = activeTaskOccurrences
+      .map((occurrence) => {
+        if (!occurrence) {
+          return null;
+        }
+
+        const startDate =
+          coerceDateValue(occurrence.startDate) || coerceDateValue(occurrence.start);
+        const endDate =
+          coerceDateValue(occurrence.endDate) || coerceDateValue(occurrence.end);
+
+        if (!isValidDateValue(startDate) || !isValidDateValue(endDate)) {
+          return null;
+        }
+
+        return {
+          ...occurrence,
+          startDate,
+          endDate,
+        };
+      })
+      .filter(Boolean);
+
+    return normalized;
+  }, [activeTaskOccurrences, coerceDateValue, isValidDateValue]);
 
   const activeWeeklyTasks =
     planningTab === TEAM_PLANNING_TAB_SHARED ? [] : weeklyTasks;
