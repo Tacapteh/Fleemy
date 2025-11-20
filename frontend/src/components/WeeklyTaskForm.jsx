@@ -1298,17 +1298,6 @@ const WeeklyTaskForm = ({
               </button>
             )}
 
-            {typeof onReturnToLinkedTasks === 'function' && (
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={onReturnToLinkedTasks}
-                disabled={isSubmitting}
-              >
-                Revenir aux tâches liées
-              </button>
-            )}
-
             <div className="action-group">
               <button
                 type="button"
