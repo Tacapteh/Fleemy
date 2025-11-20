@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
-import { ArrowRightCircle, Copy } from 'lucide-react';
+import { ArrowRightCircle, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
 import '../styles/WeeklyGrid.css';
 import { useFirebaseUser } from '../firebase';
 import { calculateHeight, calculateTopPosition } from '../utils/time';
@@ -529,6 +529,87 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
   }, [normalizedWeekStart, showWeekendsEnabled]);
 
+  const todayAtMidnight = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }, []);
+
+  const todayDayIndex = useMemo(() => {
+    return days.findIndex((day) => {
+      const normalizedDay = new Date(day.date);
+      normalizedDay.setHours(0, 0, 0, 0);
+      return normalizedDay.getTime() === todayAtMidnight.getTime();
+    });
+  }, [days, todayAtMidnight]);
+
+  const [selectedMobileDayIndex, setSelectedMobileDayIndex] = useState<number>(() => {
+    if (days.length === 0) {
+      return 0;
+    }
+    if (todayDayIndex >= 0) {
+      return todayDayIndex;
+    }
+    return 0;
+  });
+
+  useEffect(() => {
+    if (days.length === 0) {
+      setSelectedMobileDayIndex(0);
+      return;
+    }
+
+    setSelectedMobileDayIndex((current) => {
+      const clampedIndex = Math.min(Math.max(current, 0), days.length - 1);
+      if (todayDayIndex >= 0) {
+        return todayDayIndex;
+      }
+      return clampedIndex;
+    });
+  }, [days, todayDayIndex]);
+
+  const selectedMobileDay = useMemo(() => {
+    if (days.length === 0) {
+      return null;
+    }
+
+    const safeIndex = Math.min(Math.max(selectedMobileDayIndex, 0), days.length - 1);
+    return days[safeIndex] ?? null;
+  }, [days, selectedMobileDayIndex]);
+
+  const handleMobileTodayView = useCallback(() => {
+    setViewFilter('today');
+    setSelectedMobileDayIndex((current) => {
+      if (todayDayIndex >= 0) {
+        return todayDayIndex;
+      }
+      if (days.length === 0) {
+        return 0;
+      }
+      return Math.min(Math.max(current, 0), days.length - 1);
+    });
+  }, [days.length, todayDayIndex]);
+
+  const handleMobileWeekView = useCallback(() => {
+    setViewFilter('week');
+  }, []);
+
+  const goToPreviousMobileDay = useCallback(() => {
+    setSelectedMobileDayIndex((current) => Math.max(0, current - 1));
+  }, []);
+
+  const goToNextMobileDay = useCallback(() => {
+    setSelectedMobileDayIndex((current) => {
+      if (days.length === 0) {
+        return 0;
+      }
+      return Math.min(days.length - 1, current + 1);
+    });
+  }, [days.length]);
+
+  const isFirstMobileDay = selectedMobileDayIndex <= 0;
+  const isLastMobileDay = days.length === 0 ? true : selectedMobileDayIndex >= days.length - 1;
+
   const dateRange = useMemo(() => createDateRange(normalizedWeekStart), [normalizedWeekStart]);
 
   const { displayEvents, displayTaskGroups } = useMemo(
@@ -771,16 +852,18 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     return <div>Chargement...</div>;
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = todayAtMidnight;
 
   const mobileDaysToShow = viewFilter === 'today'
-    ? days.filter(day => {
-        const dayDate = new Date(day.date);
-        dayDate.setHours(0, 0, 0, 0);
-        return dayDate.getTime() === today.getTime();
-      })
+    ? selectedMobileDay
+      ? [selectedMobileDay]
+      : []
     : days;
+
+  const isSelectedDayToday = selectedMobileDay
+    ? isSameDayDate(selectedMobileDay.date, today)
+    : false;
+  const selectedDayHeadingPrefix = isSelectedDayToday ? "Aujourd'hui" : 'Journée';
 
   return (
     <div ref={wrapperRef}>
@@ -788,7 +871,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       <div className="flex md:hidden gap-2 mb-4">
         <button
           type="button"
-          onClick={() => setViewFilter('today')}
+          onClick={handleMobileTodayView}
           className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${
             viewFilter === 'today'
               ? 'bg-blue-600 text-white'
@@ -799,7 +882,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setViewFilter('week')}
+          onClick={handleMobileWeekView}
           className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${
             viewFilter === 'week'
               ? 'bg-blue-600 text-white'
@@ -1280,10 +1363,32 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                 return (
                   <div className="w-full flex flex-col">
                     {/* En-tête du jour */}
-                    <div className="flex items-center justify-between mb-2">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Aujourd'hui — {day.name} {day.date.getDate()}
-                      </h2>
+                    <div className="flex items-center justify-between mb-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={goToPreviousMobileDay}
+                            disabled={isFirstMobileDay}
+                            className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                            aria-label="Journée précédente"
+                          >
+                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={goToNextMobileDay}
+                            disabled={isLastMobileDay}
+                            className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                            aria-label="Journée suivante"
+                          >
+                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {selectedDayHeadingPrefix} — {day.name} {day.date.getDate()}
+                        </h2>
+                      </div>
                       {!isReadOnlyMode && (
                         <button
                           type="button"
@@ -1490,7 +1595,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                     {/* Message si aucun événement ni tâche */}
                     {dayEvents.length === 0 && dayTasks.length === 0 && (
                       <div className="text-center text-gray-500 dark:text-slate-400 py-8">
-                        Aucun événement ou tâche pour aujourd'hui
+                        Aucun événement ou tâche pour cette journée
                       </div>
                     )}
                   </div>
