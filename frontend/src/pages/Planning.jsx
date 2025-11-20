@@ -555,19 +555,19 @@ export default function Planning() {
     initialLinkedTaskId: null,
   });
 
-const createInitialWeeklyTaskModalState = () => ({
-  open: false,
-  task: null,
-  linkedEvent: null,
-  linkedTaskId: null,
-  linkedEventReadOnly: false,
-  defaultDayIndex: null,
-  linkedTasks: [],
-});
+  const createInitialWeeklyTaskModalState = () => ({
+    open: false,
+    task: null,
+    linkedEvent: null,
+    linkedTaskId: null,
+    linkedEventReadOnly: false,
+    defaultDayIndex: null,
+    linkedTasks: [],
+  });
 
-  const [modal, setModal] = useState(createInitialEventModalState);
+  const [modal, setModal] = useState(() => createInitialEventModalState());
   const [weeklyTaskModal, setWeeklyTaskModal] = useState(
-    createInitialWeeklyTaskModalState,
+    () => createInitialWeeklyTaskModalState(),
   );
   const [isTransferringSoloWeek, setIsTransferringSoloWeek] = useState(false);
   const [dayDuplicationSource, setDayDuplicationSource] = useState(null);
