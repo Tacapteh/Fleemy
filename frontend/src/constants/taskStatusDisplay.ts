@@ -14,6 +14,7 @@ export interface TaskStatusDisplayConfig {
 export interface TaskStatusIndicatorStyle {
   backgroundColor: string;
   borderColor: string;
+  color: string;
 }
 
 export const TASK_STATUS_DISPLAY: Record<TaskStatusKey, TaskStatusDisplayConfig> = {
@@ -47,14 +48,17 @@ export const TASK_STATUS_INDICATOR_STYLES: Record<TaskStatusKey, TaskStatusIndic
   todo: {
     backgroundColor: '#cbd5f5',
     borderColor: 'rgba(148, 163, 184, 0.9)',
+    color: '#0f172a',
   },
   doing: {
     backgroundColor: '#fcd34d',
     borderColor: 'rgba(245, 158, 11, 0.9)',
+    color: '#78350f',
   },
   done: {
     backgroundColor: '#34d399',
     borderColor: 'rgba(5, 150, 105, 0.9)',
+    color: '#064e3b',
   },
 };
 

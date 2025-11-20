@@ -131,6 +131,15 @@ export interface TeamParticipantBadge {
   text?: string | null;
 }
 
+export interface TaskParticipant {
+  id?: string | null;
+  name?: string | null;
+  initials?: string | null;
+  avatarUrl?: string | null;
+  color?: string | null;
+  [key: string]: unknown;
+}
+
 export interface TaskOccurrence {
   taskId: string;
   occurrenceId: string;
@@ -152,6 +161,7 @@ export interface TaskOccurrence {
   statusEnabled?: boolean;
   status_enabled?: boolean;
   teamParticipants?: TeamParticipantBadge[];
+  participants?: TaskParticipant[];
   [key: string]: unknown;
 }
 
