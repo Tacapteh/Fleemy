@@ -860,10 +860,336 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
       : []
     : days;
 
+  const selectedDaySlots = useMemo(() => {
+    if (viewFilter !== 'today') {
+      return [];
+    }
+
+    if (!selectedMobileDay) {
+      return [];
+    }
+
+    const originalDayIndex = days.findIndex(
+      (day) => day.date.getTime() === selectedMobileDay.date.getTime()
+    );
+
+    if (originalDayIndex < 0) {
+      return [];
+    }
+
+    return mergedDaySlots[originalDayIndex] || [];
+  }, [days, mergedDaySlots, selectedMobileDay, viewFilter]);
+
   const isSelectedDayToday = selectedMobileDay
     ? isSameDayDate(selectedMobileDay.date, today)
     : false;
   const selectedDayHeadingPrefix = isSelectedDayToday ? "Aujourd'hui" : 'Journée';
+
+  const renderMobileSlotItems = useCallback(
+    (slot: DaySlot, keyPrefix: string) => {
+      const items: React.ReactNode[] = [];
+
+      if (slot.event) {
+        const event = slot.event;
+        const startTime = event.startDate.toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const endTime = event.endDate.toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        let bgColorClass = 'bg-gray-200 dark:bg-gray-700';
+        let borderColorClass = 'border-gray-300 dark:border-gray-600';
+        if (event.status === 'paid') {
+          bgColorClass = 'bg-green-200 dark:bg-green-500/30';
+          borderColorClass = 'border-green-300 dark:border-green-500';
+        } else if (event.status === 'unpaid') {
+          bgColorClass = 'bg-red-200 dark:bg-red-500/30';
+          borderColorClass = 'border-red-300 dark:border-red-500';
+        } else if (event.status === 'pending') {
+          bgColorClass = 'bg-orange-200 dark:bg-orange-500/30';
+          borderColorClass = 'border-orange-300 dark:border-orange-500';
+        }
+
+        items.push(
+          <div
+            key={`${keyPrefix}-${slot.key}-event`}
+            onClick={() => onEventClick?.(event)}
+            className={`${bgColorClass} ${borderColorClass} relative border ${radius.button} p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
+          >
+            <div className="font-medium text-gray-900 dark:text-white">
+              {startTime} - {endTime}
+            </div>
+            <div className="text-gray-800 dark:text-slate-200">
+              {event.client || event.description || 'Sans titre'}
+            </div>
+
+            {slot.eventTaskBadges.length > 0 && (
+              <div className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1">
+                {slot.eventTaskBadges.map((badge) => {
+                  const IconComponent = getIcon(badge.iconId ?? undefined);
+                  const badgeColors = getTaskColor(badge.color);
+                  const priorityDisabled =
+                    badge.priority == null ||
+                    isPriorityToggleDisabled(badge.priorityEnabled) ||
+                    isPriorityToggleDisabled(badge.priority_enabled);
+                  const priorityDisplay =
+                    showPriorityBadges && !priorityDisabled && badge.priority
+                      ? getPriorityDisplay(badge.priority)
+                      : null;
+                  const badgeStatusRaw =
+                    typeof badge.status === 'string'
+                      ? badge.status.trim().toLowerCase()
+                      : undefined;
+                  const hasBadgeStatus =
+                    badgeStatusRaw === 'todo' ||
+                    badgeStatusRaw === 'doing' ||
+                    badgeStatusRaw === 'done';
+                  const statusKey: TaskStatusKey | undefined = hasBadgeStatus
+                    ? resolveEffectiveTaskStatus(badgeStatusRaw, badge.done)
+                    : undefined;
+                  const statusDisplay =
+                    showStatusBadges && statusKey
+                      ? TASK_STATUS_DISPLAY[statusKey]
+                      : null;
+                  const statusIndicatorStyle =
+                    statusDisplay && statusKey
+                      ? TASK_STATUS_INDICATOR_STYLES[statusKey]
+                      : null;
+
+                  const normalizedLabel =
+                    typeof badge.label === 'string' && badge.label.trim().length > 0
+                      ? badge.label
+                      : 'Tâche';
+                  const badgeAriaLabelParts: string[] = [normalizedLabel];
+                  if (statusDisplay) {
+                    badgeAriaLabelParts.push(statusDisplay.label);
+                  }
+                  if (priorityDisplay) {
+                    badgeAriaLabelParts.push(priorityDisplay.ariaLabel);
+                  }
+                  const badgeAriaLabel = badgeAriaLabelParts.join(' — ');
+
+                  return (
+                    <span
+                      key={`${slot.key}-badge-${badge.taskId}`}
+                      className="relative flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
+                      style={{
+                        backgroundColor: badgeColors.backgroundColor,
+                        color: badgeColors.color,
+                        borderColor: badgeColors.borderColor,
+                      }}
+                      aria-label={badgeAriaLabel}
+                    >
+                      <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
+                      {showStatusBadges && statusDisplay && statusIndicatorStyle ? (
+                        <>
+                          <span className="sr-only">{statusDisplay.srLabel}</span>
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-full border"
+                            style={{
+                              backgroundColor: statusIndicatorStyle.backgroundColor,
+                              borderColor: statusIndicatorStyle.borderColor,
+                              boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.35)',
+                            }}
+                          />
+                        </>
+                      ) : null}
+                      {priorityDisplay ? (
+                        <span
+                          className={`pointer-events-none absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70 ${priorityDisplay.bgClass}`}
+                        >
+                          {priorityDisplay.labelNumber}
+                          <span className="sr-only">{priorityDisplay.ariaLabel}</span>
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (slot.tasks.length > 0) {
+        slot.tasks.forEach((task) => {
+          const startTime = task.startDate.toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const endTime = task.endDate.toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          const IconComponent = getIcon(task.icon ?? undefined);
+          const colors = getTaskColor(task.color);
+
+          const priorityDisabled =
+            task.priority == null ||
+            isPriorityToggleDisabled(task.priorityEnabled) ||
+            isPriorityToggleDisabled(task.priority_enabled);
+          const priorityLevel =
+            !priorityDisabled &&
+            (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low')
+              ? task.priority
+              : null;
+          const isAbsenceTask =
+            typeof task.type === 'string' && task.type.trim().toLowerCase() === 'absence';
+          const slotStatusRaw =
+            typeof slot.status === 'string'
+              ? slot.status.trim().toLowerCase()
+              : undefined;
+          const taskStatusRaw =
+            typeof task.status === 'string'
+              ? task.status.trim().toLowerCase()
+              : undefined;
+          const slotDone = slot.done === true;
+          const isStatusDisabled = task.status === null;
+          const hasTaskStatus =
+            taskStatusRaw === 'todo' ||
+            taskStatusRaw === 'doing' ||
+            taskStatusRaw === 'done';
+          let statusKey: TaskStatusKey | undefined;
+          if (!isStatusDisabled) {
+            if (hasTaskStatus) {
+              statusKey = resolveEffectiveTaskStatus(
+                taskStatusRaw,
+                task.done === true || slotDone,
+              );
+            } else if (slotStatusRaw === 'todo' || slotStatusRaw === 'doing' || slotStatusRaw === 'done') {
+              statusKey = resolveEffectiveTaskStatus(slotStatusRaw, slotDone);
+            }
+          }
+          const statusDisplay =
+            showStatusBadges && statusKey
+              ? TASK_STATUS_DISPLAY[statusKey]
+              : null;
+          const statusIndicatorStyle =
+            statusDisplay && statusKey
+              ? TASK_STATUS_INDICATOR_STYLES[statusKey]
+              : null;
+
+          const formattedPrice =
+            typeof task.price === 'number'
+              ? `${task.price.toLocaleString('fr-FR', {
+                  minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
+                  maximumFractionDigits: 2,
+                })} €`
+              : typeof task.price === 'string'
+              ? task.price.trim()
+              : '';
+
+          const hasParticipantBadges =
+            Array.isArray(task.participants) && task.participants.length > 0;
+          const participantBadges = hasParticipantBadges ? task.participants.slice(0, 3) : [];
+          const additionalParticipants = hasParticipantBadges
+            ? Math.max(0, task.participants.length - participantBadges.length)
+            : 0;
+
+          const isInteractive =
+            !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
+
+          items.push(
+            <div
+              key={`${keyPrefix}-task-${task.occurrenceId}`}
+              onClick={() => isInteractive && onTaskClick?.(task)}
+              className={`relative border ${radius.button} ${surface.border} ${surface.base} p-2 text-xs flex items-start gap-2 ${
+                isInteractive
+                  ? 'cursor-pointer hover:bg-white/5 transition-colors'
+                  : ''
+              }`}
+            >
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded-full border"
+                style={{
+                  backgroundColor: colors.backgroundColor,
+                  borderColor: colors.borderColor,
+                  color: colors.color,
+                }}
+              >
+                <IconComponent className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              </div>
+              <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+                <div className="flex items-start gap-2">
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-1">
+                      {isAbsenceTask ? (
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-orange-500 dark:text-orange-300">
+                          Absence
+                        </span>
+                      ) : null}
+                      <span className="font-medium truncate text-sm">{task.label}</span>
+                      {statusDisplay && statusIndicatorStyle ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full border px-2 py-[2px] text-[11px] font-medium"
+                          style={{
+                            backgroundColor: statusIndicatorStyle.backgroundColor,
+                            borderColor: statusIndicatorStyle.borderColor,
+                            color: statusIndicatorStyle.color,
+                          }}
+                        >
+                          {statusDisplay.label}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] opacity-90">
+                      <span>
+                        {startTime} - {endTime}
+                      </span>
+                      {formattedPrice && <span>{formattedPrice}</span>}
+                    </div>
+                    {hasParticipantBadges && (
+                      <div className="flex items-center gap-1 text-[11px] pt-1">
+                        {participantBadges.map((participant, index) => {
+                          const initials =
+                            typeof participant?.initials === 'string' &&
+                            participant.initials.trim().length > 0
+                              ? participant.initials.trim()
+                              : '??';
+                          return (
+                            <span
+                              key={`task-participant-${task.occurrenceId}-${participant?.id || index}`}
+                              className="flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: participant?.background || colors.backgroundColor,
+                                borderColor: participant?.border || colors.borderColor,
+                                color: participant?.text || colors.color,
+                              }}
+                              title={participant?.name ? `Créé par ${participant.name}` : undefined}
+                              aria-label={participant?.name ? `Créé par ${participant.name}` : 'Créé par un membre'}
+                            >
+                              {initials}
+                            </span>
+                          );
+                        })}
+                        {additionalParticipants > 0 && (
+                          <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                            +{additionalParticipants}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {showPriorityBadges && priorityLevel ? (
+                    <div className="flex-shrink-0">
+                      <PriorityNumberBadge priority={priorityLevel} show />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          );
+        });
+      }
+
+      return items;
+    },
+    [isReadOnlyMode, onEventClick, onTaskClick, showPriorityBadges, showStatusBadges]
+  );
 
   return (
     <div ref={wrapperRef}>
@@ -1045,292 +1371,11 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                   </div>
 
                   <div className="space-y-2 mb-3">
-                    {daySlots.map((slot) => {
-                      if (slot.event) {
-                        const event = slot.event;
-                        const startTime = event.startDate.toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        });
-                        const endTime = event.endDate.toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        });
-
-                        let bgColorClass = 'bg-gray-200 dark:bg-gray-700';
-                        let borderColorClass = 'border-gray-300 dark:border-gray-600';
-                        if (event.status === 'paid') {
-                          bgColorClass = 'bg-green-200 dark:bg-green-500/30';
-                          borderColorClass = 'border-green-300 dark:border-green-500';
-                        } else if (event.status === 'unpaid') {
-                          bgColorClass = 'bg-red-200 dark:bg-red-500/30';
-                          borderColorClass = 'border-red-300 dark:border-red-500';
-                        } else if (event.status === 'pending') {
-                          bgColorClass = 'bg-orange-200 dark:bg-orange-500/30';
-                          borderColorClass = 'border-orange-300 dark:border-orange-500';
-                        }
-
-                        return (
-                          <div
-                            key={`${slot.key}-event`}
-                            onClick={() => onEventClick?.(event)}
-                            className={`${bgColorClass} ${borderColorClass} relative border ${radius.button} p-2 cursor-pointer text-xs min-h-[44px] flex flex-col justify-center`}
-                          >
-                            <div className="font-medium text-gray-900 dark:text-white">
-                              {startTime} - {endTime}
-                            </div>
-                            <div className="text-gray-800 dark:text-slate-200">
-                              {event.client || event.description || 'Sans titre'}
-                            </div>
-
-                            {slot.eventTaskBadges.length > 0 && (
-                              <div className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1">
-                                {slot.eventTaskBadges.map((badge) => {
-                                  const IconComponent = getIcon(badge.iconId ?? undefined);
-                                  const badgeColors = getTaskColor(badge.color);
-                                  const priorityDisabled =
-                                    badge.priority == null ||
-                                    isPriorityToggleDisabled(badge.priorityEnabled) ||
-                                    isPriorityToggleDisabled(badge.priority_enabled);
-                                  const priorityDisplay =
-                                    showPriorityBadges && !priorityDisabled && badge.priority
-                                      ? getPriorityDisplay(badge.priority)
-                                      : null;
-                                  const badgeStatusRaw =
-                                    typeof badge.status === 'string'
-                                      ? badge.status.trim().toLowerCase()
-                                      : undefined;
-                                  const hasBadgeStatus =
-                                    badgeStatusRaw === 'todo' ||
-                                    badgeStatusRaw === 'doing' ||
-                                    badgeStatusRaw === 'done';
-                                  const statusKey: TaskStatusKey | undefined = hasBadgeStatus
-                                    ? resolveEffectiveTaskStatus(badgeStatusRaw, badge.done)
-                                    : undefined;
-                                  const statusDisplay =
-                                    showStatusBadges && statusKey
-                                      ? TASK_STATUS_DISPLAY[statusKey]
-                                      : null;
-                                  const statusIndicatorStyle =
-                                    statusDisplay && statusKey
-                                      ? TASK_STATUS_INDICATOR_STYLES[statusKey]
-                                      : null;
-
-                                  const normalizedLabel =
-                                    typeof badge.label === 'string' && badge.label.trim().length > 0
-                                      ? badge.label
-                                      : 'Tâche';
-                                  const badgeAriaLabelParts: string[] = [normalizedLabel];
-                                  if (statusDisplay) {
-                                    badgeAriaLabelParts.push(statusDisplay.label);
-                                  }
-                                  if (priorityDisplay) {
-                                    badgeAriaLabelParts.push(priorityDisplay.ariaLabel);
-                                  }
-                                  const badgeAriaLabel = badgeAriaLabelParts.join(' — ');
-
-                                  return (
-                                    <span
-                                      key={`${slot.key}-badge-${badge.taskId}`}
-                                      className="relative flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
-                                      style={{
-                                        backgroundColor: badgeColors.backgroundColor,
-                                        color: badgeColors.color,
-                                        borderColor: badgeColors.borderColor,
-                                      }}
-                                      aria-label={badgeAriaLabel}
-                                    >
-                                      <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
-                                      {showStatusBadges && statusDisplay && statusIndicatorStyle ? (
-                                        <>
-                                          <span className="sr-only">{statusDisplay.srLabel}</span>
-                                          <span
-                                            aria-hidden="true"
-                                            className="pointer-events-none absolute -bottom-1 left-1/2 h-1.5 w-3 -translate-x-1/2 rounded-full border"
-                                            style={{
-                                              backgroundColor: statusIndicatorStyle.backgroundColor,
-                                              borderColor: statusIndicatorStyle.borderColor,
-                                              boxShadow: '0 0 0 1px rgba(15, 23, 42, 0.35)',
-                                            }}
-                                          />
-                                        </>
-                                      ) : null}
-                                      {priorityDisplay ? (
-                                        <span
-                                          className={`pointer-events-none absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70 ${priorityDisplay.bgClass}`}
-                                        >
-                                          {priorityDisplay.labelNumber}
-                                          <span className="sr-only">{priorityDisplay.ariaLabel}</span>
-                                        </span>
-                                      ) : null}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      if (slot.tasks.length > 0) {
-                        return slot.tasks.map((task) => {
-                          const startTime = task.startDate.toLocaleTimeString('fr-FR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          });
-                          const endTime = task.endDate.toLocaleTimeString('fr-FR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          });
-                          const IconComponent = getIcon(task.icon ?? undefined);
-                          const colors = getTaskColor(task.color);
-
-                          const priorityDisabled =
-                            task.priority == null ||
-                            isPriorityToggleDisabled(task.priorityEnabled) ||
-                            isPriorityToggleDisabled(task.priority_enabled);
-                          const priorityLevel =
-                            !priorityDisabled &&
-                            (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low')
-                              ? task.priority
-                              : null;
-                          const isAbsenceTask =
-                            typeof task.type === 'string' && task.type.trim().toLowerCase() === 'absence';
-                          const slotStatusRaw =
-                            typeof slot.status === 'string'
-                              ? slot.status.trim().toLowerCase()
-                              : undefined;
-                          const taskStatusRaw =
-                            typeof task.status === 'string'
-                              ? task.status.trim().toLowerCase()
-                              : undefined;
-                          const slotDone = slot.done === true;
-                          const isStatusDisabled = task.status === null;
-                          const hasTaskStatus =
-                            taskStatusRaw === 'todo' ||
-                            taskStatusRaw === 'doing' ||
-                            taskStatusRaw === 'done';
-                          let statusKey: TaskStatusKey | undefined;
-                          if (!isStatusDisabled) {
-                            if (hasTaskStatus) {
-                              statusKey = resolveEffectiveTaskStatus(
-                                taskStatusRaw,
-                                task.done === true || slotDone,
-                              );
-                            } else if (slotStatusRaw) {
-                              statusKey = resolveEffectiveTaskStatus(
-                                slotStatusRaw,
-                                task.done === true || slotDone,
-                              );
-                            } else if (task.done === true || slotDone) {
-                              statusKey = 'done';
-                            }
-                          }
-                          const statusDisplay =
-                            showStatusBadges && !isAbsenceTask && statusKey
-                              ? TASK_STATUS_DISPLAY[statusKey]
-                              : null;
-                          const StatusIcon = statusDisplay?.iconComponent;
-                          
-                          const formattedPrice =
-                            typeof task.price === 'number'
-                              ? `${task.price.toLocaleString('fr-FR', {
-                                  minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
-                                  maximumFractionDigits: 2,
-                                })} €`
-                              : typeof task.price === 'string'
-                              ? task.price.trim()
-                              : '';
-                          const participantBadges = Array.isArray(task.teamParticipants)
-                            ? task.teamParticipants.slice(0, 3)
-                            : [];
-                          const hasParticipantBadges = participantBadges.length > 0;
-                          const additionalParticipants = Array.isArray(task.teamParticipants)
-                            ? Math.max(0, task.teamParticipants.length - participantBadges.length)
-                            : 0;
-
-                          const isInteractive =
-                            !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
-
-                          return (
-                            <div
-                              key={`${slot.key}-task-${task.occurrenceId}`}
-                              onClick={() => isInteractive && onTaskClick?.(task)}
-                              className={`${radius.button} p-2 text-xs min-h-[44px] flex items-center gap-2 ${
-                                isInteractive ? 'cursor-pointer' : ''
-                              }`}
-                              style={{
-                                backgroundColor: colors.backgroundColor,
-                                border: `1px solid ${colors.borderColor}`,
-                                color: colors.color,
-                              }}
-                            >
-                              <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-                              <div className="flex flex-col flex-1 min-w-0 gap-1">
-                                <div className="flex min-w-0 items-start gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <span className="font-medium truncate block">{task.label}</span>
-                                    {showStatusBadges && statusDisplay && StatusIcon ? (
-                                      <span
-                                        className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusDisplay.chipClass}`}
-                                      >
-                                        <StatusIcon className={`h-3.5 w-3.5 ${statusDisplay.iconClass}`} aria-hidden="true" />
-                                        <span>{statusDisplay.label}</span>
-                                        <span className="sr-only">{statusDisplay.srLabel}</span>
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  {showPriorityBadges && priorityLevel ? (
-                                    <div className="flex-shrink-0">
-                                      <PriorityNumberBadge priority={priorityLevel} show />
-                                    </div>
-                                  ) : null}
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] opacity-90">
-                                  <span>
-                                    {startTime} - {endTime}
-                                  </span>
-                                  {formattedPrice && <span>{formattedPrice}</span>}
-                                </div>
-                                {hasParticipantBadges && (
-                                  <div className="flex items-center gap-1 text-[11px] pt-1">
-                                    {participantBadges.map((participant, index) => {
-                                      const initials =
-                                        typeof participant?.initials === 'string' &&
-                                        participant.initials.trim().length > 0
-                                          ? participant.initials.trim()
-                                          : '??';
-                                      return (
-                                        <span
-                                          key={`task-participant-${task.occurrenceId}-${participant?.id || index}`}
-                                          className="flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold"
-                                          style={{
-                                            backgroundColor: participant?.background || colors.backgroundColor,
-                                            borderColor: participant?.border || colors.borderColor,
-                                            color: participant?.text || colors.color,
-                                          }}
-                                          title={participant?.name ? `Créé par ${participant.name}` : undefined}
-                                          aria-label={participant?.name ? `Créé par ${participant.name}` : 'Créé par un membre'}
-                                        >
-                                          {initials}
-                                        </span>
-                                      );
-                                    })}
-                                    {additionalParticipants > 0 && (
-                                      <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                                        +{additionalParticipants}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        });
-                      }
-
-                      return null;
-                    })}
+                    {daySlots.map((slot) => (
+                      <React.Fragment key={`${dayIndex}-${slot.key}`}>
+                        {renderMobileSlotItems(slot, `day-${dayIndex}`)}
+                      </React.Fragment>
+                    ))}
                   </div>
 
                   {/* Message si pas d'événements ni de tâches */}
@@ -1350,264 +1395,79 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
               </div>
             )}
           </>
-        ) : (
-          // Mode AUJOURD'HUI : Grille horaire verticale (nouvelle vue)
-          <>
-            {mobileDaysToShow.length > 0 ? (
-              (() => {
-                const day = mobileDaysToShow[0];
-                const originalDayIndex = days.findIndex(d => d.date.getTime() === day.date.getTime());
-                const dayEvents = originalDayIndex >= 0 ? visibleEventLayouts[originalDayIndex] || [] : [];
-                const dayTasks = originalDayIndex >= 0 ? visibleTaskLayouts[originalDayIndex] || [] : [];
+          ) : (
+            // Mode AUJOURD'HUI : Liste verticale sans chevauchement
+            <>
+              {mobileDaysToShow.length > 0 ? (
+                (() => {
+                  const day = mobileDaysToShow[0];
 
-                return (
-                  <div className="w-full flex flex-col">
-                    {/* En-tête du jour */}
-                    <div className="flex items-center justify-between mb-2 gap-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={goToPreviousMobileDay}
-                            disabled={isFirstMobileDay}
-                            className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
-                            aria-label="Journée précédente"
-                          >
-                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={goToNextMobileDay}
-                            disabled={isLastMobileDay}
-                            className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
-                            aria-label="Journée suivante"
-                          >
-                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                          </button>
-                        </div>
-                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                          {selectedDayHeadingPrefix} — {day.name} {day.date.getDate()}
-                        </h2>
-                      </div>
-                      {!isReadOnlyMode && (
-                        <button
-                          type="button"
-                          onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
-                          className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 min-h-[44px]"
-                        >
-                          + Événement
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Grille horaire verticale */}
-                    <div
-                      className={`relative overflow-y-auto border border-white/10 ${radius.card} ${surface.base} pb-[calc(env(safe-area-inset-bottom)+2rem)]`}
-                      style={{ maxHeight: 'calc(100vh - 280px)' }}
-                    >
-                      <div className="grid grid-cols-[60px_1fr] gap-0">
-                        {/* Colonne des heures + Colonne des événements */}
-                        {hours.map((hourLabel) => (
-                          <React.Fragment key={hourLabel}>
-                            {/* Heure à gauche */}
-                            <div
-                              className={`sticky left-0 ${surface.base} border-b border-white/10 flex items-start justify-end pr-2 py-1`}
-                              style={{ height: `${SLOT_HEIGHT}px` }}
+                  return (
+                    <div className="w-full flex flex-col">
+                      {/* En-tête du jour */}
+                      <div className="flex items-center justify-between mb-2 gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={goToPreviousMobileDay}
+                              disabled={isFirstMobileDay}
+                              className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                              aria-label="Journée précédente"
                             >
-                              <span className="text-xs text-gray-400 dark:text-slate-400">{hourLabel}</span>
-                            </div>
+                              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={goToNextMobileDay}
+                              disabled={isLastMobileDay}
+                              className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                              aria-label="Journée suivante"
+                            >
+                              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                            {selectedDayHeadingPrefix} — {day.name} {day.date.getDate()}
+                          </h2>
+                        </div>
+                        {!isReadOnlyMode && (
+                          <button
+                            type="button"
+                            onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
+                            className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 min-h-[44px]"
+                          >
+                            + Événement
+                          </button>
+                        )}
+                      </div>
 
-                            {/* Cellule de temps à droite */}
-                            <div className="relative border-b border-white/10" style={{ height: `${SLOT_HEIGHT}px` }}>
-                              {!isReadOnlyMode && (
-                                <button
-                                  type="button"
-                                  className="absolute inset-0 hover:bg-white/5 transition-colors"
-                                  onClick={() => onCellClick?.(day.date, hourLabel)}
-                                />
-                              )}
-                            </div>
+                      <div
+                        className={`relative overflow-y-auto border border-white/10 ${radius.card} ${surface.base} ${surface.border} p-3 space-y-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]`}
+                        style={{ maxHeight: 'calc(100vh - 280px)' }}
+                      >
+                        {selectedDaySlots.map((slot) => (
+                          <React.Fragment key={`selected-${slot.key}`}>
+                            {renderMobileSlotItems(slot, `selected-${slot.key}`)}
                           </React.Fragment>
                         ))}
-                        <div className={`hour-label-final sticky left-0 ${surface.base} flex items-start justify-end pr-2 pt-1 pb-1 mt-1 text-xs text-gray-400 dark:text-slate-300`}>
-                          <span>{finalHourLabel}</span>
-                        </div>
-                      </div>
 
-                      {/* Conteneur absolu pour les événements */}
-                      <div className="absolute top-0 left-[60px] right-0 bottom-0 pointer-events-none">
-                        <div className="relative w-full h-full">
-                          {/* Événements */}
-                          {dayEvents.map(({ event, top, height }) => {
-                            if (height <= 0) return null;
-
-                            const topValue = formatPositionValue(top, positionUnit, minuteHeight);
-                            const heightValue = formatPositionValue(height, positionUnit, minuteHeight);
-
-                            const startTime = event.startDate.toLocaleTimeString('fr-FR', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-                            const endTime = event.endDate.toLocaleTimeString('fr-FR', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-
-                            let bgColorClass = 'bg-gray-200 dark:bg-gray-700';
-                            let borderColorClass = 'border-gray-300 dark:border-gray-600';
-                            if (event.status === 'paid') {
-                              bgColorClass = 'bg-green-200 dark:bg-green-500/30';
-                              borderColorClass = 'border-green-300 dark:border-green-500';
-                            } else if (event.status === 'unpaid') {
-                              bgColorClass = 'bg-red-200 dark:bg-red-500/30';
-                              borderColorClass = 'border-red-300 dark:border-red-500';
-                            } else if (event.status === 'pending') {
-                              bgColorClass = 'bg-orange-200 dark:bg-orange-500/30';
-                              borderColorClass = 'border-orange-300 dark:border-orange-500';
-                            }
-
-                            return (
-                              <div
-                                key={event.id}
-                                onClick={() => onEventClick?.(event)}
-                            className={`absolute left-1 right-1 ${bgColorClass} ${borderColorClass} border ${radius.button} shadow-sm cursor-pointer text-xs overflow-hidden pointer-events-auto`}
-                            style={{
-                              top: topValue,
-                              height: heightValue,
-                              minHeight: '44px',
-                            }}
-                          >
-                                <div className="p-2 h-full flex flex-col justify-center relative pr-8 pb-6">
-                                  <div className="font-medium text-gray-900 dark:text-white text-sm">
-                                    {startTime} - {endTime}
-                                  </div>
-                                  <div className="text-gray-800 dark:text-slate-200 truncate">
-                                    {event.client || event.description || 'Sans titre'}
-                                  </div>
-                                  {event.attachedTaskBadges.length > 0 && (
-                                    <div className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1">
-                                      {event.attachedTaskBadges.map((badge) => {
-                                        const IconComponent = getIcon(badge.iconId ?? undefined);
-                                        const badgeColors = getTaskColor(badge.color);
-                                        const priorityDisabled =
-                                          badge.priority == null ||
-                                          isPriorityToggleDisabled(badge.priorityEnabled) ||
-                                          isPriorityToggleDisabled(badge.priority_enabled);
-                                        const priorityDisplay =
-                                          showPriorityBadges && !priorityDisabled && badge.priority
-                                            ? getPriorityDisplay(badge.priority)
-                                            : null;
-
-                                        return (
-                                          <span
-                                            key={`${event.id}-badge-${badge.taskId}`}
-                                            className="relative flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm"
-                                            style={{
-                                              backgroundColor: badgeColors.backgroundColor,
-                                              color: badgeColors.color,
-                                              borderColor: badgeColors.borderColor,
-                                            }}
-                                          >
-                                            <IconComponent className="h-[14px] w-[14px]" strokeWidth={2} aria-hidden="true" />
-                                            {priorityDisplay ? (
-                                              <span
-                                                className={`pointer-events-none absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-semibold text-white ring-1 ring-white/70 ${priorityDisplay.bgClass}`}
-                                              >
-                                                {priorityDisplay.labelNumber}
-                                                <span className="sr-only">{priorityDisplay.ariaLabel}</span>
-                                              </span>
-                                            ) : null}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-
-                          {/* Tâches hebdomadaires */}
-                          {dayTasks.map(({ task, top, height, backgroundColor, borderColor, textColor }) => {
-                            if (height <= 0) return null;
-
-                            const topValue = formatPositionValue(top, positionUnit, minuteHeight);
-                            const heightValue = formatPositionValue(height, positionUnit, minuteHeight);
-
-                            const startTime = task.startDate.toLocaleTimeString('fr-FR', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-                            const endTime = task.endDate.toLocaleTimeString('fr-FR', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-                            const IconComponent = getIcon(task.icon ?? undefined);
-
-                            const formattedPrice =
-                              typeof task.price === 'number'
-                                ? `${task.price.toLocaleString('fr-FR', {
-                                    minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
-                                    maximumFractionDigits: 2,
-                                  })} €`
-                                : typeof task.price === 'string'
-                                ? task.price.trim()
-                                : '';
-
-                            const isInteractive =
-                              !isReadOnlyMode && !task.readOnly && typeof onTaskClick === 'function';
-
-                            return (
-                              <div
-                                key={task.occurrenceId}
-                                onClick={() => isInteractive && onTaskClick?.(task)}
-                                className={`absolute left-1 right-1 ${radius.button} shadow-sm text-xs overflow-hidden pointer-events-auto ${
-                                  isInteractive ? 'cursor-pointer' : ''
-                                }`}
-                                style={{
-                                  top: topValue,
-                                  height: heightValue,
-                                  minHeight: '44px',
-                                  backgroundColor,
-                                  border: `1px solid ${borderColor}`,
-                                  color: textColor,
-                                }}
-                              >
-                                <div className="p-2 h-full flex items-center gap-2">
-                                  <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} />
-                                  <div className="flex flex-col flex-1 min-w-0">
-                                    <span className="font-medium truncate text-sm">{task.label}</span>
-                                    <div className="flex items-center gap-2 text-[11px] opacity-90">
-                                      <span>
-                                        {startTime} - {endTime}
-                                      </span>
-                                      {formattedPrice && <span>{formattedPrice}</span>}
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {selectedDaySlots.length === 0 && (
+                          <div className="text-center text-gray-500 dark:text-slate-400 py-4">
+                            Aucun événement ou tâche pour cette journée
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {/* Message si aucun événement ni tâche */}
-                    {dayEvents.length === 0 && dayTasks.length === 0 && (
-                      <div className="text-center text-gray-500 dark:text-slate-400 py-8">
-                        Aucun événement ou tâche pour cette journée
-                      </div>
-                    )}
-                  </div>
-                );
-              })()
-            ) : (
-              <div className="text-center text-gray-500 dark:text-slate-400 py-8">
-                Aucune journée à afficher
-              </div>
-            )}
-          </>
-        )}
+                  );
+                })()
+              ) : (
+                <div className="text-center text-gray-500 dark:text-slate-400 py-8">
+                  Aucune journée à afficher
+                </div>
+              )}
+            </>
+          )}
       </div>
     </div>
   );
