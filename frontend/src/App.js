@@ -14,6 +14,7 @@ import { SettingsProvider, useSettings } from "./context/SettingsContext";
 
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
+import PlanningErrorBoundary from "./components/PlanningErrorBoundary";
 import { apiFetch } from "./lib/api";
 import {
   hasFreshTeamsCache,
@@ -320,7 +321,9 @@ function AppWithSettings() {
               element={
                 <AuthGuard user={user}>
                   <Suspense fallback={<PageLoader message="Chargement du planning..." />}>
-                    <Planning />
+                    <PlanningErrorBoundary>
+                      <Planning />
+                    </PlanningErrorBoundary>
                   </Suspense>
                 </AuthGuard>
               }
@@ -330,7 +333,9 @@ function AppWithSettings() {
               element={
                 <AuthGuard user={user}>
                   <Suspense fallback={<PageLoader message="Chargement du planning..." />}>
-                    <Planning />
+                    <PlanningErrorBoundary>
+                      <Planning />
+                    </PlanningErrorBoundary>
                   </Suspense>
                 </AuthGuard>
               }
@@ -341,7 +346,9 @@ function AppWithSettings() {
               element={
                 <AuthGuard user={user}>
                   <Suspense fallback={<PageLoader message="Chargement du planning..." />}>
-                    <Planning />
+                    <PlanningErrorBoundary>
+                      <Planning />
+                    </PlanningErrorBoundary>
                   </Suspense>
                 </AuthGuard>
               }
