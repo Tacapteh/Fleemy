@@ -78,6 +78,83 @@ const TaskSummaryRow = ({ iconId, label, price }) => {
 const PRIMARY_ACTION_BUTTON_CLASSES =
   "inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors transition-shadow duration-150 hover:bg-blue-400 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:focus-visible:ring-offset-slate-900 active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:shadow-lg disabled:hover:bg-blue-500";
 
+const TransferCalendarIcon = ({ className = "" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="4.5" y="5.5" width="15" height="13" rx="2.5" />
+    <path d="M8 4.5v2M16 4.5v2M5 10.5h14" />
+    <circle cx="9" cy="13.5" r="1.2" />
+    <circle cx="15" cy="13.5" r="1.2" />
+    <path d="M9 17h6" />
+  </svg>
+);
+
+const TransferArrowIcon = ({ className = "" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M6 12h12" />
+    <path d="M13.5 7.5 18 12l-4.5 4.5" />
+  </svg>
+);
+
+const TransferTeamIcon = ({ className = "" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <circle cx="9" cy="9" r="3.2" />
+    <path d="M4.5 19a5 5 0 0 1 9 0" />
+    <circle cx="17" cy="10" r="2.5" />
+    <path d="M14.5 19c.3-2.1 2-3.5 4-3.5 1 0 1.9.3 2.5.8" />
+  </svg>
+);
+
+const TransferSpinnerIcon = ({ className = "" }) => (
+  <svg
+    className={`animate-spin ${className}`}
+    viewBox="0 0 24 24"
+    fill="none"
+    aria-hidden="true"
+  >
+    <circle
+      className="opacity-20"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      d="M22 12c0-5.523-4.477-10-10-10"
+      stroke="currentColor"
+      strokeWidth="4"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const matchTeamId = (team, teamId) => {
   if (!team || !teamId) {
     return false;
@@ -3904,6 +3981,26 @@ const createInitialWeeklyTaskModalState = () => ({
     ? "Transfert en cours…"
     : "Transférer ma semaine vers l'équipe";
 
+  const renderTransferButtonContent = () => (
+    <div className="flex flex-col items-center gap-1 text-blue-600 dark:text-blue-200">
+      <span className="sr-only">{transferButtonLabel}</span>
+      <div className="flex items-center justify-center gap-1">
+        {isTransferringSoloWeek ? (
+          <TransferSpinnerIcon className="h-5 w-5" />
+        ) : (
+          <>
+            <TransferCalendarIcon className="h-4 w-4" />
+            <TransferArrowIcon className="h-4 w-4" />
+            <TransferTeamIcon className="h-4 w-4" />
+          </>
+        )}
+      </div>
+      <p className="text-[10px] font-medium leading-tight text-current">
+        Transférer ma semaine vers l'équipe
+      </p>
+    </div>
+  );
+
   return (
     <div className="space-y-6 text-slate-900 dark:text-slate-100">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -4044,9 +4141,10 @@ const createInitialWeeklyTaskModalState = () => ({
               onClick={handleTransferSoloWeekToTeam}
               disabled={transferButtonDisabled}
               aria-disabled={transferButtonDisabled}
+              aria-label={transferButtonLabel}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500 px-4 py-2 text-sm font-semibold text-blue-600 shadow-sm transition-colors transition-shadow duration-150 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-500/10 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {transferButtonLabel}
+              {renderTransferButtonContent()}
             </button>
           )}
         </div>
@@ -4059,9 +4157,10 @@ const createInitialWeeklyTaskModalState = () => ({
             onClick={handleTransferSoloWeekToTeam}
             disabled={transferButtonDisabled}
             aria-disabled={transferButtonDisabled}
+            aria-label={transferButtonLabel}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-blue-500 px-4 py-2 text-sm font-semibold text-blue-600 shadow-sm transition-colors transition-shadow duration-150 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-100 dark:border-blue-400 dark:text-blue-200 dark:hover:bg-blue-500/10 dark:focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {transferButtonLabel}
+            {renderTransferButtonContent()}
           </button>
         </div>
       )}
@@ -4290,11 +4389,6 @@ const createInitialWeeklyTaskModalState = () => ({
                               <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
                                 {client.clientLabel}
                               </p>
-                              {client.clientId && (
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                  ID : {client.clientId}
-                                </p>
-                              )}
                             </div>
                           </div>
                           <div className="flex flex-col gap-3 text-sm text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center sm:gap-6">
