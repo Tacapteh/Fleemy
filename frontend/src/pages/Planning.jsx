@@ -3314,7 +3314,19 @@ export default function Planning() {
           const _startMs = start.getTime();
           const _endMs = end.getTime();
           if (!Number.isFinite(_startMs) || !Number.isFinite(_endMs)) {
-            throw new Error("Invalid dates for team event");
+            console.error("Invalid dates for team event", {
+              startValue: data.start,
+              endValue: data.end,
+            });
+            showToast(
+              "Créneau invalide : merci de choisir des horaires valides",
+              true,
+            );
+            setIsTransferringSoloWeek(false);
+            setDayDuplicationSource(null);
+            setIsDuplicatingDay(false);
+            closeModal();
+            return;
           }
           if (_endMs <= _startMs) {
             end = new Date(_startMs + 15 * 60 * 1000);
