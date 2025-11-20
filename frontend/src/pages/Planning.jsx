@@ -2307,6 +2307,30 @@ export default function Planning() {
     return taskOccurrences;
   }, [planningTab, teamTaskOccurrences, taskOccurrences]);
 
+  const isValidDateValue = useCallback((value) => {
+    return value instanceof Date && !Number.isNaN(value.getTime());
+  }, []);
+
+  const sanitizedActiveEvents = useMemo(() => {
+    if (!Array.isArray(activeEvents)) {
+      return [];
+    }
+
+    return activeEvents.filter((event) =>
+      isValidDateValue(event?.start) && isValidDateValue(event?.end)
+    );
+  }, [activeEvents, isValidDateValue]);
+
+  const sanitizedActiveTaskOccurrences = useMemo(() => {
+    if (!Array.isArray(activeTaskOccurrences)) {
+      return [];
+    }
+
+    return activeTaskOccurrences.filter((occurrence) =>
+      isValidDateValue(occurrence?.start) && isValidDateValue(occurrence?.end)
+    );
+  }, [activeTaskOccurrences, isValidDateValue]);
+
   const activeWeeklyTasks =
     planningTab === TEAM_PLANNING_TAB_SHARED ? [] : weeklyTasks;
   const findTaskByIdentifier = useCallback(
@@ -2353,14 +2377,14 @@ export default function Planning() {
   const recapTotals = useMemo(
     () =>
       calculateRecapTotals(
-        activeEvents,
-        activeTaskOccurrences,
+        sanitizedActiveEvents,
+        sanitizedActiveTaskOccurrences,
         hourlyRateGlobal
       ),
     [
       calculateRecapTotals,
-      activeEvents,
-      activeTaskOccurrences,
+      sanitizedActiveEvents,
+      sanitizedActiveTaskOccurrences,
       hourlyRateGlobal,
     ]
   );
@@ -2412,13 +2436,13 @@ export default function Planning() {
 
   const tasksSummary = useMemo(() => {
     if (
-      !Array.isArray(activeTaskOccurrences) ||
-      activeTaskOccurrences.length === 0
+      !Array.isArray(sanitizedActiveTaskOccurrences) ||
+      sanitizedActiveTaskOccurrences.length === 0
     ) {
       return { total: 0, items: [] };
     }
 
-    const items = activeTaskOccurrences
+    const items = sanitizedActiveTaskOccurrences
       .map((occurrence) => {
         const rawPrice = occurrence?.price;
         const priceNumber = Number(rawPrice);
@@ -2498,7 +2522,7 @@ export default function Planning() {
         price: Math.round(entry.price * 100) / 100,
       })),
     };
-  }, [activeTaskOccurrences]);
+  }, [sanitizedActiveTaskOccurrences]);
 
   const resolveDayIndexFromDate = useCallback((value) => {
     if (!value) {
@@ -2694,8 +2718,8 @@ export default function Planning() {
         return 0;
       }
 
-      const eventsToCopy = Array.isArray(activeEvents)
-        ? activeEvents.filter((slot) => {
+      const eventsToCopy = Array.isArray(sanitizedActiveEvents)
+        ? sanitizedActiveEvents.filter((slot) => {
             const startDate = getSlotStartDate(slot);
             return (
               startDate && resolveDayIndexFromDate(startDate) === sourceDayIndex
@@ -2781,8 +2805,13 @@ export default function Planning() {
       }
 
       return created;
-    },
-    [activeEvents, planningContext, resolveDayIndexFromDate, saveEventNew],
+  },
+    [
+      sanitizedActiveEvents,
+      planningContext,
+      resolveDayIndexFromDate,
+      saveEventNew,
+    ],
   );
 
   const duplicateWeeklyTasksForDay = useCallback(
@@ -3869,7 +3898,7 @@ export default function Planning() {
       ? formatWeekLabel(currentDate)
       : formatMonthLabel(currentDate);
 
-  const taskSources = activeTaskOccurrences;
+  const taskSources = sanitizedActiveTaskOccurrences;
 
   const showSkeleton =
     planningTab === TEAM_PLANNING_TAB_SHARED
@@ -4180,7 +4209,7 @@ export default function Planning() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
         {view === "week" ? (
           <PlannerGrid
-            events={activeEvents}
+            events={sanitizedActiveEvents}
             tasks={taskSources}
             weekStart={weekStart}
             onSlotSelect={(date) => openCreateModal(date)}
