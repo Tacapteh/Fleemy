@@ -225,6 +225,17 @@ const isRecoverablePopupError = (error) => {
 
 let redirectResultPromise = null;
 
+const ensureAuthReadyForRedirect = async () => {
+  try {
+    await ensureAuthPersistence();
+  } catch (error) {
+    console.warn(
+      "Unable to prepare Firebase persistence before redirect handling, continuing without it",
+      error,
+    );
+  }
+};
+
 export const GOOGLE_SIGN_IN_STATUS = Object.freeze({
   SUCCESS: "success",
   REDIRECT_TRIGGERED: "redirect-triggered",
@@ -274,6 +285,7 @@ export const signInWithGoogle = async () => {
       );
       redirectResultPromise = null;
       try {
+        await ensureAuthReadyForRedirect();
         await signInWithRedirect(auth, googleProvider);
         return buildSignInResult({
           status: GOOGLE_SIGN_IN_STATUS.REDIRECT_TRIGGERED,
@@ -310,7 +322,8 @@ export const signInWithGoogle = async () => {
 
 export const getGoogleRedirectResult = () => {
   if (!redirectResultPromise) {
-    redirectResultPromise = getRedirectResult(auth)
+    redirectResultPromise = ensureAuthReadyForRedirect()
+      .then(() => getRedirectResult(auth))
       .then((result) => result)
       .catch((error) => {
         if (!error || typeof error.code !== "string") {
