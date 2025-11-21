@@ -543,6 +543,21 @@ export default function Planning() {
     [viewParam, searchParams, setSearchParams]
   );
   const [currentDate, setCurrentDate] = useState(new Date());
+  const setCurrentDateSafe = useCallback((nextValue) => {
+    setCurrentDate((previous) => {
+      const resolved =
+        typeof nextValue === "function" ? nextValue(previous) : nextValue;
+
+      const safeDate = toDateSafe(resolved);
+      if (safeDate instanceof Date && !Number.isNaN(safeDate.getTime())) {
+        return safeDate;
+      }
+
+      const fallback = new Date();
+      fallback.setHours(0, 0, 0, 0);
+      return fallback;
+    });
+  }, []);
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState(null);
@@ -3908,24 +3923,24 @@ export default function Planning() {
   }, []);
 
   const goToToday = useCallback(() => {
-    setCurrentDate(new Date());
-  }, []);
+    setCurrentDateSafe(new Date());
+  }, [setCurrentDateSafe]);
 
   const goToPrevious = useCallback(() => {
-    setCurrentDate((date) =>
+    setCurrentDateSafe((date) =>
       view === "week"
         ? new Date(date.getFullYear(), date.getMonth(), date.getDate() - 7)
         : new Date(date.getFullYear(), date.getMonth() - 1, 1)
     );
-  }, [view]);
+  }, [setCurrentDateSafe, view]);
 
   const goToNext = useCallback(() => {
-    setCurrentDate((date) =>
+    setCurrentDateSafe((date) =>
       view === "week"
         ? new Date(date.getFullYear(), date.getMonth(), date.getDate() + 7)
         : new Date(date.getFullYear(), date.getMonth() + 1, 1)
     );
-  }, [view]);
+  }, [setCurrentDateSafe, view]);
 
   const currentLabel =
     view === "week"
@@ -4268,33 +4283,33 @@ export default function Planning() {
             onDayDuplicate={handleDuplicateDayToTarget}
             isDuplicatingDay={isDuplicatingDay}
           />
-        ) : (
-          <MonthGrid
-            year={currentDate.getFullYear()}
-            month={currentDate.getMonth()}
-            onDateSelect={(date) => {
-              handleViewChange("week");
-              setCurrentDate(date);
-            }}
-            onEventClick={openEventModal}
-            onCreateEvent={openCreateModal}
-            context={
-              planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext
-            }
-            staticEvents={
-              planningTab === TEAM_PLANNING_TAB_SHARED
-                ? teamMonthEvents
-                : undefined
-            }
-            staticTasks={
-              planningTab === TEAM_PLANNING_TAB_SHARED
-                ? teamMonthTasks
-                : isTeamContext
-                  ? teamSoloMonthTasks
+          ) : (
+            <MonthGrid
+              year={currentDate.getFullYear()}
+              month={currentDate.getMonth()}
+              onDateSelect={(date) => {
+                handleViewChange("week");
+                setCurrentDateSafe(date);
+              }}
+              onEventClick={openEventModal}
+              onCreateEvent={openCreateModal}
+              context={
+                planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext
+              }
+              staticEvents={
+                planningTab === TEAM_PLANNING_TAB_SHARED
+                  ? teamMonthEvents
                   : undefined
-            }
-          />
-        )}
+              }
+              staticTasks={
+                planningTab === TEAM_PLANNING_TAB_SHARED
+                  ? teamMonthTasks
+                  : isTeamContext
+                    ? teamSoloMonthTasks
+                    : undefined
+              }
+            />
+          )}
 
         <div className="mt-6 md:mt-4 lg:mt-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
