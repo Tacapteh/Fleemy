@@ -225,7 +225,7 @@ export default function useUserWeekSlots(userId, options = {}) {
   useEffect(() => {
     if (!enabled) {
       setSlots([]);
-      setLoading(true);
+      setLoading(false);
       setError(null);
       return () => {};
     }
