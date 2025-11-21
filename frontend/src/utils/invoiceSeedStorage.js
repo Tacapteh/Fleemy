@@ -1,8 +1,21 @@
 const STORAGE_KEY = 'planningInvoiceSeeds';
 const MAX_ENTRY_AGE_MS = 1000 * 60 * 60 * 48; // 48 heures
 
-const canUseSessionStorage = () =>
-  typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
+const canUseSessionStorage = () => {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+    return false;
+  }
+
+  try {
+    const testKey = '__invoice-seed-test__';
+    window.sessionStorage.setItem(testKey, '1');
+    window.sessionStorage.removeItem(testKey);
+    return true;
+  } catch (error) {
+    console.warn('SessionStorage unavailable for invoice seeds', error);
+    return false;
+  }
+};
 
 const safeParse = (value) => {
   if (!value || typeof value !== 'string') {
@@ -24,8 +37,14 @@ const readSeeds = () => {
     return {};
   }
 
-  const rawValue = window.sessionStorage.getItem(STORAGE_KEY);
-  const parsed = safeParse(rawValue) || {};
+  let parsed = {};
+
+  try {
+    const rawValue = window.sessionStorage.getItem(STORAGE_KEY);
+    parsed = safeParse(rawValue) || {};
+  } catch (error) {
+    console.warn('Impossible de lire les brouillons de facture', error);
+  }
   const now = Date.now();
   const result = {};
 
