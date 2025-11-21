@@ -239,21 +239,38 @@ const normalizeTeamPlanningEntries = (entries) => {
     return [];
   }
 
+  const coerceToDate = (value) => {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value;
+    }
+
+    if (value && typeof value === "object" && typeof value.toDate === "function") {
+      const timestampDate = value.toDate();
+      if (timestampDate instanceof Date && !Number.isNaN(timestampDate.getTime())) {
+        return timestampDate;
+      }
+    }
+
+    if (typeof value === "string" || typeof value === "number") {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
+    return null;
+  };
+
   return entries
     .map((entry) => {
       if (!entry) {
         return null;
       }
 
-      const startDate = entry.start ? new Date(entry.start) : null;
-      const endDate = entry.end ? new Date(entry.end) : null;
+      const startDate = coerceToDate(entry.start);
+      const endDate = coerceToDate(entry.end);
 
-      if (
-        !startDate ||
-        Number.isNaN(startDate.getTime()) ||
-        !endDate ||
-        Number.isNaN(endDate.getTime())
-      ) {
+      if (!startDate || !endDate) {
         return null;
       }
 
@@ -2001,8 +2018,21 @@ export default function Planning() {
     if (!teamEventBlocks.length) {
       return [];
     }
+
+    const validEntries = teamEventBlocks.filter(
+      (entry) =>
+        entry?.start instanceof Date &&
+        !Number.isNaN(entry.start.getTime()) &&
+        entry?.end instanceof Date &&
+        !Number.isNaN(entry.end.getTime()),
+    );
+
+    if (!validEntries.length) {
+      return [];
+    }
+
     const groups = new Map();
-    teamEventBlocks.forEach((entry) => {
+    validEntries.forEach((entry) => {
       const startKey = entry.start.toISOString();
       const endKey = entry.end.toISOString();
       const key = `${startKey}|${endKey}`;
