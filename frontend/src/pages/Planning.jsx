@@ -2374,10 +2374,27 @@ export default function Planning() {
       return [];
     }
 
-    return activeEvents.filter((event) =>
-      isValidDateValue(event?.start) && isValidDateValue(event?.end)
-    );
-  }, [activeEvents, isValidDateValue]);
+    return activeEvents
+      .map((event) => {
+        if (!event) {
+          return null;
+        }
+
+        const startValue = event.start ?? event.startDate;
+        const endValue = event.end ?? event.endDate;
+
+        if (!isValidDateValue(startValue) || !isValidDateValue(endValue)) {
+          return null;
+        }
+
+        return {
+          ...event,
+          start: coerceDateValue(startValue),
+          end: coerceDateValue(endValue),
+        };
+      })
+      .filter(Boolean);
+  }, [activeEvents, coerceDateValue, isValidDateValue]);
 
   const sanitizedActiveTaskOccurrences = useMemo(() => {
     if (!Array.isArray(activeTaskOccurrences)) {
