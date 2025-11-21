@@ -10,6 +10,7 @@ import {
 import {
   collectionGroup,
   doc,
+  documentId,
   getDoc,
   getDocs,
   onSnapshot,
@@ -272,23 +273,33 @@ const ProfilePickerPage = () => {
       hydrateTeamsFromFetcher();
 
       try {
-        const membershipCollectionNames = ['memberships', 'members'];
+        const membershipCollectionCandidates = [
+          {
+            name: 'memberships',
+            buildQuery: (col) => query(col, where(documentId(), '==', user.uid)),
+          },
+          {
+            name: 'members',
+            buildQuery: (col) => query(col, where('uid', '==', user.uid)),
+          },
+          {
+            name: 'members',
+            buildQuery: (col) => query(col, where(documentId(), '==', user.uid)),
+          },
+        ];
         let membershipsQuery = null;
 
-        for (const collectionName of membershipCollectionNames) {
+        for (const { name, buildQuery } of membershipCollectionCandidates) {
           let candidateQuery = null;
           try {
-            candidateQuery = query(
-              collectionGroup(db, collectionName),
-              where('uid', '==', user.uid),
-            );
+            candidateQuery = buildQuery(collectionGroup(db, name));
           } catch (collectionError) {
             if (isPermissionDeniedError(collectionError)) {
               membershipsQuery = null;
               break;
             }
             console.warn(
-              `Unable to prepare ${collectionName} membership query`,
+              `Unable to prepare ${name} membership query`,
               collectionError,
             );
             continue;
@@ -306,7 +317,7 @@ const ProfilePickerPage = () => {
               break;
             }
             console.warn(
-              `Unable to prefetch ${collectionName} memberships`,
+              `Unable to prefetch ${name} memberships`,
               membershipError,
             );
           }
