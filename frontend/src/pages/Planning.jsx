@@ -2539,6 +2539,15 @@ export default function Planning() {
     ]
   );
 
+  const recapTotalsAll = useMemo(
+    () =>
+      recapTotals.totalPaye +
+      recapTotals.totalEnAttente +
+      recapTotals.totalNonPaye +
+      recapTotals.totalTaches,
+    [recapTotals]
+  );
+
   const monthlyClientSummaries = useMemo(
     () =>
       buildMonthlyClientSummary(
@@ -2554,34 +2563,66 @@ export default function Planning() {
     ]
   );
 
+  const monthlyClientsTotals = useMemo(() => {
+    if (
+      !Array.isArray(monthlyClientSummaries) ||
+      monthlyClientSummaries.length === 0
+    ) {
+      return { totalAmount: 0, tasksAmount: 0 };
+    }
+
+    return monthlyClientSummaries.reduce(
+      (acc, client) => {
+        const clientTotal = Number(client?.totalAmount) || 0;
+        const clientTasksTotal = Array.isArray(client?.tasks)
+          ? client.tasks.reduce((sum, task) => {
+              const price = Number(task?.price);
+              if (!Number.isFinite(price) || price <= 0) {
+                return sum;
+              }
+              return sum + price;
+            }, 0)
+          : 0;
+        acc.totalAmount += clientTotal;
+        acc.tasksAmount += clientTasksTotal;
+        return acc;
+      },
+      { totalAmount: 0, tasksAmount: 0 }
+    );
+  }, [monthlyClientSummaries]);
+
   const summaryCards = useMemo(
     () => [
+      {
+        key: "total",
+        label: "Total",
+        amount: recapTotalsAll,
+        variant: "info",
+        testId: "planning-recap-total",
+      },
       {
         key: "paid",
         label: "Payé",
         amount: recapTotals.totalPaye,
-        border: "border-emerald-200/70 dark:border-emerald-500/40",
-        background: "bg-emerald-50 dark:bg-emerald-500/10",
-        accent: "text-emerald-600 dark:text-emerald-300",
+        variant: "success",
+        testId: "planning-recap-paid",
       },
       {
         key: "pending",
         label: "En attente",
         amount: recapTotals.totalEnAttente,
-        border: "border-amber-200/70 dark:border-amber-500/30",
-        background: "bg-amber-50 dark:bg-amber-500/10",
-        accent: "text-amber-600 dark:text-amber-300",
+        variant: "warning",
+        testId: "planning-recap-pending",
       },
       {
         key: "unpaid",
         label: "Non payé",
         amount: recapTotals.totalNonPaye,
-        border: "border-rose-200/70 dark:border-rose-500/40",
-        background: "bg-rose-50 dark:bg-rose-500/10",
-        accent: "text-rose-600 dark:text-rose-300",
+        variant: "danger",
+        testId: "planning-recap-unpaid",
       },
     ],
-    [recapTotals]
+    [recapTotals, recapTotalsAll]
   );
 
   const tasksSummary = useMemo(() => {
@@ -4487,25 +4528,16 @@ export default function Planning() {
                   {clientsError}
                 </p>
               )}
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <StatusSummaryCard
-                  variant="success"
-                  label="Payé"
-                  amount={currencyFormatter.format(recapTotals.totalPaye)}
-                  data-testid="planning-recap-paid"
-                />
-                <StatusSummaryCard
-                  variant="warning"
-                  label="En attente"
-                  amount={currencyFormatter.format(recapTotals.totalEnAttente)}
-                  data-testid="planning-recap-pending"
-                />
-                <StatusSummaryCard
-                  variant="danger"
-                  label="Non payé"
-                  amount={currencyFormatter.format(recapTotals.totalNonPaye)}
-                  data-testid="planning-recap-unpaid"
-                />
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {summaryCards.map((card) => (
+                  <StatusSummaryCard
+                    key={card.key}
+                    variant={card.variant}
+                    label={card.label}
+                    amount={currencyFormatter.format(card.amount)}
+                    data-testid={card.testId}
+                  />
+                ))}
                 <div
                   className={`rounded-xl border px-4 py-3 text-sm shadow-sm transition-colors ${
                     tasksSummary.items.length > 0
@@ -4548,6 +4580,20 @@ export default function Planning() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Tâches affichées uniquement lorsqu'elles chevauchent un créneau client.
                 </p>
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <StatusSummaryCard
+                  variant="info"
+                  label="Total du mois"
+                  amount={currencyFormatter.format(monthlyClientsTotals.totalAmount)}
+                  data-testid="planning-recap-clients-total"
+                />
+                <StatusSummaryCard
+                  variant="info"
+                  label="Tâches du mois"
+                  amount={currencyFormatter.format(monthlyClientsTotals.tasksAmount)}
+                  data-testid="planning-recap-clients-tasks"
+                />
               </div>
               {monthlyClientsLoading && (
                 <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
