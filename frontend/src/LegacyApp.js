@@ -1685,11 +1685,17 @@ const EventModal = ({
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.5"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 className="h-4 w-4"
               >
-                <path d="M8 7h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
-                <path d="M16 3h-1a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2H8a2 2 0 0 0-2 2v1h12V5a2 2 0 0 0-2-2Z" />
+                <path d="M7 8.5H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h9" />
+                <path d="M10 3h5.5L20.5 8v11a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+                <path d="M15.5 3v5h5" />
+                <path d="M11.5 11.5h6" />
+                <path d="M11.5 15h6" />
+                <path d="M11.5 18.5h3.5" />
               </svg>
             </button>
           </div>
@@ -2444,11 +2450,17 @@ const TaskModal = ({
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.5"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 className="h-4 w-4"
               >
-                <path d="M8 7h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
-                <path d="M16 3h-1a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2H8a2 2 0 0 0-2 2v1h12V5a2 2 0 0 0-2-2Z" />
+                <path d="M7 8.5H6a2 2 0 0 0-2 2V19a2 2 0 0 0 2 2h9" />
+                <path d="M10 3h5.5L20.5 8v11a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+                <path d="M15.5 3v5h5" />
+                <path d="M11.5 11.5h6" />
+                <path d="M11.5 15h6" />
+                <path d="M11.5 18.5h3.5" />
               </svg>
             </button>
           </div>
