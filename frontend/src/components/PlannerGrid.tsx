@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useRef, useState, useEffect } from 'react';
-import { ArrowRightCircle, Copy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Copy, ChevronLeft, ChevronRight, Table } from 'lucide-react';
 import '../styles/WeeklyGrid.css';
 import { useFirebaseUser } from '../firebase';
 import { calculateHeight, calculateTopPosition } from '../utils/time';
@@ -1255,7 +1255,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                         isDuplicatingDay
                       }
                     >
-                      <ArrowRightCircle size={16} />
+                      <Table size={16} />
                     </button>
                   )}
                 </div>
@@ -1352,7 +1352,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                                 isDuplicatingDay
                               }
                             >
-                              <ArrowRightCircle size={16} />
+                              <Table size={16} />
                             </button>
                           )}
                         </div>
