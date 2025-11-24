@@ -2396,6 +2396,60 @@ export default function Planning() {
       .filter(Boolean);
   }, [activeEvents, coerceDateValue, isValidDateValue]);
 
+  const buildDayKey = useCallback((value) => {
+    const date = coerceDateValue(value);
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return null;
+    }
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized.getTime();
+  }, [coerceDateValue]);
+
+  const findOverlappingEventIds = useCallback(
+    (startDate, endDate, keepId = null) => {
+      const startKey = buildDayKey(startDate);
+      if (startKey == null) {
+        return [];
+      }
+
+      const conflicts = [];
+      sanitizedActiveEvents.forEach((existing) => {
+        if (!existing?.id || existing.id === keepId) {
+          return;
+        }
+
+        const existingStart = coerceDateValue(existing.start);
+        const existingEnd = coerceDateValue(existing.end);
+
+        if (
+          !(existingStart instanceof Date) ||
+          !(existingEnd instanceof Date) ||
+          Number.isNaN(existingStart.getTime()) ||
+          Number.isNaN(existingEnd.getTime()) ||
+          existingEnd <= existingStart
+        ) {
+          return;
+        }
+
+        if (buildDayKey(existingStart) !== startKey) {
+          return;
+        }
+
+        const overlaps =
+          existingStart.getTime() < endDate.getTime() &&
+          startDate.getTime() < existingEnd.getTime();
+
+        if (overlaps) {
+          conflicts.push(existing.id);
+        }
+      });
+
+      return conflicts;
+    },
+    [buildDayKey, coerceDateValue, sanitizedActiveEvents]
+  );
+
   const sanitizedActiveTaskOccurrences = useMemo(() => {
     if (!Array.isArray(activeTaskOccurrences)) {
       return [];
@@ -3608,8 +3662,12 @@ export default function Planning() {
       }
 
       try {
+        const fallbackId = resolveEventId(data) || resolveEventId(modal.event);
+        const overlappingId =
+          fallbackId || findOverlappingEventIds(start, end)[0] || null;
+
         const payload = {
-          id: resolveEventId(data) || resolveEventId(modal.event),
+          id: overlappingId,
           start: start.toISOString(),
           end: end.toISOString(),
           type: eventType,
@@ -3628,7 +3686,22 @@ export default function Planning() {
           synced: Boolean(data.synced),
         };
 
-        await saveEventNew(planningContext, payload);
+        const saved = await saveEventNew(planningContext, payload);
+        const savedId = saved?.id || payload.id || fallbackId || null;
+
+        if (savedId) {
+          const conflicts = findOverlappingEventIds(start, end, savedId);
+          if (Array.isArray(conflicts) && conflicts.length > 0) {
+            await Promise.allSettled(
+              conflicts.map((conflictId) =>
+                deleteEventNew(planningContext, conflictId).catch((error) => {
+                  console.warn("Unable to delete overlapping event", error);
+                })
+              )
+            );
+          }
+        }
+
         requestWeekSlotsRefresh(planningContext, weekStart, weekEnd);
 
         showToast("Événement sauvegardé avec succès");
@@ -3647,6 +3720,8 @@ export default function Planning() {
       weekStart,
       weekEnd,
       requestWeekSlotsRefresh,
+      findOverlappingEventIds,
+      deleteEventNew,
       closeModal,
       sharedTeamId,
       user?.uid,
