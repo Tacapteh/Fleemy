@@ -1163,6 +1163,8 @@ const EventModal = ({
   readOnly,
   navigate,
   onSwitchToTask,
+  copiedItem,
+  onCopy,
   attachedTasks = [],
   onEditLinkedTask,
   initialLinkedTaskId = null,
@@ -1536,8 +1538,60 @@ const EventModal = ({
       return;
     }
 
-    onSwitchToTask();
-  }, [event, onSwitchToTask, readOnly]);
+    const range = allowMinutes
+      ? sanitizeRangeForDetailedMode(formData.start, formData.end)
+      : sanitizeRangeForHourMode(formData.start, formData.end);
+
+    onSwitchToTask({
+      timeSlot: {
+        day: formData.day,
+        start: range.start,
+        end: range.end,
+      },
+    });
+  }, [allowMinutes, event, formData.day, formData.end, formData.start, onSwitchToTask, readOnly]);
+
+  const handleCopy = useCallback(() => {
+    if (typeof onCopy !== "function") {
+      return;
+    }
+
+    const range = allowMinutes
+      ? sanitizeRangeForDetailedMode(formData.start, formData.end)
+      : sanitizeRangeForHourMode(formData.start, formData.end);
+
+    onCopy({
+      type: "event",
+      payload: {
+        ...formData,
+        start: range.start,
+        end: range.end,
+      },
+    });
+  }, [allowMinutes, formData, onCopy]);
+
+  const handlePaste = useCallback(() => {
+    if (!copiedItem || copiedItem.type !== "event") {
+      return;
+    }
+
+    const source = copiedItem.payload || {};
+    const range = allowMinutes
+      ? sanitizeRangeForDetailedMode(source.start || formData.start, source.end || formData.end)
+      : sanitizeRangeForHourMode(source.start || formData.start, source.end || formData.end);
+
+    setFormData((current) => ({
+      ...current,
+      description: source.description || "",
+      day: typeof source.day === "number" ? source.day : current.day,
+      start: range.start,
+      end: range.end,
+      type: source.type || "normal",
+      payment_status: source.payment_status || "pending",
+      client_id: source.client_id || "",
+      client_name: source.client_name || "",
+    }));
+  }, [allowMinutes, copiedItem, formData.end, formData.start]);
 
   const shouldShowTaskTab =
     typeof onSwitchToTask === "function" && !event && !readOnly;
@@ -1595,9 +1649,51 @@ const EventModal = ({
   return (
     <div className="modal-overlay">
       <div className="modal-content dark:bg-slate-900 dark:text-slate-100">
-        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
-          {event ? "Modifier l'événement" : "Nouvel événement"}
-        </h2>
+        <div className="modal-header dark:text-slate-100 dark:border-slate-700 flex items-center justify-between gap-4">
+          <span>{event ? "Modifier l'événement" : "Nouvel événement"}</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              onClick={handleCopy}
+              title="Copier l'événement"
+              disabled={loading}
+              aria-label="Copier l'événement"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-4 w-4"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              onClick={handlePaste}
+              title="Coller l'événement copié"
+              aria-label="Coller l'événement copié"
+              disabled={loading || !copiedItem || copiedItem.type !== "event"}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-4 w-4"
+              >
+                <path d="M8 7h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+                <path d="M16 3h-1a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2H8a2 2 0 0 0-2 2v1h12V5a2 2 0 0 0-2-2Z" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
         {shouldDisplayModalTabs && (
           <div
@@ -2033,7 +2129,16 @@ const DayEventsModal = ({
 };
 
 // Task Modal Component
-const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
+const TaskModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  onDelete,
+  task,
+  initialSlot = null,
+  copiedItem,
+  onCopy,
+}) => {
   const [formData, setFormData] = useState({
     name: "",
     price: 0,
@@ -2142,26 +2247,98 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
     "Dimanche",
   ];
 
+  const normalizeSlot = useCallback((slot) => {
+    if (!slot) {
+      return null;
+    }
+
+    const resolvedRange = sanitizeRangeForDetailedMode(
+      slot.start || "09:00",
+      slot.end || "10:00",
+    );
+
+    let resolvedDay = slot.day;
+    if (typeof resolvedDay === "number") {
+      resolvedDay = englishDayNames[resolvedDay];
+    }
+    if (typeof resolvedDay === "string") {
+      resolvedDay = resolvedDay.toLowerCase();
+    }
+    if (!dayNames.includes(resolvedDay)) {
+      resolvedDay = dayNames[0];
+    }
+
+    return {
+      day: resolvedDay,
+      start: resolvedRange.start,
+      end: resolvedRange.end,
+    };
+  }, []);
+
   useEffect(() => {
+    const normalizedInitialSlot = normalizeSlot(initialSlot);
     if (task) {
+      const normalizedSlots = Array.isArray(task.time_slots)
+        ? task.time_slots.map(normalizeSlot).filter(Boolean)
+        : [];
       setFormData({
         name: task.name || "",
         price: task.price || 0,
         color: task.color || "#3b82f6",
         icon: task.icon || "📝",
-        time_slots: task.time_slots || [],
+        time_slots: normalizedSlots,
       });
+      const firstSlot = normalizedSlots[0] || normalizedInitialSlot;
+      if (firstSlot) {
+        setTimeSlotInput(firstSlot);
+      } else {
+        setTimeSlotInput(normalizeSlot({ start: "09:00", end: "10:00" }));
+      }
     } else {
+      const fallbackSlot =
+        normalizedInitialSlot || normalizeSlot({ start: "09:00", end: "10:00" });
       setFormData({
         name: "",
         price: 0,
         color: "#3b82f6",
         icon: "📝",
-        time_slots: [],
+        time_slots: fallbackSlot ? [fallbackSlot] : [],
       });
+      if (fallbackSlot) {
+        setTimeSlotInput(fallbackSlot);
+      }
     }
     setErrors({});
-  }, [task, isOpen]);
+  }, [initialSlot, isOpen, normalizeSlot, task]);
+
+  const handleCopy = useCallback(() => {
+    if (typeof onCopy !== "function") {
+      return;
+    }
+    onCopy({ type: "task", payload: formData });
+  }, [formData, onCopy]);
+
+  const handlePaste = useCallback(() => {
+    if (!copiedItem || copiedItem.type !== "task") {
+      return;
+    }
+    const source = copiedItem.payload || {};
+    const normalizedSlots = Array.isArray(source.time_slots)
+      ? source.time_slots.map(normalizeSlot).filter(Boolean)
+      : [];
+    setFormData({
+      name: source.name || "",
+      price: source.price || 0,
+      color: source.color || "#3b82f6",
+      icon: source.icon || "📝",
+      time_slots: normalizedSlots,
+    });
+    if (normalizedSlots[0]) {
+      setTimeSlotInput(normalizedSlots[0]);
+    } else {
+      setTimeSlotInput(normalizeSlot({ start: "09:00", end: "10:00" }));
+    }
+  }, [copiedItem, normalizeSlot]);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
@@ -2232,9 +2409,50 @@ const TaskModal = ({ isOpen, onClose, onSave, onDelete, task }) => {
         className="modal-content dark:bg-slate-900 dark:text-slate-100"
         style={{ maxWidth: "600px" }}
       >
-        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
-          {task ? "✏️ Modifier la tâche" : "➕ Nouvelle tâche"}
-        </h2>
+        <div className="modal-header dark:text-slate-100 dark:border-slate-700 flex items-center justify-between gap-4">
+          <span>{task ? "✏️ Modifier la tâche" : "➕ Nouvelle tâche"}</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              onClick={handleCopy}
+              title="Copier la tâche"
+              aria-label="Copier la tâche"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-4 w-4"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              onClick={handlePaste}
+              title="Coller la tâche copiée"
+              aria-label="Coller la tâche copiée"
+              disabled={!copiedItem || copiedItem.type !== "task"}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-4 w-4"
+              >
+                <path d="M8 7h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+                <path d="M16 3h-1a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2H8a2 2 0 0 0-2 2v1h12V5a2 2 0 0 0-2-2Z" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
         <div className="form-group">
           <label className="form-label">Nom de la tâche *</label>
@@ -2743,7 +2961,11 @@ const Planning = ({ user }) => {
     timeSlot: null,
     selectedDate: null,
   });
-  const [taskModal, setTaskModal] = useState({ isOpen: false, task: null }); // Add task modal state
+  const [taskModal, setTaskModal] = useState({
+    isOpen: false,
+    task: null,
+    prefillSlot: null,
+  }); // Add task modal state
   const [dayEventsModal, setDayEventsModal] = useState({
     isOpen: false,
     events: [],
@@ -2759,6 +2981,7 @@ const Planning = ({ user }) => {
   const [offlineStorage] = useState(new PlanningOfflineStorage());
   const [errorMessage, setErrorMessage] = useState(null);
   const [weekData, setWeekData] = useState({});
+  const [copiedItem, setCopiedItem] = useState(null);
 
   const viewingMember =
     selectedMemberUid && selectedMemberUid !== user?.uid
@@ -4038,7 +4261,7 @@ const Planning = ({ user }) => {
   };
 
   const handleTaskClick = (task) => {
-    setTaskModal({ isOpen: true, task });
+    setTaskModal({ isOpen: true, task, prefillSlot: null });
   };
 
   const handleCreateTask = async (taskData) => {
@@ -4071,7 +4294,7 @@ const Planning = ({ user }) => {
 
       // Update local state immediately
       setTasks((prevTasks) => [...prevTasks, createdTask]);
-      setTaskModal({ isOpen: false, task: null });
+      setTaskModal({ isOpen: false, task: null, prefillSlot: null });
     } catch (error) {
       console.error("Error creating task:", error);
       showToast(
@@ -4089,7 +4312,7 @@ const Planning = ({ user }) => {
         };
         await offlineStorage.saveTask(localTask);
         setTasks((prev) => [...prev, localTask]);
-        setTaskModal({ isOpen: false, task: null });
+        setTaskModal({ isOpen: false, task: null, prefillSlot: null });
       }
     }
   };
@@ -4129,7 +4352,7 @@ const Planning = ({ user }) => {
         ),
       );
 
-      setTaskModal({ isOpen: false, task: null });
+      setTaskModal({ isOpen: false, task: null, prefillSlot: null });
     } catch (error) {
       console.error("Error updating task:", error);
       showToast(
@@ -4146,7 +4369,7 @@ const Planning = ({ user }) => {
         setTasks((prev) =>
           prev.map((t) => (t.id === localTask.id ? localTask : t)),
         );
-        setTaskModal({ isOpen: false, task: null });
+        setTaskModal({ isOpen: false, task: null, prefillSlot: null });
       }
     }
   };
@@ -4170,7 +4393,7 @@ const Planning = ({ user }) => {
       await offlineStorage.deleteTask(taskId);
       // Update local state immediately
       setTasks((prevTasks) => prevTasks.filter((task) => task.id !== taskId));
-      setTaskModal({ isOpen: false, task: null });
+      setTaskModal({ isOpen: false, task: null, prefillSlot: null });
     } catch (error) {
       console.error("Error deleting task:", error);
     }
@@ -4297,6 +4520,19 @@ const Planning = ({ user }) => {
     }
   };
 
+  const handleSwitchToTaskFromEvent = useCallback(
+    ({ timeSlot: slot } = {}) => {
+      setEventModal({
+        isOpen: false,
+        event: null,
+        timeSlot: null,
+        selectedDate: null,
+      });
+      setTaskModal({ isOpen: true, task: null, prefillSlot: slot || null });
+    },
+    [],
+  );
+
   const handleDayClick = (date) => {
     const dayEvents = getEventsForDate(date);
     setDayEventsModal({ isOpen: true, events: dayEvents, date });
@@ -4367,6 +4603,20 @@ const Planning = ({ user }) => {
       selectedDate: date,
     });
   };
+
+  const handleCopyEventData = useCallback((item) => {
+    if (!item || item.type !== "event") {
+      return;
+    }
+    setCopiedItem(item);
+  }, []);
+
+  const handleCopyTaskData = useCallback((item) => {
+    if (!item || item.type !== "task") {
+      return;
+    }
+    setCopiedItem(item);
+  }, []);
 
   const updateHourlyRate = async (newRate) => {
     try {
@@ -4483,7 +4733,9 @@ const Planning = ({ user }) => {
                 + Événement
               </button>
               <button
-                onClick={() => setTaskModal({ isOpen: true, task: null })}
+                onClick={() =>
+                  setTaskModal({ isOpen: true, task: null, prefillSlot: null })
+                }
                 className="btn btn-secondary"
               >
                 + Tâche
@@ -4611,6 +4863,9 @@ const Planning = ({ user }) => {
         timeSlot={eventModal.timeSlot}
         selectedDate={eventModal.selectedDate}
         attachedTasks={modalAttachedTasks}
+        onSwitchToTask={handleSwitchToTaskFromEvent}
+        copiedItem={copiedItem}
+        onCopy={handleCopyEventData}
       />
 
       <DayEventsModal
@@ -4626,10 +4881,13 @@ const Planning = ({ user }) => {
 
       <TaskModal
         isOpen={taskModal.isOpen}
-        onClose={() => setTaskModal({ isOpen: false, task: null })}
+        onClose={() => setTaskModal({ isOpen: false, task: null, prefillSlot: null })}
         onSave={taskModal.task ? handleUpdateTask : handleCreateTask}
         onDelete={handleDeleteTask}
         task={taskModal.task}
+        initialSlot={taskModal.prefillSlot}
+        copiedItem={copiedItem}
+        onCopy={handleCopyTaskData}
       />
 
       {/* Hourly Rate Modal */}
