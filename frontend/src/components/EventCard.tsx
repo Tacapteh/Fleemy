@@ -100,18 +100,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
   const isInteractive = typeof onClick === 'function';
   const isReadOnly = Boolean(event.readOnly);
 
-  let subtitle = '';
-  let subtitleClass = 'subtitle truncate break-words leading-tight md:leading-normal text-xs text-gray-600';
-  if (!isAbsence) {
-    if (clientLabel && clientLabel !== title) {
-      subtitle = clientLabel;
-      subtitleClass = 'subtitle truncate leading-tight md:leading-normal break-words';
-    } else if (description && description !== title) {
-      subtitle = description;
-    }
-  } else if (description && description.toLowerCase() !== 'indisponible') {
-    subtitle = description;
-  }
+  const hasClientLabel = Boolean(clientLabel);
+  const descriptionBelowTime = isAbsence
+    ? description && description.toLowerCase() !== 'indisponible'
+      ? description
+      : ''
+    : description && description !== title
+      ? description
+      : '';
 
   return (
     <div
@@ -126,8 +122,13 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
       data-testid={`event-${event.id}`}
     >
       <div className="event-chip-content relative flex h-full min-h-[3rem] w-full flex-col justify-center gap-1 pr-8 pb-5 text-[13px] leading-tight sm:text-[14px] md:leading-normal">
+        {hasClientLabel && (
+          <div className="text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">
+            {clientLabel}
+          </div>
+        )}
         {timeLabel && (
-          <div className="mb-1 text-xs font-semibold leading-tight text-slate-600 dark:text-slate-200">
+          <div className="text-xs font-semibold leading-tight text-slate-600 dark:text-slate-200">
             {timeLabel}
           </div>
         )}
@@ -181,7 +182,11 @@ const EventCard: React.FC<EventCardProps> = ({ event, onClick, style }) => {
           </div>
         )}
 
-        {subtitle && <div className={subtitleClass}>{subtitle}</div>}
+        {descriptionBelowTime && (
+          <div className="text-xs leading-tight text-slate-700 dark:text-slate-200">
+            {descriptionBelowTime}
+          </div>
+        )}
       </div>
     </div>
   );
