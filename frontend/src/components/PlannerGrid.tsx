@@ -848,10 +848,6 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
   );
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
-  if (!user) {
-    return <div>Chargement...</div>;
-  }
-
   const today = todayAtMidnight;
 
   const mobileDaysToShow = viewFilter === 'today'
@@ -1186,10 +1182,14 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         });
       }
 
-      return items;
-    },
-    [isReadOnlyMode, onEventClick, onTaskClick, showPriorityBadges, showStatusBadges]
+    return items;
+  },
+  [isReadOnlyMode, onEventClick, onTaskClick, showPriorityBadges, showStatusBadges]
   );
+
+  if (!user) {
+    return <div>Chargement...</div>;
+  }
 
   return (
     <div ref={wrapperRef}>
