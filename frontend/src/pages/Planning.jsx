@@ -2583,7 +2583,7 @@ export default function Planning() {
               return sum + price;
             }, 0)
           : 0;
-        acc.totalAmount += clientTotal;
+        acc.totalAmount += clientTotal + clientTasksTotal;
         acc.tasksAmount += clientTasksTotal;
         return acc;
       },
@@ -4587,12 +4587,6 @@ export default function Planning() {
                   label="Total du mois"
                   amount={currencyFormatter.format(monthlyClientsTotals.totalAmount)}
                   data-testid="planning-recap-clients-total"
-                />
-                <StatusSummaryCard
-                  variant="info"
-                  label="Tâches du mois"
-                  amount={currencyFormatter.format(monthlyClientsTotals.tasksAmount)}
-                  data-testid="planning-recap-clients-tasks"
                 />
               </div>
               {monthlyClientsLoading && (
