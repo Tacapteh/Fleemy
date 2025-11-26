@@ -1848,6 +1848,7 @@ export default function Planning() {
           if (existing) {
             const combinedPrice = Number(existing.price) + Number(task.price || 0);
             existing.price = Math.round(combinedPrice * 100) / 100;
+            existing.count += 1;
             return;
           }
 
@@ -1855,10 +1856,14 @@ export default function Planning() {
             ...task,
             label: normalizedLabel,
             price: Math.round(Number(task.price || 0) * 100) / 100,
+            count: 1,
           });
         });
 
-        return Array.from(merged.values());
+        return Array.from(merged.values()).map((task) => ({
+          ...task,
+          label: task.count > 1 ? `${task.label} x${task.count}` : task.label,
+        }));
       };
 
       const resolveTaskColorKey = (task) => {
@@ -1937,7 +1942,7 @@ export default function Planning() {
 
       tasksArray.forEach((task) => {
         const price = resolveTaskPrice(task);
-        if (!Number.isFinite(price) || price <= 0) {
+        if (!Number.isFinite(price) || price === 0) {
           return;
         }
         const taskStart =
@@ -2004,7 +2009,9 @@ export default function Planning() {
       return {
         summaries: mergedSummaries,
         unattachedTasks: mergeTasksWithSameLabel(
-          unattachedTasks.filter((task) => task.price > 0)
+          unattachedTasks.filter(
+            (task) => Number.isFinite(task.price) && task.price !== 0
+          )
         ),
       };
     },
@@ -2663,7 +2670,7 @@ export default function Planning() {
         const clientTasksTotal = Array.isArray(client?.tasks)
           ? client.tasks.reduce((sum, task) => {
               const price = Number(task?.price);
-              if (!Number.isFinite(price) || price <= 0) {
+              if (!Number.isFinite(price) || price === 0) {
                 return sum;
               }
               return sum + price;
@@ -2685,7 +2692,7 @@ export default function Planning() {
     const items = monthlyUnattachedTasks
       .map((task, index) => {
         const price = Number(task?.price);
-        if (!Number.isFinite(price) || price <= 0) {
+        if (!Number.isFinite(price) || price === 0) {
           return null;
         }
         const label =
