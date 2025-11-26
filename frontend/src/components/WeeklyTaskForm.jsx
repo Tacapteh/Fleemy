@@ -14,6 +14,7 @@ import {
 } from '../constants/colors';
 import { useSettings } from '../context/SettingsContext';
 import TaskModalStyles from './TaskModalStyles';
+import { readTaskClipboard, writeTaskClipboard } from '../utils/taskClipboard';
 
 const DAY_NAMES = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
@@ -578,6 +579,17 @@ const WeeklyTaskForm = ({
   const [selectedIconCategory, setSelectedIconCategory] = useState(
     resolveIconCategoryFromInitial(currentInitialTask),
   );
+  const [clipboardItem, setClipboardItem] = useState(() => readTaskClipboard());
+
+  const isNegativePrice = useMemo(() => {
+    if (typeof task.price === 'string') {
+      return task.price.trim().startsWith('-');
+    }
+    if (task.price == null) {
+      return false;
+    }
+    return Number(task.price) < 0;
+  }, [task.price]);
 
   const handleLinkedTaskSelectorChange = (event) => {
     setHasUserSelectedLinkedTask(true);
@@ -851,6 +863,9 @@ const WeeklyTaskForm = ({
         priceValueRaw = String(task.price);
       }
       const priceValue = priceValueRaw.trim();
+      const parsedPrice =
+        priceValue && priceValue !== '-' ? parseFloat(priceValue) : null;
+      const normalizedPrice = Number.isFinite(parsedPrice) ? parsedPrice : null;
       const normalizedStatus = canConfigureStatus && statusEnabled
         ? normalizeStatusValue(task.status)
         : 'todo';
@@ -859,7 +874,7 @@ const WeeklyTaskForm = ({
         ...task,
         time_ranges: rangesWithDates,
         id: currentInitialTask?.id || undefined,
-        price: priceValue ? parseFloat(priceValue) : null,
+        price: normalizedPrice,
         priority: normalizePriorityValue(task.priority),
         status: normalizedStatus,
         priorityEnabled: canConfigurePriority ? priorityEnabled : false,
@@ -917,6 +932,50 @@ const WeeklyTaskForm = ({
 
   const getColorLabel = (colorKey) => PASTEL_COLORS[colorKey]?.name || colorKey;
 
+  const handleCopy = () => {
+    const clipboard = {
+      type: 'weekly-task',
+      payload: {
+        ...task,
+        priorityEnabled,
+        statusEnabled,
+        allowMinutes
+      }
+    };
+    writeTaskClipboard(clipboard);
+    setClipboardItem(clipboard);
+  };
+
+  const handlePaste = () => {
+    if (!clipboardItem || clipboardItem.type !== 'weekly-task') {
+      return;
+    }
+
+    const payload = clipboardItem.payload || {};
+    const normalizedRanges = ensureTimeRanges(payload.time_ranges || task.time_ranges, {
+      allowMinutes,
+      defaultDayIndex,
+    });
+
+    setTask((current) => ({
+      ...current,
+      label: payload.label || payload.name || current.label,
+      price: payload.price ?? payload.amount ?? current.price,
+      color: payload.color || current.color,
+      icon: resolveTaskIconKey(payload.icon || current.icon),
+      time_ranges: normalizedRanges,
+      priority: normalizePriorityValue(payload.priority ?? current.priority),
+      status: normalizeStatusValue(payload.status ?? current.status),
+    }));
+
+    if (typeof payload.priorityEnabled === 'boolean') {
+      setPriorityEnabled(payload.priorityEnabled);
+    }
+    if (typeof payload.statusEnabled === 'boolean') {
+      setStatusEnabled(payload.statusEnabled);
+    }
+  };
+
   const canSwitchToEvent =
     typeof onSwitchToEvent === 'function' && !readOnly;
 
@@ -930,11 +989,35 @@ const WeeklyTaskForm = ({
   return (
     <div className="modal-overlay weekly-task-overlay">
       <div className="modal-content weekly-task-modal dark:bg-slate-900 dark:text-slate-100">
-        <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
-          {currentInitialTask
-            ? 'Modifier la tâche hebdomadaire'
-            : 'Nouvelle tâche hebdomadaire'}
-        </h2>
+        <div className="weekly-task-header-row">
+          <h2 className="modal-header dark:text-slate-100 dark:border-slate-700">
+            {currentInitialTask
+              ? 'Modifier la tâche hebdomadaire'
+              : 'Nouvelle tâche hebdomadaire'}
+          </h2>
+          <div className="task-form-header-actions">
+            <button
+              type="button"
+              className="task-form-clipboard"
+              onClick={handleCopy}
+              title="Copier la tâche"
+              aria-label="Copier la tâche"
+              disabled={isSubmitting}
+            >
+              📋
+            </button>
+            <button
+              type="button"
+              className="task-form-clipboard"
+              onClick={handlePaste}
+              title="Coller la tâche copiée"
+              aria-label="Coller la tâche copiée"
+              disabled={!clipboardItem || clipboardItem.type !== 'weekly-task' || readOnly}
+            >
+              📥
+            </button>
+          </div>
+        </div>
 
         {canSwitchToEvent && (
           <div
@@ -1126,10 +1209,12 @@ const WeeklyTaskForm = ({
                   value={task.price}
                   onChange={(e) => setTask({ ...task, price: e.target.value })}
                   placeholder="Optionnel"
-                  min="0"
                   step="0.5"
                   className="form-input"
                 />
+                {isNegativePrice && (
+                  <p className="weekly-task-hint">montant négatif</p>
+                )}
               </div>
 
             {canConfigurePriority && (
