@@ -1731,7 +1731,7 @@ export default function Planning() {
         }
 
         const price = Number(occurrence.price);
-        if (Number.isFinite(price) && price > 0) {
+        if (Number.isFinite(price) && price !== 0) {
           totals.totalTaches += price;
           if (occurrenceId) {
             countedTaskIds.add(String(occurrenceId));
@@ -2778,7 +2778,7 @@ export default function Planning() {
       .map((occurrence) => {
         const rawPrice = occurrence?.price;
         const priceNumber = Number(rawPrice);
-        if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+        if (!Number.isFinite(priceNumber) || priceNumber === 0) {
           return null;
         }
 
