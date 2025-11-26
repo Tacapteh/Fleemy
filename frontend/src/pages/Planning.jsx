@@ -1842,6 +1842,60 @@ export default function Planning() {
       const resolveTaskIcon = (task) =>
         resolveTaskIconKey(task?.icon || task?.originalTask?.icon || null);
 
+      const aggregateTasksByLabel = (tasks) => {
+        if (!Array.isArray(tasks) || tasks.length === 0) {
+          return [];
+        }
+
+        const taskMap = new Map();
+
+        tasks.forEach((task, index) => {
+          if (!task) {
+            return;
+          }
+
+          const label =
+            (typeof task.label === "string" && task.label.trim()) ||
+            "Tâche associée";
+          const key = label.toLowerCase();
+          const existing = taskMap.get(key);
+
+          if (existing) {
+            existing.price += Number(task.price) || 0;
+            if (!existing.icon && task.icon) {
+              existing.icon = task.icon;
+            }
+            if (!existing.color && task.color) {
+              existing.color = task.color;
+            }
+            if (!existing.id && task.id) {
+              existing.id = task.id;
+            }
+            return;
+          }
+
+          taskMap.set(key, {
+            id: task.id || `task-${index}`,
+            label,
+            price: Number(task.price) || 0,
+            icon: task.icon,
+            color: task.color,
+          });
+        });
+
+        return Array.from(taskMap.values())
+          .map((task) => ({
+            ...task,
+            price: Math.round(task.price * 100) / 100,
+          }))
+          .sort((a, b) => {
+            if (a.price !== b.price) {
+              return b.price - a.price;
+            }
+            return a.label.localeCompare(b.label, "fr");
+          });
+      };
+
       eventsArray.forEach((slot) => {
         const info = resolveSlotBillingInfo(slot, hourlyRateValue);
         if (!info || info.type !== "event") {
@@ -1954,14 +2008,18 @@ export default function Planning() {
 
       return {
         summaries: Array.from(summaryMap.values())
-          .map((entry) => ({
-            key: entry.key,
-            clientId: entry.clientId,
-            clientLabel: entry.clientLabel,
-            totalHours: Number(entry.totalHours.toFixed(2)),
-            totalAmount: Math.round(entry.totalAmount * 100) / 100,
-            tasks: entry.tasks,
-          }))
+          .map((entry) => {
+            const aggregatedTasks = aggregateTasksByLabel(entry.tasks);
+
+            return {
+              key: entry.key,
+              clientId: entry.clientId,
+              clientLabel: entry.clientLabel,
+              totalHours: Number(entry.totalHours.toFixed(2)),
+              totalAmount: Math.round(entry.totalAmount * 100) / 100,
+              tasks: aggregatedTasks,
+            };
+          })
           .filter((entry) =>
             entry.totalAmount > 0 || entry.totalHours > 0 || entry.tasks.length > 0
           )
@@ -4805,19 +4863,17 @@ export default function Planning() {
                             <p className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
                               Tâches associées
                             </p>
-                            <ul className="mt-2 space-y-1">
+                            <div className="mt-2 space-y-2" role="list">
                               {client.tasks.map((task) => (
-                                <li
+                                <TaskSummaryRow
                                   key={task.id}
-                                  className="flex items-center justify-between gap-2 text-slate-700 dark:text-slate-200"
-                                >
-                                  <span className="truncate">{task.label}</span>
-                                  <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                    {currencyFormatter.format(task.price)}
-                                  </span>
-                                </li>
+                                  iconId={task.icon}
+                                  label={task.label}
+                                  price={currencyFormatter.format(task.price)}
+                                  colorKey={task.color}
+                                />
                               ))}
-                            </ul>
+                            </div>
                           </div>
                         )}
                       </div>
