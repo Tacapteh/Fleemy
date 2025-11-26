@@ -1826,6 +1826,41 @@ export default function Planning() {
         return 0;
       };
 
+      const mergeTasksWithSameLabel = (tasks) => {
+        if (!Array.isArray(tasks) || tasks.length === 0) {
+          return [];
+        }
+
+        const merged = new Map();
+
+        tasks.forEach((task) => {
+          if (!task) {
+            return;
+          }
+
+          const normalizedLabel =
+            typeof task.label === "string" && task.label.trim()
+              ? task.label.trim()
+              : "Tâche associée";
+          const key = normalizedLabel.toLowerCase();
+          const existing = merged.get(key);
+
+          if (existing) {
+            const combinedPrice = Number(existing.price) + Number(task.price || 0);
+            existing.price = Math.round(combinedPrice * 100) / 100;
+            return;
+          }
+
+          merged.set(key, {
+            ...task,
+            label: normalizedLabel,
+            price: Math.round(Number(task.price || 0) * 100) / 100,
+          });
+        });
+
+        return Array.from(merged.values());
+      };
+
       const resolveTaskColorKey = (task) => {
         const candidates = [
           task?.color,
@@ -1952,21 +1987,25 @@ export default function Planning() {
         targetEntry.totalAmount += price;
       });
 
+      const mergedSummaries = Array.from(summaryMap.values())
+        .map((entry) => ({
+          key: entry.key,
+          clientId: entry.clientId,
+          clientLabel: entry.clientLabel,
+          totalHours: Number(entry.totalHours.toFixed(2)),
+          totalAmount: Math.round(entry.totalAmount * 100) / 100,
+          tasks: mergeTasksWithSameLabel(entry.tasks),
+        }))
+        .filter((entry) =>
+          entry.totalAmount > 0 || entry.totalHours > 0 || entry.tasks.length > 0
+        )
+        .sort((a, b) => b.totalAmount - a.totalAmount);
+
       return {
-        summaries: Array.from(summaryMap.values())
-          .map((entry) => ({
-            key: entry.key,
-            clientId: entry.clientId,
-            clientLabel: entry.clientLabel,
-            totalHours: Number(entry.totalHours.toFixed(2)),
-            totalAmount: Math.round(entry.totalAmount * 100) / 100,
-            tasks: entry.tasks,
-          }))
-          .filter((entry) =>
-            entry.totalAmount > 0 || entry.totalHours > 0 || entry.tasks.length > 0
-          )
-          .sort((a, b) => b.totalAmount - a.totalAmount),
-        unattachedTasks: unattachedTasks.filter((task) => task.price > 0),
+        summaries: mergedSummaries,
+        unattachedTasks: mergeTasksWithSameLabel(
+          unattachedTasks.filter((task) => task.price > 0)
+        ),
       };
     },
     [resolveSlotBillingInfo]
