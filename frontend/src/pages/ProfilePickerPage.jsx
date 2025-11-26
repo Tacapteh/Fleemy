@@ -26,6 +26,7 @@ import {
   readTeamsCache,
   clearTeamsCache,
   writeTeamsCache,
+  normalizeTeamsResponse,
 } from '../utils/teamCache';
 import { showToast } from '../utils/toast';
 
@@ -130,11 +131,12 @@ const ProfilePickerPage = () => {
         const response = await apiFetch('/teams/my', {
           signal: controller?.signal,
         });
-        if (response?.success !== true || !Array.isArray(response?.teams)) {
+        const teamsPayload = normalizeTeamsResponse(response);
+        if (!Array.isArray(teamsPayload)) {
           throw new Error('Invalid response');
         }
 
-        const nextTeams = response.teams
+        const nextTeams = teamsPayload
           .map((team) => ({
             team_id: team.team_id || team.id || null,
             name: team.name || DEFAULT_TEAM_NAME,
