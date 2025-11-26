@@ -11,6 +11,72 @@ const TaskModalStyles = () => (
       color: #e2e8f0;
     }
 
+    .task-form-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .weekly-task-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .task-form-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-form-clipboard {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #0f172a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .task-form-clipboard:hover:not(:disabled) {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+
+    .task-form-clipboard:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .dark .task-form-clipboard {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-color: #1e293b;
+    }
+
+    .dark .task-form-clipboard:hover:not(:disabled) {
+      background: #1e293b;
+      border-color: #334155;
+    }
+
+    .task-form-hint {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #6c757d;
+    }
+
+    .dark .task-form-hint {
+      color: #cbd5e1;
+    }
+
     .weekly-task-header {
       margin-bottom: 24px;
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { saveTask, useFirebaseUser } from '../firebase';
 import {
   TASK_ICON_CATEGORIES,
@@ -8,6 +8,7 @@ import {
 } from '../constants/icons';
 import { TASK_COLOR_KEYS, getTaskColor, DEFAULT_TASK_COLOR } from '../constants/colors';
 import TaskModalStyles from './TaskModalStyles';
+import { readTaskClipboard, writeTaskClipboard } from '../utils/taskClipboard';
 
 const roundToHour = (date = new Date()) => {
   const d = new Date(date);
@@ -38,7 +39,18 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [selectedIconCategory, setSelectedIconCategory] = useState(defaultIconCategory);
+  const [clipboardItem, setClipboardItem] = useState(() => readTaskClipboard());
   const user = useFirebaseUser();
+
+  const isNegativePrice = useMemo(() => {
+    if (typeof task.price === 'string') {
+      return task.price.trim().startsWith('-');
+    }
+    if (task.price == null) {
+      return false;
+    }
+    return Number(task.price) < 0;
+  }, [task.price]);
 
   const formatDateTimeLocal = (date) => {
     const d = new Date(date);
@@ -77,12 +89,21 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
     setIsSubmitting(true);
 
     try {
+      const normalizedPrice = (() => {
+        const rawPrice = typeof task.price === 'string' ? task.price.trim() : task.price;
+        if (rawPrice === '' || rawPrice === null || rawPrice === undefined || rawPrice === '-') {
+          return null;
+        }
+        const parsed = Number.parseFloat(rawPrice);
+        return Number.isFinite(parsed) ? parsed : null;
+      })();
+
       const taskData = {
         ...task,
         id: initialTask?.id || undefined,
         start: startDate,
         end: endDate,
-        price: task.price ? parseFloat(task.price) : null,
+        price: normalizedPrice,
         user_id: user.uid
       };
 
@@ -134,6 +155,40 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
 
   const colorOptions = TASK_COLOR_KEYS;
 
+  const handleCopy = () => {
+    const clipboard = {
+      type: 'task',
+      payload: {
+        ...task,
+        start: task.start instanceof Date ? task.start.toISOString() : task.start,
+        end: task.end instanceof Date ? task.end.toISOString() : task.end
+      }
+    };
+    writeTaskClipboard(clipboard);
+    setClipboardItem(clipboard);
+  };
+
+  const handlePaste = () => {
+    if (!clipboardItem || clipboardItem.type !== 'task' || !clipboardItem.payload) {
+      return;
+    }
+
+    const payload = clipboardItem.payload;
+    const parsedStart = payload.start ? new Date(payload.start) : task.start;
+    const parsedEnd = payload.end ? new Date(payload.end) : task.end;
+
+    setTask((current) => ({
+      ...current,
+      title: payload.title || payload.label || current.title,
+      description: payload.description || current.description,
+      color: payload.color || current.color,
+      icon: resolveTaskIconKey(payload.icon || current.icon),
+      price: payload.price ?? payload.amount ?? payload.total ?? current.price,
+      start: Number.isNaN(parsedStart?.getTime()) ? current.start : parsedStart,
+      end: Number.isNaN(parsedEnd?.getTime()) ? current.end : parsedEnd
+    }));
+  };
+
   if (!user) {
     return <div>Chargement...</div>;
   }
@@ -143,13 +198,34 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
       <div className="task-form-modal">
         <div className="task-form-header">
           <h3>{initialTask ? 'Modifier la tâche' : 'Nouvelle tâche'}</h3>
-          <button 
-            type="button" 
-            onClick={onCancel}
-            className="task-form-close"
-          >
-            ×
-          </button>
+          <div className="task-form-header-actions">
+            <button
+              type="button"
+              className="task-form-clipboard"
+              onClick={handleCopy}
+              title="Copier la tâche"
+              aria-label="Copier la tâche"
+            >
+              📋
+            </button>
+            <button
+              type="button"
+              className="task-form-clipboard"
+              onClick={handlePaste}
+              title="Coller la tâche copiée"
+              aria-label="Coller la tâche copiée"
+              disabled={!clipboardItem || clipboardItem.type !== 'task'}
+            >
+              📥
+            </button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="task-form-close"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="task-form">
@@ -270,11 +346,13 @@ const TaskForm = ({ initialTask = null, onSave, onCancel, onDelete }) => {
               id="task-price"
               type="number"
               step="0.01"
-              min="0"
               value={task.price}
               onChange={(e) => setTask({ ...task, price: e.target.value })}
               placeholder="0.00"
             />
+            {isNegativePrice && (
+              <span className="task-form-hint">montant négatif</span>
+            )}
           </div>
 
           <div className="task-form-field">

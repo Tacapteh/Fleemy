@@ -13,6 +13,7 @@ import useUserWeekSlots, {
 } from "../hooks/useUserWeekSlots";
 import { useSettings } from "../context/SettingsContext";
 import { getIcon } from "../icons/registry";
+import { resolveTaskIconKey } from "../constants/icons";
 import {
   useFirebaseUser,
   saveEventNew,
@@ -32,6 +33,7 @@ import { subscribeToUIEvent } from "../store/uiStore";
 import { contextStore } from "../stores/contextStore";
 import { ensureTeamsCache, readTeamsCache } from "../utils/teamCache";
 import { SectionHeaderRow, Calendar, StatusSummaryCard } from "../ui";
+import { getTaskColor, DEFAULT_TASK_COLOR } from "../constants/colors";
 import { persistInvoiceSeed } from "../utils/invoiceSeedStorage";
 
 const DAY_KEYS = [
@@ -45,8 +47,9 @@ const DAY_KEYS = [
 ];
 const DEFAULT_START = "09:00";
 const DEFAULT_END = "10:00";
-const TaskSummaryRow = ({ iconId, label, price }) => {
+const TaskSummaryRow = ({ iconId, label, price, colorKey }) => {
   const IconComponent = getIcon(iconId || undefined);
+  const colorStyles = getTaskColor(colorKey || DEFAULT_TASK_COLOR);
 
   return (
     <div
@@ -57,8 +60,13 @@ const TaskSummaryRow = ({ iconId, label, price }) => {
     >
       <div className="flex items-center gap-2 min-w-0">
         <span
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/30 dark:text-sky-200"
+          className="flex h-7 w-7 items-center justify-center rounded-full border"
           title={label}
+          style={{
+            backgroundColor: colorStyles.backgroundColor,
+            color: colorStyles.color,
+            borderColor: colorStyles.borderColor,
+          }}
         >
           <IconComponent
             className="h-4 w-4"
@@ -1741,6 +1749,7 @@ export default function Planning() {
       const eventsArray = Array.isArray(slotsList) ? slotsList : [];
       const tasksArray = Array.isArray(tasksList) ? tasksList : [];
       const summaryMap = new Map();
+      const unattachedTasks = [];
 
       const normalizeLabel = (value) =>
         typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -1816,6 +1825,22 @@ export default function Planning() {
         }
         return 0;
       };
+
+      const resolveTaskColorKey = (task) => {
+        const candidates = [
+          task?.color,
+          task?.taskColor,
+          task?.task_color,
+          task?.originalTask?.color,
+        ];
+        const match = candidates.find(
+          (candidate) => typeof candidate === "string" && candidate.trim(),
+        );
+        return match || DEFAULT_TASK_COLOR;
+      };
+
+      const resolveTaskIcon = (task) =>
+        resolveTaskIconKey(task?.icon || task?.originalTask?.icon || null);
 
       eventsArray.forEach((slot) => {
         const info = resolveSlotBillingInfo(slot, hourlyRateValue);
@@ -1899,10 +1924,6 @@ export default function Planning() {
         ) {
           return;
         }
-        const targetEntry = findEntryForTask(taskStart, taskEnd, task);
-        if (!targetEntry) {
-          return;
-        }
         const label =
           task?.title ||
           task?.label ||
@@ -1915,27 +1936,38 @@ export default function Planning() {
           task?.occurrenceId ||
           task?.taskId ||
           `${label}-${taskStart.getTime()}`;
-        targetEntry.tasks.push({
+        const taskEntry = {
           id: String(identifier),
           label,
           price,
-        });
+          icon: resolveTaskIcon(task),
+          color: resolveTaskColorKey(task),
+        };
+        const targetEntry = findEntryForTask(taskStart, taskEnd, task);
+        if (!targetEntry) {
+          unattachedTasks.push(taskEntry);
+          return;
+        }
+        targetEntry.tasks.push(taskEntry);
         targetEntry.totalAmount += price;
       });
 
-      return Array.from(summaryMap.values())
-        .map((entry) => ({
-          key: entry.key,
-          clientId: entry.clientId,
-          clientLabel: entry.clientLabel,
-          totalHours: Number(entry.totalHours.toFixed(2)),
-          totalAmount: Math.round(entry.totalAmount * 100) / 100,
-          tasks: entry.tasks,
-        }))
-        .filter((entry) =>
-          entry.totalAmount > 0 || entry.totalHours > 0 || entry.tasks.length > 0
-        )
-        .sort((a, b) => b.totalAmount - a.totalAmount);
+      return {
+        summaries: Array.from(summaryMap.values())
+          .map((entry) => ({
+            key: entry.key,
+            clientId: entry.clientId,
+            clientLabel: entry.clientLabel,
+            totalHours: Number(entry.totalHours.toFixed(2)),
+            totalAmount: Math.round(entry.totalAmount * 100) / 100,
+            tasks: entry.tasks,
+          }))
+          .filter((entry) =>
+            entry.totalAmount > 0 || entry.totalHours > 0 || entry.tasks.length > 0
+          )
+          .sort((a, b) => b.totalAmount - a.totalAmount),
+        unattachedTasks: unattachedTasks.filter((task) => task.price > 0),
+      };
     },
     [resolveSlotBillingInfo]
   );
@@ -2548,19 +2580,34 @@ export default function Planning() {
     [recapTotals]
   );
 
-  const monthlyClientSummaries = useMemo(
-    () =>
-      buildMonthlyClientSummary(
+  const {
+    summaries: monthlyClientSummaries,
+    unattachedTasks: monthlyUnattachedTasks,
+  } = useMemo(
+    () => {
+      const result = buildMonthlyClientSummary(
         monthEventsForSummary,
         monthTasksForSummary,
-        hourlyRateGlobal
-      ),
+        hourlyRateGlobal,
+      );
+
+      if (Array.isArray(result)) {
+        return { summaries: result, unattachedTasks: [] };
+      }
+
+      return {
+        summaries: Array.isArray(result?.summaries) ? result.summaries : [],
+        unattachedTasks: Array.isArray(result?.unattachedTasks)
+          ? result.unattachedTasks
+          : [],
+      };
+    },
     [
       buildMonthlyClientSummary,
       monthEventsForSummary,
       monthTasksForSummary,
       hourlyRateGlobal,
-    ]
+    ],
   );
 
   const monthlyClientsTotals = useMemo(() => {
@@ -2590,6 +2637,41 @@ export default function Planning() {
       { totalAmount: 0, tasksAmount: 0 }
     );
   }, [monthlyClientSummaries]);
+
+  const monthlyUnattachedTasksSummary = useMemo(() => {
+    if (!Array.isArray(monthlyUnattachedTasks) || monthlyUnattachedTasks.length === 0) {
+      return { total: 0, items: [] };
+    }
+
+    const items = monthlyUnattachedTasks
+      .map((task, index) => {
+        const price = Number(task?.price);
+        if (!Number.isFinite(price) || price <= 0) {
+          return null;
+        }
+        const label =
+          (typeof task?.label === "string" && task.label.trim()) ||
+          (typeof task?.title === "string" && task.title.trim()) ||
+          "Tâche";
+        return {
+          id: task?.id || task?.taskId || `unattached-${index}`,
+          label,
+          price,
+          icon: task?.icon || null,
+          color: task?.color || DEFAULT_TASK_COLOR,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (a.price !== b.price) {
+          return b.price - a.price;
+        }
+        return a.label.localeCompare(b.label, "fr");
+      });
+
+    const total = items.reduce((sum, item) => sum + item.price, 0);
+    return { total, items };
+  }, [monthlyUnattachedTasks]);
 
   const summaryCards = useMemo(
     () => [
@@ -2633,6 +2715,19 @@ export default function Planning() {
       return { total: 0, items: [] };
     }
 
+    const resolveColor = (occurrence) => {
+      const candidates = [
+        occurrence?.color,
+        occurrence?.taskColor,
+        occurrence?.task?.color,
+        occurrence?.originalTask?.color,
+      ];
+      const match = candidates.find(
+        (value) => typeof value === "string" && value.trim(),
+      );
+      return match || DEFAULT_TASK_COLOR;
+    };
+
     const items = sanitizedActiveTaskOccurrences
       .map((occurrence) => {
         const rawPrice = occurrence?.price;
@@ -2660,6 +2755,7 @@ export default function Planning() {
           label,
           price: priceNumber,
           sortValue,
+          color: resolveColor(occurrence),
         };
       })
       .filter(Boolean);
@@ -2688,6 +2784,7 @@ export default function Planning() {
           icon: item.icon || null,
           price: 0,
           count: 0,
+          color: item.color || null,
         };
         labelMap.set(normalizedLabel, entry);
         aggregatedItems.push(entry);
@@ -2696,6 +2793,9 @@ export default function Planning() {
       entry.count += 1;
       if (!entry.icon && item.icon) {
         entry.icon = item.icon;
+      }
+      if (!entry.color && item.color) {
+        entry.color = item.color;
       }
     });
 
@@ -2706,6 +2806,7 @@ export default function Planning() {
       items: aggregatedItems.map((entry, index) => ({
         id: `${entry.key}-${index}`,
         icon: entry.icon,
+        color: entry.color,
         label:
           entry.count > 1
             ? `${entry.baseLabel} x${entry.count}`
@@ -4559,6 +4660,7 @@ export default function Planning() {
                           iconId={item.icon}
                           label={item.label}
                           price={currencyFormatter.format(item.price)}
+                          colorKey={item.color}
                         />
                       ))}
                     </div>
@@ -4589,6 +4691,34 @@ export default function Planning() {
                   data-testid="planning-recap-clients-total"
                 />
               </div>
+              {monthlyUnattachedTasksSummary.items.length > 0 && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/70">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        Tâches non rattachées
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Tâches du mois sans client associé.
+                      </p>
+                    </div>
+                    <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                      {currencyFormatter.format(monthlyUnattachedTasksSummary.total)}
+                    </p>
+                  </div>
+                  <div className="mt-3 space-y-2" role="list">
+                    {monthlyUnattachedTasksSummary.items.map((task) => (
+                      <TaskSummaryRow
+                        key={task.id}
+                        iconId={task.icon}
+                        label={task.label}
+                        price={currencyFormatter.format(task.price)}
+                        colorKey={task.color}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
               {monthlyClientsLoading && (
                 <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                   Analyse des clients…
