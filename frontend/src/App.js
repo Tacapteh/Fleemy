@@ -20,9 +20,10 @@ import {
   hasFreshTeamsCache,
   ensureTeamsCache,
   clearTeamsCache,
+  readTeamsCache,
 } from "./utils/teamCache";
 
-const CONTEXT_CHECK_TIMEOUT_MS = 7000;
+const CONTEXT_CHECK_TIMEOUT_MS = 15000;
 
 const Login = lazy(() => import("./Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -71,15 +72,46 @@ function AuthGuard({ user, children }) {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    const isSavedTeamValid = (teams, savedContext) => {
+      if (!savedContext?.teamId || !Array.isArray(teams)) {
+        return false;
+      }
+
+      return teams.some((team) => team.team_id === savedContext.teamId);
+    };
+
     const checkContext = async () => {
       if (!user) {
         setChecking(false);
         return;
       }
 
+      const savedContext = contextStore.get();
+
+      const cachedTeams = readTeamsCache();
+      if (savedContext?.type === "team" && isSavedTeamValid(cachedTeams, savedContext)) {
+        setChecking(false);
+
+        ensureTeamsCache(() => apiFetch("/teams/my"), { forceRefresh: true })
+          .then((result) => {
+            if (!result.success) {
+              clearTeamsCache();
+            }
+
+            if (!isSavedTeamValid(result.teams, savedContext)) {
+              navigate("/profiles");
+            }
+          })
+          .catch((refreshError) => {
+            console.error("Error validating team membership in background:", refreshError);
+            clearTeamsCache();
+          });
+
+        return;
+      }
+
       try {
         // Vérifier si un contexte existe
-        const savedContext = contextStore.get();
         
         if (savedContext) {
           // Valider que le contexte est toujours valide

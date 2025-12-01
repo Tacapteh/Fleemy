@@ -98,7 +98,7 @@ const ProfilePickerPage = () => {
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
 
-  const API_TEAM_FETCH_TIMEOUT_MS = 8000;
+  const API_TEAM_FETCH_TIMEOUT_MS = 0;
 
   const fetchTeamsList = useCallback(
     async (options = {}) => {
