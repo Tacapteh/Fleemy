@@ -4713,7 +4713,7 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
 
         member_docs, owner_docs, membership_docs, legacy_member_docs = await asyncio.gather(
             asyncio.to_thread(fetch_member_teams),
-            asyncio.to_thread(fetch_owner_teams),
+            fetch_owner_teams(),
             fetch_membership_docs(),
             fetch_legacy_member_docs(),
         )
