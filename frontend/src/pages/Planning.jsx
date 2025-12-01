@@ -2884,6 +2884,24 @@ export default function Planning() {
     return jsDay - 1;
   }, []);
 
+  const formatDateOnly = useCallback((value) => {
+    if (!value) {
+      return null;
+    }
+
+    const candidate = value instanceof Date ? new Date(value) : new Date(value);
+    if (Number.isNaN(candidate.getTime())) {
+      return null;
+    }
+
+    candidate.setHours(0, 0, 0, 0);
+    const year = candidate.getFullYear();
+    const month = String(candidate.getMonth() + 1).padStart(2, "0");
+    const day = String(candidate.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }, []);
+
   const normalizeDayDate = useCallback((value) => {
     if (!value) {
       return null;
@@ -3153,10 +3171,12 @@ export default function Planning() {
   );
 
   const duplicateWeeklyTasksForDay = useCallback(
-    async (sourceDayIndex, targetDayIndex) => {
+    async (sourceDayIndex, targetDayIndex, targetDate) => {
       if (!planningContext || planningTab === TEAM_PLANNING_TAB_SHARED) {
         return 0;
       }
+
+      const targetDateIso = formatDateOnly(targetDate);
 
       const normalizeRangeDay = (range) => {
         if (!range) return null;
@@ -3216,10 +3236,10 @@ export default function Planning() {
           ...range,
           day: targetDayIndex,
           weekday: targetDayIndex,
-          task_date: null,
-          taskDate: null,
-          task_day_iso: null,
-          taskDayIso: null,
+          task_date: targetDateIso,
+          taskDate: targetDateIso,
+          task_day_iso: targetDateIso,
+          taskDayIso: targetDateIso,
           taskDayISO: null,
         }));
 
@@ -3230,6 +3250,9 @@ export default function Planning() {
             ...rest,
             time_ranges: duplicatedRanges,
             weekday: targetDayIndex,
+            task_date: targetDateIso ?? rest.task_date ?? rest.taskDate ?? null,
+            task_day_iso:
+              targetDateIso ?? rest.task_day_iso ?? rest.taskDayIso ?? null,
           });
           created += 1;
         } catch (error) {
@@ -3239,7 +3262,13 @@ export default function Planning() {
 
       return created;
     },
-    [activeWeeklyTasks, planningContext, planningTab, saveWeeklyTask],
+    [
+      activeWeeklyTasks,
+      formatDateOnly,
+      planningContext,
+      planningTab,
+      saveWeeklyTask,
+    ],
   );
 
   const handleSelectDayForDuplication = useCallback(
@@ -3307,7 +3336,11 @@ export default function Planning() {
       try {
         const [createdEvents, createdTasks] = await Promise.all([
           duplicateEventsForDay(sourceDayIndex, targetDayIndex, normalizedTarget),
-          duplicateWeeklyTasksForDay(sourceDayIndex, targetDayIndex),
+          duplicateWeeklyTasksForDay(
+            sourceDayIndex,
+            targetDayIndex,
+            normalizedTarget,
+          ),
         ]);
 
         if (createdEvents === 0 && createdTasks === 0) {
