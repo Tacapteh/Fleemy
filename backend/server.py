@@ -4644,7 +4644,7 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             except Exception as member_error:  # pragma: no cover - fallback path
                 return scan_member_teams_fallback(member_error)
 
-        def fetch_owner_teams():
+        async def fetch_owner_teams():
             owner_fields = [
                 "owner_uid",
                 "ownerUid",
@@ -4660,45 +4660,34 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             seen_team_ids: Set[str] = set()
             owner_documents: List[Any] = []
 
-            for field_name in owner_fields:
+            # Run all owner queries in parallel
+            async def _query_field(field_name: str) -> List[Any]:
                 try:
                     query_ref = teams_ref.where(field_name, "==", user["uid"])
+                    return await asyncio.to_thread(lambda: list(query_ref.stream()))
                 except Exception:
                     logger.debug(
                         "Owner field %s is not queryable in this environment", field_name
                     )
-                    continue
+                    return []
 
-                try:
-                    for team_doc in query_ref.stream():
-                        team_id = getattr(team_doc, "id", None)
-                        if not team_id or team_id in seen_team_ids:
-                            continue
-                        owner_documents.append(team_doc)
-                        seen_team_ids.add(team_id)
-                except Exception:
-                    logger.debug(
-                        "Owner field %s query failed, skipping", field_name, exc_info=True
-                    )
+            results = await asyncio.gather(*[_query_field(f) for f in owner_fields])
+            
+            for docs in results:
+                for team_doc in docs:
+                    team_id = getattr(team_doc, "id", None)
+                    if not team_id or team_id in seen_team_ids:
+                        continue
+                    owner_documents.append(team_doc)
+                    seen_team_ids.add(team_id)
 
             return owner_documents
 
         async def fetch_membership_docs() -> List[Any]:
-            if not hasattr(db, "collection_group"):
-                return []
-
-            def _run_query():
-                membership_query = (
-                    db.collection_group("memberships")
-                    .where(DOCUMENT_ID_FIELD, "==", user["uid"])
-                )
-                return list(membership_query.stream())
-
-            try:
-                return await asyncio.to_thread(_run_query)
-            except Exception:  # pragma: no cover - defensive
-                logger.exception("Failed to fetch membership collection group")
-                return []
+            # collectionGroup queries on documentId() are not supported in this context
+            # and caused "Invalid query" errors. We return empty for now as we rely
+            # on direct member/owner queries.
+            return []
 
         async def fetch_legacy_member_docs() -> List[Any]:
             uid = user.get("uid")
@@ -4720,26 +4709,7 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                     return []
 
             legacy_docs = await asyncio.to_thread(_run_legacy_query)
-            if legacy_docs:
-                return legacy_docs
-
-            def _scan_all_teams() -> List[Any]:
-                results: List[Any] = []
-                try:
-                    for team_doc in teams_ref.stream():
-                        data = team_doc.to_dict() or {}
-                        member_ids = _normalize_member_ids(data.get("members"))
-                        if uid in member_ids:
-                            results.append(team_doc)
-                except Exception as scan_error:
-                    logger.warning(
-                        "Legacy members scan failed for %s: %s",
-                        uid,
-                        scan_error,
-                    )
-                return results
-
-            return await asyncio.to_thread(_scan_all_teams)
+            return legacy_docs
 
         member_docs, owner_docs, membership_docs, legacy_member_docs = await asyncio.gather(
             asyncio.to_thread(fetch_member_teams),

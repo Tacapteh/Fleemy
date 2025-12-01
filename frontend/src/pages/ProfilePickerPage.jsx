@@ -277,16 +277,8 @@ const ProfilePickerPage = () => {
       try {
         const membershipCollectionCandidates = [
           {
-            name: 'memberships',
-            buildQuery: (col) => query(col, where(documentId(), '==', user.uid)),
-          },
-          {
             name: 'members',
             buildQuery: (col) => query(col, where('uid', '==', user.uid)),
-          },
-          {
-            name: 'members',
-            buildQuery: (col) => query(col, where(documentId(), '==', user.uid)),
           },
         ];
         let membershipsQuery = null;
