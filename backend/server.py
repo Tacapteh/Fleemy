@@ -4099,6 +4099,8 @@ async def create_team(
                     "user_id": owner_uid,
                     "userId": owner_uid,
                 },
+                # Legacy field maintained for backwards compatibility
+                "inviteCode": invite_code,
             }
         )
         team_payload["created_at"] = firestore.SERVER_TIMESTAMP
@@ -4145,17 +4147,36 @@ async def join_team(
         if not code:
             raise HTTPException(status_code=400, detail="Le code d'invitation est requis")
         
-        # Find team by invite code
+        # Find team by invite code (supports legacy camelCase field)
         teams_ref = db.collection("teams")
-        query = teams_ref.where("invite_code", "==", code).limit(1)
-        teams = list(await asyncio.to_thread(query.stream))
-        
+        teams: List[Any] = []
+        last_error: Optional[Exception] = None
+
+        for field_name in ("invite_code", "inviteCode"):
+            try:
+                query = teams_ref.where(field_name, "==", code).limit(1)
+                teams = await asyncio.to_thread(lambda: list(query.stream()))
+            except Exception as stream_error:  # pragma: no cover - defensive logging
+                last_error = stream_error
+                logger.warning(
+                    "Failed to query teams by %s: %s",
+                    field_name,
+                    stream_error,
+                    exc_info=True,
+                )
+                continue
+
+            if teams:
+                break
+
         if not teams:
-            raise HTTPException(
-                status_code=404,
-                detail="Code d'invitation invalide ou expiré"
-            )
-        
+            if last_error:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Service d'invitation temporairement indisponible",
+                )
+            raise HTTPException(status_code=404, detail="Équipe introuvable")
+
         team_doc = teams[0]
         team_data = team_doc.to_dict()
         team_id = team_doc.id
@@ -4760,7 +4781,8 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 "team_id": team_id,
                 "name": team_data.get("name"),
                 "owner_uid": owner_uid,
-                "invite_code": team_data.get("invite_code"),
+                "invite_code": team_data.get("invite_code")
+                or team_data.get("inviteCode"),
                 "members_count": members_count,
             }
 
@@ -4831,6 +4853,7 @@ async def rotate_invite_code(
             team_ref.update,
             {
                 "invite_code": new_code,
+                "inviteCode": new_code,
                 "updated_at": firestore.SERVER_TIMESTAMP,
             }
         )
