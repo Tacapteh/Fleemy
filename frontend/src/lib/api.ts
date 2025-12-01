@@ -44,6 +44,8 @@ const ENV_API_URL =
     ? process.env.REACT_APP_API_URL.trim()
     : null;
 
+const CURRENT_HOSTNAME =
+  typeof window !== "undefined" ? window.location.hostname || null : null;
 const SAME_ORIGIN_OVERRIDE = resolveSameOriginOverride();
 const BROWSER_ORIGIN =
   typeof window !== "undefined" ? window.location.origin || null : null;
@@ -53,6 +55,8 @@ const BROWSER_FALLBACK_URL = resolveBrowserFallback();
 const DEFAULT_API_URL = "https://fleemy.onrender.com";
 
 const API_BASE_URLS: string[] = [];
+const SHOULD_PRIORITIZE_DIRECT_BACKEND =
+  CURRENT_HOSTNAME !== null && CURRENT_HOSTNAME.endsWith(".vercel.app");
 
 const appendBaseUrl = (candidate: string | null) => {
   if (!candidate) {
@@ -71,20 +75,36 @@ const appendBaseUrl = (candidate: string | null) => {
   API_BASE_URLS.push(candidate);
 };
 
-// Always prefer browser-provided origins before falling back to
-// environment configuration. When the frontend runs on a platform like
-// Vercel we rely on rewrites to proxy ``/api`` calls to the backend
-// (Render). If we try the environment URL first we end up calling the
-// Render instance directly which re-introduces strict CORS checks and
-// manifests as ``TypeError: Failed to fetch`` when the backend is under
-// load. Prioritising the same-origin candidates keeps requests on the
-// Vercel domain so the proxy can add the correct headers even for error
-// responses.
-appendBaseUrl(SAME_ORIGIN_OVERRIDE);
-appendBaseUrl(BROWSER_ORIGIN);
-appendBaseUrl(BROWSER_FALLBACK_URL);
-appendBaseUrl(ENV_API_URL);
-appendBaseUrl(DEFAULT_API_URL);
+const baseCandidates = SHOULD_PRIORITIZE_DIRECT_BACKEND
+  ? [
+      // On Vercel we sometimes see transient 502 errors from the proxy layer
+      // before the Render backend is fully awake. Trying the Render base URL
+      // directly first lets us bypass the proxy and avoid surfacing a gateway
+      // failure to the user when the API is reachable with CORS.
+      ENV_API_URL,
+      DEFAULT_API_URL,
+      SAME_ORIGIN_OVERRIDE,
+      BROWSER_ORIGIN,
+      BROWSER_FALLBACK_URL,
+    ]
+  : [
+      // Always prefer browser-provided origins before falling back to
+      // environment configuration. When the frontend runs on a platform like
+      // Vercel we rely on rewrites to proxy ``/api`` calls to the backend
+      // (Render). If we try the environment URL first we end up calling the
+      // Render instance directly which re-introduces strict CORS checks and
+      // manifests as ``TypeError: Failed to fetch`` when the backend is under
+      // load. Prioritising the same-origin candidates keeps requests on the
+      // Vercel domain so the proxy can add the correct headers even for error
+      // responses.
+      SAME_ORIGIN_OVERRIDE,
+      BROWSER_ORIGIN,
+      BROWSER_FALLBACK_URL,
+      ENV_API_URL,
+      DEFAULT_API_URL,
+    ];
+
+baseCandidates.forEach(appendBaseUrl);
 const RETRY_DELAYS = [0, 250, 500, 1000];
 const TEMPORARY_RETRY_DELAYS = [0, 300, 1000];
 const TEMPORARY_FINAL_BACKOFF = 2500;
