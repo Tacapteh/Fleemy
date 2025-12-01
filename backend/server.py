@@ -4190,8 +4190,10 @@ async def join_team(
                     detail="Ce code d'invitation a expiré"
                 )
         
-        # Check if user is already a member
-        current_members = team_data.get("members", [])
+        # Check if user is already a member (supports legacy map structure)
+        current_members_raw = team_data.get("members", [])
+        current_members = set(_normalize_member_ids(current_members_raw))
+
         if user["uid"] in current_members:
             # Already a member - return success (idempotent)
             return {
@@ -4200,14 +4202,25 @@ async def join_team(
                 "name": team_data.get("name"),
                 "already_member": True,
             }
-        
-        # Add user to members
+
+        # Add user to members (handle legacy map fields that are not arrays)
+        members_update: Any
+        if isinstance(current_members_raw, list):
+            members_update = firestore.ArrayUnion([user["uid"]])
+        else:
+            # Rebuild the members array from the legacy structure to avoid
+            # Firestore type errors when applying ArrayUnion on a map.
+            members_update = list({*current_members, user["uid"]})
+
+        update_payload = {
+            "members": members_update,
+            "members_count": len(current_members) + 1,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        }
+
         await asyncio.to_thread(
             db.collection("teams").document(team_id).update,
-            {
-                "members": firestore.ArrayUnion([user["uid"]]),
-                "updated_at": firestore.SERVER_TIMESTAMP,
-            },
+            update_payload,
         )
 
         logger.info("User %s joined team %s", user["uid"], team_id)
