@@ -121,6 +121,8 @@ function AuthGuard({ user, children }) {
             return;
           } else if (savedContext.type === 'team' && savedContext.teamId) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
+            const cachedTeams = readTeamsCache();
+
             const ensurePromise = ensureTeamsCache(
               () => apiFetch('/teams/my'),
               { forceRefresh: true },
@@ -136,10 +138,17 @@ function AuthGuard({ user, children }) {
             ]);
 
             if (resultOrTimeout.status === 'timeout') {
-              console.warn(
-                'AuthGuard: délai dépassé lors de la vérification du contexte, poursuite sans validation réseau.',
-              );
-              setChecking(false);
+              if (Array.isArray(cachedTeams)) {
+                const stillMemberWithCache = cachedTeams.some((t) => t.team_id === savedContext.teamId);
+
+                if (stillMemberWithCache) {
+                  setChecking(false);
+                  return;
+                }
+              }
+
+              clearTeamsCache();
+              navigate('/profiles');
               return;
             }
 
