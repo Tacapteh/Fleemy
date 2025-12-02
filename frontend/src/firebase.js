@@ -1645,11 +1645,31 @@ export async function fetchUserTeamsFromFirestore() {
         collect(snapshot);
       });
 
-    if (ownerDocsFound === 0) {
+    const shouldScanAllTeams =
+      ownerDocsFound === 0 ||
+      !Array.isArray(membershipDocSnaps) ||
+      membershipDocSnaps.length === 0;
+
+    if (shouldScanAllTeams) {
       try {
         const fallbackSnapshot = await getDocs(teamsCollection);
         fallbackSnapshot.forEach((docSnap) => {
           const data = docSnap?.data?.() || {};
+          const membersValue = data.members;
+
+          const isLegacyMemberMap =
+            membersValue &&
+            typeof membersValue === "object" &&
+            !Array.isArray(membersValue) &&
+            Object.prototype.hasOwnProperty.call(membersValue, uid);
+
+          if (isLegacyMemberMap) {
+            uniqueTeams.set(docSnap.id, {
+              ...normalizeTeamSnapshot(docSnap),
+              source: "firestore-member-scan",
+            });
+          }
+
           const ownerCandidates = [
             data.owner_uid,
             data.ownerUid,
