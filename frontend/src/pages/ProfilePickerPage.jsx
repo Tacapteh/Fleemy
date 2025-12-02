@@ -654,14 +654,25 @@ const ProfilePickerPage = () => {
         console.warn('Unable to ensure membership after team creation', membershipError);
       }
 
-      clearTeamsCache();
-      setInviteDialogTeam({
+      const newTeam = {
         team_id: data.team_id,
         name: data.name || teamName,
         invite_code: data.invite_code,
         owner_uid: user.uid,
         members_count: 1,
+      };
+
+      clearTeamsCache();
+      setTeams((currentTeams) => {
+        const baseTeams = Array.isArray(currentTeams) ? currentTeams : [];
+        const exists = baseTeams.some((team) => team.team_id === newTeam.team_id);
+        if (exists) {
+          return baseTeams;
+        }
+        return [...baseTeams, newTeam];
       });
+
+      setInviteDialogTeam(newTeam);
     } catch (err) {
       throw err;
     }
