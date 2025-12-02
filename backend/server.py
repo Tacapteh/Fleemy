@@ -4718,10 +4718,61 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             return owner_documents
 
         async def fetch_membership_docs() -> List[Any]:
-            # collectionGroup queries on documentId() are not supported in this context
-            # and caused "Invalid query" errors. We return empty for now as we rely
-            # on direct member/owner queries.
-            return []
+            uid = user.get("uid")
+            if not uid:
+                return []
+
+            # Prefer a collection group query when available to pick up membership
+            # documents even if the parent team doesn't list the user in a flat
+            # array. This matches the structure created by the backend when
+            # ensuring memberships.
+            try:
+                collection_group = getattr(db, "collection_group", None)
+                if callable(collection_group):
+                    membership_query = (
+                        collection_group("memberships")
+                        .where(DOCUMENT_ID_FIELD, "==", uid)
+                    )
+                    return await asyncio.to_thread(
+                        lambda: list(membership_query.stream())
+                    )
+            except Exception as membership_error:  # pragma: no cover - defensive
+                logger.warning(
+                    "Membership collection group query failed for %s: %s",
+                    uid,
+                    membership_error,
+                    exc_info=True,
+                )
+
+            def _scan_memberships_fallback() -> List[Any]:
+                docs: List[Any] = []
+                try:
+                    for team_doc in teams_ref.stream():
+                        team_id = getattr(team_doc, "id", None)
+                        if not team_id:
+                            continue
+
+                        team_ref = getattr(team_doc, "reference", None)
+                        if team_ref is None:
+                            team_ref = teams_ref.document(team_id)
+
+                        membership_ref = team_ref.collection("memberships").document(
+                            uid
+                        )
+                        membership_snap = membership_ref.get()
+
+                        if getattr(membership_snap, "exists", True):
+                            docs.append(membership_snap)
+                except Exception as fallback_error:  # pragma: no cover - defensive
+                    logger.warning(
+                        "Membership scan fallback failed for %s: %s",
+                        uid,
+                        fallback_error,
+                        exc_info=True,
+                    )
+                return docs
+
+            return await asyncio.to_thread(_scan_memberships_fallback)
 
         async def fetch_legacy_member_docs() -> List[Any]:
             uid = user.get("uid")
