@@ -77,15 +77,15 @@ const appendBaseUrl = (candidate: string | null) => {
 
 const baseCandidates = SHOULD_PRIORITIZE_DIRECT_BACKEND
   ? [
-      // On Vercel we sometimes see transient 502 errors from the proxy layer
-      // before the Render backend is fully awake. Trying the Render base URL
-      // directly first lets us bypass the proxy and avoid surfacing a gateway
-      // failure to the user when the API is reachable with CORS.
-      ENV_API_URL,
-      DEFAULT_API_URL,
+      // When running on Vercel, prefer the proxied same-origin URLs first so
+      // we keep Render behind the Vercel rewrite and preserve CORS headers. We
+      // still include the direct backend URLs as fallbacks to bypass proxy
+      // issues once the safe options have been tried.
       SAME_ORIGIN_OVERRIDE,
       BROWSER_ORIGIN,
       BROWSER_FALLBACK_URL,
+      ENV_API_URL,
+      DEFAULT_API_URL,
     ]
   : [
       // Always prefer browser-provided origins before falling back to
