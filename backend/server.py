@@ -4064,8 +4064,8 @@ async def create_team(
 ):
     """Create a new team with unique invite code."""
     try:
-        # Validate team name
-        name = team_request.name.strip()
+        # Validate team name (avoid AttributeError if client sends null/undefined)
+        name = (team_request.name or "").strip()
         if len(name) < 2 or len(name) > 48:
             raise HTTPException(
                 status_code=400,
@@ -4113,11 +4113,18 @@ async def create_team(
             team_data,
         )
 
-        await ensure_membership_documents(
-            team.team_id,
-            user,
-            include_joined_at=True,
-        )
+        try:
+            await ensure_membership_documents(
+                team.team_id,
+                user,
+                include_joined_at=True,
+            )
+        except Exception as membership_error:  # pragma: no cover - defensive fallback
+            logger.warning(
+                "Team %s created but membership docs failed: %s",
+                team.team_id,
+                membership_error,
+            )
 
         logger.info("Team created: %s by user %s", team.team_id, user["uid"])
 
