@@ -5,7 +5,9 @@ const TEAMS_CACHE_TTL_MS = 60_000; // 1 minute cache to speed up perceived loadi
 
 const isBrowser = typeof window !== 'undefined';
 
-export const readTeamsCache = () => {
+export const readTeamsCache = (options = {}) => {
+  const allowExpired = options.allowExpired === true;
+
   if (!isBrowser) {
     return null;
   }
@@ -17,11 +19,11 @@ export const readTeamsCache = () => {
     }
 
     const parsed = JSON.parse(raw);
-    if (
+    const isFresh =
       typeof parsed?.cachedAt === 'number' &&
-      Array.isArray(parsed?.teams) &&
-      Date.now() - parsed.cachedAt < TEAMS_CACHE_TTL_MS
-    ) {
+      Date.now() - parsed.cachedAt < TEAMS_CACHE_TTL_MS;
+
+    if (Array.isArray(parsed?.teams) && (allowExpired || isFresh)) {
       return parsed.teams;
     }
   } catch (cacheError) {
@@ -79,6 +81,8 @@ export const normalizeTeamsResponse = (data) => {
 export const hasFreshTeamsCache = () => readTeamsCache() !== null;
 
 let pendingTeamsPromise = null;
+
+const allowExpiredCacheRead = () => readTeamsCache({ allowExpired: true });
 
 const buildResult = (teams, raw, success, fromCache) => ({
   teams,
@@ -149,6 +153,7 @@ const fetchAndCacheTeams = async (fetcher) => {
 
 export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) => {
   const cachedTeams = readTeamsCache();
+  const staleTeams = allowExpiredCacheRead();
 
   if (!forceRefresh && cachedTeams !== null) {
     return buildResult(cachedTeams, null, true, true);
@@ -163,6 +168,10 @@ export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) =
       const result = await fetchAndCacheTeams(fetcher);
       return result;
     } catch (error) {
+      if (staleTeams !== null) {
+        return buildResult(staleTeams, null, true, true);
+      }
+
       clearTeamsCache();
       throw error;
     } finally {
