@@ -221,3 +221,37 @@ async def test_get_my_teams_includes_membership_documents(monkeypatch):
     legacy_team = result["teams"][0]
     assert legacy_team["owner_uid"] == "owner-legacy"
     assert legacy_team["members_count"] == 2
+
+
+@pytest.mark.anyio("asyncio")
+async def test_get_my_teams_returns_unavailable_on_membership_error(monkeypatch):
+    user_uid = "user-permission"
+
+    class FailingCollection:
+        def __init__(self, error):
+            self._error = error
+
+        def where(self, *args, **kwargs):  # pragma: no cover - not reached
+            raise self._error
+
+        def stream(self):  # pragma: no cover - defensive
+            raise self._error
+
+    class FailingDB:
+        def __init__(self, error):
+            self._error = error
+
+        def collection(self, name):
+            if name == "teams":
+                raise self._error
+            raise KeyError(name)
+
+    permission_error = server.PermissionDenied("permissions denied")
+    monkeypatch.setattr(server, "db", FailingDB(permission_error))
+
+    response = await server.get_my_teams(user={"uid": user_uid})
+
+    assert hasattr(response, "status_code")
+    assert response.status_code == 503
+    assert response.body is not None
+    assert b"MEMBERSHIPS_UNAVAILABLE" in response.body

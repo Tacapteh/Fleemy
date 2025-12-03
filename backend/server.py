@@ -4641,7 +4641,23 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
     logger.info("/teams/my called for %s", user.get("uid"))
     try:
         # Query teams where user is a member or the owner
-        teams_ref = db.collection("teams")
+        try:
+            teams_ref = db.collection("teams")
+        except (PermissionDenied, Forbidden, GoogleServiceUnavailable) as membership_error:
+            logger.warning(
+                "Unable to access teams collection for %s: %s",
+                user.get("uid"),
+                membership_error,
+                exc_info=True,
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "code": "MEMBERSHIPS_UNAVAILABLE",
+                    "message": "Memberships temporarily unavailable",
+                },
+            )
 
         def scan_member_teams_fallback(error: Optional[Exception] = None):
             """Fallback when ``array_contains`` query fails (legacy data / indexes)."""
@@ -4803,12 +4819,30 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             legacy_docs = await asyncio.to_thread(_run_legacy_query)
             return legacy_docs
 
-        member_docs, owner_docs, membership_docs, legacy_member_docs = await asyncio.gather(
-            asyncio.to_thread(fetch_member_teams),
-            fetch_owner_teams(),
-            fetch_membership_docs(),
-            fetch_legacy_member_docs(),
-        )
+        try:
+            member_docs, owner_docs, membership_docs, legacy_member_docs = (
+                await asyncio.gather(
+                    asyncio.to_thread(fetch_member_teams),
+                    fetch_owner_teams(),
+                    fetch_membership_docs(),
+                    fetch_legacy_member_docs(),
+                )
+            )
+        except (PermissionDenied, Forbidden, GoogleServiceUnavailable) as membership_error:
+            logger.warning(
+                "Unable to list teams for %s due to membership permission issues: %s",
+                user.get("uid"),
+                membership_error,
+                exc_info=True,
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "code": "MEMBERSHIPS_UNAVAILABLE",
+                    "message": "Memberships temporarily unavailable",
+                },
+            )
 
         teams_map: Dict[str, Dict[str, Any]] = {}
 
