@@ -278,18 +278,50 @@ const ProfilePickerPage = () => {
         const membershipCollectionCandidates = [
           {
             name: 'members',
-            buildQuery: (col) => query(col, where('uid', '==', user.uid)),
+            buildQueries: (col) => {
+              const queries = [query(col, where('uid', '==', user.uid))];
+
+              try {
+                queries.push(query(col, where(documentId(), '==', user.uid)));
+              } catch (fieldError) {
+                if (!isPermissionDeniedError(fieldError)) {
+                  console.warn('Unable to use documentId constraint', fieldError);
+                }
+              }
+
+              return queries;
+            },
+          },
+          {
+            name: 'memberships',
+            buildQueries: (col) => {
+              const queries = [query(col, where('uid', '==', user.uid))];
+
+              try {
+                queries.push(query(col, where(documentId(), '==', user.uid)));
+              } catch (fieldError) {
+                if (!isPermissionDeniedError(fieldError)) {
+                  console.warn('Unable to use documentId constraint', fieldError);
+                }
+              }
+
+              return queries;
+            },
           },
         ];
         let membershipsQuery = null;
+        let membershipAccessDenied = false;
 
-        for (const { name, buildQuery } of membershipCollectionCandidates) {
-          let candidateQuery = null;
+        for (const { name, buildQueries } of membershipCollectionCandidates) {
+          let queries = [];
           try {
-            candidateQuery = buildQuery(collectionGroup(db, name));
+            queries =
+              typeof buildQueries === 'function'
+                ? buildQueries(collectionGroup(db, name))
+                : [];
           } catch (collectionError) {
             if (isPermissionDeniedError(collectionError)) {
-              membershipsQuery = null;
+              membershipAccessDenied = true;
               break;
             }
             console.warn(
@@ -299,31 +331,42 @@ const ProfilePickerPage = () => {
             continue;
           }
 
-          let snapshot = null;
-          try {
-            snapshot = await getDocs(candidateQuery);
-            if (!active) {
-              return;
+          for (const candidateQuery of queries) {
+            let snapshot = null;
+            try {
+              snapshot = await getDocs(candidateQuery);
+              if (!active) {
+                return;
+              }
+            } catch (membershipError) {
+              if (isPermissionDeniedError(membershipError)) {
+                membershipAccessDenied = true;
+                break;
+              }
+              console.warn(
+                `Unable to prefetch ${name} memberships`,
+                membershipError,
+              );
             }
-          } catch (membershipError) {
-            if (isPermissionDeniedError(membershipError)) {
-              membershipsQuery = null;
+
+            if (!membershipsQuery) {
+              membershipsQuery = candidateQuery;
+            }
+
+            if (snapshot && !snapshot.empty) {
+              membershipsQuery = candidateQuery;
               break;
             }
-            console.warn(
-              `Unable to prefetch ${name} memberships`,
-              membershipError,
-            );
           }
 
-          if (!membershipsQuery) {
-            membershipsQuery = candidateQuery;
-          }
-
-          if (snapshot && !snapshot.empty) {
-            membershipsQuery = candidateQuery;
+          if (membershipAccessDenied || membershipsQuery) {
             break;
           }
+        }
+
+        if (membershipAccessDenied) {
+          hydrateTeamsFromFetcher();
+          return;
         }
 
         if (!membershipsQuery) {
