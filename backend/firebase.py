@@ -33,19 +33,63 @@ def _ensure_doc_entry(node: Dict[str, Any]) -> Dict[str, Any]:
     return node
 
 
-def _to_plain_dict(data: Any) -> Dict[str, Any]:
+def _resolve_special_value(value: Any, current: Any = None) -> Any:
+    """Handle Firestore sentinels like ArrayUnion and SERVER_TIMESTAMP.
+
+    The in-memory store is used in environments where the Firestore emulator
+    isn't available. We still receive the same sentinel objects (ArrayUnion,
+    SERVER_TIMESTAMP), but they aren't directly serialisable to Python dicts.
+    This helper resolves them to concrete Python values so ``set``/``update``
+    behaves closer to Firestore and doesn't crash.
+    """
+
+    try:  # pragma: no cover - optional import depending on environment
+        from firebase_admin import firestore as _firestore
+    except Exception:  # pragma: no cover - fallback when firebase_admin missing
+        _firestore = None
+
+    # ArrayUnion support
+    try:  # pragma: no cover - optional import depending on environment
+        from google.cloud.firestore_v1.transforms import ArrayUnion  # type: ignore
+    except Exception:  # pragma: no cover - fallback when dependency missing
+        ArrayUnion = None  # type: ignore
+
+    if ArrayUnion is not None and isinstance(value, ArrayUnion):
+        existing = list(current) if isinstance(current, list) else []
+        additions = list(getattr(value, "_values", []) or [])
+        merged = list(dict.fromkeys([*existing, *additions]))
+        return merged
+
+    # SERVER_TIMESTAMP fallback
+    if _firestore is not None and value is getattr(_firestore, "SERVER_TIMESTAMP", None):
+        return datetime.utcnow()
+
+    return value
+
+
+def _to_plain_dict(data: Any, current: Dict[str, Any] | None = None) -> Dict[str, Any]:
     if isinstance(data, dict):
-        return dict(data)
+        return {
+            key: _resolve_special_value(value, (current or {}).get(key))
+            for key, value in data.items()
+        }
 
     model_dump = getattr(data, "model_dump", None)
     if callable(model_dump):
-        return dict(model_dump())
+        raw = dict(model_dump())
+        return _to_plain_dict(raw, current)
 
     legacy_dict = getattr(data, "dict", None)
     if callable(legacy_dict):
-        return dict(legacy_dict())
+        raw = dict(legacy_dict())
+        return _to_plain_dict(raw, current)
 
-    return dict(data)
+    try:
+        raw = dict(data)
+    except Exception:
+        return {}
+
+    return _to_plain_dict(raw, current)
 
 
 class InMemoryDocument(dict):
@@ -89,7 +133,8 @@ class InMemoryDocument(dict):
         entry = self._doc_entry(create=True)
         if entry is None:
             return
-        payload = _to_plain_dict(data)
+        base = dict(entry.get("__doc__", {})) if merge else {}
+        payload = _to_plain_dict(data, base)
         if merge:
             entry["__doc__"].update(payload)
         else:
@@ -99,7 +144,8 @@ class InMemoryDocument(dict):
         entry = self._doc_entry(create=True)
         if entry is None:
             return
-        entry["__doc__"].update(_to_plain_dict(data))
+        current = dict(entry.get("__doc__", {}))
+        entry["__doc__"].update(_to_plain_dict(data, current))
 
     def get(self):
         entry = self._doc_entry(create=False)
