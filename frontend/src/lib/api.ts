@@ -207,7 +207,20 @@ const ensureAuthHeaders = async (
   forceRefresh: boolean,
 ): Promise<void> => {
   const user = auth.currentUser;
+
   if (!user) {
+    try {
+      const storedToken =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("authToken")
+          : null;
+
+      if (storedToken) {
+        headers.set("Authorization", `Bearer ${storedToken}`);
+      }
+    } catch (storageError) {
+      console.warn("Unable to read cached auth token", storageError);
+    }
     return;
   }
 
