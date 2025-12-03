@@ -73,6 +73,10 @@ export const normalizeTeamsResponse = (data) => {
     if (Array.isArray(data.data)) {
       return data.data;
     }
+
+    if (data.success === true && data.teams === undefined) {
+      return [];
+    }
   }
 
   return null;
