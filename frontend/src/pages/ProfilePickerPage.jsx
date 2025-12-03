@@ -10,7 +10,6 @@ import {
 import {
   collectionGroup,
   doc,
-  documentId,
   getDoc,
   getDocs,
   onSnapshot,
@@ -278,35 +277,11 @@ const ProfilePickerPage = () => {
         const membershipCollectionCandidates = [
           {
             name: 'members',
-            buildQueries: (col) => {
-              const queries = [query(col, where('uid', '==', user.uid))];
-
-              try {
-                queries.push(query(col, where(documentId(), '==', user.uid)));
-              } catch (fieldError) {
-                if (!isPermissionDeniedError(fieldError)) {
-                  console.warn('Unable to use documentId constraint', fieldError);
-                }
-              }
-
-              return queries;
-            },
+            buildQueries: (col) => [query(col, where('uid', '==', user.uid))],
           },
           {
             name: 'memberships',
-            buildQueries: (col) => {
-              const queries = [query(col, where('uid', '==', user.uid))];
-
-              try {
-                queries.push(query(col, where(documentId(), '==', user.uid)));
-              } catch (fieldError) {
-                if (!isPermissionDeniedError(fieldError)) {
-                  console.warn('Unable to use documentId constraint', fieldError);
-                }
-              }
-
-              return queries;
-            },
+            buildQueries: (col) => [query(col, where('uid', '==', user.uid))],
           },
         ];
         let membershipsQuery = null;
