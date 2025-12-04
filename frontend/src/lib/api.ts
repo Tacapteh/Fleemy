@@ -75,35 +75,22 @@ const appendBaseUrl = (candidate: string | null) => {
   API_BASE_URLS.push(candidate);
 };
 
-const baseCandidates = SHOULD_PRIORITIZE_DIRECT_BACKEND
-  ? [
-      // On Vercel the proxy occasionally responds with 502/Bad Gateway before
-      // the request reaches Render. Prefer direct backend URLs first to avoid
-      // surfacing those transient console errors, but still keep the
-      // same-origin options as fallbacks so we preserve CORS compatibility if
-      // the direct call fails.
-      ENV_API_URL,
-      DEFAULT_API_URL,
-      SAME_ORIGIN_OVERRIDE,
-      BROWSER_ORIGIN,
-      BROWSER_FALLBACK_URL,
-    ]
-  : [
-      // Always prefer browser-provided origins before falling back to
-      // environment configuration. When the frontend runs on a platform like
-      // Vercel we rely on rewrites to proxy ``/api`` calls to the backend
-      // (Render). If we try the environment URL first we end up calling the
-      // Render instance directly which re-introduces strict CORS checks and
-      // manifests as ``TypeError: Failed to fetch`` when the backend is under
-      // load. Prioritising the same-origin candidates keeps requests on the
-      // Vercel domain so the proxy can add the correct headers even for error
-      // responses.
-      SAME_ORIGIN_OVERRIDE,
-      BROWSER_ORIGIN,
-      BROWSER_FALLBACK_URL,
-      ENV_API_URL,
-      DEFAULT_API_URL,
-    ];
+const baseCandidates = [
+  // Always prefer browser-provided origins before falling back to environment
+  // configuration. When the frontend runs on a platform like Vercel we rely on
+  // rewrites to proxy ``/api`` calls to the backend (Render). If we try the
+  // environment URL first we end up calling the Render instance directly which
+  // re-introduces strict CORS checks and manifests as ``TypeError: Failed to
+  // fetch`` when the backend is under load. Prioritising the same-origin
+  // candidates keeps requests on the Vercel domain so the proxy can add the
+  // correct headers even for error responses. Render remains as a fallback so
+  // requests still succeed if the proxy is misconfigured.
+  SAME_ORIGIN_OVERRIDE,
+  BROWSER_ORIGIN,
+  BROWSER_FALLBACK_URL,
+  ENV_API_URL,
+  DEFAULT_API_URL,
+];
 
 baseCandidates.forEach(appendBaseUrl);
 const RETRY_DELAYS = [0, 250, 500, 1000];
