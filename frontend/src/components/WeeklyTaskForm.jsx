@@ -416,6 +416,7 @@ const WeeklyTaskForm = ({
   linkedTasks = [],
   initialLinkedTaskId = null,
   onLinkedTaskSelectionChange,
+  availableTasks = [],
 }) => {
   const settingsContext = useSettings() || {};
   const { settings, showTaskStatusBadges, showTaskPriorityBadges } = settingsContext;
@@ -423,6 +424,42 @@ const WeeklyTaskForm = ({
   const canConfigureStatus = showTaskStatusBadges !== false;
   const canConfigurePriority = showTaskPriorityBadges !== false;
   const timeInputStep = allowMinutes ? 900 : 3600;
+  const availableTaskOptions = useMemo(() => {
+    if (!Array.isArray(availableTasks)) {
+      return [];
+    }
+    const seenIds = new Set();
+    return availableTasks
+      .map((taskItem, index) => {
+        if (!taskItem) {
+          return null;
+        }
+        const optionId = taskItem.id || `task-${index}`;
+        if (seenIds.has(optionId)) {
+          return null;
+        }
+        seenIds.add(optionId);
+        const label =
+          typeof taskItem.label === 'string' && taskItem.label.trim()
+            ? taskItem.label.trim()
+            : `Tâche ${index + 1}`;
+        const normalizedPrice =
+          taskItem.price != null && taskItem.price !== ''
+            ? Number.isFinite(Number(taskItem.price))
+              ? Number(taskItem.price)
+              : taskItem.price
+            : '';
+        return {
+          optionId,
+          label,
+          color: taskItem.color || DEFAULT_TASK_COLOR,
+          icon: resolveTaskIconKey(taskItem.icon || 'briefcase'),
+          price: normalizedPrice,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  }, [availableTasks]);
   const normalizedLinkedTasks = useMemo(() => {
     if (!Array.isArray(linkedTasks)) {
       return [];
@@ -580,6 +617,7 @@ const WeeklyTaskForm = ({
     resolveIconCategoryFromInitial(currentInitialTask),
   );
   const [clipboardItem, setClipboardItem] = useState(() => readTaskClipboard());
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   const isNegativePrice = useMemo(() => {
     if (typeof task.price === 'string') {
@@ -613,6 +651,7 @@ const WeeklyTaskForm = ({
     setSelectedIconCategory(
       resolveIconCategoryFromInitial(currentInitialTask),
     );
+    setSelectedTemplateId('');
   }, [
     currentInitialTask,
     allowMinutes,
@@ -620,6 +659,33 @@ const WeeklyTaskForm = ({
     canConfigurePriority,
     canConfigureStatus,
   ]);
+
+  const handleTemplateChange = (event) => {
+    const { value } = event.target;
+    setSelectedTemplateId(value);
+    const matchedTemplate = availableTaskOptions.find(
+      (option) => option.optionId === value,
+    );
+    if (!matchedTemplate) {
+      return;
+    }
+
+    const resolvedCategory = resolveTaskIconCategory(matchedTemplate.icon);
+    if (resolvedCategory) {
+      setSelectedIconCategory(resolvedCategory);
+    }
+
+    setTask((current) => ({
+      ...current,
+      label: matchedTemplate.label || current.label,
+      price:
+        matchedTemplate.price === '' || matchedTemplate.price == null
+          ? ''
+          : String(matchedTemplate.price),
+      color: matchedTemplate.color || current.color,
+      icon: matchedTemplate.icon || current.icon,
+    }));
+  };
 
   useEffect(() => {
     setTask((current) => ({
@@ -1083,11 +1149,11 @@ const WeeklyTaskForm = ({
           )}
 
           <fieldset className="weekly-task-fieldset" disabled={readOnly || isSubmitting}>
-            {normalizedLinkedTasks.length > 0 && (
-              <div className="form-group">
-                <label className="form-label" htmlFor="linked-task-selector">
-                  Tâche liée à modifier
-                </label>
+          {normalizedLinkedTasks.length > 0 && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="linked-task-selector">
+                Tâche liée à modifier
+              </label>
                 <select
                   id="linked-task-selector"
                   className="form-input"
@@ -1102,6 +1168,30 @@ const WeeklyTaskForm = ({
                 </select>
                 <p className="weekly-task-hint">
                   Sélectionnez la tâche liée que vous souhaitez mettre à jour.
+                </p>
+              </div>
+            )}
+
+            {availableTaskOptions.length > 0 && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="weekly-task-template">
+                  Charger une tâche existante
+                </label>
+                <select
+                  id="weekly-task-template"
+                  className="form-input"
+                  value={selectedTemplateId}
+                  onChange={handleTemplateChange}
+                >
+                  <option value="">Sélectionnez une tâche</option>
+                  {availableTaskOptions.map((option) => (
+                    <option key={option.optionId} value={option.optionId}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="weekly-task-hint">
+                  Remplit automatiquement le libellé, le tarif horaire, la couleur et l’icône.
                 </p>
               </div>
             )}

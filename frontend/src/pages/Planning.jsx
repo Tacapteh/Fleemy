@@ -4992,6 +4992,7 @@ export default function Planning() {
         linkedTasks={weeklyTaskModal.linkedTasks}
         initialLinkedTaskId={weeklyTaskModal.linkedTaskId}
         onLinkedTaskSelectionChange={handleLinkedTaskSelectionChange}
+        availableTasks={weeklyTasks}
       />
     </div>
   );

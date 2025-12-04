@@ -4,6 +4,23 @@ import useNotificationPreferences from "../hooks/useNotificationPreferences";
 import { showToast } from "../utils/toast";
 import { SectionHeaderRow, Settings as SettingsIcon } from "../ui";
 import { EMAIL_TEMPLATE_TOKENS } from "../utils/documents";
+import {
+  deleteWeeklyTask,
+  fetchWeeklyTasksOnce,
+  saveWeeklyTask,
+  useFirebaseUser,
+} from "../firebase";
+import {
+  TASK_COLOR_KEYS,
+  DEFAULT_TASK_COLOR,
+  getTaskColor,
+} from "../constants/colors";
+import {
+  TASK_ICON_CATEGORIES,
+  getTaskIcon,
+  resolveTaskIconCategory,
+  resolveTaskIconKey,
+} from "../constants/icons";
 
 function Switch({ checked, onToggle, ...props }) {
   const handleToggle = useCallback(() => {
@@ -85,6 +102,385 @@ const toggleSettings = [
 ];
 
 const NUMBER_SETTING_KEY = "defaultSlotDurationMinutes";
+
+const DEFAULT_TASK_RANGE = { day: 0, start: "09:00", end: "10:00" };
+
+const flattenIconOptions = () =>
+  TASK_ICON_CATEGORIES.flatMap((category) => {
+    const iconEntries = Object.keys(category.icons || {});
+    return iconEntries.map((key) => ({
+      key,
+      label: `${getTaskIcon(key)} ${category.label || key}`.trim(),
+      category: category.key,
+    }));
+  });
+
+function TaskManagerSection() {
+  const user = useFirebaseUser();
+  const planningContext = useMemo(
+    () => (user?.uid ? { type: "personal", userId: user.uid } : null),
+    [user?.uid]
+  );
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [savingId, setSavingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const iconOptions = useMemo(() => flattenIconOptions(), []);
+
+  const normalizeManagedTask = useCallback((task, index = 0) => {
+    const safeRanges =
+      Array.isArray(task?.time_ranges) && task.time_ranges.length
+        ? task.time_ranges
+        : [{ ...DEFAULT_TASK_RANGE }];
+
+    return {
+      id: task?.id || null,
+      localId: task?.id || `task-${index}`,
+      label: typeof task?.label === "string" ? task.label : task?.name || "",
+      price:
+        task?.price != null && task.price !== ""
+          ? String(task.price)
+          : "",
+      color: task?.color || DEFAULT_TASK_COLOR,
+      icon: resolveTaskIconKey(task?.icon || "briefcase"),
+      time_ranges: safeRanges,
+      priority: task?.priority ?? null,
+      status: task?.status ?? null,
+    };
+  }, []);
+
+  const refreshTasks = useCallback(async () => {
+    if (!planningContext) {
+      setTasks([]);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const result = await fetchWeeklyTasksOnce(planningContext);
+      const normalized = Array.isArray(result)
+        ? result.map((task, index) => normalizeManagedTask(task, index))
+        : [];
+      setTasks(normalized);
+    } catch (err) {
+      console.error("task manager fetch error", err);
+      setError("Impossible de charger les tâches existantes.");
+    } finally {
+      setLoading(false);
+    }
+  }, [normalizeManagedTask, planningContext]);
+
+  useEffect(() => {
+    refreshTasks();
+  }, [refreshTasks]);
+
+  const updateTaskField = useCallback((localId, updates) => {
+    setTasks((current) =>
+      current.map((task) =>
+        task.localId === localId ? { ...task, ...updates } : task
+      )
+    );
+  }, []);
+
+  const handleAddTask = useCallback(() => {
+    setTasks((current) => [
+      ...current,
+      {
+        id: null,
+        localId: `new-${Date.now()}-${current.length}`,
+        label: "",
+        price: "",
+        color: DEFAULT_TASK_COLOR,
+        icon: resolveTaskIconKey("briefcase"),
+        time_ranges: [{ ...DEFAULT_TASK_RANGE }],
+        priority: null,
+        status: null,
+      },
+    ]);
+  }, []);
+
+  const handleSaveTask = useCallback(
+    async (localId) => {
+      if (!planningContext) {
+        setError("Connectez-vous pour gérer vos tâches.");
+        return;
+      }
+
+      const currentTask = tasks.find((task) => task.localId === localId);
+      if (!currentTask) {
+        return;
+      }
+
+      const label = (currentTask.label || "").trim();
+      if (!label) {
+        setError("Le libellé est requis pour enregistrer la tâche.");
+        return;
+      }
+
+      const parsedPrice = (() => {
+        const raw =
+          typeof currentTask.price === "string"
+            ? currentTask.price.trim()
+            : currentTask.price;
+        if (raw === "" || raw == null) {
+          return null;
+        }
+        const numeric = Number.parseFloat(raw);
+        return Number.isFinite(numeric) ? numeric : raw;
+      })();
+
+      setSavingId(localId);
+      setError("");
+      try {
+        const saved = await saveWeeklyTask(planningContext, {
+          ...currentTask,
+          id: currentTask.id || undefined,
+          label,
+          price: parsedPrice,
+          color: currentTask.color || DEFAULT_TASK_COLOR,
+          icon: resolveTaskIconKey(currentTask.icon || "briefcase"),
+          time_ranges:
+            Array.isArray(currentTask.time_ranges) &&
+            currentTask.time_ranges.length
+              ? currentTask.time_ranges
+              : [{ ...DEFAULT_TASK_RANGE }],
+        });
+        const normalized = normalizeManagedTask(saved);
+        setTasks((current) =>
+          current.map((task) =>
+            task.localId === localId
+              ? { ...normalized, localId: normalized.id || localId }
+              : task
+          )
+        );
+        showToast("Tâche enregistrée");
+      } catch (err) {
+        console.error("task manager save error", err);
+        setError("Impossible de sauvegarder la tâche.");
+      } finally {
+        setSavingId(null);
+      }
+    },
+    [normalizeManagedTask, planningContext, tasks]
+  );
+
+  const handleDeleteTask = useCallback(
+    async (localId) => {
+      const currentTask = tasks.find((task) => task.localId === localId);
+      if (!currentTask) {
+        return;
+      }
+      if (!planningContext) {
+        setError("Connectez-vous pour gérer vos tâches.");
+        return;
+      }
+      if (!currentTask.id) {
+        setTasks((current) => current.filter((task) => task.localId !== localId));
+        return;
+      }
+      setDeletingId(localId);
+      setError("");
+      try {
+        await deleteWeeklyTask(planningContext, currentTask.id);
+        setTasks((current) => current.filter((task) => task.localId !== localId));
+        showToast("Tâche supprimée");
+      } catch (err) {
+        console.error("task manager delete error", err);
+        setError("Impossible de supprimer la tâche.");
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [planningContext, tasks]
+  );
+
+  const renderTaskRow = (task) => {
+    const activeCategory =
+      resolveTaskIconCategory(task.icon) || iconOptions[0]?.category;
+    const categoryIcons = iconOptions.filter(
+      (entry) => entry.category === activeCategory
+    );
+
+    return (
+      <div
+        key={task.localId}
+        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+            Libellé
+            <input
+              type="text"
+              value={task.label}
+              onChange={(event) =>
+                updateTaskField(task.localId, { label: event.target.value })
+              }
+              className="form-input"
+              placeholder="Ex. Accompagnement"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+            Tarif horaire
+            <input
+              type="number"
+              step="0.5"
+              value={task.price}
+              onChange={(event) =>
+                updateTaskField(task.localId, { price: event.target.value })
+              }
+              className="form-input"
+              placeholder="Optionnel"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+            Couleur
+            <select
+              value={task.color}
+              onChange={(event) =>
+                updateTaskField(task.localId, { color: event.target.value })
+              }
+              className="form-input"
+            >
+              {TASK_COLOR_KEYS.map((colorKey) => (
+                <option key={colorKey} value={getTaskColor(colorKey)}>
+                  {colorKey}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid grid-cols-1 gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            <label className="flex flex-col gap-1">
+              Catégorie d’icône
+              <select
+                value={activeCategory || ""}
+                onChange={(event) => {
+                  const nextCategory = event.target.value;
+                  const nextIcons = iconOptions.filter(
+                    (entry) => entry.category === nextCategory
+                  );
+                  updateTaskField(task.localId, {
+                    icon: nextIcons[0]?.key || task.icon,
+                  });
+                }}
+                className="form-input"
+              >
+                {TASK_ICON_CATEGORIES.map((category) => (
+                  <option key={category.key} value={category.key}>
+                    {category.label || category.key}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              Icône
+              <select
+                value={task.icon}
+                onChange={(event) =>
+                  updateTaskField(task.localId, { icon: event.target.value })
+                }
+                className="form-input"
+              >
+                {categoryIcons.map((icon) => (
+                  <option key={icon.key} value={icon.key}>
+                    {icon.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => handleSaveTask(task.localId)}
+            className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors duration-150 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-indigo-300 dark:focus-visible:ring-offset-slate-900"
+            disabled={savingId === task.localId}
+          >
+            {savingId === task.localId ? "Enregistrement…" : "Enregistrer"}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDeleteTask(task.localId)}
+            className="inline-flex items-center justify-center rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors duration-150 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:border-red-100 disabled:text-red-300 dark:border-red-500/50 dark:text-red-200 dark:hover:bg-red-500/10 dark:focus-visible:ring-offset-slate-900"
+            disabled={deletingId === task.localId}
+          >
+            {deletingId === task.localId ? "Suppression…" : "Supprimer"}
+          </button>
+          {task.id && (
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              ID : {task.id}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-700">
+        <h2 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+          Gestionnaire des tâches
+        </h2>
+        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Retrouvez vos tâches existantes pour les réutiliser rapidement dans le planning.
+        </p>
+      </div>
+
+      <div className="space-y-4 px-4 py-4">
+        {error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/60 dark:bg-red-900/30 dark:text-red-200">
+            {error}
+          </div>
+        )}
+
+        {!planningContext && (
+          <p className="text-sm text-slate-600 dark:text-slate-300">
+            Connectez-vous pour gérer vos tâches personnalisées.
+          </p>
+        )}
+
+        {loading ? (
+          <p className="text-sm text-slate-600 dark:text-slate-300">Chargement des tâches…</p>
+        ) : tasks.length === 0 ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300">
+            <p>Aucune tâche enregistrée pour le moment.</p>
+            <div>
+              <button
+                type="button"
+                onClick={handleAddTask}
+                className="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors duration-150 hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900"
+                disabled={!planningContext}
+              >
+                Ajouter une tâche
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {tasks.map((task) => renderTaskRow(task))}
+            <div>
+              <button
+                type="button"
+                onClick={handleAddTask}
+                className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
+                disabled={!planningContext}
+              >
+                Ajouter une tâche
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const { settings, loading, updateSetting } = useSettings();
@@ -606,6 +1002,8 @@ export default function SettingsPage() {
           />
         </div>
       </div>
+
+      <TaskManagerSection />
 
       <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-700">
