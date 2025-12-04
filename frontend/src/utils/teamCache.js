@@ -1,9 +1,28 @@
 import { fetchUserTeamsFromFirestore } from '../firebase';
 
 const TEAMS_CACHE_KEY = 'fleemy_profile_picker_teams_cache';
-const TEAMS_CACHE_TTL_MS = 60_000; // 1 minute cache to speed up perceived loading
+// Keep the cache for a full day to avoid losing the last known teams when the sessionStorage is cleared
+// (e.g. after keeping the tab idle for a while or reopening the app).
+const TEAMS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const isBrowser = typeof window !== 'undefined';
+const storage = () => {
+  if (!isBrowser) {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch (error) {
+    console.warn('Unable to access localStorage, falling back to sessionStorage', error);
+    try {
+      return window.sessionStorage;
+    } catch (sessionError) {
+      console.warn('Unable to access sessionStorage either', sessionError);
+      return null;
+    }
+  }
+};
 
 export const readTeamsCache = (options = {}) => {
   const allowExpired = options.allowExpired === true;
@@ -12,8 +31,13 @@ export const readTeamsCache = (options = {}) => {
     return null;
   }
 
+  const store = storage();
+  if (!store) {
+    return null;
+  }
+
   try {
-    const raw = window.sessionStorage.getItem(TEAMS_CACHE_KEY);
+    const raw = store.getItem(TEAMS_CACHE_KEY);
     if (!raw) {
       return null;
     }
@@ -38,11 +62,13 @@ export const writeTeamsCache = (teams) => {
     return;
   }
 
+  const store = storage();
+  if (!store) {
+    return;
+  }
+
   try {
-    window.sessionStorage.setItem(
-      TEAMS_CACHE_KEY,
-      JSON.stringify({ cachedAt: Date.now(), teams }),
-    );
+    store.setItem(TEAMS_CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), teams }));
   } catch (cacheError) {
     console.warn('Unable to cache teams:', cacheError);
   }
@@ -54,7 +80,8 @@ export const clearTeamsCache = () => {
   }
 
   try {
-    window.sessionStorage.removeItem(TEAMS_CACHE_KEY);
+    const store = storage();
+    store?.removeItem(TEAMS_CACHE_KEY);
   } catch (cacheError) {
     console.warn('Unable to clear cached teams:', cacheError);
   }
