@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
+  onIdTokenChanged,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
@@ -134,6 +135,40 @@ const AUTH_PERSISTENCE_STRATEGIES = [
 
 let persistenceInitializationPromise = null;
 
+const persistAuthToken = async (user) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (!user) {
+      window.localStorage?.removeItem("authToken");
+      return;
+    }
+
+    const token = await user.getIdToken();
+    window.localStorage?.setItem("authToken", token);
+  } catch (tokenError) {
+    console.warn("Unable to persist auth token", tokenError);
+  }
+};
+
+let authTokenWatcherStarted = false;
+
+const startAuthTokenWatcher = () => {
+  if (authTokenWatcherStarted || typeof window === "undefined") {
+    return;
+  }
+
+  authTokenWatcherStarted = true;
+
+  onIdTokenChanged(auth, (user) => {
+    persistAuthToken(user).catch((error) => {
+      console.warn("Auth token watcher failed to persist token", error);
+    });
+  });
+};
+
 const ensureAuthPersistence = () => {
   if (persistenceInitializationPromise) {
     return persistenceInitializationPromise;
@@ -184,6 +219,7 @@ if (typeof window !== "undefined") {
   ensureAuthPersistence().catch((error) => {
     console.error("Firebase auth persistence bootstrap failed", error);
   });
+  startAuthTokenWatcher();
 }
 
 const REDIRECT_IN_PROGRESS_ERROR_CODE = "auth/redirect-in-progress";

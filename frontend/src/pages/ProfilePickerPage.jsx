@@ -23,9 +23,11 @@ import JoinTeamDialog from '../components/profiles/JoinTeamDialog';
 import TeamInviteCodeDialog from '../components/profiles/TeamInviteCodeDialog';
 import {
   readTeamsCache,
+  readStaleTeamsCache,
   clearTeamsCache,
   writeTeamsCache,
   normalizeTeamsResponse,
+  removeTeamFromCache,
 } from '../utils/teamCache';
 import { showToast } from '../utils/toast';
 
@@ -166,6 +168,7 @@ const ProfilePickerPage = () => {
         source = 'firestore';
         let fallbackTeams = [];
         let fallbackFailed = false;
+        const persistedTeams = readStaleTeamsCache() || [];
         try {
           fallbackTeams = await fetchUserTeamsFromFirestore();
         } catch (fallbackError) {
@@ -196,10 +199,18 @@ const ProfilePickerPage = () => {
             setTeams(normalizedFallback);
             setError('');
             writeTeamsCache(normalizedFallback);
-          } else if (fallbackFailed && !silent) {
-            setTeams([]);
-            setError("Impossible de charger vos équipes pour l'instant");
-            clearTeamsCache();
+          } else if (fallbackFailed) {
+            if (persistedTeams.length > 0) {
+              setTeams(persistedTeams);
+              if (!silent) {
+                setError("Impossible de charger vos équipes pour l'instant");
+              }
+            } else {
+              setTeams([]);
+              if (!silent) {
+                setError("Impossible de charger vos équipes pour l'instant");
+              }
+            }
           } else {
             setTeams([]);
             if (!silent) {
@@ -223,7 +234,7 @@ const ProfilePickerPage = () => {
   );
 
   useEffect(() => {
-    const cachedTeams = readTeamsCache();
+    const cachedTeams = readTeamsCache() || readStaleTeamsCache();
     const hasCachedTeams = Array.isArray(cachedTeams) && cachedTeams.length > 0;
 
     if (hasCachedTeams) {
@@ -623,7 +634,7 @@ const ProfilePickerPage = () => {
         await apiFetch(`/teams/${team.team_id}`, { method: 'DELETE' });
 
         showToast(`Équipe "${team.name}" supprimée`);
-        clearTeamsCache();
+        removeTeamFromCache(team.team_id);
 
         setTeams((currentTeams) =>
           Array.isArray(currentTeams)

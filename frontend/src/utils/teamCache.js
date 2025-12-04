@@ -57,6 +57,8 @@ export const readTeamsCache = (options = {}) => {
   return null;
 };
 
+export const readStaleTeamsCache = () => readTeamsCache({ allowExpired: true });
+
 export const writeTeamsCache = (teams) => {
   if (!isBrowser) {
     return;
@@ -84,6 +86,24 @@ export const clearTeamsCache = () => {
     store?.removeItem(TEAMS_CACHE_KEY);
   } catch (cacheError) {
     console.warn('Unable to clear cached teams:', cacheError);
+  }
+};
+
+export const removeTeamFromCache = (teamId) => {
+  if (!teamId || !isBrowser) {
+    return;
+  }
+
+  try {
+    const cached = readStaleTeamsCache();
+    if (!Array.isArray(cached)) {
+      return;
+    }
+
+    const filtered = cached.filter((team) => team?.team_id !== teamId);
+    writeTeamsCache(filtered);
+  } catch (cacheError) {
+    console.warn('Unable to remove team from cache:', cacheError);
   }
 };
 
