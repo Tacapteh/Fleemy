@@ -28,6 +28,7 @@ import {
   writeTeamsCache,
   normalizeTeamsResponse,
   removeTeamFromCache,
+  ensureTeamsCache,
 } from '../utils/teamCache';
 import { showToast } from '../utils/toast';
 
@@ -99,8 +100,6 @@ const ProfilePickerPage = () => {
     coopMeta.setAttribute('content', 'same-origin-allow-popups');
   }, []);
 
-  const API_TEAM_FETCH_TIMEOUT_MS = 8000;
-
   const fetchTeamsList = useCallback(
     async (options = {}) => {
       const {
@@ -113,85 +112,53 @@ const ProfilePickerPage = () => {
         setLoading(true);
       }
 
-      let source = 'api';
-      const hasWindow = typeof window !== 'undefined';
-      const controller =
-        typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId =
-        controller && hasWindow && API_TEAM_FETCH_TIMEOUT_MS > 0
-          ? window.setTimeout(() => {
-              try {
-                controller.abort();
-              } catch {
-                /* ignore abort errors */
-              }
-            }, API_TEAM_FETCH_TIMEOUT_MS)
-          : null;
+      const persistedTeams = readStaleTeamsCache() || [];
 
-      try {
-        const response = await apiFetch('/teams/my', {
-          signal: controller?.signal,
-        });
-        const teamsPayload = normalizeTeamsResponse(response);
-        if (!Array.isArray(teamsPayload)) {
-          throw new Error('Invalid response');
-        }
-
-        const nextTeams = teamsPayload
+      const mapTeams = (payload) =>
+        payload
           .map((team) => ({
             team_id: team.team_id || team.id || null,
             name: team.name || DEFAULT_TEAM_NAME,
             owner_uid: team.owner_uid || team.ownerUid || null,
             invite_code: team.invite_code || team.inviteCode || null,
-            members_count: typeof team.members_count === 'number'
-              ? team.members_count
-              : Array.isArray(team.members)
-              ? team.members.length
-              : 0,
+            members_count:
+              typeof team.members_count === 'number'
+                ? team.members_count
+                : Array.isArray(team.members)
+                ? team.members.length
+                : 0,
           }))
           .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
           .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
+      try {
+        const result = await ensureTeamsCache(() => apiFetch('/teams/my'));
+        const teamsPayload = Array.isArray(result?.teams)
+          ? result.teams
+          : normalizeTeamsResponse(result?.raw);
+
+        if (!Array.isArray(teamsPayload)) {
+          throw new Error('Invalid response');
+        }
+
+        const nextTeams = mapTeams(teamsPayload);
+
         if (shouldUpdate()) {
           setTeams(nextTeams);
-          setError('');
-          writeTeamsCache(nextTeams);
+          setError(result?.success === false && !silent ? "Impossible de charger vos équipes pour l'instant" : '');
         }
       } catch (apiError) {
-        if (apiError?.name === 'AbortError') {
-          if (!silent) {
-            console.warn('API teams fetch aborted, falling back to Firestore');
-          }
-        } else {
-          console.error('Failed to fetch teams via API', apiError);
-        }
-        source = 'firestore';
+        console.error('Failed to fetch teams', apiError);
+
         let fallbackTeams = [];
-        let fallbackFailed = false;
-        const persistedTeams = readStaleTeamsCache() || [];
         try {
           fallbackTeams = await fetchUserTeamsFromFirestore();
         } catch (fallbackError) {
           console.warn('Fallback Firestore teams fetch failed', fallbackError);
-          fallbackFailed = true;
         }
 
         const normalizedFallback = Array.isArray(fallbackTeams)
-          ? fallbackTeams
-              .map((team) => ({
-                team_id: team.team_id || team.id || null,
-                name: team.name || DEFAULT_TEAM_NAME,
-                owner_uid: team.owner_uid || team.ownerUid || null,
-                invite_code: team.invite_code || team.inviteCode || null,
-                members_count:
-                  typeof team.members_count === 'number'
-                    ? team.members_count
-                    : Array.isArray(team.members)
-                    ? team.members.length
-                    : 0,
-              }))
-              .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
-              .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+          ? mapTeams(fallbackTeams)
           : [];
 
         if (shouldUpdate()) {
@@ -199,32 +166,20 @@ const ProfilePickerPage = () => {
             setTeams(normalizedFallback);
             setError('');
             writeTeamsCache(normalizedFallback);
-          } else if (fallbackFailed) {
-            if (persistedTeams.length > 0) {
-              setTeams(persistedTeams);
-              if (!silent) {
-                setError("Impossible de charger vos équipes pour l'instant");
-              }
-            } else {
-              setTeams([]);
-              if (!silent) {
-                setError("Impossible de charger vos équipes pour l'instant");
-              }
+          } else if (persistedTeams.length > 0) {
+            setTeams(mapTeams(persistedTeams));
+            if (!silent) {
+              setError("Impossible de charger vos équipes pour l'instant");
             }
           } else {
             setTeams([]);
             if (!silent) {
-              setError('');
+              setError("Impossible de charger vos équipes pour l'instant");
             }
-            if (!fallbackFailed) {
-              writeTeamsCache([]);
-            }
+            clearTeamsCache();
           }
         }
       } finally {
-        if (hasWindow && timeoutId !== null) {
-          window.clearTimeout(timeoutId);
-        }
         if (shouldUpdate()) {
           setLoading(false);
         }
