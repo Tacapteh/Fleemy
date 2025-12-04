@@ -112,6 +112,20 @@ const ProfilePickerPage = () => {
         setLoading(true);
       }
 
+      // Ensure we never keep the loader spinning forever in case the
+      // asynchronous chain (API + Firestore) gets stuck on mobile devices.
+      // After the timeout we surface an error and let the user create/join a
+      // team instead of waiting indefinitely.
+      const safetyTimeout = setTimeout(() => {
+        if (!shouldUpdate()) {
+          return;
+        }
+        setLoading(false);
+        if (!silent) {
+          setError("Impossible de charger vos équipes pour l'instant");
+        }
+      }, 12000);
+
       const persistedTeams = readStaleTeamsCache() || [];
 
       const mapTeams = (payload) =>
@@ -180,6 +194,7 @@ const ProfilePickerPage = () => {
           }
         }
       } finally {
+        clearTimeout(safetyTimeout);
         if (shouldUpdate()) {
           setLoading(false);
         }
