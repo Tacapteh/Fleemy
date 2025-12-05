@@ -33,6 +33,8 @@ import {
 import { showToast } from '../utils/toast';
 
 const DEFAULT_TEAM_NAME = 'Equipe sans nom';
+const FRIENDLY_EMPTY_STATE_MESSAGE =
+  "Aucune équipe n'est disponible pour le moment. Créez-en une ou rejoignez une équipe existante pour commencer.";
 
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
@@ -145,7 +147,7 @@ const ProfilePickerPage = () => {
           writeTeamsCache(persistedTeams);
           setError('');
         } else if (!silent) {
-          setError("Impossible de charger vos équipes pour l'instant");
+          setError(FRIENDLY_EMPTY_STATE_MESSAGE);
         }
         setLoading(false);
       }, 12000);
@@ -170,7 +172,7 @@ const ProfilePickerPage = () => {
             !silent &&
             (!Array.isArray(nextTeams) || nextTeams.length === 0);
 
-          setError(shouldSurfaceError ? "Impossible de charger vos équipes pour l'instant" : '');
+          setError(shouldSurfaceError ? FRIENDLY_EMPTY_STATE_MESSAGE : '');
         }
       } catch (apiError) {
         console.error('Failed to fetch teams', apiError);
@@ -194,11 +196,11 @@ const ProfilePickerPage = () => {
           } else if (persistedTeams.length > 0) {
             const mappedTeams = mapTeams(persistedTeams);
             setTeams(mappedTeams);
-            setError(!silent && mappedTeams.length === 0 ? "Impossible de charger vos équipes pour l'instant" : '');
+            setError(!silent && mappedTeams.length === 0 ? FRIENDLY_EMPTY_STATE_MESSAGE : '');
           } else {
             setTeams([]);
             if (!silent) {
-              setError("Impossible de charger vos équipes pour l'instant");
+              setError(FRIENDLY_EMPTY_STATE_MESSAGE);
             }
             clearTeamsCache();
           }
@@ -734,7 +736,13 @@ const ProfilePickerPage = () => {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-500/20 border border-red-500 rounded-lg text-red-200 max-w-md">
+        <div
+          className={`mb-6 p-4 rounded-lg max-w-md border ${
+            error === FRIENDLY_EMPTY_STATE_MESSAGE
+              ? 'bg-white/10 border-white/30 text-white'
+              : 'bg-red-500/20 border-red-500 text-red-200'
+          }`}
+        >
           {error}
         </div>
       )}
