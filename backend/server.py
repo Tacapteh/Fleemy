@@ -4961,8 +4961,18 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
 
         return {"success": True, "teams": teams}
     except Exception as e:
+        # Never surface a hard failure to the client: return an empty list so the
+        # frontend can proceed without showing a blocking error message.
         logger.error("get_my_teams error: %s", e, exc_info=True)
-        return {"success": False, "teams": [], "error": str(e)}
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "teams": [],
+                "fallback": True,
+                "message": "Membership lookup temporarily unavailable",
+            },
+        )
 
 
 @api_router.post("/teams/{team_id}/rotate-code")
