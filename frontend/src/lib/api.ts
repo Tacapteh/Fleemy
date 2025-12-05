@@ -451,7 +451,15 @@ export async function apiFetch(
             data,
           };
           (error as any).detail = detail;
-          if (!isLastBase && shouldFallbackToNextBase(response.status)) {
+          const shouldFallbackOnTemporaryReason =
+            lastTemporaryResult.temporaryReason === "non-json" ||
+            lastTemporaryResult.temporaryReason === "status";
+
+          if (
+            !isLastBase &&
+            (shouldFallbackToNextBase(response.status) ||
+              shouldFallbackOnTemporaryReason)
+          ) {
             shouldTryNextBase = true;
             lastFallbackError = error;
             break;
