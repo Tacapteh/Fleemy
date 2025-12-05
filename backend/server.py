@@ -4745,27 +4745,64 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             if not uid:
                 return []
 
-            # Prefer a collection group query when available to pick up membership
-            # documents even if the parent team doesn't list the user in a flat
-            # array. This matches the structure created by the backend when
-            # ensuring memberships.
-            try:
-                collection_group = getattr(db, "collection_group", None)
-                if callable(collection_group):
-                    membership_query = (
-                        collection_group("memberships")
-                        .where(DOCUMENT_ID_FIELD, "==", uid)
-                    )
-                    return await asyncio.to_thread(
-                        lambda: list(membership_query.stream())
-                    )
-            except Exception as membership_error:  # pragma: no cover - defensive
-                logger.warning(
-                    "Membership collection group query failed for %s: %s",
-                    uid,
-                    membership_error,
-                    exc_info=True,
-                )
+            # Prefer collection group queries (both legacy "members" and the
+            # newer "memberships" subcollection) so we can pick up membership
+            # documents even when the team document doesn't list the user in a
+            # flat array. This matches the structure created by the backend when
+            # ensuring memberships and supports legacy data that only stored the
+            # "members" subcollection.
+            collection_group = getattr(db, "collection_group", None)
+            if callable(collection_group):
+                collection_names = ("memberships", "members")
+                collected_docs: List[Any] = []
+                seen_paths: Set[str] = set()
+
+                for collection_name in collection_names:
+                    try:
+                        group_ref = collection_group(collection_name)
+                    except Exception as membership_error:  # pragma: no cover - defensive
+                        logger.warning(
+                            "Membership collection group %s unavailable for %s: %s",
+                            collection_name,
+                            uid,
+                            membership_error,
+                            exc_info=True,
+                        )
+                        continue
+
+                    try:
+                        membership_query = (
+                            group_ref.where(DOCUMENT_ID_FIELD, "==", uid)
+                        )
+                        snapshots = await asyncio.to_thread(
+                            lambda: list(membership_query.stream())
+                        )
+                    except Exception as membership_error:  # pragma: no cover - defensive
+                        logger.warning(
+                            "Membership query failed for %s in %s: %s",
+                            uid,
+                            collection_name,
+                            membership_error,
+                            exc_info=True,
+                        )
+                        continue
+
+                    for doc in snapshots:
+                        doc_ref = getattr(doc, "reference", None)
+                        doc_path = getattr(doc_ref, "path", None) or getattr(
+                            doc_ref, "id", None
+                        )
+                        if doc_path and doc_path in seen_paths:
+                            continue
+                        if doc_path:
+                            seen_paths.add(doc_path)
+                        collected_docs.append(doc)
+
+                    if collected_docs:
+                        break
+
+                if collected_docs:
+                    return collected_docs
 
             def _scan_memberships_fallback() -> List[Any]:
                 docs: List[Any] = []
