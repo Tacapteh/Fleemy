@@ -108,24 +108,6 @@ const ProfilePickerPage = () => {
         shouldUpdate = () => true,
       } = options;
 
-      if (!skipStartLoading && shouldUpdate()) {
-        setLoading(true);
-      }
-
-      // Ensure we never keep the loader spinning forever in case the
-      // asynchronous chain (API + Firestore) gets stuck on mobile devices.
-      // After the timeout we surface an error and let the user create/join a
-      // team instead of waiting indefinitely.
-      const safetyTimeout = setTimeout(() => {
-        if (!shouldUpdate()) {
-          return;
-        }
-        setLoading(false);
-        if (!silent) {
-          setError("Impossible de charger vos équipes pour l'instant");
-        }
-      }, 12000);
-
       const persistedTeams = readStaleTeamsCache() || [];
 
       const mapTeams = (payload) =>
@@ -144,6 +126,29 @@ const ProfilePickerPage = () => {
           }))
           .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
           .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+
+      if (!skipStartLoading && shouldUpdate()) {
+        setLoading(true);
+      }
+
+      // Ensure we never keep the loader spinning forever in case the
+      // asynchronous chain (API + Firestore) gets stuck on mobile devices.
+      // After the timeout we surface an error and let the user create/join a
+      // team instead of waiting indefinitely.
+      const safetyTimeout = setTimeout(() => {
+        if (!shouldUpdate()) {
+          return;
+        }
+
+        if (persistedTeams.length > 0) {
+          setTeams(mapTeams(persistedTeams));
+          writeTeamsCache(persistedTeams);
+          setError('');
+        } else if (!silent) {
+          setError("Impossible de charger vos équipes pour l'instant");
+        }
+        setLoading(false);
+      }, 12000);
 
       try {
         const result = await ensureTeamsCache(() => apiFetch('/teams/my'));
