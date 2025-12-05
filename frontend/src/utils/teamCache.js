@@ -143,6 +143,7 @@ const buildResult = (teams, raw, success, fromCache) => ({
 });
 
 const cacheTeamsFromResponse = (data) => {
+  const staleTeams = allowExpiredCacheRead();
   const resolvedTeams = normalizeTeamsResponse(data);
 
   if (Array.isArray(resolvedTeams)) {
@@ -156,6 +157,10 @@ const cacheTeamsFromResponse = (data) => {
     return buildResult(teamsList, data, true, false);
   }
 
+  if (Array.isArray(staleTeams) && staleTeams.length > 0) {
+    return buildResult(staleTeams, data, true, true);
+  }
+
   clearTeamsCache();
   return buildResult([], data, false, false);
 };
@@ -163,6 +168,7 @@ const cacheTeamsFromResponse = (data) => {
 const fetchAndCacheTeams = async (fetcher) => {
   let primaryError = null;
   let primaryResult = null;
+  const staleTeams = allowExpiredCacheRead();
 
   if (typeof fetcher === 'function') {
     try {
@@ -187,6 +193,10 @@ const fetchAndCacheTeams = async (fetcher) => {
     const result = cacheTeamsFromResponse(fallbackPayload);
     return { ...result, viaFirestore: true };
   } catch (firestoreError) {
+    if (Array.isArray(staleTeams) && staleTeams.length > 0) {
+      return buildResult(staleTeams, null, true, true);
+    }
+
     clearTeamsCache();
 
     if (primaryResult) {
