@@ -164,7 +164,13 @@ const ProfilePickerPage = () => {
 
         if (shouldUpdate()) {
           setTeams(nextTeams);
-          setError(result?.success === false && !silent ? "Impossible de charger vos équipes pour l'instant" : '');
+
+          const shouldSurfaceError =
+            result?.success === false &&
+            !silent &&
+            (!Array.isArray(nextTeams) || nextTeams.length === 0);
+
+          setError(shouldSurfaceError ? "Impossible de charger vos équipes pour l'instant" : '');
         }
       } catch (apiError) {
         console.error('Failed to fetch teams', apiError);
@@ -186,10 +192,9 @@ const ProfilePickerPage = () => {
             setError('');
             writeTeamsCache(normalizedFallback);
           } else if (persistedTeams.length > 0) {
-            setTeams(mapTeams(persistedTeams));
-            if (!silent) {
-              setError("Impossible de charger vos équipes pour l'instant");
-            }
+            const mappedTeams = mapTeams(persistedTeams);
+            setTeams(mappedTeams);
+            setError(!silent && mappedTeams.length === 0 ? "Impossible de charger vos équipes pour l'instant" : '');
           } else {
             setTeams([]);
             if (!silent) {
