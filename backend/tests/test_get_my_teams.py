@@ -108,7 +108,7 @@ class DummyDB:
         docs_by_id = {team_id: DummyDoc(team_id, data) for team_id, data in teams.items()}
         self._teams = DummyTeamsCollection(docs_by_id)
         self._collections = {"teams": self._teams}
-        self._membership_docs = []
+        self._membership_docs = {"memberships": [], "members": []}
 
     def collection(self, name):
         if name not in self._collections:  # pragma: no cover - defensive
@@ -116,12 +116,12 @@ class DummyDB:
         return self._collections[name]
 
     def collection_group(self, name):
-        if name != "memberships":  # pragma: no cover - defensive
+        if name not in self._membership_docs:  # pragma: no cover - defensive
             raise KeyError(name)
-        return DummyCollectionGroupQuery(self._membership_docs)
+        return DummyCollectionGroupQuery(self._membership_docs[name])
 
-    def set_membership_docs(self, docs):
-        self._membership_docs = docs
+    def set_membership_docs(self, docs, collection_name="memberships"):
+        self._membership_docs[collection_name] = docs
 
 
 @pytest.fixture
@@ -221,6 +221,36 @@ async def test_get_my_teams_includes_membership_documents(monkeypatch):
     legacy_team = result["teams"][0]
     assert legacy_team["owner_uid"] == "owner-legacy"
     assert legacy_team["members_count"] == 2
+
+
+@pytest.mark.anyio("asyncio")
+async def test_get_my_teams_supports_members_collection_group(monkeypatch):
+    user_uid = "user-members"
+    teams_payload = {
+        "team-members": {
+            "name": "LegacyMembers",
+            "members": None,
+            "ownerUid": "owner-legacy-members",
+            "invite_code": "INVLEG2",
+        }
+    }
+
+    dummy_db = DummyDB(teams_payload)
+    legacy_doc = dummy_db._teams.get_doc("team-members")
+    dummy_db.set_membership_docs(
+        [DummyMembershipDoc(user_uid, legacy_doc)], collection_name="members"
+    )
+    monkeypatch.setattr(server, "db", dummy_db)
+
+    async def fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(server.asyncio, "to_thread", fake_to_thread)
+
+    result = await server.get_my_teams(user={"uid": user_uid})
+
+    assert result["success"] is True
+    assert {team["team_id"] for team in result["teams"]} == {"team-members"}
 
 
 @pytest.mark.anyio("asyncio")
