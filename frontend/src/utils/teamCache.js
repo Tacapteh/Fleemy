@@ -214,9 +214,11 @@ const fetchAndCacheTeams = async (fetcher) => {
 
 export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) => {
   const cachedTeams = readTeamsCache();
+  const hasCachedTeams = Array.isArray(cachedTeams) && cachedTeams.length > 0;
   const staleTeams = allowExpiredCacheRead();
+  const hasStaleTeams = Array.isArray(staleTeams) && staleTeams.length > 0;
 
-  if (!forceRefresh && cachedTeams !== null) {
+  if (!forceRefresh && hasCachedTeams) {
     return buildResult(cachedTeams, null, true, true);
   }
 
@@ -229,7 +231,7 @@ export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) =
       const result = await fetchAndCacheTeams(fetcher);
       return result;
     } catch (error) {
-      if (staleTeams !== null) {
+      if (hasStaleTeams) {
         return buildResult(staleTeams, null, true, true);
       }
 
