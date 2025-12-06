@@ -9,6 +9,7 @@ import {
   fetchWeeklyTasksOnce,
   saveWeeklyTask,
   useFirebaseUser,
+  watchWeeklyTasksForContext,
 } from "../firebase";
 import {
   TASK_COLOR_KEYS,
@@ -173,8 +174,47 @@ function TaskManagerSection() {
   }, [normalizeManagedTask, planningContext]);
 
   useEffect(() => {
+    if (!planningContext) {
+      setTasks([]);
+      setLoading(false);
+      return () => {};
+    }
+
+    let cancelled = false;
+
+    const safeSetTasks = (next) => {
+      if (!cancelled) {
+        setTasks(next);
+      }
+    };
+
+    const unsubscribe = watchWeeklyTasksForContext(
+      planningContext,
+      (list) => {
+        const normalized = Array.isArray(list)
+          ? list.map((task, index) => normalizeManagedTask(task, index))
+          : [];
+        safeSetTasks(normalized);
+        setLoading(false);
+      },
+      (err) => {
+        console.error("task manager realtime error", err);
+        if (!cancelled) {
+          setError("Impossible de charger les tâches existantes.");
+          setLoading(false);
+        }
+      }
+    );
+
     refreshTasks();
-  }, [refreshTasks]);
+
+    return () => {
+      cancelled = true;
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, [planningContext, refreshTasks, normalizeManagedTask]);
 
   const updateTaskField = useCallback((localId, updates) => {
     setTasks((current) =>
