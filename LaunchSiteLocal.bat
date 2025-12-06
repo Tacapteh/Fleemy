@@ -2,7 +2,7 @@
 REM === Lancer Fleemy Backend + Frontend ===
 
 REM Aller dans le dossier du projet
-cd /d "C:\Users\theoc\OneDrive\Bureau\Test Site\Fleemy"
+cd /d "%~dp0"
 
 REM Activer l'environnement Python si nécessaire (décommente si tu as un venv)
 REM call venv\Scripts\activate
@@ -15,7 +15,7 @@ timeout /t 3 >nul
 
 REM Aller dans le frontend et lancer React
 cd frontend
-start cmd /k "npm start"
+start cmd /k "set REACT_APP_API_URL=http://localhost:8000 && npm start"
 
 REM Revenir au répertoire racine
 cd ..
