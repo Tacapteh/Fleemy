@@ -75,22 +75,30 @@ const appendBaseUrl = (candidate: string | null) => {
   API_BASE_URLS.push(candidate);
 };
 
-const baseCandidates = [
-  // Always prefer browser-provided origins before falling back to environment
-  // configuration. When the frontend runs on a platform like Vercel we rely on
-  // rewrites to proxy ``/api`` calls to the backend (Render). If we try the
-  // environment URL first we end up calling the Render instance directly which
-  // re-introduces strict CORS checks and manifests as ``TypeError: Failed to
-  // fetch`` when the backend is under load. Prioritising the same-origin
-  // candidates keeps requests on the Vercel domain so the proxy can add the
-  // correct headers even for error responses. Render remains as a fallback so
-  // requests still succeed if the proxy is misconfigured.
-  SAME_ORIGIN_OVERRIDE,
-  BROWSER_ORIGIN,
-  BROWSER_FALLBACK_URL,
-  ENV_API_URL,
-  DEFAULT_API_URL,
-];
+const baseCandidates = SHOULD_PRIORITIZE_DIRECT_BACKEND
+  ? [
+      // When served from a Vercel preview/production domain we sometimes see
+      // transient 502 responses from the proxy layer. In that environment the
+      // direct backend URL (Render) is more reliable, so we try it first before
+      // falling back to same-origin rewrites.
+      ENV_API_URL,
+      DEFAULT_API_URL,
+      SAME_ORIGIN_OVERRIDE,
+      BROWSER_ORIGIN,
+      BROWSER_FALLBACK_URL,
+    ]
+  : [
+      // In most environments we prefer browser-provided origins before falling
+      // back to environment configuration. This keeps requests on the deployed
+      // domain so the proxy can add the correct headers even for error
+      // responses. Render remains as a fallback so requests still succeed if the
+      // proxy is misconfigured.
+      SAME_ORIGIN_OVERRIDE,
+      BROWSER_ORIGIN,
+      BROWSER_FALLBACK_URL,
+      ENV_API_URL,
+      DEFAULT_API_URL,
+    ];
 
 baseCandidates.forEach(appendBaseUrl);
 const RETRY_DELAYS = [0, 250, 500, 1000];
