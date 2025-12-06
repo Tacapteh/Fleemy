@@ -4955,6 +4955,14 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 if getattr(team_snap, "exists", True):
                     _store_team(team_snap)
 
+        # Helper to run fallback scan
+        if not teams_map:
+            logger.info("No teams found via standard queries, attempting full scan fallback for %s", user["uid"])
+            fallback_docs = await asyncio.to_thread(scan_member_teams_fallback)
+            if fallback_docs:
+                for doc in fallback_docs:
+                    _store_team(doc)
+
         teams = list(teams_map.values())
 
         logger.info("Found %d teams for user %s", len(teams), user["uid"])
