@@ -122,7 +122,31 @@ def _load_service_account_credentials():
 
     json_payload = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
     if json_payload:
+        data = None
         try:
+            data = json.loads(json_payload)
+        except json.JSONDecodeError:
+            # Try to handle cases where user might have wrapped it in quotes or added weird whitespace
+            try:
+                cleaned = json_payload.strip().strip("'").strip('"')
+                data = json.loads(cleaned)
+            except Exception:
+                logger.error("Invalid FIREBASE_SERVICE_ACCOUNT_JSON payload", exc_info=True)
+        
+        if data:
+            project_id = os.getenv("FIREBASE_PROJECT_ID")
+            client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
+            if project_id and not data.get("project_id"):
+                data["project_id"] = project_id
+            if client_email and not data.get("client_email"):
+                data["client_email"] = client_email
+            logger.info("Using inline Firebase service account credentials from env")
+            return credentials.Certificate(data)
+
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        # Patched for deployment
+        logger.info("Using Firebase service account file at %s", cred_path)
         return credentials.Certificate(cred_path)
 
     # Fallback: check for serviceAccountKey.json in the same directory
