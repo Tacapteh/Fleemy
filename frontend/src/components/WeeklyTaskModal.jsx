@@ -16,6 +16,7 @@ export default function WeeklyTaskModal({
   initialLinkedTaskId = null,
   onLinkedTaskSelectionChange,
   availableTasks = [],
+  defaultTimeRange = null,
 }) {
   if (!isOpen) return null;
 
@@ -41,6 +42,7 @@ export default function WeeklyTaskModal({
       initialLinkedTaskId={initialLinkedTaskId}
       onLinkedTaskSelectionChange={onLinkedTaskSelectionChange}
       availableTasks={availableTasks}
+      defaultTimeRange={defaultTimeRange}
     />
   );
 }
