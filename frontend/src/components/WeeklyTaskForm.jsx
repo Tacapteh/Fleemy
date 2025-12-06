@@ -285,9 +285,18 @@ const normalizeTimeRange = (
 
 const ensureTimeRanges = (
   ranges,
-  { allowMinutes = false, defaultDayIndex = null } = {}
+  { allowMinutes = false, defaultDayIndex = null, defaultTimeRange = null } = {}
 ) => {
-  if (!Array.isArray(ranges)) {
+  const resolveDefaultRange = () => {
+    const normalizedDefault = normalizeTimeRange(defaultTimeRange, {
+      adjustEndIfNeeded: true,
+      allowMinutes,
+    });
+
+    if (normalizedDefault) {
+      return [normalizedDefault];
+    }
+
     if (
       typeof defaultDayIndex === 'number' &&
       defaultDayIndex >= 0 &&
@@ -295,21 +304,19 @@ const ensureTimeRanges = (
     ) {
       return [createDefaultTimeRange({ day: defaultDayIndex })];
     }
+
     return [createDefaultTimeRange()];
+  };
+
+  if (!Array.isArray(ranges)) {
+    return resolveDefaultRange();
   }
 
   const normalized = ranges
     .map((range) => normalizeTimeRange(range, { adjustEndIfNeeded: true, allowMinutes }))
     .filter(Boolean);
   if (!normalized.length) {
-    if (
-      typeof defaultDayIndex === 'number' &&
-      defaultDayIndex >= 0 &&
-      defaultDayIndex <= 6
-    ) {
-      return [createDefaultTimeRange({ day: defaultDayIndex })];
-    }
-    return [createDefaultTimeRange()];
+    return resolveDefaultRange();
   }
   return normalized;
 };
@@ -345,7 +352,12 @@ const normalizeLinkedTaskIdentifier = (candidate) => {
 
 const buildTaskStateFromInitial = (
   sourceTask,
-  { allowMinutes = false, defaultDayIndex = null, canConfigureStatus = true } = {},
+  {
+    allowMinutes = false,
+    defaultDayIndex = null,
+    defaultTimeRange = null,
+    canConfigureStatus = true,
+  } = {},
 ) => {
   const iconKey = resolveTaskIconKey(sourceTask?.icon || 'briefcase');
   return {
@@ -359,6 +371,7 @@ const buildTaskStateFromInitial = (
     time_ranges: ensureTimeRanges(sourceTask?.time_ranges, {
       allowMinutes,
       defaultDayIndex,
+      defaultTimeRange,
     }),
     priority: normalizePriorityValue(sourceTask?.priority),
     status: canConfigureStatus
@@ -411,6 +424,7 @@ const WeeklyTaskForm = ({
   readOnly = false,
   weekStartISO = null,
   defaultDayIndex = null,
+  defaultTimeRange = null,
   onSwitchToEvent,
   onReturnToLinkedTasks,
   linkedTasks = [],
@@ -601,6 +615,7 @@ const WeeklyTaskForm = ({
     buildTaskStateFromInitial(currentInitialTask, {
       allowMinutes,
       defaultDayIndex,
+      defaultTimeRange,
       canConfigureStatus,
     }),
   );
@@ -639,6 +654,7 @@ const WeeklyTaskForm = ({
       buildTaskStateFromInitial(currentInitialTask, {
         allowMinutes,
         defaultDayIndex,
+        defaultTimeRange,
         canConfigureStatus,
       }),
     );
@@ -656,6 +672,7 @@ const WeeklyTaskForm = ({
     currentInitialTask,
     allowMinutes,
     defaultDayIndex,
+    defaultTimeRange,
     canConfigurePriority,
     canConfigureStatus,
   ]);
@@ -690,9 +707,13 @@ const WeeklyTaskForm = ({
   useEffect(() => {
     setTask((current) => ({
       ...current,
-      time_ranges: ensureTimeRanges(current.time_ranges, { allowMinutes }),
+      time_ranges: ensureTimeRanges(current.time_ranges, {
+        allowMinutes,
+        defaultDayIndex,
+        defaultTimeRange,
+      }),
     }));
-  }, [allowMinutes]);
+  }, [allowMinutes, defaultDayIndex, defaultTimeRange]);
 
   useEffect(() => {
     if (!canConfigurePriority) {
@@ -1021,6 +1042,7 @@ const WeeklyTaskForm = ({
     const normalizedRanges = ensureTimeRanges(payload.time_ranges || task.time_ranges, {
       allowMinutes,
       defaultDayIndex,
+      defaultTimeRange,
     });
 
     setTask((current) => ({

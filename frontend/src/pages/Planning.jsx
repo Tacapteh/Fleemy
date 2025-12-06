@@ -602,6 +602,7 @@ export default function Planning() {
     linkedTaskId: null,
     linkedEventReadOnly: false,
     defaultDayIndex: null,
+    defaultTimeRange: null,
     linkedTasks: [],
   });
 
@@ -3042,10 +3043,39 @@ export default function Planning() {
     )
       return;
     const defaultDayIndex = resolveDayIndexFromDate(defaultDate);
+    const defaultTimeRange = (() => {
+      if (!defaultDate) {
+        return null;
+      }
+
+      const parsedDate = new Date(defaultDate);
+      if (Number.isNaN(parsedDate.getTime())) {
+        return null;
+      }
+
+      if (defaultDayIndex == null) {
+        return null;
+      }
+
+      const pad = (value) => String(value).padStart(2, "0");
+      const startHours = parsedDate.getHours();
+      const startMinutes = parsedDate.getMinutes();
+      const startLabel = `${pad(startHours)}:${pad(startMinutes)}`;
+
+      const endDate = new Date(parsedDate);
+      endDate.setHours(endDate.getHours() + 1, endDate.getMinutes(), 0, 0);
+      const crossesDay = endDate.getDate() !== parsedDate.getDate();
+      const endLabel = crossesDay
+        ? "24:00"
+        : `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
+
+      return { day: defaultDayIndex, start: startLabel, end: endLabel };
+    })();
     setWeeklyTaskModal({
       ...createInitialWeeklyTaskModalState(),
       open: true,
       defaultDayIndex,
+      defaultTimeRange,
     });
   }, [readOnly, planningContext, planningTab, resolveDayIndexFromDate]);
 
@@ -4993,6 +5023,7 @@ export default function Planning() {
         initialLinkedTaskId={weeklyTaskModal.linkedTaskId}
         onLinkedTaskSelectionChange={handleLinkedTaskSelectionChange}
         availableTasks={weeklyTasks}
+        defaultTimeRange={weeklyTaskModal.defaultTimeRange}
       />
     </div>
   );
