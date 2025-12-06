@@ -138,6 +138,7 @@ def _load_service_account_credentials():
 
     cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if cred_path and os.path.exists(cred_path):
+        # Patched for deployment
         logger.info("Using Firebase service account file at %s", cred_path)
         return credentials.Certificate(cred_path)
 
