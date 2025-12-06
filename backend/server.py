@@ -123,23 +123,6 @@ def _load_service_account_credentials():
     json_payload = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
     if json_payload:
         try:
-            data = json.loads(json_payload)
-        except json.JSONDecodeError:
-            logger.error("Invalid FIREBASE_SERVICE_ACCOUNT_JSON payload")
-        else:
-            project_id = os.getenv("FIREBASE_PROJECT_ID")
-            client_email = os.getenv("FIREBASE_CLIENT_EMAIL")
-            if project_id and not data.get("project_id"):
-                data["project_id"] = project_id
-            if client_email and not data.get("client_email"):
-                data["client_email"] = client_email
-            logger.info("Using inline Firebase service account credentials from env")
-            return credentials.Certificate(data)
-
-    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if cred_path and os.path.exists(cred_path):
-        # Patched for deployment
-        logger.info("Using Firebase service account file at %s", cred_path)
         return credentials.Certificate(cred_path)
 
     # Fallback: check for serviceAccountKey.json in the same directory
@@ -149,6 +132,9 @@ def _load_service_account_credentials():
         return credentials.Certificate(str(local_key_path))
 
     return None
+
+def is_db_in_memory():
+    return type(db).__name__ == 'InMemoryFirestore'
 
 
 def _ensure_firebase_app_initialized():
@@ -4972,6 +4958,17 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
 
         teams = list(teams_map.values())
 
+        if not teams and is_db_in_memory():
+            # Inject a fake team to warn the user that DB is not connected
+            logger.warning("Injecting warning team because DB is InMemory and empty")
+            teams.append({
+                "team_id": "error-db-disconnected",
+                "name": "⚠️ ERREUR: Base de données non connectée",
+                "owner_uid": user["uid"],
+                "invite_code": "ERROR",
+                "members_count": 0,
+            })
+
         logger.info("Found %d teams for user %s", len(teams), user["uid"])
 
         return {"success": True, "teams": teams}
@@ -5957,12 +5954,14 @@ app.include_router(api_router)
 
 @app.get("/healthz")
 async def healthz() -> Dict[str, Any]:
-    return {"ok": True, "service": "fleemy", "status": "healthy"}
+    db_type = type(db).__name__
+    return {"ok": True, "service": "fleemy", "status": "healthy", "db_type": db_type}
 
 
 @app.get("/health")
 async def health() -> Dict[str, Any]:
-    return {"ok": True, "service": "fleemy", "status": "healthy"}
+    db_type = type(db).__name__
+    return {"ok": True, "service": "fleemy", "status": "healthy", "db_type": db_type}
 
 
 @app.exception_handler(FastAPIRequestValidationError)
