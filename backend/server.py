@@ -4800,35 +4800,8 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 if collected_docs:
                     return collected_docs
 
-            def _scan_memberships_fallback() -> List[Any]:
-                docs: List[Any] = []
-                try:
-                    for team_doc in teams_ref.stream():
-                        team_id = getattr(team_doc, "id", None)
-                        if not team_id:
-                            continue
-
-                        team_ref = getattr(team_doc, "reference", None)
-                        if team_ref is None:
-                            team_ref = teams_ref.document(team_id)
-
-                        membership_ref = team_ref.collection("memberships").document(
-                            uid
-                        )
-                        membership_snap = membership_ref.get()
-
-                        if getattr(membership_snap, "exists", True):
-                            docs.append(membership_snap)
-                except Exception as fallback_error:  # pragma: no cover - defensive
-                    logger.warning(
-                        "Membership scan fallback failed for %s: %s",
-                        uid,
-                        fallback_error,
-                        exc_info=True,
-                    )
-                return docs
-
-            return await asyncio.to_thread(_scan_memberships_fallback)
+            # Fallback scan removed to prevent production timeouts.
+            return []
 
         async def fetch_legacy_member_docs() -> List[Any]:
             uid = user.get("uid")
