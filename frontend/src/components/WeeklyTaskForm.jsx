@@ -443,6 +443,7 @@ const WeeklyTaskForm = ({
       return [];
     }
     const seenIds = new Set();
+    const seenLabels = new Set();
     return availableTasks
       .map((taskItem, index) => {
         if (!taskItem) {
@@ -457,6 +458,11 @@ const WeeklyTaskForm = ({
           typeof taskItem.label === 'string' && taskItem.label.trim()
             ? taskItem.label.trim()
             : `Tâche ${index + 1}`;
+        const normalizedLabelKey = label.toLowerCase();
+        if (seenLabels.has(normalizedLabelKey)) {
+          return null;
+        }
+        seenLabels.add(normalizedLabelKey);
         const normalizedPrice =
           taskItem.price != null && taskItem.price !== ''
             ? Number.isFinite(Number(taskItem.price))
