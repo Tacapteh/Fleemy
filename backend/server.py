@@ -141,6 +141,12 @@ def _load_service_account_credentials():
         logger.info("Using Firebase service account file at %s", cred_path)
         return credentials.Certificate(cred_path)
 
+    # Fallback: check for serviceAccountKey.json in the same directory
+    local_key_path = Path(__file__).parent / "serviceAccountKey.json"
+    if local_key_path.exists():
+        logger.info("Auto-detected local service account file at %s", local_key_path)
+        return credentials.Certificate(str(local_key_path))
+
     return None
 
 
