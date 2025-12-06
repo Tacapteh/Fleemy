@@ -4677,45 +4677,24 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             )
 
         def scan_member_teams_fallback(error: Optional[Exception] = None):
-            """Fallback when ``array_contains`` query fails (legacy data / indexes)."""
-
-            if error is not None:
+            """Fallback when ``array_contains`` query fails."""
+            # WARNING: We DO NOT perform a full scan here anymore because it causes 502 timeouts
+            # on production when the database grows. If indexes are missing, we prefer
+            # partial results over crashing the server.
+            if error:
                 logger.warning(
                     "teams members array query failed for %s: %s",
                     user["uid"],
                     error,
                     exc_info=True,
                 )
-            fallback_docs: List[Any] = []
-            try:
-                for team_doc in teams_ref.stream():
-                    data = team_doc.to_dict() or {}
-                    member_ids = set(_normalize_member_ids(data.get("members")))
-                    owner_uid = (
-                        data.get("owner_uid")
-                        or data.get("ownerUid")
-                        or data.get("ownerId")
-                        or (data.get("owner") or {}).get("uid")
-                    )
-                    owner_matches = False
-                    if owner_uid is not None:
-                        owner_matches = str(owner_uid) == str(user["uid"])
-                    if user["uid"] in member_ids or owner_matches:
-                        fallback_docs.append(team_doc)
-            except Exception as scan_error:  # pragma: no cover - defensive
-                logger.warning(
-                    "teams fallback membership scan failed for %s: %s",
-                    user["uid"],
-                    scan_error,
-                    exc_info=True,
-                )
-            return fallback_docs
+            return []
 
         def fetch_member_teams():
             try:
                 member_query = teams_ref.where("members", "array_contains", user["uid"])
                 return list(member_query.stream())
-            except Exception as member_error:  # pragma: no cover - fallback path
+            except Exception as member_error:
                 return scan_member_teams_fallback(member_error)
 
         async def fetch_owner_teams():
