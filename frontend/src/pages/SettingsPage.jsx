@@ -10,6 +10,7 @@ import {
   saveWeeklyTask,
   useFirebaseUser,
   watchWeeklyTasksForContext,
+  fetchUserTeamsFromFirestore,
 } from "../firebase";
 import {
   TASK_COLOR_KEYS,
@@ -48,15 +49,13 @@ function Switch({ checked, onToggle, ...props }) {
       tabIndex={0}
       onClick={handleToggle}
       onKeyDown={handleKeyDown}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-        checked ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-600"
-      }`}
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${checked ? "bg-indigo-600" : "bg-slate-300 dark:bg-slate-600"
+        }`}
       {...props}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          checked ? "translate-x-6" : "translate-x-1"
-        }`}
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${checked ? "translate-x-6" : "translate-x-1"
+          }`}
       />
     </button>
   );
@@ -118,10 +117,35 @@ const flattenIconOptions = () =>
 
 function TaskManagerSection() {
   const user = useFirebaseUser();
-  const planningContext = useMemo(
-    () => (user?.uid ? { type: "personal", userId: user.uid } : null),
-    [user?.uid]
-  );
+  const [availableTeams, setAvailableTeams] = useState([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [teamsLoading, setTeamsLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    fetchUserTeamsFromFirestore()
+      .then((teams) => {
+        if (active) {
+          setAvailableTeams(teams);
+          setTeamsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn("Settings task manager: failed to fetch teams", err);
+        if (active) setTeamsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const planningContext = useMemo(() => {
+    if (!user?.uid) return null;
+    if (selectedTeamId) {
+      return { type: "team", teamId: selectedTeamId, memberUid: user.uid };
+    }
+    return { type: "personal", userId: user.uid };
+  }, [user?.uid, selectedTeamId]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -177,7 +201,7 @@ function TaskManagerSection() {
     if (!planningContext) {
       setTasks([]);
       setLoading(false);
-      return () => {};
+      return () => { };
     }
 
     let cancelled = false;
@@ -283,7 +307,7 @@ function TaskManagerSection() {
           icon: resolveTaskIconKey(currentTask.icon || "briefcase"),
           time_ranges:
             Array.isArray(currentTask.time_ranges) &&
-            currentTask.time_ranges.length
+              currentTask.time_ranges.length
               ? currentTask.time_ranges
               : [{ ...DEFAULT_TASK_RANGE }],
         });
@@ -486,6 +510,27 @@ function TaskManagerSection() {
           </p>
         )}
 
+        {planningContext && (
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+              Contexte :
+            </span>
+            <select
+              value={selectedTeamId}
+              onChange={(e) => setSelectedTeamId(e.target.value)}
+              disabled={teamsLoading}
+              className="rounded-md border border-slate-300 bg-white py-1.5 px-3 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            >
+              <option value="">Espace personnel</option>
+              {availableTeams.map((team) => (
+                <option key={team.team_id} value={team.team_id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-slate-600 dark:text-slate-300">Chargement des tâches…</p>
         ) : tasks.length === 0 ? (
@@ -518,7 +563,7 @@ function TaskManagerSection() {
           </div>
         )}
       </div>
-    </section>
+    </section >
   );
 }
 
