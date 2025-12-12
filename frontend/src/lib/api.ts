@@ -77,33 +77,33 @@ const appendBaseUrl = (candidate: string | null) => {
 
 const baseCandidates = SHOULD_PRIORITIZE_DIRECT_BACKEND
   ? [
-      // When served from a Vercel preview/production domain we sometimes see
-      // transient 502 responses from the proxy layer. In that environment the
-      // direct backend URL (Render) is more reliable, so we try it first before
-      // falling back to same-origin rewrites.
-      ENV_API_URL,
-      DEFAULT_API_URL,
-      SAME_ORIGIN_OVERRIDE,
-      BROWSER_ORIGIN,
-      BROWSER_FALLBACK_URL,
-    ]
+    // When served from a Vercel preview/production domain we sometimes see
+    // transient 502 responses from the proxy layer. In that environment the
+    // direct backend URL (Render) is more reliable, so we try it first before
+    // falling back to same-origin rewrites.
+    ENV_API_URL,
+    DEFAULT_API_URL,
+    SAME_ORIGIN_OVERRIDE,
+    BROWSER_ORIGIN,
+    BROWSER_FALLBACK_URL,
+  ]
   : [
-      // In most environments we prefer browser-provided origins before falling
-      // back to environment configuration. This keeps requests on the deployed
-      // domain so the proxy can add the correct headers even for error
-      // responses. Render remains as a fallback so requests still succeed if the
-      // proxy is misconfigured.
-      SAME_ORIGIN_OVERRIDE,
-      BROWSER_ORIGIN,
-      BROWSER_FALLBACK_URL,
-      ENV_API_URL,
-      DEFAULT_API_URL,
-    ];
+    // In most environments we prefer browser-provided origins before falling
+    // back to environment configuration. This keeps requests on the deployed
+    // domain so the proxy can add the correct headers even for error
+    // responses. Render remains as a fallback so requests still succeed if the
+    // proxy is misconfigured.
+    SAME_ORIGIN_OVERRIDE,
+    BROWSER_ORIGIN,
+    BROWSER_FALLBACK_URL,
+    ENV_API_URL,
+    DEFAULT_API_URL,
+  ];
 
 baseCandidates.forEach(appendBaseUrl);
 const RETRY_DELAYS = [0, 250, 500, 1000];
-const TEMPORARY_RETRY_DELAYS = [0, 300, 1000];
-const TEMPORARY_FINAL_BACKOFF = 2500;
+const TEMPORARY_RETRY_DELAYS = [0, 1000, 2000, 4000];
+const TEMPORARY_FINAL_BACKOFF = 5000;
 const TEMPORARY_STATUS_CODES = new Set([502, 503, 504]);
 const NON_JSON_RESPONSE_PLACEHOLDER = "[non-json response omitted]";
 

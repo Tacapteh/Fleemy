@@ -286,12 +286,12 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             const formattedPrice =
               typeof task.price === 'number'
                 ? `${task.price.toLocaleString('fr-FR', {
-                    minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
-                    maximumFractionDigits: 2,
-                  })} €`
+                  minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
+                  maximumFractionDigits: 2,
+                })} €`
                 : typeof task.price === 'string'
-                ? task.price.trim()
-                : '';
+                  ? task.price.trim()
+                  : '';
 
             const titleParts = [task.label];
             if (startTimeLabel && endTimeLabel) {
@@ -300,6 +300,45 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
             if (formattedPrice) {
               titleParts.push(formattedPrice);
             }
+
+            // Resolve Priority
+            const priorityDisabled =
+              task.priority == null ||
+              isPriorityToggleDisabled(task.priorityEnabled) ||
+              isPriorityToggleDisabled(task.priority_enabled);
+            const priorityLevel =
+              !priorityDisabled &&
+                (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low')
+                ? task.priority
+                : null;
+
+            // Resolve Status
+            const taskStatusRaw =
+              typeof task.status === 'string'
+                ? task.status.trim().toLowerCase()
+                : undefined;
+            const isStatusDisabled = task.status === null;
+            const hasTaskStatus =
+              taskStatusRaw === 'todo' ||
+              taskStatusRaw === 'doing' ||
+              taskStatusRaw === 'done';
+
+            let statusKey: TaskStatusKey | undefined;
+            if (!isStatusDisabled && hasTaskStatus) {
+              statusKey = resolveEffectiveTaskStatus(
+                taskStatusRaw,
+                task.done === true
+              );
+            }
+            const statusDisplay =
+              showStatusBadges && statusKey
+                ? TASK_STATUS_DISPLAY[statusKey]
+                : null;
+            const statusIndicatorStyle =
+              statusDisplay && statusKey
+                ? TASK_STATUS_INDICATOR_STYLES[statusKey]
+                : null;
+
             const tooltipTitle = titleParts.filter(Boolean).join('\n');
 
             const handleTaskClick = () => {
@@ -315,11 +354,10 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               }
             };
 
-            const taskCardClassName = `task-standalone transition-transform transition-shadow duration-150 ease-out ${
-              isInteractive
-                ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-slate-100/70 dark:focus-visible:ring-offset-slate-900 hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.99]'
-                : ''
-            }`;
+            const taskCardClassName = `task-standalone transition-transform transition-shadow duration-150 ease-out ${isInteractive
+              ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-slate-100/70 dark:focus-visible:ring-offset-slate-900 hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.99]'
+              : ''
+              }`;
 
             return (
               <div
@@ -347,8 +385,22 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
               >
                 <div className="flex w-full items-center gap-2 px-2 py-1 text-xs sm:text-sm">
                   <IconComponent className="h-4 w-4 flex-shrink-0" strokeWidth={2} aria-hidden="true" />
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium leading-tight">{task.label}</span>
+                  <div className="flex min-w-0 flex-col flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate font-medium leading-tight">{task.label}</span>
+                      {statusDisplay && statusIndicatorStyle && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full border px-1.5 py-[1px] text-[10px] font-medium shrink-0"
+                          style={{
+                            backgroundColor: statusIndicatorStyle.backgroundColor,
+                            borderColor: statusIndicatorStyle.borderColor,
+                            color: statusIndicatorStyle.color,
+                          }}
+                        >
+                          {statusDisplay.label}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 text-[11px] font-normal leading-tight opacity-90">
                       <span>
                         {startTimeLabel} - {endTimeLabel}
@@ -356,6 +408,11 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
                       {formattedPrice ? <span>{formattedPrice}</span> : null}
                     </div>
                   </div>
+                  {showPriorityBadges && priorityLevel && (
+                    <div className="flex-shrink-0 ml-auto">
+                      <PriorityNumberBadge priority={priorityLevel} show />
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -477,7 +534,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return () => {};
+      return () => { };
     }
 
     const mediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
@@ -506,15 +563,15 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     () =>
       (isMobileLayout
         ? {
-            height: gridViewportHeight,
-            maxHeight: gridViewportHeight,
-            overflowY: 'auto',
-          }
+          height: gridViewportHeight,
+          maxHeight: gridViewportHeight,
+          overflowY: 'auto',
+        }
         : {
-            height: 'auto',
-            maxHeight: 'none',
-            overflow: 'visible',
-          }) as React.CSSProperties,
+          height: 'auto',
+          maxHeight: 'none',
+          overflow: 'visible',
+        }) as React.CSSProperties,
     [gridViewportHeight, isMobileLayout]
   );
 
@@ -827,7 +884,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
     });
 
     return perDay;
-  }, [allowMinutes, displayTaskGroups, positionUnit, visibleRange]);
+  }, [allowMinutes, displayTaskGroups, positionUnit, visibleRange, showStatusBadges, showPriorityBadges]);
 
   const visibleTaskLayouts = useMemo(
     () => (showWeekendsEnabled ? taskLayouts : taskLayouts.filter((_, index) => index < 5)),
@@ -1052,7 +1109,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
             isPriorityToggleDisabled(task.priority_enabled);
           const priorityLevel =
             !priorityDisabled &&
-            (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low')
+              (task.priority === 'high' || task.priority === 'medium' || task.priority === 'low')
               ? task.priority
               : null;
           const isAbsenceTask =
@@ -1094,12 +1151,12 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
           const formattedPrice =
             typeof task.price === 'number'
               ? `${task.price.toLocaleString('fr-FR', {
-                  minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
-                  maximumFractionDigits: 2,
-                })} €`
+                minimumFractionDigits: task.price % 1 === 0 ? 0 : 2,
+                maximumFractionDigits: 2,
+              })} €`
               : typeof task.price === 'string'
-              ? task.price.trim()
-              : '';
+                ? task.price.trim()
+                : '';
 
           const hasParticipantBadges =
             Array.isArray(task.participants) && task.participants.length > 0;
@@ -1115,11 +1172,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
             <div
               key={`${keyPrefix}-task-${task.occurrenceId}`}
               onClick={() => isInteractive && onTaskClick?.(task)}
-              className={`relative border ${radius.button} ${surface.border} ${surface.base} p-2 text-xs flex items-start gap-2 ${
-                isInteractive
-                  ? 'cursor-pointer hover:bg-white/5 transition-colors'
-                  : ''
-              }`}
+              className={`relative border ${radius.button} ${surface.border} ${surface.base} p-2 text-xs flex items-start gap-2 ${isInteractive
+                ? 'cursor-pointer hover:bg-white/5 transition-colors'
+                : ''
+                }`}
             >
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-full border"
@@ -1165,7 +1221,7 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                         {participantBadges.map((participant, index) => {
                           const initials =
                             typeof participant?.initials === 'string' &&
-                            participant.initials.trim().length > 0
+                              participant.initials.trim().length > 0
                               ? participant.initials.trim()
                               : '??';
                           return (
@@ -1204,9 +1260,9 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         });
       }
 
-    return items;
-  },
-  [isReadOnlyMode, onEventClick, onTaskClick, showPriorityBadges, showStatusBadges]
+      return items;
+    },
+    [isReadOnlyMode, onEventClick, onTaskClick, showPriorityBadges, showStatusBadges]
   );
 
   if (!user) {
@@ -1220,22 +1276,20 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
         <button
           type="button"
           onClick={handleMobileTodayView}
-          className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${
-            viewFilter === 'today'
-              ? 'bg-blue-600 text-white'
-              : 'border border-gray-600 dark:border-slate-600 text-gray-900 dark:text-slate-100'
-          }`}
+          className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${viewFilter === 'today'
+            ? 'bg-blue-600 text-white'
+            : 'border border-gray-600 dark:border-slate-600 text-gray-900 dark:text-slate-100'
+            }`}
         >
           Aujourd'hui
         </button>
         <button
           type="button"
           onClick={handleMobileWeekView}
-          className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${
-            viewFilter === 'week'
-              ? 'bg-blue-600 text-white'
-              : 'border border-gray-600 dark:border-slate-600 text-gray-900 dark:text-slate-100'
-          }`}
+          className={`min-h-[44px] px-3 rounded-md text-sm font-medium flex-1 ${viewFilter === 'week'
+            ? 'bg-blue-600 text-white'
+            : 'border border-gray-600 dark:border-slate-600 text-gray-900 dark:text-slate-100'
+            }`}
         >
           Semaine
         </button>
@@ -1253,11 +1307,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                 <div className="day-header-actions">
                   <button
                     type="button"
-                    className={`day-header-button ${
-                      isSameDayDate(normalizedDuplicationSource, day.date)
-                        ? 'active'
-                        : ''
-                    }`}
+                    className={`day-header-button ${isSameDayDate(normalizedDuplicationSource, day.date)
+                      ? 'active'
+                      : ''
+                      }`}
                     onClick={() => onDayCopy?.(day.date)}
                     title="Choisir cette journée comme source"
                     aria-label="Choisir cette journée comme source"
@@ -1350,11 +1403,10 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            className={`inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 p-1 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                              isSameDayDate(normalizedDuplicationSource, day.date)
-                                ? 'bg-blue-600 text-white border-blue-500'
-                                : ''
-                            }`}
+                            className={`inline-flex items-center justify-center rounded-full border border-white/20 bg-white/10 p-1 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${isSameDayDate(normalizedDuplicationSource, day.date)
+                              ? 'bg-blue-600 text-white border-blue-500'
+                              : ''
+                              }`}
                             onClick={() => onDayCopy?.(day.date)}
                             title="Choisir cette journée comme source"
                             aria-label="Choisir cette journée comme source"
@@ -1417,79 +1469,79 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
               </div>
             )}
           </>
-          ) : (
-            // Mode AUJOURD'HUI : Liste verticale sans chevauchement
-            <>
-              {mobileDaysToShow.length > 0 ? (
-                (() => {
-                  const day = mobileDaysToShow[0];
+        ) : (
+          // Mode AUJOURD'HUI : Liste verticale sans chevauchement
+          <>
+            {mobileDaysToShow.length > 0 ? (
+              (() => {
+                const day = mobileDaysToShow[0];
 
-                  return (
-                    <div className="w-full flex flex-col">
-                      {/* En-tête du jour */}
-                      <div className="flex items-center justify-between mb-2 gap-3">
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={goToPreviousMobileDay}
-                              disabled={isFirstMobileDay}
-                              className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
-                              aria-label="Journée précédente"
-                            >
-                              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={goToNextMobileDay}
-                              disabled={isLastMobileDay}
-                              className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
-                              aria-label="Journée suivante"
-                            >
-                              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                          </div>
-                          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {selectedDayHeadingPrefix} — {day.name} {day.date.getDate()}
-                          </h2>
-                        </div>
-                        {!isReadOnlyMode && (
+                return (
+                  <div className="w-full flex flex-col">
+                    {/* En-tête du jour */}
+                    <div className="flex items-center justify-between mb-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
-                            className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 min-h-[44px]"
+                            onClick={goToPreviousMobileDay}
+                            disabled={isFirstMobileDay}
+                            className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                            aria-label="Journée précédente"
                           >
-                            + Événement
+                            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            onClick={goToNextMobileDay}
+                            disabled={isLastMobileDay}
+                            className="inline-flex items-center justify-center rounded-full border border-gray-300 bg-white p-2 text-gray-800 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/20"
+                            aria-label="Journée suivante"
+                          >
+                            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        </div>
+                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {selectedDayHeadingPrefix} — {day.name} {day.date.getDate()}
+                        </h2>
                       </div>
-
-                      <div
-                        className={`relative overflow-y-auto border border-white/10 ${radius.card} ${surface.base} ${surface.border} p-3 space-y-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]`}
-                        style={{ maxHeight: 'calc(100vh - 280px)' }}
-                      >
-                        {selectedDaySlots.map((slot) => (
-                          <React.Fragment key={`selected-${slot.key}`}>
-                            {renderMobileSlotItems(slot, `selected-${slot.key}`)}
-                          </React.Fragment>
-                        ))}
-
-                        {selectedDaySlots.length === 0 && (
-                          <div className="text-center text-gray-500 dark:text-slate-400 py-4">
-                            Aucun événement ou tâche pour cette journée
-                          </div>
-                        )}
-                      </div>
+                      {!isReadOnlyMode && (
+                        <button
+                          type="button"
+                          onClick={() => onAddEvent?.(day.date, hours[0] ?? '09:00')}
+                          className="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 min-h-[44px]"
+                        >
+                          + Événement
+                        </button>
+                      )}
                     </div>
-                  );
-                })()
-              ) : (
-                <div className="text-center text-gray-500 dark:text-slate-400 py-8">
-                  Aucune journée à afficher
-                </div>
-              )}
-            </>
-          )}
+
+                    <div
+                      className={`relative overflow-y-auto border border-white/10 ${radius.card} ${surface.base} ${surface.border} p-3 space-y-3 pb-[calc(env(safe-area-inset-bottom)+1rem)]`}
+                      style={{ maxHeight: 'calc(100vh - 280px)' }}
+                    >
+                      {selectedDaySlots.map((slot) => (
+                        <React.Fragment key={`selected-${slot.key}`}>
+                          {renderMobileSlotItems(slot, `selected-${slot.key}`)}
+                        </React.Fragment>
+                      ))}
+
+                      {selectedDaySlots.length === 0 && (
+                        <div className="text-center text-gray-500 dark:text-slate-400 py-4">
+                          Aucun événement ou tâche pour cette journée
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              <div className="text-center text-gray-500 dark:text-slate-400 py-8">
+                Aucune journée à afficher
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
