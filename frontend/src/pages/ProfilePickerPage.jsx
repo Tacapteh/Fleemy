@@ -62,8 +62,8 @@ const ProfilePickerPage = () => {
       typeof data.members_count === 'number'
         ? data.members_count
         : typeof data.membersCount === 'number'
-        ? data.membersCount
-        : members.length;
+          ? data.membersCount
+          : members.length;
 
     return {
       team_id: docSnap.id,
@@ -123,8 +123,8 @@ const ProfilePickerPage = () => {
               typeof team.members_count === 'number'
                 ? team.members_count
                 : Array.isArray(team.members)
-                ? team.members.length
-                : 0,
+                  ? team.members.length
+                  : 0,
           }))
           .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
           .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
@@ -150,7 +150,7 @@ const ProfilePickerPage = () => {
           setError(FRIENDLY_EMPTY_STATE_MESSAGE);
         }
         setLoading(false);
-      }, 12000);
+      }, 60000);
 
       try {
         const result = await ensureTeamsCache(() => apiFetch('/teams/my'));
@@ -737,11 +737,10 @@ const ProfilePickerPage = () => {
 
       {error && (
         <div
-          className={`mb-6 p-4 rounded-lg max-w-md border ${
-            error === FRIENDLY_EMPTY_STATE_MESSAGE
-              ? 'bg-white/10 border-white/30 text-white'
-              : 'bg-red-500/20 border-red-500 text-red-200'
-          }`}
+          className={`mb-6 p-4 rounded-lg max-w-md border ${error === FRIENDLY_EMPTY_STATE_MESSAGE
+            ? 'bg-white/10 border-white/30 text-white'
+            : 'bg-red-500/20 border-red-500 text-red-200'
+            }`}
         >
           {error}
         </div>
@@ -803,11 +802,10 @@ const ProfilePickerPage = () => {
 
           const actionButtonBase =
             'p-2 rounded-full bg-white/20 text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
-          const deleteButtonClass = `${actionButtonBase} ${
-            deletingTeamId === team.team_id
-              ? 'opacity-60 cursor-not-allowed'
-              : 'hover:bg-white/30'
-          }`;
+          const deleteButtonClass = `${actionButtonBase} ${deletingTeamId === team.team_id
+            ? 'opacity-60 cursor-not-allowed'
+            : 'hover:bg-white/30'
+            }`;
 
           return (
             <button
@@ -921,7 +919,7 @@ const ProfilePickerPage = () => {
         onClose={() => setShowCreateDialog(false)}
         onCreateTeam={handleCreateTeam}
       />
-      
+
       <JoinTeamDialog
         isOpen={showJoinDialog}
         onClose={() => setShowJoinDialog(false)}

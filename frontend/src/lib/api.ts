@@ -102,7 +102,7 @@ const baseCandidates = SHOULD_PRIORITIZE_DIRECT_BACKEND
 
 baseCandidates.forEach(appendBaseUrl);
 const RETRY_DELAYS = [0, 250, 500, 1000];
-const TEMPORARY_RETRY_DELAYS = [0, 1000, 2000, 4000];
+const TEMPORARY_RETRY_DELAYS = [0, 1000, 2000, 4000, 8000, 12000, 15000, 20000];
 const TEMPORARY_FINAL_BACKOFF = 5000;
 const TEMPORARY_STATUS_CODES = new Set([502, 503, 504]);
 const NON_JSON_RESPONSE_PLACEHOLDER = "[non-json response omitted]";
