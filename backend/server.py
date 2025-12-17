@@ -4694,33 +4694,35 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             try:
                 member_query = teams_ref.where("members", "array_contains", user["uid"])
                 return list(member_query.stream())
+            except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted):
+                raise
             except Exception as member_error:
                 return scan_member_teams_fallback(member_error)
 
         async def fetch_owner_teams():
+            # Optimization: Reduced from ~9 fields to just the active ones.
+            # We prioritized 'owner_uid' (standard) and 'ownerUid' (camelCase).
+            # 'ownerId' is kept as a legacy fallback.
             owner_fields = [
                 "owner_uid",
                 "ownerUid",
                 "ownerId",
-                "owner.uid",
-                "owner.user_uid",
-                "owner.userUid",
-                "owner.id",
-                "owner.user_id",
-                "owner.userId",
             ]
 
             seen_team_ids: Set[str] = set()
             owner_documents: List[Any] = []
 
-            # Run all owner queries in parallel
+            # Run owner queries in parallel, but fewer of them
             async def _query_field(field_name: str) -> List[Any]:
                 try:
                     query_ref = teams_ref.where(field_name, "==", user["uid"])
                     return await asyncio.to_thread(lambda: list(query_ref.stream()))
+                except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted):
+                    raise
                 except Exception:
+                    # Log at debug level to avoid noise, unless it's a specific error we care about
                     logger.debug(
-                        "Owner field %s is not queryable in this environment", field_name
+                        "Owner field %s query failed (likely no index or field unused)", field_name
                     )
                     return []
 
@@ -4814,6 +4816,8 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 try:
                     legacy_query = teams_ref.where(lookup_field, "==", True)
                     return list(legacy_query.stream())
+                except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted):
+                    raise
                 except Exception as legacy_error:
                     logger.warning(
                         "Legacy members map query failed for %s: %s",
@@ -4834,7 +4838,22 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                     fetch_legacy_member_docs(),
                 )
             )
-        except (PermissionDenied, Forbidden, GoogleServiceUnavailable) as membership_error:
+        except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted) as transient_error:
+            logger.warning(
+                "Transient backend error while fetching teams for %s: %s",
+                user.get("uid"),
+                transient_error,
+            )
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "code": "BACKEND_WARMUP",
+                    "message": "Service temporarily unavailable (warming up)",
+                    "retry_after": 1
+                },
+            )
+        except (PermissionDenied, Forbidden) as membership_error:
             logger.warning(
                 "Unable to list teams for %s due to membership permission issues: %s",
                 user.get("uid"),
