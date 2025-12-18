@@ -146,9 +146,8 @@ const ProfilePickerPage = () => {
           setTeams(mapTeams(persistedTeams));
           writeTeamsCache(persistedTeams);
           setError('');
-        } else if (!silent) {
-          setError(FRIENDLY_EMPTY_STATE_MESSAGE);
         }
+        // Do not set error for empty state on timeout, just stop loading
         setLoading(false);
       }, 60000);
 
@@ -172,7 +171,11 @@ const ProfilePickerPage = () => {
             !silent &&
             (!Array.isArray(nextTeams) || nextTeams.length === 0);
 
-          setError(shouldSurfaceError ? FRIENDLY_EMPTY_STATE_MESSAGE : '');
+          if (shouldSurfaceError) {
+            setError(result?.error || 'Erreur lors du chargement des équipes');
+          } else {
+            setError('');
+          }
         }
       } catch (apiError) {
         console.error('Failed to fetch teams', apiError);
@@ -199,8 +202,9 @@ const ProfilePickerPage = () => {
             setError(!silent && mappedTeams.length === 0 ? FRIENDLY_EMPTY_STATE_MESSAGE : '');
           } else {
             setTeams([]);
+            // Do not set FRIENDLY_EMPTY_STATE_MESSAGE as error
             if (!silent) {
-              setError(FRIENDLY_EMPTY_STATE_MESSAGE);
+              setError('');
             }
             clearTeamsCache();
           }
@@ -736,12 +740,7 @@ const ProfilePickerPage = () => {
       </div>
 
       {error && (
-        <div
-          className={`mb-6 p-4 rounded-lg max-w-md border ${error === FRIENDLY_EMPTY_STATE_MESSAGE
-            ? 'bg-white/10 border-white/30 text-white'
-            : 'bg-red-500/20 border-red-500 text-red-200'
-            }`}
-        >
+        <div className="mb-6 p-4 rounded-lg max-w-md border bg-red-500/20 border-red-500 text-red-200">
           {error}
         </div>
       )}
@@ -756,6 +755,16 @@ const ProfilePickerPage = () => {
         <div className="mb-8 flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-medium text-white shadow-lg">
           <span className="h-2 w-2 animate-ping rounded-full bg-white/70" aria-hidden />
           <span>Chargement des profils…</span>
+        </div>
+      )}
+
+      {/* Empty State Message */}
+      {!loading && !error && teams.length === 0 && (
+        <div className="mb-8 max-w-md text-center p-6 bg-white/10 border border-white/20 rounded-xl backdrop-blur-sm">
+          <h3 className="text-xl font-semibold text-white mb-2">Aucune équipe trouvée</h3>
+          <p className="text-gray-300 mb-4">
+            {FRIENDLY_EMPTY_STATE_MESSAGE}
+          </p>
         </div>
       )}
 
