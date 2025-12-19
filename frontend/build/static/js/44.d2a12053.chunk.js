@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunkfrontend=self.webpackChunkfrontend||[]).push([[44],{2044:(e,n,t)=>{t.r(n),t.d(n,{default:()=>r});var s=t(579);function r(){return(0,s.jsxs)("div",{className:"p-6 text-center",children:[(0,s.jsx)("h1",{className:"text-2xl font-bold mb-2",children:"404 - Page not found"}),(0,s.jsx)("p",{children:"Sorry, this page does not exist."})]})}}}]);
+//# sourceMappingURL=44.d2a12053.chunk.js.map

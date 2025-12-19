@@ -179,6 +179,8 @@ interface InteractiveLayerProps {
   isReadOnlyMode?: boolean;
   positionUnit: PositionUnit;
   minuteHeight: number;
+  showStatusBadges?: boolean;
+  showPriorityBadges?: boolean;
 }
 
 const formatPositionValue = (value: number, unit: PositionUnit, minuteHeight: number): string => {
@@ -202,6 +204,8 @@ const InteractiveLayer = React.memo(function InteractiveLayer({
   isReadOnlyMode,
   positionUnit,
   minuteHeight,
+  showStatusBadges,
+  showPriorityBadges,
 }: InteractiveLayerProps) {
   return (
     <div className="interactive-layer">
@@ -1376,6 +1380,8 @@ const PlannerGrid: React.FC<PlannerGridProps> = ({
               isReadOnlyMode={isReadOnlyMode}
               positionUnit={positionUnit}
               minuteHeight={minuteHeight}
+              showStatusBadges={showStatusBadges}
+              showPriorityBadges={showPriorityBadges}
             />
           </div>
         </div>

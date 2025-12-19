@@ -41,6 +41,7 @@ const ProfilePickerPage = () => {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isInitialSnapshotLoaded, setIsInitialSnapshotLoaded] = useState(false);
+  const [isInitialSyncComplete, setIsInitialSyncComplete] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
   const [error, setError] = useState('');
@@ -227,7 +228,10 @@ const ProfilePickerPage = () => {
     if (hasCachedTeams) {
       setTeams(cachedTeams);
       setLoading(false);
+      setTeams(cachedTeams);
+      setLoading(false);
       setIsInitialSnapshotLoaded(true);
+      setIsInitialSyncComplete(true);
     } else {
       setLoading(true);
       // If we have no cache, we wait for snapshot or API
@@ -382,6 +386,7 @@ const ProfilePickerPage = () => {
         const handleSnapshot = (snapshot) => {
           // Mark snapshot as loaded immediately when we get the first one
           setIsInitialSnapshotLoaded(true);
+          setIsInitialSyncComplete(true);
 
           latestSnapshotId += 1;
           const currentSnapshotId = latestSnapshotId;
@@ -467,6 +472,7 @@ const ProfilePickerPage = () => {
 
             if (isPermissionDeniedError(snapshotError)) {
               console.warn('Firestore membership subscription permission denied', snapshotError);
+              setIsInitialSyncComplete(true);
               stopTeamsListener();
               hydrateTeamsFromFetcher();
               return;
@@ -482,6 +488,7 @@ const ProfilePickerPage = () => {
 
         if (isPermissionDeniedError(subscriptionError)) {
           console.warn('Skipping Firestore membership subscription (permission denied)');
+          setIsInitialSyncComplete(true);
           hydrateTeamsFromFetcher();
           return;
         }
@@ -738,7 +745,7 @@ const ProfilePickerPage = () => {
   };
 
 
-  const isInitialLoading = (loading || !isInitialSnapshotLoaded) && teams.length === 0;
+  const isActuallyLoading = loading || (!isInitialSyncComplete && teams.length === 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
@@ -764,7 +771,7 @@ const ProfilePickerPage = () => {
         </div>
       )}
 
-      {isInitialLoading && !error && (
+      {isActuallyLoading && !error && (
         <div className="mb-8 flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-medium text-white shadow-lg">
           <span className="h-2 w-2 animate-ping rounded-full bg-white/70" aria-hidden />
           <span>Chargement des profils…</span>
@@ -772,7 +779,7 @@ const ProfilePickerPage = () => {
       )}
 
       {/* Empty State Message */}
-      {!isInitialLoading && !error && teams.length === 0 && (
+      {!isActuallyLoading && !error && teams.length === 0 && (
         <div className="mb-8 max-w-md text-center p-6 bg-white/10 border border-white/20 rounded-xl backdrop-blur-sm">
           <h3 className="text-xl font-semibold text-white mb-2">Aucune équipe trouvée</h3>
           <p className="text-gray-300 mb-4">
