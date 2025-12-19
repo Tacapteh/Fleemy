@@ -6,12 +6,11 @@ import { SectionHeaderRow, Settings as SettingsIcon } from "../ui";
 import { EMAIL_TEMPLATE_TOKENS } from "../utils/documents";
 import {
   deleteWeeklyTask,
-  fetchWeeklyTasksOnce,
   saveWeeklyTask,
   useFirebaseUser,
-  watchWeeklyTasksForContext,
   fetchUserTeamsFromFirestore,
 } from "../firebase";
+import useTasks from "../hooks/useTasks";
 import {
   TASK_COLOR_KEYS,
   DEFAULT_TASK_COLOR,
@@ -126,7 +125,7 @@ function TaskManagerSection() {
     fetchUserTeamsFromFirestore()
       .then((teams) => {
         if (active) {
-          setAvailableTeams(teams);
+          setAvailableTeams(teams || []);
           setTeamsLoading(false);
         }
       })
@@ -146,8 +145,10 @@ function TaskManagerSection() {
     }
     return { type: "personal", userId: user.uid };
   }, [user?.uid, selectedTeamId]);
+
+  const { tasks: remoteTasks, loading, error: tasksError } = useTasks(planningContext, null);
+
   const [tasks, setTasks] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -176,69 +177,14 @@ function TaskManagerSection() {
     };
   }, []);
 
-  const refreshTasks = useCallback(async () => {
-    if (!planningContext) {
-      setTasks([]);
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const result = await fetchWeeklyTasksOnce(planningContext);
-      const normalized = Array.isArray(result)
-        ? result.map((task, index) => normalizeManagedTask(task, index))
-        : [];
-      setTasks(normalized);
-    } catch (err) {
-      console.error("task manager fetch error", err);
-      setError("Impossible de charger les tâches existantes.");
-    } finally {
-      setLoading(false);
-    }
-  }, [normalizeManagedTask, planningContext]);
-
+  // Synchronise les tâches distantes vers l'état local pour édition
   useEffect(() => {
-    if (!planningContext) {
+    if (Array.isArray(remoteTasks)) {
+      setTasks(remoteTasks.map((task, index) => normalizeManagedTask(task, index)));
+    } else {
       setTasks([]);
-      setLoading(false);
-      return () => { };
     }
-
-    let cancelled = false;
-
-    const safeSetTasks = (next) => {
-      if (!cancelled) {
-        setTasks(next);
-      }
-    };
-
-    const unsubscribe = watchWeeklyTasksForContext(
-      planningContext,
-      (list) => {
-        const normalized = Array.isArray(list)
-          ? list.map((task, index) => normalizeManagedTask(task, index))
-          : [];
-        safeSetTasks(normalized);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("task manager realtime error", err);
-        if (!cancelled) {
-          setError("Impossible de charger les tâches existantes.");
-          setLoading(false);
-        }
-      }
-    );
-
-    refreshTasks();
-
-    return () => {
-      cancelled = true;
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
-      }
-    };
-  }, [planningContext, refreshTasks, normalizeManagedTask]);
+  }, [remoteTasks, normalizeManagedTask]);
 
   const updateTaskField = useCallback((localId, updates) => {
     setTasks((current) =>
@@ -272,10 +218,8 @@ function TaskManagerSection() {
         return;
       }
 
-      const currentTask = tasks.find((task) => task.localId === localId);
-      if (!currentTask) {
-        return;
-      }
+      const currentTask = tasks.find((t) => t.localId === localId);
+      if (!currentTask) return;
 
       const label = (currentTask.label || "").trim();
       if (!label) {
@@ -288,9 +232,7 @@ function TaskManagerSection() {
           typeof currentTask.price === "string"
             ? currentTask.price.trim()
             : currentTask.price;
-        if (raw === "" || raw == null) {
-          return null;
-        }
+        if (raw === "" || raw == null) return null;
         const numeric = Number.parseFloat(raw);
         return Number.isFinite(numeric) ? numeric : raw;
       })();
@@ -298,7 +240,7 @@ function TaskManagerSection() {
       setSavingId(localId);
       setError("");
       try {
-        const saved = await saveWeeklyTask(planningContext, {
+        await saveWeeklyTask(planningContext, {
           ...currentTask,
           id: currentTask.id || undefined,
           label,
@@ -306,19 +248,10 @@ function TaskManagerSection() {
           color: currentTask.color || DEFAULT_TASK_COLOR,
           icon: resolveTaskIconKey(currentTask.icon || "briefcase"),
           time_ranges:
-            Array.isArray(currentTask.time_ranges) &&
-              currentTask.time_ranges.length
+            Array.isArray(currentTask.time_ranges) && currentTask.time_ranges.length
               ? currentTask.time_ranges
               : [{ ...DEFAULT_TASK_RANGE }],
         });
-        const normalized = normalizeManagedTask(saved);
-        setTasks((current) =>
-          current.map((task) =>
-            task.localId === localId
-              ? { ...normalized, localId: normalized.id || localId }
-              : task
-          )
-        );
         showToast("Tâche enregistrée");
       } catch (err) {
         console.error("task manager save error", err);
@@ -327,28 +260,28 @@ function TaskManagerSection() {
         setSavingId(null);
       }
     },
-    [normalizeManagedTask, planningContext, tasks]
+    [planningContext, tasks]
   );
 
   const handleDeleteTask = useCallback(
     async (localId) => {
-      const currentTask = tasks.find((task) => task.localId === localId);
-      if (!currentTask) {
-        return;
-      }
+      const currentTask = tasks.find((t) => t.localId === localId);
+      if (!currentTask) return;
+
       if (!planningContext) {
         setError("Connectez-vous pour gérer vos tâches.");
         return;
       }
+
       if (!currentTask.id) {
-        setTasks((current) => current.filter((task) => task.localId !== localId));
+        setTasks((current) => current.filter((t) => t.localId !== localId));
         return;
       }
+
       setDeletingId(localId);
       setError("");
       try {
         await deleteWeeklyTask(planningContext, currentTask.id);
-        setTasks((current) => current.filter((task) => task.localId !== localId));
         showToast("Tâche supprimée");
       } catch (err) {
         console.error("task manager delete error", err);
@@ -360,7 +293,7 @@ function TaskManagerSection() {
     [planningContext, tasks]
   );
 
-  const renderTaskRow = (task) => {
+  const renderTaskRow = useCallback((task) => {
     const activeCategory =
       resolveTaskIconCategory(task.icon) || iconOptions[0]?.category;
     const categoryIcons = iconOptions.filter(
@@ -484,7 +417,7 @@ function TaskManagerSection() {
         </div>
       </div>
     );
-  };
+  }, [iconOptions, updateTaskField, handleSaveTask, handleDeleteTask, savingId, deletingId]);
 
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -498,9 +431,9 @@ function TaskManagerSection() {
       </div>
 
       <div className="space-y-4 px-4 py-4">
-        {error && (
+        {(error || tasksError) && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/60 dark:bg-red-900/30 dark:text-red-200">
-            {error}
+            {error || tasksError}
           </div>
         )}
 
