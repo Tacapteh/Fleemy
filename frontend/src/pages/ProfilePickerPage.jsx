@@ -411,24 +411,42 @@ const ProfilePickerPage = () => {
               return;
             }
 
-            const resolvedTeams = await Promise.all(
-              Array.from(uniqueTeamRefs.entries()).map(async ([teamId, teamRef]) => {
-                try {
-                  const teamSnap = await getDoc(teamRef);
-                  return teamSnap;
-                } catch (teamError) {
-                  console.warn(`Unable to fetch team ${teamId}`, teamError);
-                  return null;
-                }
-              }),
-            );
+            const teamIds = Array.from(uniqueTeamRefs.keys());
+            let resolvedTeams = [];
+
+            try {
+              // Batch fetch teams by ID (Firestore limit for 'in' is 30)
+              const batchSize = 30;
+              for (let i = 0; i < teamIds.length; i += batchSize) {
+                const chunk = teamIds.slice(i, i + batchSize);
+                const q = query(
+                  collection(db, 'teams'),
+                  where(documentId(), 'in', chunk)
+                );
+                const querySnap = await getDocs(q);
+                resolvedTeams = [...resolvedTeams, ...querySnap.docs];
+              }
+            } catch (batchError) {
+              console.warn('Batch team fetch failed, falling back to sequential', batchError);
+              resolvedTeams = await Promise.all(
+                Array.from(uniqueTeamRefs.entries()).map(async ([teamId, teamRef]) => {
+                  try {
+                    const teamSnap = await getDoc(teamRef);
+                    return teamSnap;
+                  } catch (teamError) {
+                    console.warn(`Unable to fetch team ${teamId}`, teamError);
+                    return null;
+                  }
+                }),
+              );
+            }
 
             if (!active || currentSnapshotId !== latestSnapshotId) {
               return;
             }
 
             const nextTeams = resolvedTeams
-              .map((teamSnap) => normalizeTeamDoc(teamSnap))
+              .map((teamSnap) => teamSnap && normalizeTeamDoc(teamSnap))
               .filter(Boolean)
               .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
@@ -793,7 +811,7 @@ const ProfilePickerPage = () => {
         {/* Solo Profile */}
         <button
           onClick={handleSelectSolo}
-          className="group relative aspect-square bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl overflow-hidden hover:ring-4 hover:ring-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+          className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
           data-testid="profile-solo-btn"
           aria-label="Mode Solo"
         >
@@ -830,19 +848,17 @@ const ProfilePickerPage = () => {
           };
 
           const actionButtonBase =
-            'p-2 rounded-full bg-white/20 text-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70';
-          const deleteButtonClass = `${actionButtonBase} ${deletingTeamId === team.team_id
-            ? 'opacity-60 cursor-not-allowed'
-            : 'hover:bg-white/30'
+            'p-2 rounded-full transition-all duration-200 transform active:scale-95 text-white/90 hover:text-white';
+          const deleteButtonClass = `${actionButtonBase} hover:bg-red-500/40 ${deletingTeamId === team.team_id ? 'animate-pulse opacity-50' : ''
             }`;
 
           return (
             <button
               key={team.team_id}
               onClick={() => handleSelectTeam(team)}
-              className="group relative aspect-square bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl overflow-hidden hover:ring-4 hover:ring-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
-              data-testid={`profile-team-${team.team_id}-btn`}
-              aria-label={`Équipe ${team.name}`}
+              className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
+              data-testid={`team-${team.team_id}-btn`}
+              aria-label={`Accéder à l'équipe ${team.name}`}
             >
               <span className="absolute top-3 left-3 z-10 inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm">
                 Équipe
@@ -900,11 +916,22 @@ const ProfilePickerPage = () => {
           );
         })}
 
-        {isActuallyLoading && (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/30 bg-white/10 p-6 text-center text-white/80">
-            <div className="mb-3 h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden />
-            <p className="text-sm">Chargement des équipes…</p>
-          </div>
+        {/* Skeletons while loading remaining teams */}
+        {isActuallyLoading && teams.length === 0 && (
+          <>
+            {[1, 2, 3].map((i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="relative aspect-square bg-white/5 backdrop-blur-sm border-2 border-white/10 rounded-2xl overflow-hidden animate-pulse min-h-[160px]"
+              >
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                  <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center" />
+                  <div className="h-4 w-24 bg-white/10 rounded mb-2" />
+                  <div className="h-3 w-16 bg-white/10 rounded" />
+                </div>
+              </div>
+            ))}
+          </>
         )}
 
         {/* Create Team */}

@@ -212,7 +212,7 @@ const fetchAndCacheTeams = async (fetcher) => {
   }
 };
 
-export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) => {
+export const ensureTeamsCache = async (fetcher, { forceRefresh = false, returnStaleWhileRefreshing = true } = {}) => {
   const cachedTeams = readTeamsCache();
   const hasCachedTeams = Array.isArray(cachedTeams) && cachedTeams.length > 0;
   const staleTeams = allowExpiredCacheRead();
@@ -220,6 +220,19 @@ export const ensureTeamsCache = async (fetcher, { forceRefresh = false } = {}) =
 
   if (!forceRefresh && hasCachedTeams) {
     return buildResult(cachedTeams, null, true, true);
+  }
+
+  // If we have stale teams and we're allowed to return them while refreshing
+  if (!forceRefresh && returnStaleWhileRefreshing && hasStaleTeams && !pendingTeamsPromise) {
+    // Start the refresh in background
+    (async () => {
+      try {
+        await fetchAndCacheTeams(fetcher);
+      } catch (e) {
+        console.warn('Background team refresh failed', e);
+      }
+    })();
+    return buildResult(staleTeams, null, true, true);
   }
 
   if (pendingTeamsPromise) {

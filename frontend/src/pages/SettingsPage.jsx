@@ -8,8 +8,9 @@ import {
   deleteWeeklyTask,
   saveWeeklyTask,
   useFirebaseUser,
-  fetchUserTeamsFromFirestore,
 } from "../firebase";
+import { apiFetch } from "../lib/api";
+import { ensureTeamsCache } from "../utils/teamCache";
 import useTasks from "../hooks/useTasks";
 import {
   TASK_COLOR_KEYS,
@@ -122,10 +123,10 @@ function TaskManagerSection() {
 
   useEffect(() => {
     let active = true;
-    fetchUserTeamsFromFirestore()
-      .then((teams) => {
+    ensureTeamsCache(() => apiFetch("/teams/my"))
+      .then((result) => {
         if (active) {
-          setAvailableTeams(teams || []);
+          setAvailableTeams(result?.teams || result?.raw?.teams || []);
           setTeamsLoading(false);
         }
       })

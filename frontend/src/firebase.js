@@ -491,7 +491,7 @@ const planningAuthSubscribers = new Set();
 
 const registerPlanningListener = (unsubscribe) => {
   if (typeof unsubscribe !== "function") {
-    return () => {};
+    return () => { };
   }
   let active = true;
   const wrapped = () => {
@@ -526,7 +526,7 @@ const clearPlanningListeners = () => {
 
 const registerPlanningAuthRestart = (callback) => {
   if (typeof callback !== "function") {
-    return () => {};
+    return () => { };
   }
   planningAuthSubscribers.add(callback);
   return () => {
@@ -795,7 +795,7 @@ async function saveEventViaApiFallback(resolved, eventData, startTs, endTs) {
 
   const durationMinutes = Math.max(
     Number.parseInt(rawEvent?.duration, 10) ||
-      Math.round((endDate - startDate) / 60000),
+    Math.round((endDate - startDate) / 60000),
     0
   );
 
@@ -951,7 +951,7 @@ export const setTeamContext = (teamId) => {
 export const listenTeamMemberships = (teamId, { onData, onError } = {}) => {
   if (!teamId) {
     onData?.([]);
-    return () => {};
+    return () => { };
   }
 
   let unsubscribe = null;
@@ -1257,7 +1257,7 @@ export const listenToTeamPlanningEntries = (
 ) => {
   if (!teamId) {
     onData?.([]);
-    return () => {};
+    return () => { };
   }
 
   let active = true;
@@ -1566,12 +1566,6 @@ export async function fetchUserTeamsFromFirestore() {
       "owner_uid",
       "ownerUid",
       "ownerId",
-      "owner.uid",
-      "owner.user_uid",
-      "owner.userUid",
-      "owner.id",
-      "owner.user_id",
-      "owner.userId",
     ];
 
     const ownerSnapshotPromises = ownerFieldCandidates.map(async (fieldName) => {
@@ -1891,7 +1885,7 @@ const normalizeEventData = (id, data, ownerUid, teamId, viewerUid) => {
   const resolvedType = deriveEventType(data);
   const legacyTypeValue =
     typeof data.type === "string" &&
-    !["absence", "normal", "work"].includes(normalizeStringLower(data.type))
+      !["absence", "normal", "work"].includes(normalizeStringLower(data.type))
       ? data.type
       : undefined;
 
@@ -2000,10 +1994,10 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     );
     const normalizedDate = normalizeTaskDateField(
       range?.task_date ??
-        range?.taskDate ??
-        range?.task_day_iso ??
-        range?.taskDayIso ??
-        null
+      range?.taskDate ??
+      range?.task_day_iso ??
+      range?.taskDayIso ??
+      null
     );
 
     return {
@@ -2058,7 +2052,7 @@ const normalizeWeeklyTaskData = (id, data, ownerUid, teamId, viewerUid) => {
     done: isDone,
     priorityEnabled:
       isPriorityToggleDisabled(data.priority_enabled) ||
-      isPriorityToggleDisabled(data.priorityEnabled)
+        isPriorityToggleDisabled(data.priorityEnabled)
         ? false
         : true,
     statusEnabled:
@@ -2225,10 +2219,10 @@ const sanitizeWeeklyTaskTimeRanges = (ranges) => {
 
       const taskDateIso = normalizeTaskDateField(
         range.task_date ??
-          range.taskDate ??
-          range.task_day_iso ??
-          range.taskDayIso ??
-          null
+        range.taskDate ??
+        range.task_day_iso ??
+        range.taskDayIso ??
+        null
       );
 
       const sanitized = { day, start, end, weekday: day };
@@ -2314,7 +2308,7 @@ const buildWeeklyTaskPayload = (
 
   const priorityEnabled =
     isPriorityToggleDisabled(taskData?.priorityEnabled) ||
-    isPriorityToggleDisabled(taskData?.priority_enabled)
+      isPriorityToggleDisabled(taskData?.priority_enabled)
       ? false
       : true;
   const statusEnabled =
@@ -2431,7 +2425,7 @@ const saveWeeklyTaskViaApiFallback = async (
 
   const priorityEnabled =
     isPriorityToggleDisabled(taskData?.priorityEnabled) ||
-    isPriorityToggleDisabled(taskData?.priority_enabled)
+      isPriorityToggleDisabled(taskData?.priority_enabled)
       ? false
       : true;
   const statusEnabled =
@@ -2498,9 +2492,9 @@ const saveWeeklyTaskViaApiFallback = async (
 
   return normalizeWeeklyTaskData(
     rawTask.id ||
-      taskData?.id ||
-      rawTask.uid ||
-      `${ownerUid}-${body.label || body.title || "task"}`,
+    taskData?.id ||
+    rawTask.uid ||
+    `${ownerUid}-${body.label || body.title || "task"}`,
     rawTask,
     ownerUid,
     teamId || null,
@@ -2602,8 +2596,8 @@ const fetchWeeklyTasksFallback = async (context) => {
           task.owner_uid || task.user_id || defaultOwner || viewerUid;
         return normalizeWeeklyTaskData(
           task.id ||
-            task.uid ||
-            `${ownerUid}-${task.label || task.name || "task"}`,
+          task.uid ||
+          `${ownerUid}-${task.label || task.name || "task"}`,
           task,
           ownerUid,
           teamId,
@@ -2642,7 +2636,7 @@ const buildRangeFromIso = (startIso, endIso) => {
 export const watchPlanningEventsInRange = (context, range, onData, onError) => {
   if (!range?.from || !range?.to) {
     onData?.([]);
-    return () => {};
+    return () => { };
   }
 
   const fromDate = normalizeDate(range.from);
@@ -2654,7 +2648,7 @@ export const watchPlanningEventsInRange = (context, range, onData, onError) => {
     Number.isNaN(toDate.getTime())
   ) {
     onData?.([]);
-    return () => {};
+    return () => { };
   }
 
   let effectiveContext = context;
@@ -2844,7 +2838,7 @@ export const watchWeekEvents = (
   const range = buildRangeFromIso(weekStartISO, weekEndISO);
   if (!range) {
     onData?.([]);
-    return () => {};
+    return () => { };
   }
   return watchPlanningEventsInRange(context, range, onData, onError);
 };
