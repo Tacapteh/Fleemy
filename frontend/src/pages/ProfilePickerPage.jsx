@@ -900,7 +900,7 @@ const ProfilePickerPage = () => {
           );
         })}
 
-        {isInitialLoading && (
+        {isActuallyLoading && (
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-white/30 bg-white/10 p-6 text-center text-white/80">
             <div className="mb-3 h-12 w-12 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden />
             <p className="text-sm">Chargement des équipes…</p>
