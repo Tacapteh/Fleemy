@@ -4707,6 +4707,12 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 "owner_uid",
                 "ownerUid",
                 "ownerId",
+                "owner.uid",
+                "owner.user_uid",
+                "owner.userUid",
+                "owner.id",
+                "owner.user_id",
+                "owner.userId",
             ]
 
             seen_team_ids: Set[str] = set()

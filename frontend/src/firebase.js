@@ -1566,6 +1566,12 @@ export async function fetchUserTeamsFromFirestore() {
       "owner_uid",
       "ownerUid",
       "ownerId",
+      "owner.uid",
+      "owner.user_uid",
+      "owner.userUid",
+      "owner.id",
+      "owner.user_id",
+      "owner.userId",
     ];
 
     const ownerSnapshotPromises = ownerFieldCandidates.map(async (fieldName) => {

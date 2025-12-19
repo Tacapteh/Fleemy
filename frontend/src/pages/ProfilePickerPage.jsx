@@ -8,8 +8,10 @@ import {
   fetchUserTeamsFromFirestore,
 } from '../firebase';
 import {
+  collection,
   collectionGroup,
   doc,
+  documentId,
   getDoc,
   getDocs,
   onSnapshot,
@@ -215,6 +217,7 @@ const ProfilePickerPage = () => {
         clearTimeout(safetyTimeout);
         if (shouldUpdate()) {
           setLoading(false);
+          setIsInitialSyncComplete(true);
         }
       }
     },
