@@ -4755,24 +4755,22 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             collection_names = ("memberships", "members")
             all_snapshots = []
             
-            async def _query_group(collection_name: str, field_name: str) -> List[Any]:
+            async def _query_group(collection_name: str) -> List[Any]:
                 try:
                     group_ref = collection_group(collection_name)
-                    # Support both document ID named after UID AND a field named 'uid'
-                    membership_query = group_ref.where(field_name, "==", uid)
+                    # Use 'uid' field only; DOCUMENT_ID_FIELD (document_id()) is not 
+                    # supported in collection group queries in many Firestore versions/mocks.
+                    # Document ID named after UID is better handled by direct document lookups
+                    # which are already covered by owner/member direct queries if applicable.
+                    membership_query = group_ref.where("uid", "==", uid)
                     return await asyncio.to_thread(lambda: list(membership_query.stream()))
                 except Exception:
                     return []
 
-            for collection_name in collection_names:
-                # Query by document ID and by 'uid' field for each collection type
-                results = await asyncio.gather(
-                    _query_group(collection_name, DOCUMENT_ID_FIELD),
-                    _query_group(collection_name, "uid")
-                )
-                for snapshots in results:
-                    if snapshots:
-                        all_snapshots.extend(snapshots)
+            results = await asyncio.gather(*[_query_group(name) for name in collection_names])
+            for snapshots in results:
+                if snapshots:
+                    all_snapshots.extend(snapshots)
             
             return all_snapshots
 
@@ -4787,7 +4785,9 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
         seen_team_ids: Set[str] = set()
         teams: List[Dict[str, Any]] = []
 
-        # 1. Process teams from membership docs first (often the most complete)
+        # 1. Process teams from membership docs first
+        # Extract pending team IDs to fetch them in batches
+        pending_metadata_ids: Set[str] = set()
         for doc in membership_docs:
             try:
                 # Try to get parent team ID
@@ -4797,17 +4797,28 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                     if team_parent:
                         team_id = team_parent.id
                         if team_id not in seen_team_ids:
-                            # We need to fetch the actual team document for full metadata
-                            # but for speed, if we already have it from members/owner, we skip.
-                            # For simplicity in this optimization, we only fetch what we need.
-                            t_doc = await asyncio.to_thread(lambda: db.collection("teams").document(team_id).get())
-                            if t_doc.exists:
-                                data = t_doc.to_dict()
-                                data["team_id"] = t_doc.id
-                                teams.append(data)
-                                seen_team_ids.add(team_id)
+                            pending_metadata_ids.add(team_id)
             except Exception:
                 continue
+
+        if pending_metadata_ids:
+            # Batch fetch teams by ID (Firestore limit for 'in' is 30, 
+            # but here we use direct document gets for simplicity or loop if needed.
+            # Optimization: only fetch if not already in member/owner docs to be processed next)
+            async def _fetch_team(tid: str):
+                try:
+                    t_doc = await asyncio.to_thread(lambda: db.collection("teams").document(tid).get())
+                    return t_doc if t_doc.exists else None
+                except Exception:
+                    return None
+            
+            metadata_docs = await asyncio.gather(*[_fetch_team(tid) for tid in pending_metadata_ids])
+            for t_doc in metadata_docs:
+                if t_doc and t_doc.id not in seen_team_ids:
+                    data = t_doc.to_dict()
+                    data["team_id"] = t_doc.id
+                    teams.append(data)
+                    seen_team_ids.add(t_doc.id)
 
         # 2. Process other direct documents
         for doc in (member_docs + owner_docs):

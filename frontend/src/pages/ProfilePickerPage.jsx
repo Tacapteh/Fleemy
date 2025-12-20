@@ -236,8 +236,6 @@ const ProfilePickerPage = () => {
     if (hasCachedTeams) {
       setTeams(cachedTeams);
       setLoading(false);
-      setTeams(cachedTeams);
-      setLoading(false);
       setIsInitialSnapshotLoaded(true);
       setIsInitialSyncComplete(true);
     } else {
@@ -273,6 +271,7 @@ const ProfilePickerPage = () => {
         setTeams([]);
         setLoading(false);
         setError('');
+        setIsInitialSnapshotLoaded(true); // Don't block loading if no user
         navigate('/');
         return;
       }
@@ -353,6 +352,7 @@ const ProfilePickerPage = () => {
         }
 
         if (membershipAccessDenied) {
+          setIsInitialSnapshotLoaded(true); // Don't block loading on access denied
           hydrateTeamsFromFetcher();
           return;
         }
@@ -363,6 +363,7 @@ const ProfilePickerPage = () => {
         const hasInitialData = teams.length > 0;
 
         if (!membershipsQuery) {
+          setIsInitialSnapshotLoaded(true); // Don't block loading if no query found
           hydrateTeamsFromFetcher();
           return;
         }
@@ -465,6 +466,7 @@ const ProfilePickerPage = () => {
               .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
             if (nextTeams.length === 0) {
+              setIsInitialSnapshotLoaded(true); // Ensure progress even if empty
               hydrateTeamsFromFetcher();
               return;
             }
