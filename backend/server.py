@@ -4715,8 +4715,18 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
 
         async def fetch_owner_teams():
             """Fetch teams where UID is owner (parallel optimized)."""
-            # Focused set of owner fields to minimize redundant Firestore hits.
-            owner_fields = ["owner_uid", "ownerUid", "owner.uid", "owner.id"]
+            # Expanded set of owner fields to be as thorough as the frontend fallback logic.
+            owner_fields = [
+                "owner_uid",
+                "ownerUid",
+                "ownerId",
+                "owner.uid",
+                "owner.id",
+                "owner.user_uid",
+                "owner.userUid",
+                "owner.user_id",
+                "owner.userId",
+            ]
 
             async def _query_field(field_name: str) -> List[Any]:
                 try:
@@ -4742,20 +4752,29 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             if not callable(collection_group):
                 return []
 
-            # Focus only on the standard memberships subcollection used by the logic.
-            # 'members' subcollection is kept as a secondary fallback if needed.
             collection_names = ("memberships", "members")
-            for collection_name in collection_names:
+            all_snapshots = []
+            
+            async def _query_group(collection_name: str, field_name: str) -> List[Any]:
                 try:
                     group_ref = collection_group(collection_name)
-                    membership_query = group_ref.where(DOCUMENT_ID_FIELD, "==", uid)
-                    snapshots = await asyncio.to_thread(lambda: list(membership_query.stream()))
+                    # Support both document ID named after UID AND a field named 'uid'
+                    membership_query = group_ref.where(field_name, "==", uid)
+                    return await asyncio.to_thread(lambda: list(membership_query.stream()))
+                except Exception:
+                    return []
+
+            for collection_name in collection_names:
+                # Query by document ID and by 'uid' field for each collection type
+                results = await asyncio.gather(
+                    _query_group(collection_name, DOCUMENT_ID_FIELD),
+                    _query_group(collection_name, "uid")
+                )
+                for snapshots in results:
                     if snapshots:
-                        return snapshots
-                except Exception as membership_error:
-                    logger.debug("Membership query failed in group %s: %s", collection_name, membership_error)
-                    continue
-            return []
+                        all_snapshots.extend(snapshots)
+            
+            return all_snapshots
 
         # Execute queries in parallel
         member_docs, owner_docs, membership_docs = await asyncio.gather(

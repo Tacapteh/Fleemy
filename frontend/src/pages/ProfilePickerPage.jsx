@@ -216,7 +216,12 @@ const ProfilePickerPage = () => {
       } finally {
         clearTimeout(safetyTimeout);
         if (shouldUpdate()) {
-          setLoading(false);
+          // We only stop loading here if we haven't started a snapshot listener 
+          // yet or if the snapshot listener already finished.
+          // This prevents the "empty state" from flashing while the snapshot is still pending.
+          if (isInitialSnapshotLoaded) {
+            setLoading(false);
+          }
           setIsInitialSyncComplete(true);
         }
       }
@@ -395,6 +400,7 @@ const ProfilePickerPage = () => {
           // Mark snapshot as loaded immediately when we get the first one
           setIsInitialSnapshotLoaded(true);
           setIsInitialSyncComplete(true);
+          setLoading(false); // Snapshot is here, we can stop the spinner safely
 
           latestSnapshotId += 1;
           const currentSnapshotId = latestSnapshotId;
@@ -771,7 +777,15 @@ const ProfilePickerPage = () => {
   };
 
 
+  // We are "actually loading" if the loading spinner is on AND we haven't 
+  // resolved teams yet.
   const isActuallyLoading = loading && teams.length === 0;
+
+  // We only show the empty state if:
+  // 1. We are NOT loading anymore (both API and snapshot initial check done)
+  // 2. We have NO teams
+  // 3. There is NO error
+  const shouldShowEmptyState = !loading && teams.length === 0 && !error;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
@@ -805,7 +819,7 @@ const ProfilePickerPage = () => {
       )}
 
       {/* Empty State Message */}
-      {!isActuallyLoading && !error && teams.length === 0 && (
+      {shouldShowEmptyState && (
         <div className="mb-8 max-w-md text-center p-6 bg-white/10 border border-white/20 rounded-xl backdrop-blur-sm">
           <h3 className="text-xl font-semibold text-white mb-2">Aucune équipe trouvée</h3>
           <p className="text-gray-300 mb-4">
