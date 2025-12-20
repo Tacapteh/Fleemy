@@ -110,7 +110,7 @@ const flattenIconOptions = () =>
     const iconEntries = Object.keys(category.icons || {});
     return iconEntries.map((key) => ({
       key,
-      label: `${getTaskIcon(key)} ${category.label || key}`.trim(),
+      label: `${TASK_ICONS[key]?.emoji || ""} ${category.label || key}`.trim(),
       category: category.key,
     }));
   });
@@ -118,8 +118,20 @@ const flattenIconOptions = () =>
 function TaskManagerSection() {
   const user = useFirebaseUser();
   const [availableTeams, setAvailableTeams] = useState([]);
-  const [selectedTeamId, setSelectedTeamId] = useState("");
   const [teamsLoading, setTeamsLoading] = useState(true);
+
+  const activeContext = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('fleemy_context');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const selectedTeamId = useMemo(() => {
+    return activeContext?.type === 'team' ? activeContext.teamId : "";
+  }, [activeContext]);
 
   useEffect(() => {
     let active = true;
@@ -181,7 +193,19 @@ function TaskManagerSection() {
   // Synchronise les tâches distantes vers l'état local pour édition
   useEffect(() => {
     if (Array.isArray(remoteTasks)) {
-      setTasks(remoteTasks.map((task, index) => normalizeManagedTask(task, index)));
+      // Déduplication par libellé (nom)
+      const uniqueTasks = [];
+      const seenLabels = new Set();
+
+      remoteTasks.forEach((task) => {
+        const label = (task.label || task.name || "").trim();
+        if (label && !seenLabels.has(label.toLowerCase())) {
+          seenLabels.add(label.toLowerCase());
+          uniqueTasks.push(task);
+        }
+      });
+
+      setTasks(uniqueTasks.map((task, index) => normalizeManagedTask(task, index)));
     } else {
       setTasks([]);
     }
@@ -410,11 +434,6 @@ function TaskManagerSection() {
           >
             {deletingId === task.localId ? "Suppression…" : "Supprimer"}
           </button>
-          {task.id && (
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              ID : {task.id}
-            </span>
-          )}
         </div>
       </div>
     );
@@ -449,19 +468,9 @@ function TaskManagerSection() {
             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Contexte :
             </span>
-            <select
-              value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
-              disabled={teamsLoading}
-              className="rounded-md border border-slate-300 bg-white py-1.5 px-3 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <option value="">Espace personnel</option>
-              {availableTeams.map((team) => (
-                <option key={team.team_id} value={team.team_id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+            <div className="rounded-md border border-slate-300 bg-slate-100 py-1.5 px-3 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+              {activeContext?.type === 'team' ? (activeContext.teamName || "Équipe") : "Espace personnel"}
+            </div>
           </div>
         )}
 
