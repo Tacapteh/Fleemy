@@ -426,6 +426,26 @@ async def error_handling_middleware(request: Request, call_next):
 api_router = APIRouter(prefix="/api")
 
 
+# Teams memory cache for performance optimization
+_USER_TEAMS_CACHE: Dict[str, Tuple[float, List[Any]]] = {}
+_USER_TEAMS_CACHE_TTL = 30.0  # seconds
+
+
+def _get_cached_teams(uid: str) -> Optional[List[Any]]:
+    """Return cached teams for a user if available and fresh."""
+    if uid in _USER_TEAMS_CACHE:
+        timestamp, teams = _USER_TEAMS_CACHE[uid]
+        if asyncio.get_event_loop().time() - timestamp < _USER_TEAMS_CACHE_TTL:
+            logger.info("Serving teams from memory cache for UID: %s", uid)
+            return teams
+    return None
+
+
+def _set_cached_teams(uid: str, teams: List[Any]):
+    """Store user teams in the short-lived memory cache."""
+    _USER_TEAMS_CACHE[uid] = (asyncio.get_event_loop().time(), teams)
+
+
 @api_router.api_route("/_debug/info", methods=["GET"], include_in_schema=False)
 async def debug_info() -> Dict[str, str]:
     git_sha = "unknown"
@@ -4655,15 +4675,23 @@ async def delete_team_planning_entry(
 @api_router.get("/teams/my")
 async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
     """Get all teams where the user is a member."""
-    logger.info("/teams/my called for %s", user.get("uid"))
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="User ID required")
+
+    # Check memory cache first
+    cached = _get_cached_teams(uid)
+    if cached is not None:
+        return {"success": True, "teams": cached}
+
+    logger.info("/teams/my called for %s", uid)
     try:
-        # Query teams where user is a member or the owner
         try:
             teams_ref = db.collection("teams")
         except (PermissionDenied, Forbidden, GoogleServiceUnavailable) as membership_error:
             logger.warning(
                 "Unable to access teams collection for %s: %s",
-                user.get("uid"),
+                uid,
                 membership_error,
                 exc_info=True,
             )
@@ -4676,204 +4704,127 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                 },
             )
 
-        def scan_member_teams_fallback(error: Optional[Exception] = None):
-            """Fallback when ``array_contains`` query fails."""
-            # WARNING: We DO NOT perform a full scan here anymore because it causes 502 timeouts
-            # on production when the database grows. If indexes are missing, we prefer
-            # partial results over crashing the server.
-            if error:
-                logger.warning(
-                    "teams members array query failed for %s: %s",
-                    user["uid"],
-                    error,
-                    exc_info=True,
-                )
-            return []
-
         def fetch_member_teams():
+            """Fetch teams where UID is in the 'members' array."""
             try:
-                member_query = teams_ref.where("members", "array_contains", user["uid"])
+                member_query = teams_ref.where("members", "array_contains", uid)
                 return list(member_query.stream())
-            except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted):
-                raise
             except Exception as member_error:
-                return scan_member_teams_fallback(member_error)
+                logger.warning("teams members array query failed for %s: %s", uid, member_error)
+                return []
 
         async def fetch_owner_teams():
-            # Optimization: Reduced from ~9 fields to just the active ones.
-            # We prioritized 'owner_uid' (standard) and 'ownerUid' (camelCase).
-            # 'ownerId' is kept as a legacy fallback.
-            owner_fields = [
-                "owner_uid",
-                "ownerUid",
-                "ownerId",
-                "owner.uid",
-                "owner.user_uid",
-                "owner.userUid",
-                "owner.id",
-                "owner.user_id",
-                "owner.userId",
-            ]
+            """Fetch teams where UID is owner (parallel optimized)."""
+            # Focused set of owner fields to minimize redundant Firestore hits.
+            owner_fields = ["owner_uid", "ownerUid", "owner.uid", "owner.id"]
 
-            seen_team_ids: Set[str] = set()
-            owner_documents: List[Any] = []
-
-            # Run owner queries in parallel, but fewer of them
             async def _query_field(field_name: str) -> List[Any]:
                 try:
-                    query_ref = teams_ref.where(field_name, "==", user["uid"])
+                    query_ref = teams_ref.where(field_name, "==", uid)
                     return await asyncio.to_thread(lambda: list(query_ref.stream()))
-                except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted):
-                    raise
                 except Exception:
-                    # Log at debug level to avoid noise, unless it's a specific error we care about
-                    logger.debug(
-                        "Owner field %s query failed (likely no index or field unused)", field_name
-                    )
                     return []
 
             results = await asyncio.gather(*[_query_field(f) for f in owner_fields])
             
+            seen_team_ids: Set[str] = set()
+            owner_documents: List[Any] = []
             for docs in results:
                 for team_doc in docs:
-                    team_id = getattr(team_doc, "id", None)
-                    if not team_id or team_id in seen_team_ids:
-                        continue
-                    owner_documents.append(team_doc)
-                    seen_team_ids.add(team_id)
-
+                    if team_doc.id not in seen_team_ids:
+                        owner_documents.append(team_doc)
+                        seen_team_ids.add(team_doc.id)
             return owner_documents
 
         async def fetch_membership_docs() -> List[Any]:
-            uid = user.get("uid")
-            if not uid:
+            """Fetch teams using memberships subcollections."""
+            collection_group = getattr(db, "collection_group", None)
+            if not callable(collection_group):
                 return []
 
-            # Prefer collection group queries (both legacy "members" and the
-            # newer "memberships" subcollection) so we can pick up membership
-            # documents even when the team document doesn't list the user in a
-            # flat array. This matches the structure created by the backend when
-            # ensuring memberships and supports legacy data that only stored the
-            # "members" subcollection.
-            collection_group = getattr(db, "collection_group", None)
-            if callable(collection_group):
-                collection_names = ("memberships", "members")
-                collected_docs: List[Any] = []
-                seen_paths: Set[str] = set()
-
-                for collection_name in collection_names:
-                    try:
-                        group_ref = collection_group(collection_name)
-                    except Exception as membership_error:  # pragma: no cover - defensive
-                        logger.warning(
-                            "Membership collection group %s unavailable for %s: %s",
-                            collection_name,
-                            uid,
-                            membership_error,
-                            exc_info=True,
-                        )
-                        continue
-
-                    try:
-                        membership_query = (
-                            group_ref.where(DOCUMENT_ID_FIELD, "==", uid)
-                        )
-                        snapshots = await asyncio.to_thread(
-                            lambda: list(membership_query.stream())
-                        )
-                    except Exception as membership_error:  # pragma: no cover - defensive
-                        logger.warning(
-                            "Membership query failed for %s in %s: %s",
-                            uid,
-                            collection_name,
-                            membership_error,
-                            exc_info=True,
-                        )
-                        continue
-
-                    for doc in snapshots:
-                        doc_ref = getattr(doc, "reference", None)
-                        doc_path = getattr(doc_ref, "path", None) or getattr(
-                            doc_ref, "id", None
-                        )
-                        if doc_path and doc_path in seen_paths:
-                            continue
-                        if doc_path:
-                            seen_paths.add(doc_path)
-                        collected_docs.append(doc)
-
-                    if collected_docs:
-                        break
-
-                if collected_docs:
-                    return collected_docs
-
-            # Fallback scan removed to prevent production timeouts.
+            # Focus only on the standard memberships subcollection used by the logic.
+            # 'members' subcollection is kept as a secondary fallback if needed.
+            collection_names = ("memberships", "members")
+            for collection_name in collection_names:
+                try:
+                    group_ref = collection_group(collection_name)
+                    membership_query = group_ref.where(DOCUMENT_ID_FIELD, "==", uid)
+                    snapshots = await asyncio.to_thread(lambda: list(membership_query.stream()))
+                    if snapshots:
+                        return snapshots
+                except Exception as membership_error:
+                    logger.debug("Membership query failed in group %s: %s", collection_name, membership_error)
+                    continue
             return []
 
-        async def fetch_legacy_member_docs() -> List[Any]:
-            uid = user.get("uid")
-            if not uid:
-                return []
+        # Execute queries in parallel
+        member_docs, owner_docs, membership_docs = await asyncio.gather(
+            asyncio.to_thread(fetch_member_teams),
+            fetch_owner_teams(),
+            fetch_membership_docs(),
+        )
 
-            lookup_field = f"members.{uid}"
+        # Merge and serialize
+        seen_team_ids: Set[str] = set()
+        teams: List[Dict[str, Any]] = []
 
-            def _run_legacy_query() -> List[Any]:
-                try:
-                    legacy_query = teams_ref.where(lookup_field, "==", True)
-                    return list(legacy_query.stream())
-                except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted):
-                    raise
-                except Exception as legacy_error:
-                    logger.warning(
-                        "Legacy members map query failed for %s: %s",
-                        lookup_field,
-                        legacy_error,
-                    )
-                    return []
+        # 1. Process teams from membership docs first (often the most complete)
+        for doc in membership_docs:
+            try:
+                # Try to get parent team ID
+                team_ref = getattr(doc.reference, "parent", None)
+                if team_ref:
+                    team_parent = getattr(team_ref, "parent", None)
+                    if team_parent:
+                        team_id = team_parent.id
+                        if team_id not in seen_team_ids:
+                            # We need to fetch the actual team document for full metadata
+                            # but for speed, if we already have it from members/owner, we skip.
+                            # For simplicity in this optimization, we only fetch what we need.
+                            t_doc = await asyncio.to_thread(lambda: db.collection("teams").document(team_id).get())
+                            if t_doc.exists:
+                                data = t_doc.to_dict()
+                                data["team_id"] = t_doc.id
+                                teams.append(data)
+                                seen_team_ids.add(team_id)
+            except Exception:
+                continue
 
-            legacy_docs = await asyncio.to_thread(_run_legacy_query)
-            return legacy_docs
+        # 2. Process other direct documents
+        for doc in (member_docs + owner_docs):
+            if doc.id not in seen_team_ids:
+                data = doc.to_dict()
+                data["team_id"] = doc.id
+                teams.append(data)
+                seen_team_ids.add(doc.id)
 
-        try:
-            member_docs, owner_docs, membership_docs, legacy_member_docs = (
-                await asyncio.gather(
-                    asyncio.to_thread(fetch_member_teams),
-                    fetch_owner_teams(),
-                    fetch_membership_docs(),
-                    fetch_legacy_member_docs(),
-                )
-            )
-        except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted) as transient_error:
-            logger.warning(
-                "Transient backend error while fetching teams for %s: %s",
-                user.get("uid"),
-                transient_error,
-            )
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "success": False,
-                    "code": "BACKEND_WARMUP",
-                    "message": "Service temporarily unavailable (warming up)",
-                    "retry_after": 1
-                },
-            )
-        except (PermissionDenied, Forbidden) as membership_error:
-            logger.warning(
-                "Unable to list teams for %s due to membership permission issues: %s",
-                user.get("uid"),
-                membership_error,
-                exc_info=True,
-            )
-            return JSONResponse(
-                status_code=503,
-                content={
-                    "success": False,
-                    "code": "MEMBERSHIPS_UNAVAILABLE",
-                    "message": "Memberships temporarily unavailable",
-                },
-            )
+        # Serialize timestamps
+        for team in teams:
+            for key in ["created_at", "updated_at", "invite_expires_at"]:
+                if key in team:
+                    team[key] = _serialize_timestamp(team[key])
+
+        # Cache results
+        _set_cached_teams(uid, teams)
+        
+        return {"success": True, "teams": teams}
+
+    except (GoogleServiceUnavailable, GoogleDeadlineExceeded, GoogleInternal, Aborted) as transient_error:
+        logger.warning("Transient backend error while fetching teams for %s: %s", uid, transient_error)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "code": "BACKEND_WARMUP",
+                "message": "Service temporarily unavailable (warming up)",
+            },
+        )
+    except Exception as e:
+        logger.error("get_my_teams error: %s", e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)},
+        )
 
         teams_map: Dict[str, Dict[str, Any]] = {}
 

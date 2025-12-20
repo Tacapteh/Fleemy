@@ -352,6 +352,11 @@ const ProfilePickerPage = () => {
           return;
         }
 
+        // Optimization: If we already have teams from the API or cache,
+        // and we haven't found a membership query yet, or even if we did,
+        // we can skip the heavy initial getDocs if we're just setting up a listener.
+        const hasInitialData = teams.length > 0;
+
         if (!membershipsQuery) {
           hydrateTeamsFromFetcher();
           return;
@@ -766,7 +771,7 @@ const ProfilePickerPage = () => {
   };
 
 
-  const isActuallyLoading = loading || (!isInitialSyncComplete && teams.length === 0);
+  const isActuallyLoading = loading && teams.length === 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
