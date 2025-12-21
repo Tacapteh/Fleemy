@@ -340,7 +340,7 @@ function TaskManagerSection() {
               onChange={(event) =>
                 updateTaskField(task.localId, { label: event.target.value })
               }
-              className="form-input"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
               placeholder="Ex. Accompagnement"
             />
           </label>
@@ -354,7 +354,7 @@ function TaskManagerSection() {
               onChange={(event) =>
                 updateTaskField(task.localId, { price: event.target.value })
               }
-              className="form-input"
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
               placeholder="Optionnel"
             />
           </label>
@@ -398,7 +398,7 @@ function TaskManagerSection() {
                     icon: nextIcons[0]?.key || task.icon,
                   });
                 }}
-                className="form-input"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-shadow duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:focus-visible:ring-offset-slate-900"
               >
                 {TASK_ICON_CATEGORIES.map((category) => (
                   <option key={category.key} value={category.key}>
