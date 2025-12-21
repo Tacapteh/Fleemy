@@ -284,15 +284,13 @@ const ProfilePickerPage = () => {
           {
             name: 'members',
             buildQueries: (col) => [
-              query(col, where('uid', '==', user.uid)),
-              query(col, where(documentId(), '==', user.uid)),
+              query(col, where('uid', '==', user.uid))
             ],
           },
           {
             name: 'memberships',
             buildQueries: (col) => [
-              query(col, where('uid', '==', user.uid)),
-              query(col, where(documentId(), '==', user.uid)),
+              query(col, where('uid', '==', user.uid))
             ],
           },
         ];
