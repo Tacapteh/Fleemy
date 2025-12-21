@@ -4708,9 +4708,11 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             """Fetch teams where UID is in the 'members' array."""
             try:
                 member_query = teams_ref.where("members", "array_contains", uid)
-                return list(member_query.stream())
+                docs = list(member_query.stream())
+                logger.info("fetch_member_teams found %d docs for UID %s", len(docs), uid)
+                return docs
             except Exception as member_error:
-                logger.warning("teams members array query failed for %s: %s", uid, member_error)
+                logger.error("teams members array query FAILED for %s: %s", uid, member_error, exc_info=True)
                 return []
 
         async def fetch_owner_teams():
@@ -4731,8 +4733,12 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             async def _query_field(field_name: str) -> List[Any]:
                 try:
                     query_ref = teams_ref.where(field_name, "==", uid)
-                    return await asyncio.to_thread(lambda: list(query_ref.stream()))
-                except Exception:
+                    docs = await asyncio.to_thread(lambda: list(query_ref.stream()))
+                    if docs:
+                        logger.info("owner query field '%s' found %d docs for UID %s", field_name, len(docs), uid)
+                    return docs
+                except Exception as exc:
+                    logger.warning("owner query field '%s' failed for %s: %s", field_name, uid, exc)
                     return []
 
             results = await asyncio.gather(*[_query_field(f) for f in owner_fields])
@@ -4758,13 +4764,35 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
             async def _query_group(collection_name: str) -> List[Any]:
                 try:
                     group_ref = collection_group(collection_name)
-                    # Use 'uid' field only; DOCUMENT_ID_FIELD (document_id()) is not 
-                    # supported in collection group queries in many Firestore versions/mocks.
-                    # Document ID named after UID is better handled by direct document lookups
-                    # which are already covered by owner/member direct queries if applicable.
-                    membership_query = group_ref.where("uid", "==", uid)
-                    return await asyncio.to_thread(lambda: list(membership_query.stream()))
-                except Exception:
+                    # We query both by the 'uid' field and by the document ID itself.
+                    # This ensures we catch both "legacy" and "optimized" membership structures.
+                    queries = [
+                        (f"{collection_name}.uid", group_ref.where("uid", "==", uid)),
+                        (f"{collection_name}.id", group_ref.where(DOCUMENT_ID_FIELD, "==", uid))
+                    ]
+                    
+                    async def _run_q(name, q):
+                        try:
+                            res = await asyncio.to_thread(lambda: list(q.stream()))
+                            if res:
+                                logger.info("group query '%s' found %d docs for UID %s", name, len(res), uid)
+                            return res
+                        except Exception as q_exc:
+                            logger.error("group query '%s' FAILED for %s: %s", name, uid, q_exc)
+                            return []
+
+                    results = await asyncio.gather(*[_run_q(n, q) for n, q in queries])
+                    
+                    merged = []
+                    seen = set()
+                    for docs in results:
+                        for d in docs:
+                            if d.id not in seen:
+                                merged.append(d)
+                                seen.add(d.id)
+                    return merged
+                except Exception as group_exc:
+                    logger.error("collectionGroup '%s' logic FAILED for %s: %s", collection_name, uid, group_exc)
                     return []
 
             results = await asyncio.gather(*[_query_group(name) for name in collection_names])

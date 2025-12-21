@@ -137,10 +137,6 @@ const ProfilePickerPage = () => {
         setLoading(true);
       }
 
-      // Ensure we never keep the loader spinning forever in case the
-      // asynchronous chain (API + Firestore) gets stuck on mobile devices.
-      // After the timeout we surface an error and let the user create/join a
-      // team instead of waiting indefinitely.
       const safetyTimeout = setTimeout(() => {
         if (!shouldUpdate()) {
           return;
@@ -151,11 +147,11 @@ const ProfilePickerPage = () => {
           writeTeamsCache(persistedTeams);
           setError('');
         }
-        // Do not set error for empty state on timeout, just stop loading
         setLoading(false);
       }, 60000);
 
       try {
+        console.log('[ProfilePickerPage] Calling apiFetch(/teams/my)...');
         const result = await ensureTeamsCache(() => apiFetch('/teams/my'));
         const teamsPayload = Array.isArray(result?.teams)
           ? result.teams
@@ -166,6 +162,7 @@ const ProfilePickerPage = () => {
         }
 
         const nextTeams = mapTeams(teamsPayload);
+        console.log('[ProfilePickerPage] API found teams:', nextTeams.length);
 
         if (shouldUpdate()) {
           setTeams(nextTeams);
@@ -182,13 +179,13 @@ const ProfilePickerPage = () => {
           }
         }
       } catch (apiError) {
-        console.error('Failed to fetch teams', apiError);
+        console.error('[ProfilePickerPage] Failed to fetch teams via API', apiError);
 
         let fallbackTeams = [];
         try {
           fallbackTeams = await fetchUserTeamsFromFirestore();
         } catch (fallbackError) {
-          console.warn('Fallback Firestore teams fetch failed', fallbackError);
+          console.warn('[ProfilePickerPage] Fallback Firestore teams fetch failed', fallbackError);
         }
 
         const normalizedFallback = Array.isArray(fallbackTeams)
@@ -206,7 +203,6 @@ const ProfilePickerPage = () => {
             setError(!silent && mappedTeams.length === 0 ? FRIENDLY_EMPTY_STATE_MESSAGE : '');
           } else {
             setTeams([]);
-            // Do not set FRIENDLY_EMPTY_STATE_MESSAGE as error
             if (!silent) {
               setError('');
             }
@@ -216,9 +212,6 @@ const ProfilePickerPage = () => {
       } finally {
         clearTimeout(safetyTimeout);
         if (shouldUpdate()) {
-          // We only stop loading here if we haven't started a snapshot listener 
-          // yet or if the snapshot listener already finished.
-          // This prevents the "empty state" from flashing while the snapshot is still pending.
           if (isInitialSnapshotLoaded) {
             setLoading(false);
           }
@@ -226,7 +219,7 @@ const ProfilePickerPage = () => {
         }
       }
     },
-    [],
+    [isInitialSnapshotLoaded],
   );
 
   useEffect(() => {
@@ -240,7 +233,6 @@ const ProfilePickerPage = () => {
       setIsInitialSyncComplete(true);
     } else {
       setLoading(true);
-      // If we have no cache, we wait for snapshot or API
       setIsInitialSnapshotLoaded(false);
     }
 
@@ -262,16 +254,18 @@ const ProfilePickerPage = () => {
       });
 
     const subscribeToTeams = async (user) => {
+      console.log('[ProfilePickerPage] subscribeToTeams for UID:', user?.uid);
       stopTeamsListener();
 
       if (!user) {
+        console.warn('[ProfilePickerPage] No user authenticated, redirecting...');
         if (!active) {
           return;
         }
         setTeams([]);
         setLoading(false);
         setError('');
-        setIsInitialSnapshotLoaded(true); // Don't block loading if no user
+        setIsInitialSnapshotLoaded(true);
         navigate('/');
         return;
       }
@@ -289,11 +283,17 @@ const ProfilePickerPage = () => {
         const membershipCollectionCandidates = [
           {
             name: 'members',
-            buildQueries: (col) => [query(col, where('uid', '==', user.uid))],
+            buildQueries: (col) => [
+              query(col, where('uid', '==', user.uid)),
+              query(col, where(documentId(), '==', user.uid)),
+            ],
           },
           {
             name: 'memberships',
-            buildQueries: (col) => [query(col, where('uid', '==', user.uid))],
+            buildQueries: (col) => [
+              query(col, where('uid', '==', user.uid)),
+              query(col, where(documentId(), '==', user.uid)),
+            ],
           },
         ];
         let membershipsQuery = null;
@@ -311,10 +311,7 @@ const ProfilePickerPage = () => {
               membershipAccessDenied = true;
               break;
             }
-            console.warn(
-              `Unable to prepare ${name} membership query`,
-              collectionError,
-            );
+            console.warn(`[ProfilePickerPage] Unable to prepare ${name} membership query`, collectionError);
             continue;
           }
 
@@ -322,221 +319,135 @@ const ProfilePickerPage = () => {
             let snapshot = null;
             try {
               snapshot = await getDocs(candidateQuery);
-              if (!active) {
-                return;
-              }
+              if (!active) return;
             } catch (membershipError) {
               if (isPermissionDeniedError(membershipError)) {
                 membershipAccessDenied = true;
                 break;
               }
-              console.warn(
-                `Unable to prefetch ${name} memberships`,
-                membershipError,
-              );
+              console.warn(`[ProfilePickerPage] Unable to prefetch ${name} memberships`, membershipError);
             }
 
-            if (!membershipsQuery) {
-              membershipsQuery = candidateQuery;
-            }
-
+            if (!membershipsQuery) membershipsQuery = candidateQuery;
             if (snapshot && !snapshot.empty) {
               membershipsQuery = candidateQuery;
               break;
             }
           }
-
-          if (membershipAccessDenied || membershipsQuery) {
-            break;
-          }
+          if (membershipAccessDenied || membershipsQuery) break;
         }
 
         if (membershipAccessDenied) {
-          setIsInitialSnapshotLoaded(true); // Don't block loading on access denied
+          console.warn('[ProfilePickerPage] Membership access denied in Firestore');
+          setIsInitialSnapshotLoaded(true);
           hydrateTeamsFromFetcher();
           return;
         }
-
-        // Optimization: If we already have teams from the API or cache,
-        // and we haven't found a membership query yet, or even if we did,
-        // we can skip the heavy initial getDocs if we're just setting up a listener.
-        const hasInitialData = teams.length > 0;
 
         if (!membershipsQuery) {
-          setIsInitialSnapshotLoaded(true); // Don't block loading if no query found
+          console.warn('[ProfilePickerPage] No valid membership query candidate found.');
+          setIsInitialSnapshotLoaded(true);
           hydrateTeamsFromFetcher();
           return;
         }
 
+        console.log('[ProfilePickerPage] Starting onSnapshot for membershipsQuery');
         let latestSnapshotId = 0;
 
-        const extractMembershipEntries = (snapshot) =>
-          snapshot.docs
-            .map((docSnap) => {
-              const teamRef = docSnap?.ref?.parent?.parent || null;
-              let teamId = teamRef?.id || null;
-
-              if (!teamId) {
-                try {
-                  const membershipData =
-                    typeof docSnap.data === 'function' ? docSnap.data() : {};
-                  teamId = membershipData?.team_id || membershipData?.teamId || null;
-                } catch {
-                  teamId = null;
-                }
-              }
-
-              if (!teamId) {
-                return null;
-              }
-
-              return {
-                teamId,
-                teamRef: teamRef || doc(db, 'teams', teamId),
-              };
-            })
-            .filter(Boolean);
-
         const handleSnapshot = (snapshot) => {
-          // Mark snapshot as loaded immediately when we get the first one
+          console.log('[ProfilePickerPage] Received memberships snapshot, empty:', snapshot.empty, 'size:', snapshot.size);
           setIsInitialSnapshotLoaded(true);
           setIsInitialSyncComplete(true);
-          setLoading(false); // Snapshot is here, we can stop the spinner safely
+          setLoading(false);
 
           latestSnapshotId += 1;
           const currentSnapshotId = latestSnapshotId;
 
+          const extractMembershipEntries = (snap) =>
+            snap.docs
+              .map((docSnap) => {
+                const teamRef = docSnap?.ref?.parent?.parent || null;
+                let teamId = teamRef?.id || null;
+                if (!teamId) {
+                  try {
+                    const data = typeof docSnap.data === 'function' ? docSnap.data() : {};
+                    teamId = data?.team_id || data?.teamId || null;
+                  } catch { teamId = null; }
+                }
+                return teamId ? { teamId, teamRef: teamRef || doc(db, 'teams', teamId) } : null;
+              })
+              .filter(Boolean);
+
           const processSnapshot = async () => {
             const membershipEntries = extractMembershipEntries(snapshot);
-
             if (membershipEntries.length === 0) {
+              console.log('[ProfilePickerPage] No memberships found in snapshot, hydrating from fetcher...');
               hydrateTeamsFromFetcher();
               return;
             }
 
             const uniqueTeamRefs = new Map();
             membershipEntries.forEach(({ teamId, teamRef }) => {
-              if (teamId && !uniqueTeamRefs.has(teamId)) {
-                uniqueTeamRefs.set(teamId, teamRef);
-              }
+              if (!uniqueTeamRefs.has(teamId)) uniqueTeamRefs.set(teamId, teamRef);
             });
-
-            if (uniqueTeamRefs.size === 0) {
-              hydrateTeamsFromFetcher();
-              return;
-            }
 
             const teamIds = Array.from(uniqueTeamRefs.keys());
             let resolvedTeams = [];
-
             try {
-              // Batch fetch teams by ID (Firestore limit for 'in' is 30)
               const batchSize = 30;
               for (let i = 0; i < teamIds.length; i += batchSize) {
                 const chunk = teamIds.slice(i, i + batchSize);
-                const q = query(
-                  collection(db, 'teams'),
-                  where(documentId(), 'in', chunk)
-                );
+                const q = query(collection(db, 'teams'), where(documentId(), 'in', chunk));
                 const querySnap = await getDocs(q);
                 resolvedTeams = [...resolvedTeams, ...querySnap.docs];
               }
             } catch (batchError) {
-              console.warn('Batch team fetch failed, falling back to sequential', batchError);
+              console.warn('[ProfilePickerPage] Batch team fetch failed, sequential fallback');
               resolvedTeams = await Promise.all(
-                Array.from(uniqueTeamRefs.entries()).map(async ([teamId, teamRef]) => {
-                  try {
-                    const teamSnap = await getDoc(teamRef);
-                    return teamSnap;
-                  } catch (teamError) {
-                    console.warn(`Unable to fetch team ${teamId}`, teamError);
-                    return null;
-                  }
-                }),
+                Array.from(uniqueTeamRefs.entries()).map(async ([tId, tRef]) => {
+                  try { return await getDoc(tRef); } catch { return null; }
+                })
               );
             }
 
-            if (!active || currentSnapshotId !== latestSnapshotId) {
-              return;
-            }
+            if (!active || currentSnapshotId !== latestSnapshotId) return;
 
             const nextTeams = resolvedTeams
-              .map((teamSnap) => teamSnap && normalizeTeamDoc(teamSnap))
+              .map((snap) => snap && normalizeTeamDoc(snap))
               .filter(Boolean)
               .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
-            if (nextTeams.length === 0) {
-              setIsInitialSnapshotLoaded(true); // Ensure progress even if empty
-              hydrateTeamsFromFetcher();
-              return;
-            }
-
+            console.log('[ProfilePickerPage] Setting teams from snapshot:', nextTeams.length);
             setTeams(nextTeams);
             setLoading(false);
             setError('');
             writeTeamsCache(nextTeams);
           };
 
-          processSnapshot().catch((processingError) => {
-            if (!active) {
-              return;
-            }
-            console.error(
-              'Unable to hydrate teams from memberships snapshot',
-              processingError,
-            );
+          processSnapshot().catch((err) => {
+            console.error('[ProfilePickerPage] Hydration Error:', err);
             hydrateTeamsFromFetcher();
           });
         };
 
         unsubscribeTeams = onSnapshot(
           membershipsQuery,
-          (snapshot) => {
-            if (!active) {
-              return;
-            }
-            handleSnapshot(snapshot);
-          },
-          (snapshotError) => {
-            if (!active) {
-              return;
-            }
-            // Ensure we don't block loading on error
+          (snapshot) => { if (active) handleSnapshot(snapshot); },
+          (err) => {
+            console.error('[ProfilePickerPage] onSnapshot Error:', err);
             setIsInitialSnapshotLoaded(true);
-
-            if (isPermissionDeniedError(snapshotError)) {
-              console.warn('Firestore membership subscription permission denied', snapshotError);
-              setIsInitialSyncComplete(true);
-              stopTeamsListener();
-              hydrateTeamsFromFetcher();
-              return;
-            }
-
-            console.error('Firestore membership subscription error', snapshotError);
             hydrateTeamsFromFetcher();
-          },
+          }
         );
-      } catch (subscriptionError) {
-        // Ensure we don't block loading on error
+      } catch (err) {
+        console.error('[ProfilePickerPage] Subscription Exception:', err);
         setIsInitialSnapshotLoaded(true);
-
-        if (isPermissionDeniedError(subscriptionError)) {
-          console.warn('Skipping Firestore membership subscription (permission denied)');
-          setIsInitialSyncComplete(true);
-          hydrateTeamsFromFetcher();
-          return;
-        }
-
-        console.error('Failed to subscribe to teams', subscriptionError);
         hydrateTeamsFromFetcher();
       }
     };
 
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!active) {
-        return;
-      }
-      subscribeToTeams(user);
+      if (active) subscribeToTeams(user);
     });
 
     if (auth.currentUser) {
@@ -546,67 +457,48 @@ const ProfilePickerPage = () => {
     return () => {
       active = false;
       stopTeamsListener();
-      if (typeof unsubscribeAuth === 'function') {
-        unsubscribeAuth();
-      }
+      if (unsubscribeAuth) unsubscribeAuth();
     };
   }, [fetchTeamsList, navigate]);
 
   useEffect(() => {
     let active = true;
-    let unsubscribeAuth = null;
     let lastFetchedUid = null;
 
-    const cachedTeams = readTeamsCache();
-    const hasCachedTeams = Array.isArray(cachedTeams) && cachedTeams.length > 0;
-
     const ensureInitialTeams = (user) => {
-      if (!user?.uid || lastFetchedUid === user.uid) {
-        return;
-      }
-
+      if (!user?.uid || lastFetchedUid === user.uid) return;
       lastFetchedUid = user.uid;
-
+      const cached = readTeamsCache();
+      const hasCache = Array.isArray(cached) && cached.length > 0;
       fetchTeamsList({
-        skipStartLoading: hasCachedTeams,
-        silent: hasCachedTeams,
+        skipStartLoading: hasCache,
+        silent: hasCache,
         shouldUpdate: () => active,
       });
     };
 
-    if (auth.currentUser) {
-      ensureInitialTeams(auth.currentUser);
-    }
-
-    unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (!active) {
-        return;
-      }
-      ensureInitialTeams(user);
+    if (auth.currentUser) ensureInitialTeams(auth.currentUser);
+    const stopAuth = auth.onAuthStateChanged((user) => {
+      if (active) ensureInitialTeams(user);
     });
 
     return () => {
       active = false;
-      if (typeof unsubscribeAuth === 'function') {
-        unsubscribeAuth();
-      }
+      stopAuth();
     };
   }, [fetchTeamsList]);
 
   const updateLastContext = useCallback(async (contextData) => {
     try {
-      const user = auth.currentUser;
-      if (!user) return;
-
+      if (!auth.currentUser) return;
       setContextError('');
-
       await apiFetch('/auth/context', {
         method: 'PUT',
         body: JSON.stringify(contextData),
       });
     } catch (err) {
-      console.error('Error updating context:', err);
-      setContextError('Impossible de mettre à jour le contexte (réseau/CORS). Réessayez.');
+      console.error('[ProfilePickerPage] Context Update Error:', err);
+      setContextError('Erreur de mise à jour du contexte.');
     }
   }, []);
 
@@ -620,33 +512,21 @@ const ProfilePickerPage = () => {
   };
 
   const ensureMembershipForUser = async (teamId, user, options = {}) => {
-    if (!teamId || !user?.uid) {
-      return;
-    }
-
+    if (!teamId || !user?.uid) return;
     try {
       await apiFetch(`/teams/${teamId}/memberships/ensure`, {
         method: 'POST',
-        body: JSON.stringify({
-          include_joined_at: options.includeJoinedAt === true,
-        }),
+        body: JSON.stringify({ include_joined_at: options.includeJoinedAt === true }),
       });
     } catch (err) {
-      console.error('Error ensuring membership document:', err);
+      console.error('[ProfilePickerPage] Ensure Membership Error:', err);
     }
   };
 
   const handleSelectTeam = (team) => {
     const user = auth.currentUser;
-    if (team?.team_id && user?.uid) {
-      ensureMembershipForUser(team.team_id, user);
-    }
-
-    const context = {
-      type: 'team',
-      teamId: team.team_id,
-      teamName: team.name,
-    };
+    if (team?.team_id && user?.uid) ensureMembershipForUser(team.team_id, user);
+    const context = { type: 'team', teamId: team.team_id, teamName: team.name };
     contextStore.set(context);
     localStorage.setItem('teamId', team.team_id);
     localStorage.setItem('teamName', team.name);
@@ -654,164 +534,71 @@ const ProfilePickerPage = () => {
     updateLastContext({ type: 'team', team_id: team.team_id });
   };
 
-  const handleDeleteTeam = useCallback(
-    async (team) => {
-      if (!team?.team_id) {
-        return;
+  const handleDeleteTeam = useCallback(async (team) => {
+    if (!team?.team_id || !window.confirm(`Supprimer "${team.name}" ?`)) return;
+    try {
+      setError('');
+      setDeletingTeamId(team.team_id);
+      await apiFetch(`/teams/${team.team_id}`, { method: 'DELETE' });
+      showToast(`Équipe "${team.name}" supprimée`);
+      removeTeamFromCache(team.team_id);
+      setTeams(prev => prev.filter(t => t.team_id !== team.team_id));
+      const ctx = contextStore.get();
+      if (ctx?.teamId === team.team_id) {
+        localStorage.removeItem('teamId');
+        localStorage.removeItem('teamName');
+        const solo = { type: 'solo' };
+        contextStore.set(solo);
+        updateLastContext(solo);
       }
+    } catch (err) {
+      console.error('[ProfilePickerPage] Delete Error:', err);
+      setError(err?.message || "Erreur lors de la suppression");
+    } finally {
+      setDeletingTeamId(null);
+    }
+  }, [updateLastContext]);
 
-      const confirmed = window.confirm(`Supprimer l'équipe "${team.name}" ?`);
-      if (!confirmed) {
-        return;
-      }
-
-      try {
-        setError('');
-        setContextError('');
-        setDeletingTeamId(team.team_id);
-
-        await apiFetch(`/teams/${team.team_id}`, { method: 'DELETE' });
-
-        showToast(`Équipe "${team.name}" supprimée`);
-        removeTeamFromCache(team.team_id);
-
-        setTeams((currentTeams) =>
-          Array.isArray(currentTeams)
-            ? currentTeams.filter((current) => current.team_id !== team.team_id)
-            : [],
-        );
-
-        const currentContext = contextStore.get();
-        if (currentContext?.type === 'team' && currentContext.teamId === team.team_id) {
-          const soloContext = { type: 'solo' };
-          contextStore.set(soloContext);
-          localStorage.removeItem('teamId');
-          localStorage.removeItem('teamName');
-          await updateLastContext(soloContext);
-        }
-
-      } catch (err) {
-        console.error('Error deleting team:', err);
-        const message = err?.message || "Impossible de supprimer l'équipe";
-        setError(message);
-        showToast(message, true);
-      } finally {
-        setDeletingTeamId(null);
-      }
-    },
-    [updateLastContext],
-  );
-
-  const handleCreateTeam = async (teamName) => {
+  const handleCreateTeam = async (name) => {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('Non connecté');
-
-      const data = await apiFetch('/teams', {
-        method: 'POST',
-        body: JSON.stringify({ name: teamName }),
-      });
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'Erreur lors de la création');
-      }
-
-      try {
-        await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
-      } catch (membershipError) {
-        console.warn('Unable to ensure membership after team creation', membershipError);
-      }
-
-      const newTeam = {
-        team_id: data.team_id,
-        name: data.name || teamName,
-        invite_code: data.invite_code,
-        owner_uid: user.uid,
-        members_count: 1,
-      };
-
+      const data = await apiFetch('/teams', { method: 'POST', body: JSON.stringify({ name }) });
+      if (!data?.success) throw new Error(data?.error || 'Erreur création');
+      await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: true });
+      const newTeam = { team_id: data.team_id, name: data.name || name, owner_uid: user.uid, members_count: 1 };
       clearTeamsCache();
-      setTeams((currentTeams) => {
-        const baseTeams = Array.isArray(currentTeams) ? currentTeams : [];
-        const exists = baseTeams.some((team) => team.team_id === newTeam.team_id);
-        if (exists) {
-          return baseTeams;
-        }
-        return [...baseTeams, newTeam];
-      });
-
+      setTeams(prev => prev.some(t => t.team_id === newTeam.team_id) ? prev : [...prev, newTeam]);
       setInviteDialogTeam(newTeam);
-    } catch (err) {
-      throw err;
-    }
+    } catch (err) { throw err; }
   };
 
   const handleJoinTeam = async (code) => {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error('Non connecté');
-
-      const data = await apiFetch('/teams/join', {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-      });
-
-      if (!data?.success) {
-        throw new Error(data?.error || 'Code invalide ou expiré');
-      }
-
-      try {
-        await ensureMembershipForUser(data.team_id, user, {
-          includeJoinedAt: !data.already_member,
-        });
-      } catch (membershipError) {
-        console.warn('Unable to ensure membership after joining team', membershipError);
-      }
-
+      const data = await apiFetch('/teams/join', { method: 'POST', body: JSON.stringify({ code }) });
+      if (!data?.success) throw new Error(data?.error || 'Code invalide');
+      await ensureMembershipForUser(data.team_id, user, { includeJoinedAt: !data.already_member });
       clearTeamsCache();
-      await handleSelectTeam({
-        team_id: data.team_id,
-        name: data.name,
-      });
-    } catch (err) {
-      throw err;
-    }
+      handleSelectTeam({ team_id: data.team_id, name: data.name });
+    } catch (err) { throw err; }
   };
 
-
-  // We are "actually loading" if the loading spinner is on AND we haven't 
-  // resolved teams yet.
   const isActuallyLoading = loading && teams.length === 0;
-
-  // We only show the empty state if:
-  // 1. We are NOT loading anymore (both API and snapshot initial check done)
-  // 2. We have NO teams
-  // 3. There is NO error
   const shouldShowEmptyState = !loading && teams.length === 0 && !error;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
-      {/* Header */}
       <div className="text-center mb-12">
         <h1 className="text-5xl md:text-6xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display, serif' }}>
           Qui est-ce ?
         </h1>
-        <p className="text-gray-300 text-lg">
-          Choisissez votre contexte de travail
-        </p>
+        <p className="text-gray-300 text-lg">Choisissez votre contexte de travail</p>
       </div>
 
-      {error && (
-        <div className="mb-6 p-4 rounded-lg max-w-md border bg-red-500/20 border-red-500 text-red-200">
-          {error}
-        </div>
-      )}
-
-      {contextError && (
-        <div className="mb-6 p-4 bg-amber-500/20 border border-amber-400 rounded-lg text-amber-100 max-w-md">
-          {contextError}
-        </div>
-      )}
+      {error && <div className="mb-6 p-4 rounded-lg max-w-md border bg-red-500/20 border-red-500 text-red-200">{error}</div>}
+      {contextError && <div className="mb-6 p-4 bg-amber-500/20 border border-amber-400 rounded-lg text-amber-100 max-w-md">{contextError}</div>}
 
       {isActuallyLoading && !error && (
         <div className="mb-8 flex items-center justify-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-sm font-medium text-white shadow-lg">
@@ -820,208 +607,62 @@ const ProfilePickerPage = () => {
         </div>
       )}
 
-      {/* Empty State Message */}
       {shouldShowEmptyState && (
         <div className="mb-8 max-w-md text-center p-6 bg-white/10 border border-white/20 rounded-xl backdrop-blur-sm">
           <h3 className="text-xl font-semibold text-white mb-2">Aucune équipe trouvée</h3>
-          <p className="text-gray-300 mb-4">
-            {FRIENDLY_EMPTY_STATE_MESSAGE}
-          </p>
+          <p className="text-gray-300 mb-4">{FRIENDLY_EMPTY_STATE_MESSAGE}</p>
         </div>
       )}
 
-      {/* Grid de profils */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-5xl w-full mb-8">
-        {/* Solo Profile */}
-        <button
-          onClick={handleSelectSolo}
-          className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
-          data-testid="profile-solo-btn"
-          aria-label="Mode Solo"
-        >
+        <button onClick={handleSelectSolo} className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 min-h-[160px]">
           <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-            <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-              <User size={32} className="text-white" />
-            </div>
+            <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center"><User size={32} className="text-white" /></div>
             <span className="text-white font-semibold text-lg">Moi</span>
             <span className="text-white/80 text-sm mt-1">Solo</span>
           </div>
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
         </button>
 
-        {/* Team Profiles */}
         {teams.map((team) => {
           const isOwner = auth.currentUser?.uid && team.owner_uid === auth.currentUser.uid;
-
-          const openInviteDialog = (event) => {
-            event?.preventDefault();
-            event?.stopPropagation();
-            setInviteDialogTeam(team);
-          };
-
-          const deleteTeam = (event) => {
-            if (deletingTeamId === team.team_id) {
-              event?.preventDefault();
-              event?.stopPropagation();
-              return;
-            }
-
-            event?.preventDefault();
-            event?.stopPropagation();
-            handleDeleteTeam(team);
-          };
-
-          const actionButtonBase =
-            'p-2 rounded-full transition-all duration-200 transform active:scale-95 text-white/90 hover:text-white';
-          const deleteButtonClass = `${actionButtonBase} hover:bg-red-500/40 ${deletingTeamId === team.team_id ? 'animate-pulse opacity-50' : ''
-            }`;
-
           return (
-            <button
-              key={team.team_id}
-              onClick={() => handleSelectTeam(team)}
-              className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
-              data-testid={`team-${team.team_id}-btn`}
-              aria-label={`Accéder à l'équipe ${team.name}`}
-            >
-              <span className="absolute top-3 left-3 z-10 inline-flex items-center rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white shadow-sm">
-                Équipe
-              </span>
+            <button key={team.team_id} onClick={() => handleSelectTeam(team)} className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 min-h-[160px]">
+              <span className="absolute top-3 left-3 z-10 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold text-white">Équipe</span>
               {isOwner && (
                 <>
-                  {team.invite_code && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={openInviteDialog}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          openInviteDialog(e);
-                        }
-                      }}
-                      className={`absolute top-3 right-3 z-10 ${actionButtonBase} hover:bg-white/30`}
-                      aria-label="Afficher le code d'invitation"
-                      data-testid={`team-${team.team_id}-invite-btn`}
-                    >
-                      <Share2 size={18} />
-                    </span>
-                  )}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={deleteTeam}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        deleteTeam(e);
-                      }
-                    }}
-                    className={`absolute bottom-3 right-3 z-10 ${deleteButtonClass}`}
-                    aria-label={`Supprimer l'équipe ${team.name}`}
-                    aria-disabled={deletingTeamId === team.team_id}
-                    data-testid={`team-${team.team_id}-delete-btn`}
-                  >
-                    <Trash2 size={18} />
-                  </span>
+                  <Share2 size={18} className="absolute top-3 right-3 text-white/50 hover:text-white" onClick={(e) => { e.stopPropagation(); setInviteDialogTeam(team); }} />
+                  <Trash2 size={18} className="absolute bottom-3 right-3 text-white/50 hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleDeleteTeam(team); }} />
                 </>
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
-                  <Users size={32} className="text-white" />
-                </div>
-                <span className="text-white font-semibold text-center text-sm leading-tight line-clamp-2">
-                  {team.name}
-                </span>
-                <span className="text-white/80 text-xs mt-1">
-                  {team.members_count} membre{team.members_count > 1 ? 's' : ''}
-                </span>
+                <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center"><Users size={32} className="text-white" /></div>
+                <span className="text-white font-semibold text-center text-sm line-clamp-2">{team.name}</span>
+                <span className="text-white/80 text-xs mt-1">{team.members_count} membre{team.members_count > 1 ? 's' : ''}</span>
               </div>
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
             </button>
           );
         })}
 
-        {/* Skeletons while loading remaining teams */}
-        {isActuallyLoading && teams.length === 0 && (
-          <>
-            {[1, 2, 3].map((i) => (
-              <div
-                key={`skeleton-${i}`}
-                className="relative aspect-square bg-white/5 backdrop-blur-sm border-2 border-white/10 rounded-2xl overflow-hidden animate-pulse min-h-[160px]"
-              >
-                <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                  <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center" />
-                  <div className="h-4 w-24 bg-white/10 rounded mb-2" />
-                  <div className="h-3 w-16 bg-white/10 rounded" />
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* Create Team */}
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
-          data-testid="create-team-btn"
-          aria-label="Créer une équipe"
-        >
+        <button onClick={() => setShowCreateDialog(true)} className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 min-h-[160px]">
           <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-            <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center">
-              <Plus size={32} className="text-white" />
-            </div>
-            <span className="text-white font-semibold text-center text-sm">
-              Créer une équipe
-            </span>
+            <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center"><Plus size={32} className="text-white" /></div>
+            <span className="text-white font-semibold text-sm">Créer une équipe</span>
           </div>
         </button>
 
-        {/* Join Team */}
-        <button
-          onClick={() => setShowJoinDialog(true)}
-          className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 focus:outline-none focus:ring-4 focus:ring-white/50 min-h-[160px]"
-          data-testid="join-team-btn"
-          aria-label="Rejoindre une équipe"
-        >
+        <button onClick={() => setShowJoinDialog(true)} className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/30 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 min-h-[160px]">
           <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-            <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center">
-              <LogIn size={32} className="text-white" />
-            </div>
-            <span className="text-white font-semibold text-center text-sm">
-              Rejoindre une équipe
-            </span>
+            <div className="w-16 h-16 mb-3 bg-white/10 rounded-full flex items-center justify-center"><LogIn size={32} className="text-white" /></div>
+            <span className="text-white font-semibold text-sm">Rejoindre une équipe</span>
           </div>
         </button>
       </div>
 
-      {/* Dialogs */}
-      <CreateTeamDialog
-        isOpen={showCreateDialog}
-        onClose={() => setShowCreateDialog(false)}
-        onCreateTeam={handleCreateTeam}
-      />
+      <CreateTeamDialog isOpen={showCreateDialog} onClose={() => setShowCreateDialog(false)} onCreateTeam={handleCreateTeam} />
+      <JoinTeamDialog isOpen={showJoinDialog} onClose={() => setShowJoinDialog(false)} onJoinTeam={handleJoinTeam} />
+      <TeamInviteCodeDialog isOpen={Boolean(inviteDialogTeam)} team={inviteDialogTeam} onClose={() => setInviteDialogTeam(null)} onOpenTeam={handleSelectTeam} />
 
-      <JoinTeamDialog
-        isOpen={showJoinDialog}
-        onClose={() => setShowJoinDialog(false)}
-        onJoinTeam={handleJoinTeam}
-      />
-
-      <TeamInviteCodeDialog
-        isOpen={Boolean(inviteDialogTeam)}
-        team={inviteDialogTeam}
-        onClose={() => setInviteDialogTeam(null)}
-        onOpenTeam={(teamData) => {
-          setInviteDialogTeam(null);
-          handleSelectTeam(teamData);
-        }}
-      />
-
-      {/* Footer */}
-      <div className="mt-8 text-center">
-        <p className="text-gray-400 text-sm">
-          Vous pouvez changer de contexte à tout moment depuis le planning
-        </p>
-      </div>
+      <div className="mt-8 text-center"><p className="text-gray-400 text-sm">Vous pouvez changer de contexte à tout moment depuis le planning</p></div>
     </div>
   );
 };

@@ -146,19 +146,27 @@ const cacheTeamsFromResponse = (data) => {
   const staleTeams = allowExpiredCacheRead();
   const resolvedTeams = normalizeTeamsResponse(data);
 
-  if (Array.isArray(resolvedTeams)) {
+  // If we got valid teams, update the cache.
+  if (Array.isArray(resolvedTeams) && resolvedTeams.length > 0) {
     writeTeamsCache(resolvedTeams);
     return buildResult(resolvedTeams, data, true, false);
   }
 
-  if (data && typeof data === 'object' && data.success) {
-    const teamsList = Array.isArray(data.teams) ? data.teams : [];
-    writeTeamsCache(teamsList);
-    return buildResult(teamsList, data, true, false);
+  // If we got an explicitly successful response from the API that is EMPTY, 
+  // we update the cache to reflect that the user genuinely has no teams.
+  if (data?.success === true && Array.isArray(resolvedTeams) && resolvedTeams.length === 0) {
+    writeTeamsCache([]);
+    return buildResult([], data, true, false);
   }
 
+  // If the data is empty or invalid, but we have stale teams, keep them.
   if (Array.isArray(staleTeams) && staleTeams.length > 0) {
     return buildResult(staleTeams, data, true, true);
+  }
+
+  // Final fallback: clear if absolutely no data is found anywhere and we are sure.
+  if (data?.success === false) {
+    return buildResult([], data, false, false);
   }
 
   clearTeamsCache();
