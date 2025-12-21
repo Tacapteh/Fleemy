@@ -359,22 +359,30 @@ function TaskManagerSection() {
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
+          <div className="flex flex-col gap-1 text-sm font-medium text-slate-700 dark:text-slate-200">
             Couleur
-            <select
-              value={task.color}
-              onChange={(event) =>
-                updateTaskField(task.localId, { color: event.target.value })
-              }
-              className="form-input"
-            >
-              {TASK_COLOR_KEYS.map((colorKey) => (
-                <option key={colorKey} value={getTaskColor(colorKey)}>
-                  {colorKey}
-                </option>
-              ))}
-            </select>
-          </label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {TASK_COLOR_KEYS.map((colorKey) => {
+                const colorStyles = getTaskColor(colorKey);
+                const isSelected = task.color === colorKey;
+                return (
+                  <button
+                    key={colorKey}
+                    type="button"
+                    className={`h-6 w-6 rounded-md border-2 transition-all ${isSelected
+                      ? "border-slate-900 dark:border-white scale-110"
+                      : "border-transparent hover:scale-105"
+                      }`}
+                    style={{
+                      backgroundColor: colorStyles.backgroundColor,
+                    }}
+                    onClick={() => updateTaskField(task.localId, { color: colorKey })}
+                    title={colorKey}
+                  />
+                );
+              })}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
             <label className="flex flex-col gap-1">
@@ -399,22 +407,28 @@ function TaskManagerSection() {
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1">
               Icône
-              <select
-                value={task.icon}
-                onChange={(event) =>
-                  updateTaskField(task.localId, { icon: event.target.value })
-                }
-                className="form-input"
-              >
-                {categoryIcons.map((icon) => (
-                  <option key={icon.key} value={icon.key}>
-                    {icon.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className="flex flex-wrap gap-1 mt-1 max-h-24 overflow-y-auto p-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
+                {categoryIcons.map((icon) => {
+                  const isSelected = task.icon === icon.key;
+                  return (
+                    <button
+                      key={icon.key}
+                      type="button"
+                      className={`p-1.5 rounded-md transition-all ${isSelected
+                        ? "bg-indigo-600 text-white shadow-sm scale-110"
+                        : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:scale-105"
+                        }`}
+                      onClick={() => updateTaskField(task.localId, { icon: icon.key })}
+                      title={icon.label}
+                    >
+                      {getTaskIcon(icon.key, { className: "h-4 w-4" })}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
