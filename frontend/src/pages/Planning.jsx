@@ -586,6 +586,7 @@ export default function Planning() {
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
   const [clientsError, setClientsError] = useState(null);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   const createInitialEventModalState = () => ({
     open: false,
@@ -1071,13 +1072,13 @@ export default function Planning() {
         setMembersLoading(true);
         setMembersError(null);
         setSelectedMemberId(null);
-        return () => {};
+        return () => { };
       }
       setMembers([]);
       setMembersLoading(false);
       setMembersError(TEAM_PLANNING_ACCESS_DENIED_MESSAGE);
       setSelectedMemberId(null);
-      return () => {};
+      return () => { };
     }
 
     if (!teamMembershipReady) {
@@ -1085,7 +1086,7 @@ export default function Planning() {
       setMembersLoading(true);
       setMembersError(null);
       setSelectedMemberId(null);
-      return () => {};
+      return () => { };
     }
 
     setMembersLoading(true);
@@ -1456,13 +1457,13 @@ export default function Planning() {
 
       const hasClientSignal = Boolean(
         (typeof slot?.client === "string" && slot.client.trim()) ||
-          (slot?.client && typeof slot.client === "object") ||
-          (typeof slot?.client_name === "string" && slot.client_name.trim()) ||
-          (typeof slot?.clientName === "string" && slot.clientName.trim()) ||
-          (typeof slot?.client_label === "string" && slot.client_label.trim()) ||
-          (typeof slot?.clientLabel === "string" && slot.clientLabel.trim()) ||
-          (typeof slot?.client_id === "string" && slot.client_id.trim()) ||
-          (typeof slot?.clientId === "string" && slot.clientId.trim())
+        (slot?.client && typeof slot.client === "object") ||
+        (typeof slot?.client_name === "string" && slot.client_name.trim()) ||
+        (typeof slot?.clientName === "string" && slot.clientName.trim()) ||
+        (typeof slot?.client_label === "string" && slot.client_label.trim()) ||
+        (typeof slot?.clientLabel === "string" && slot.clientLabel.trim()) ||
+        (typeof slot?.client_id === "string" && slot.client_id.trim()) ||
+        (typeof slot?.clientId === "string" && slot.clientId.trim())
       );
 
       const slotRateCandidate = getSlotRate(slot);
@@ -1625,10 +1626,10 @@ export default function Planning() {
 
       const statusCategory = resolveStatusCategory(
         explicitStatus ??
-          slot?.payment_status ??
-          slot?.status ??
-          slot?.type ??
-          ""
+        slot?.payment_status ??
+        slot?.status ??
+        slot?.type ??
+        ""
       );
       if (!statusCategory) {
         return null;
@@ -1665,6 +1666,13 @@ export default function Planning() {
 
       return {
         type: "event",
+        id:
+          slot?.id ||
+          slot?.occurrenceId ||
+          slot?.taskId ||
+          slot?.task_occurrence_id ||
+          slot?.task_id ||
+          null,
         amount,
         durationHours,
         statusCategory,
@@ -1722,9 +1730,8 @@ export default function Planning() {
           occurrence.occurrenceId ||
           occurrence.id ||
           (occurrence.taskId
-            ? `${occurrence.taskId}-${
-                occurrence.taskDateISO || occurrence.task_date_iso || ""
-              }`
+            ? `${occurrence.taskId}-${occurrence.taskDateISO || occurrence.task_date_iso || ""
+            }`
             : null);
 
         if (occurrenceId && countedTaskIds.has(String(occurrenceId))) {
@@ -1781,6 +1788,8 @@ export default function Planning() {
           totalAmount: 0,
           tasks: [],
           events: [],
+          rawEventIds: new Set(),
+          rawTaskIds: new Set(),
         };
         summaryMap.set(key, entry);
         return entry;
@@ -1891,6 +1900,9 @@ export default function Planning() {
         const entry = ensureEntry(info.clientId, info.clientLabel);
         entry.totalAmount += info.amount;
         entry.totalHours += info.durationHours;
+        if (info.id) {
+          entry.rawEventIds.add(info.id);
+        }
         if (info.startDate && info.endDate) {
           entry.events.push({ start: info.startDate, end: info.endDate });
         }
@@ -1990,6 +2002,9 @@ export default function Planning() {
           return;
         }
         targetEntry.tasks.push(taskEntry);
+        if (taskEntry.id) {
+          targetEntry.rawTaskIds.add(taskEntry.id);
+        }
         targetEntry.totalAmount += price;
       });
 
@@ -2001,6 +2016,8 @@ export default function Planning() {
           totalHours: Number(entry.totalHours.toFixed(2)),
           totalAmount: Math.round(entry.totalAmount * 100) / 100,
           tasks: mergeTasksWithSameLabel(entry.tasks),
+          eventIds: Array.from(entry.rawEventIds),
+          taskIds: Array.from(entry.rawTaskIds),
         }))
         .filter((entry) =>
           entry.totalAmount > 0 || entry.totalHours > 0 || entry.tasks.length > 0
@@ -2134,9 +2151,9 @@ export default function Planning() {
       const participants = sorted.map((item) => {
         const color = generateMemberColor(
           item.createdBy ||
-            item.createdByName ||
-            item.createdByInitials ||
-            "member"
+          item.createdByName ||
+          item.createdByInitials ||
+          "member"
         );
         return {
           id: item.createdBy || item.id,
@@ -2670,12 +2687,12 @@ export default function Planning() {
         const clientTotal = Number(client?.totalAmount) || 0;
         const clientTasksTotal = Array.isArray(client?.tasks)
           ? client.tasks.reduce((sum, task) => {
-              const price = Number(task?.price);
-              if (!Number.isFinite(price) || price === 0) {
-                return sum;
-              }
-              return sum + price;
-            }, 0)
+            const price = Number(task?.price);
+            if (!Number.isFinite(price) || price === 0) {
+              return sum;
+            }
+            return sum + price;
+          }, 0)
           : 0;
         acc.totalAmount += clientTotal + clientTasksTotal;
         acc.tasksAmount += clientTasksTotal;
@@ -3098,6 +3115,69 @@ export default function Planning() {
     [closeWeeklyTaskModal]
   );
 
+  const handleBulkStatusUpdate = useCallback(
+    async (clientSummary, newStatus) => {
+      if (!planningContext || readOnly || isBulkUpdating) return;
+
+      const labels = {
+        paid: "payées",
+        pending: "en attente",
+        unpaid: "à payer",
+      };
+
+      const confirmed = window.confirm(
+        `Voulez-vous marquer toutes les sessions de "${clientSummary.clientLabel
+        }" comme ${labels[newStatus] || newStatus} pour ce mois ?`,
+      );
+      if (!confirmed) return;
+
+      setIsBulkUpdating(true);
+      try {
+        const eventUpdates = (clientSummary.eventIds || []).map((id) => {
+          const original =
+            personalMonthEvents.find((e) => e.id === id) ||
+            teamMonthEvents.find((e) => e.id === id);
+          if (!original) return Promise.resolve();
+          return saveEventNew(planningContext, {
+            ...original,
+            status: newStatus,
+            payment_status: newStatus,
+          });
+        });
+
+        const taskUpdates = (clientSummary.taskIds || []).map((id) => {
+          const original =
+            weeklyTasks.find((t) => t.id === id) ||
+            taskOccurrences.find((t) => t.occurrenceId === id) ||
+            teamTaskOccurrences.find((t) => t.occurrenceId === id);
+          if (!original) return Promise.resolve();
+          return saveWeeklyTask(planningContext, {
+            ...original,
+            status: newStatus,
+          });
+        });
+
+        await Promise.allSettled([...eventUpdates, ...taskUpdates]);
+        showToast("Mise à jour effectuée");
+      } catch (error) {
+        console.error("Bulk update error:", error);
+        showToast("Erreur lors de la mise à jour", true);
+      } finally {
+        setIsBulkUpdating(false);
+      }
+    },
+    [
+      planningContext,
+      readOnly,
+      isBulkUpdating,
+      personalMonthEvents,
+      teamMonthEvents,
+      weeklyTasks,
+      taskOccurrences,
+      teamTaskOccurrences,
+    ],
+  );
+
   const duplicateEventsForDay = useCallback(
     async (sourceDayIndex, targetDayIndex, targetDate) => {
       if (!planningContext) {
@@ -3106,11 +3186,11 @@ export default function Planning() {
 
       const eventsToCopy = Array.isArray(sanitizedActiveEvents)
         ? sanitizedActiveEvents.filter((slot) => {
-            const startDate = getSlotStartDate(slot);
-            return (
-              startDate && resolveDayIndexFromDate(startDate) === sourceDayIndex
-            );
-          })
+          const startDate = getSlotStartDate(slot);
+          return (
+            startDate && resolveDayIndexFromDate(startDate) === sourceDayIndex
+          );
+        })
         : [];
 
       if (!eventsToCopy.length) {
@@ -3143,7 +3223,7 @@ export default function Planning() {
         if (targetEnd <= targetStart) {
           targetEnd.setTime(
             targetStart.getTime() +
-              Math.max(endDate.getTime() - startDate.getTime(), 15 * 60 * 1000),
+            Math.max(endDate.getTime() - startDate.getTime(), 15 * 60 * 1000),
           );
         }
 
@@ -3191,7 +3271,7 @@ export default function Planning() {
       }
 
       return created;
-  },
+    },
     [
       sanitizedActiveEvents,
       planningContext,
@@ -3240,11 +3320,11 @@ export default function Planning() {
 
       const tasksToDuplicate = Array.isArray(activeWeeklyTasks)
         ? activeWeeklyTasks.filter(
-            (task) =>
-              task &&
-              Array.isArray(task.time_ranges) &&
-              task.time_ranges.some((range) => normalizeRangeDay(range) === sourceDayIndex),
-          )
+          (task) =>
+            task &&
+            Array.isArray(task.time_ranges) &&
+            task.time_ranges.some((range) => normalizeRangeDay(range) === sourceDayIndex),
+        )
         : [];
 
       if (!tasksToDuplicate.length) {
@@ -3591,13 +3671,13 @@ export default function Planning() {
       }
       const safeTasks = Array.isArray(clientSummary.tasks)
         ? clientSummary.tasks.map((task) => ({
-            id: task?.id || task?.taskId || task?.occurrenceId || undefined,
-            label:
-              typeof task?.label === "string" && task.label.trim()
-                ? task.label.trim()
-                : "Tâche",
-            price: Number(task?.price) || 0,
-          }))
+          id: task?.id || task?.taskId || task?.occurrenceId || undefined,
+          label:
+            typeof task?.label === "string" && task.label.trim()
+              ? task.label.trim()
+              : "Tâche",
+          price: Number(task?.price) || 0,
+        }))
         : [];
       const tasksTotal = safeTasks.reduce(
         (sum, task) => (Number.isFinite(task.price) ? sum + Math.max(task.price, 0) : sum),
@@ -4515,11 +4595,10 @@ export default function Planning() {
                 role="tab"
                 aria-selected={planningTab === TEAM_PLANNING_TAB_PERSONAL}
                 onClick={() => setPlanningTab(TEAM_PLANNING_TAB_PERSONAL)}
-                className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
-                  planningTab === TEAM_PLANNING_TAB_PERSONAL
-                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
-                    : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
-                }`}
+                className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${planningTab === TEAM_PLANNING_TAB_PERSONAL
+                  ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                  : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
+                  }`}
               >
                 {isTeamContext ? "Planning solo" : "Mon planning"}
               </button>
@@ -4531,11 +4610,10 @@ export default function Planning() {
                   onClick={() => setPlanningTab(TEAM_PLANNING_TAB_SHARED)}
                   disabled={!sharedTeamId}
                   aria-disabled={!sharedTeamId}
-                  className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${
-                    planningTab === TEAM_PLANNING_TAB_SHARED
-                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
-                      : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
-                  } ${sharedTeamId ? "" : "cursor-not-allowed opacity-60"}`}
+                  className={`flex-1 min-w-[140px] rounded-md px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:flex-none ${planningTab === TEAM_PLANNING_TAB_SHARED
+                    ? "bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100"
+                    : "bg-transparent text-slate-600 hover:bg-white/60 dark:text-slate-300 dark:hover:bg-slate-700/40"
+                    } ${sharedTeamId ? "" : "cursor-not-allowed opacity-60"}`}
                 >
                   Planning d'équipe
                 </button>
@@ -4656,33 +4734,33 @@ export default function Planning() {
             onDayDuplicate={handleDuplicateDayToTarget}
             isDuplicatingDay={isDuplicatingDay}
           />
-          ) : (
-            <MonthGrid
-              year={currentDate.getFullYear()}
-              month={currentDate.getMonth()}
-              onDateSelect={(date) => {
-                handleViewChange("week");
-                setCurrentDateSafe(date);
-              }}
-              onEventClick={openEventModal}
-              onCreateEvent={openCreateModal}
-              context={
-                planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext
-              }
-              staticEvents={
-                planningTab === TEAM_PLANNING_TAB_SHARED
-                  ? teamMonthEvents
+        ) : (
+          <MonthGrid
+            year={currentDate.getFullYear()}
+            month={currentDate.getMonth()}
+            onDateSelect={(date) => {
+              handleViewChange("week");
+              setCurrentDateSafe(date);
+            }}
+            onEventClick={openEventModal}
+            onCreateEvent={openCreateModal}
+            context={
+              planningTab === TEAM_PLANNING_TAB_SHARED ? null : planningContext
+            }
+            staticEvents={
+              planningTab === TEAM_PLANNING_TAB_SHARED
+                ? teamMonthEvents
+                : undefined
+            }
+            staticTasks={
+              planningTab === TEAM_PLANNING_TAB_SHARED
+                ? teamMonthTasks
+                : isTeamContext
+                  ? teamSoloMonthTasks
                   : undefined
-              }
-              staticTasks={
-                planningTab === TEAM_PLANNING_TAB_SHARED
-                  ? teamMonthTasks
-                  : isTeamContext
-                    ? teamSoloMonthTasks
-                    : undefined
-              }
-            />
-          )}
+            }
+          />
+        )}
 
         <div className="mt-6 md:mt-4 lg:mt-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -4699,11 +4777,10 @@ export default function Planning() {
                 role="tab"
                 aria-selected={recapViewTab === "amounts"}
                 onClick={() => setRecapViewTab("amounts")}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                  recapViewTab === "amounts"
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "bg-slate-200/80 text-slate-700 hover:bg-slate-300 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-700/70"
-                }`}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${recapViewTab === "amounts"
+                  ? "bg-blue-500 text-white shadow-sm"
+                  : "bg-slate-200/80 text-slate-700 hover:bg-slate-300 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                  }`}
               >
                 Montants
               </button>
@@ -4712,11 +4789,10 @@ export default function Planning() {
                 role="tab"
                 aria-selected={recapViewTab === "clients"}
                 onClick={() => setRecapViewTab("clients")}
-                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                  recapViewTab === "clients"
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "bg-slate-200/80 text-slate-700 hover:bg-slate-300 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-700/70"
-                }`}
+                className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${recapViewTab === "clients"
+                  ? "bg-blue-500 text-white shadow-sm"
+                  : "bg-slate-200/80 text-slate-700 hover:bg-slate-300 dark:bg-slate-800/70 dark:text-slate-200 dark:hover:bg-slate-700/70"
+                  }`}
               >
                 Clients du mois
               </button>
@@ -4749,11 +4825,10 @@ export default function Planning() {
                   />
                 ))}
                 <div
-                  className={`rounded-xl border px-4 py-3 text-sm shadow-sm transition-colors ${
-                    tasksSummary.items.length > 0
-                      ? "border-sky-200/70 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10"
-                      : "border-slate-200/70 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40"
-                  }`}
+                  className={`rounded-xl border px-4 py-3 text-sm shadow-sm transition-colors ${tasksSummary.items.length > 0
+                    ? "border-sky-200/70 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/10"
+                    : "border-slate-200/70 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40"
+                    }`}
                 >
                   <p className="text-xs font-medium uppercase tracking-wide text-slate-600 dark:text-slate-300">
                     Tâches
@@ -4883,6 +4958,35 @@ export default function Planning() {
                             </div>
                           </div>
                           <div className="flex flex-col gap-3 text-sm text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center sm:gap-6">
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleBulkStatusUpdate(client, "paid")}
+                                disabled={isBulkUpdating}
+                                className="inline-flex items-center justify-center rounded-lg bg-emerald-500 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-400 disabled:opacity-50"
+                                title="Marquer tout comme payé"
+                              >
+                                Payé
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkStatusUpdate(client, "pending")}
+                                disabled={isBulkUpdating}
+                                className="inline-flex items-center justify-center rounded-lg bg-amber-500 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-400 disabled:opacity-50"
+                                title="Tout en attente"
+                              >
+                                En attente
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleBulkStatusUpdate(client, "unpaid")}
+                                disabled={isBulkUpdating}
+                                className="inline-flex items-center justify-center rounded-lg bg-rose-500 px-2 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-rose-400 disabled:opacity-50"
+                                title="Tout à payer"
+                              >
+                                À payer
+                              </button>
+                            </div>
                             <div>
                               <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 Heures
@@ -4903,7 +5007,7 @@ export default function Planning() {
                               type="button"
                               onClick={() => handleInvoiceShortcut(client)}
                               className="inline-flex items-center justify-center rounded-lg bg-blue-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white disabled:cursor-not-allowed disabled:bg-blue-300 dark:focus-visible:ring-offset-slate-900"
-                              disabled={!client.clientId}
+                              disabled={!client.clientId || isBulkUpdating}
                             >
                               Créer une facture
                             </button>
@@ -4986,13 +5090,13 @@ export default function Planning() {
         }
         onSwitchToTask={
           !readOnly &&
-          planningContext &&
-          planningTab !== TEAM_PLANNING_TAB_SHARED
+            planningContext &&
+            planningTab !== TEAM_PLANNING_TAB_SHARED
             ? () => {
-                const defaultDate = modal.selectedDate || null;
-                closeModal();
-                openWeeklyTaskModal(defaultDate);
-              }
+              const defaultDate = modal.selectedDate || null;
+              closeModal();
+              openWeeklyTaskModal(defaultDate);
+            }
             : undefined
         }
       />
