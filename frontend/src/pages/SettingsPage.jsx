@@ -19,6 +19,7 @@ import {
 } from "../constants/colors";
 import {
   TASK_ICON_CATEGORIES,
+  TASK_ICONS,
   getTaskIcon,
   resolveTaskIconCategory,
   resolveTaskIconKey,
