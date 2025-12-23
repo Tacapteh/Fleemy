@@ -56,6 +56,8 @@ const ProfilePickerPage = () => {
   const loadingRef = React.useRef(loading);
   const errorRef = React.useRef(error);
   const isInitialSnapshotLoadedRef = React.useRef(isInitialSnapshotLoaded);
+  // Track if a fetch is currently running for the *current user* to avoid duplicates
+  const fetchInProgressUidRef = React.useRef(null);
 
   useEffect(() => { teamsRef.current = teams; }, [teams]);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
@@ -200,11 +202,13 @@ const ProfilePickerPage = () => {
         } else if (sourceName === 'Firestore') {
           // Firestore is a fallback or a fast-first source
           if (!apiFinished) {
-            // API not back yet, store these as temporary display
-            if (nextTeams.length > 0) {
-              setTeams(nextTeams);
-              setLoading(false); // We have data, stop spinner
-            }
+            // API not back yet.
+            // If we have data, show it.
+            // If we have NO data (empty list) from Firestore, it likely means the user has no teams.
+            // Waiting for API (which might timeout) causes a bad UX (spinning for 15s).
+            // So we show the empty state immediately. The API can still arrive later and update it.
+            setTeams(nextTeams);
+            setLoading(false);
           } else {
             // API already finished. 
             // If API failed and we have firestore data, we might want to use it
@@ -322,6 +326,13 @@ const ProfilePickerPage = () => {
       }
 
       if (active) {
+        // Prevent duplicate parallel fetches for the same user session if one is already flyin'
+        if (fetchInProgressUidRef.current === user.uid) {
+          console.log('[ProfilePickerPage] Fetch already in progress for this user, skipping duplicate trigger.');
+          return;
+        }
+        fetchInProgressUidRef.current = user.uid;
+
         if (!hasCachedTeams) {
           setLoading(true);
         }
