@@ -342,11 +342,10 @@ const ProfilePickerPage = () => {
                 ? buildQueries(collectionGroup(db, name))
                 : [];
           } catch (collectionError) {
-            if (isPermissionDeniedError(collectionError)) {
-              membershipAccessDenied = true;
-              break;
+            // If we can't query this collection (e.g. index missing or perm denied), try the next one
+            if (!isPermissionDeniedError(collectionError)) {
+              console.warn(`[ProfilePickerPage] Unable to prepare ${name} membership query`, collectionError);
             }
-            console.warn(`[ProfilePickerPage] Unable to prepare ${name} membership query`, collectionError);
             continue;
           }
 
@@ -356,11 +355,11 @@ const ProfilePickerPage = () => {
               snapshot = await getDocs(candidateQuery);
               if (!active) return;
             } catch (membershipError) {
-              if (isPermissionDeniedError(membershipError)) {
-                membershipAccessDenied = true;
-                break;
+              // Ignore permission errors for candidates, just move to next
+              if (!isPermissionDeniedError(membershipError)) {
+                console.warn(`[ProfilePickerPage] Unable to prefetch ${name} memberships`, membershipError);
               }
-              console.warn(`[ProfilePickerPage] Unable to prefetch ${name} memberships`, membershipError);
+              continue;
             }
 
             if (!membershipsQuery) membershipsQuery = candidateQuery;
@@ -369,20 +368,19 @@ const ProfilePickerPage = () => {
               break;
             }
           }
-          if (membershipAccessDenied || membershipsQuery) break;
-        }
-
-        if (membershipAccessDenied) {
-          console.warn('[ProfilePickerPage] Membership access denied in Firestore');
-          setIsInitialSnapshotLoaded(true);
-          hydrateTeamsFromFetcher();
-          return;
+          if (membershipsQuery) break;
         }
 
         if (!membershipsQuery) {
-          console.warn('[ProfilePickerPage] No valid membership query candidate found.');
+          // It's common to not have memberships or have restricted access. 
+          // We don't need to scream about it if we can just fetch via API.
+          console.debug('[ProfilePickerPage] No direct Firestore membership access or no memberships found. Relying on API.');
+
           setIsInitialSnapshotLoaded(true);
-          hydrateTeamsFromFetcher();
+          // We already called hydrateTeamsFromFetcher at the start, but we can ensure it runs one final time if needed
+          // or just trust the parallel execution. 
+          // But to be safe and match previous logic flow:
+          hydrateTeamsFromFetcher({ skipStartLoading: true });
           return;
         }
 
