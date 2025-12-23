@@ -4762,7 +4762,7 @@ export default function Planning() {
           />
         )}
 
-        <div className="mt-6 md:mt-4 lg:mt-3">
+        <div className="mt-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Récapitulatif
