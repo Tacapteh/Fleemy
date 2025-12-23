@@ -4706,7 +4706,7 @@ export default function Planning() {
         </div>
       )}
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg shadow-slate-900/10 transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
+      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-lg transition-colors transition-shadow duration-200 dark:border-slate-800 dark:bg-slate-900">
         {view === "week" ? (
           <PlannerGrid
             events={sanitizedActiveEvents}
