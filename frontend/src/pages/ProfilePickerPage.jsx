@@ -51,6 +51,17 @@ const ProfilePickerPage = () => {
   const [contextError, setContextError] = useState('');
   const [deletingTeamId, setDeletingTeamId] = useState(null);
 
+  // Refs to break dependency cycles in fetchers
+  const teamsRef = React.useRef(teams);
+  const loadingRef = React.useRef(loading);
+  const errorRef = React.useRef(error);
+  const isInitialSnapshotLoadedRef = React.useRef(isInitialSnapshotLoaded);
+
+  useEffect(() => { teamsRef.current = teams; }, [teams]);
+  useEffect(() => { loadingRef.current = loading; }, [loading]);
+  useEffect(() => { errorRef.current = error; }, [error]);
+  useEffect(() => { isInitialSnapshotLoadedRef.current = isInitialSnapshotLoaded; }, [isInitialSnapshotLoaded]);
+
   const normalizeTeamDoc = (docSnap) => {
     if (!docSnap) {
       return null;
@@ -137,6 +148,7 @@ const ProfilePickerPage = () => {
       const hasPersistedData = persistedTeams.length > 0;
 
       // Only set full loading if we have absolutely no data to show
+      // Only set full loading if we have absolutely no data to show
       if (!skipStartLoading && shouldUpdate() && !hasPersistedData) {
         setLoading(true);
       } else if (hasPersistedData && shouldUpdate()) {
@@ -179,7 +191,8 @@ const ProfilePickerPage = () => {
             console.warn('[ProfilePickerPage] API failed, relying on Firestore/Cache');
             if (error && !fetchedTeams.length) {
               // Keep existing data if we have it, else show error
-              if (!teams.length && !persistedTeams.length) {
+              // Keep existing data if we have it, else show error
+              if (!teamsRef.current.length && !persistedTeams.length) {
                 setError(errorMessage || 'Erreur lors du chargement des équipes');
               }
             }
@@ -197,7 +210,8 @@ const ProfilePickerPage = () => {
             // If API failed and we have firestore data, we might want to use it
             // But usually API handler would have decided.
             // If API failed (teams empty & error), update with Firestore
-            if (error || teams.length === 0) {
+            // If API failed (teams empty & error), update with Firestore
+            if (errorRef.current || teamsRef.current.length === 0) {
               if (nextTeams.length > 0) {
                 setTeams(nextTeams);
                 setError('');
@@ -245,18 +259,18 @@ const ProfilePickerPage = () => {
           setIsInitialSyncComplete(true);
           // Ensure loading is off if we have anything
           setLoading((prev) => {
-            if (prev && teams.length > 0) return false;
+            if (prev && teamsRef.current.length > 0) return false;
             return prev;
           });
           // Final check: if everything failed and we have nothing
-          if (teams.length === 0 && !error) {
+          if (teamsRef.current.length === 0 && !errorRef.current) {
             // Maybe show empty state? Handled by render logic
             setLoading(false);
           }
         }
       }
     },
-    [isInitialSnapshotLoaded, teams.length, error]
+    [] // Dependencies removed to prevent recreation. Logic uses refs for current state.
   );
 
   useEffect(() => {
@@ -492,7 +506,12 @@ const ProfilePickerPage = () => {
       stopTeamsListener();
       if (unsubscribeAuth) unsubscribeAuth();
     };
-  }, [fetchTeamsList, navigate]);
+    return () => {
+      active = false;
+      stopTeamsListener();
+      if (unsubscribeAuth) unsubscribeAuth();
+    };
+  }, []); // Eslint ignore: fetchTeamsList is now stable or we ignore it to prevent loops
 
   useEffect(() => {
     let active = true;
