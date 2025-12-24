@@ -203,17 +203,19 @@ const ProfilePickerPage = () => {
           // Firestore is a fallback or a fast-first source
           if (!apiFinished) {
             // API not back yet.
-            // If we have data, show it.
-            // If we have NO data (empty list) from Firestore, it likely means the user has no teams.
-            // Waiting for API (which might timeout) causes a bad UX (spinning for 15s).
-            // So we show the empty state immediately. The API can still arrive later and update it.
-            setTeams(nextTeams);
-            setLoading(false);
+            if (nextTeams.length > 0) {
+              // OPTIMISTIC UPDATE: If we found teams in Firestore, show them immediately.
+              setTeams(nextTeams);
+              setLoading(false);
+            } else {
+              // If Firestore has NO data, it *might* be empty, or it might be a cold cache.
+              // We should NOT show "No teams found" yet. We must wait for the API.
+              // So we do NOTHING here regarding state, just let the spinner spin.
+              console.log('[ProfilePickerPage] Firestore returned empty, waiting for API to confirm...');
+            }
           } else {
             // API already finished. 
             // If API failed and we have firestore data, we might want to use it
-            // But usually API handler would have decided.
-            // If API failed (teams empty & error), update with Firestore
             // If API failed (teams empty & error), update with Firestore
             if (errorRef.current || teamsRef.current.length === 0) {
               if (nextTeams.length > 0) {
