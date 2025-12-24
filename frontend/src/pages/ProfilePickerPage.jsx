@@ -58,6 +58,8 @@ const ProfilePickerPage = () => {
   const isInitialSnapshotLoadedRef = React.useRef(isInitialSnapshotLoaded);
   // Track if a fetch is currently running for the *current user* to avoid duplicates
   const fetchInProgressUidRef = React.useRef(null);
+  // Track successful subscriptions to prevent infinite loops
+  const subscribedUidRef = React.useRef(null);
 
   useEffect(() => { teamsRef.current = teams; }, [teams]);
   useEffect(() => { loadingRef.current = loading; }, [loading]);
@@ -296,7 +298,6 @@ const ProfilePickerPage = () => {
     let active = true;
     let unsubscribeTeams = null;
 
-    const subscribedUidRef = React.useRef(null);
 
     const stopTeamsListener = () => {
       if (typeof unsubscribeTeams === 'function') {
