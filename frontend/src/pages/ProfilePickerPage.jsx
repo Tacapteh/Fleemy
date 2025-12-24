@@ -296,11 +296,16 @@ const ProfilePickerPage = () => {
     let active = true;
     let unsubscribeTeams = null;
 
+    const subscribedUidRef = React.useRef(null);
+
     const stopTeamsListener = () => {
       if (typeof unsubscribeTeams === 'function') {
         unsubscribeTeams();
         unsubscribeTeams = null;
       }
+      // Do NOT reset subscribedUidRef here, because momentary null-auth (during token refresh) 
+      // shouldn't clear our memory that we already fetched for this user.
+      // We only clear it if we explicitly sign out or switch users.
     };
 
     const hydrateTeamsFromFetcher = () =>
@@ -312,28 +317,38 @@ const ProfilePickerPage = () => {
 
     const subscribeToTeams = async (user) => {
       console.log('[ProfilePickerPage] subscribeToTeams for UID:', user?.uid);
-      stopTeamsListener();
 
       if (!user) {
         console.warn('[ProfilePickerPage] No user authenticated, redirecting...');
-        if (!active) {
-          return;
-        }
+        if (!active) return;
         setTeams([]);
         setLoading(false);
         setError('');
         setIsInitialSnapshotLoaded(true);
+        subscribedUidRef.current = null; // Clear guard so we can re-sub later
         navigate('/');
         return;
       }
 
+      // --- GUARDIAN OF THE GALAXY (AND QUOTA) ---
+      // If we are already subscribed for THIS user, do NOT run again.
+      if (subscribedUidRef.current === user.uid) {
+        console.log('[ProfilePickerPage] Already subscribed for this UID, skipping redundant call.');
+        return;
+      }
+      subscribedUidRef.current = user.uid;
+      // ------------------------------------------
+
+      stopTeamsListener();
+
       if (active) {
         // Prevent duplicate parallel fetches for the same user session if one is already flyin'
+        // (Double check via fetchInProgressUidRef is also good)
         if (fetchInProgressUidRef.current === user.uid) {
-          console.log('[ProfilePickerPage] Fetch already in progress for this user, skipping duplicate trigger.');
-          return;
+          console.log('[ProfilePickerPage] Fetch already in progress/completed for this user.');
+        } else {
+          fetchInProgressUidRef.current = user.uid;
         }
-        fetchInProgressUidRef.current = user.uid;
 
         if (!hasCachedTeams) {
           setLoading(true);
@@ -359,7 +374,6 @@ const ProfilePickerPage = () => {
           },
         ];
         let membershipsQuery = null;
-        let membershipAccessDenied = false;
 
         for (const { name, buildQueries } of membershipCollectionCandidates) {
           let queries = [];
@@ -381,10 +395,18 @@ const ProfilePickerPage = () => {
             try {
               snapshot = await getDocs(candidateQuery);
               if (!active) return;
-            } catch (membershipError) {
+            } catch (queryError) {
+              const errCode = queryError?.code || '';
+              // CRITICAL: Stop on Quota Exceeded
+              if (errCode === 'resource-exhausted') {
+                console.error('[ProfilePickerPage] QUOTA EXCEEDED (getDocs). Stopping retry loop.');
+                setError('Service temporairement indisponible (Quota).');
+                setLoading(false);
+                return; // STOP EVERYTHING
+              }
               // Ignore permission errors for candidates, just move to next
-              if (!isPermissionDeniedError(membershipError)) {
-                console.warn(`[ProfilePickerPage] Unable to prefetch ${name} memberships`, membershipError);
+              if (!isPermissionDeniedError(queryError)) {
+                console.warn(`[ProfilePickerPage] Unable to prefetch ${name} memberships`, queryError);
               }
               continue;
             }
@@ -402,12 +424,9 @@ const ProfilePickerPage = () => {
           // It's common to not have memberships or have restricted access. 
           // We don't need to scream about it if we can just fetch via API.
           console.debug('[ProfilePickerPage] No direct Firestore membership access or no memberships found. Relying on API.');
-
           setIsInitialSnapshotLoaded(true);
-          // We already called hydrateTeamsFromFetcher at the start, but we can ensure it runs one final time if needed
-          // or just trust the parallel execution. 
-          // But to be safe and match previous logic flow:
-          hydrateTeamsFromFetcher({ skipStartLoading: true });
+          // Only hydrate if we haven't just done it
+          // hydrateTeamsFromFetcher({ skipStartLoading: true }); 
           return;
         }
 
@@ -462,6 +481,11 @@ const ProfilePickerPage = () => {
                 resolvedTeams = [...resolvedTeams, ...querySnap.docs];
               }
             } catch (batchError) {
+              if (batchError?.code === 'resource-exhausted') {
+                console.error('[ProfilePickerPage] QUOTA EXCEEDED (batch). Stopping.');
+                setError('Service indisponible (Quota).');
+                return;
+              }
               console.warn('[ProfilePickerPage] Batch team fetch failed, sequential fallback');
               resolvedTeams = await Promise.all(
                 Array.from(uniqueTeamRefs.entries()).map(async ([tId, tRef]) => {
@@ -495,6 +519,12 @@ const ProfilePickerPage = () => {
           (snapshot) => { if (active) handleSnapshot(snapshot); },
           (err) => {
             console.error('[ProfilePickerPage] onSnapshot Error:', err);
+            if (err?.code === 'resource-exhausted') {
+              console.error('[ProfilePickerPage] QUOTA EXCEEDED (onSnapshot). Stopping.');
+              setError('Quota dépassé. Réessayez demain.');
+              setLoading(false);
+              return;
+            }
             setIsInitialSnapshotLoaded(true);
             hydrateTeamsFromFetcher();
           }
@@ -502,7 +532,7 @@ const ProfilePickerPage = () => {
       } catch (err) {
         console.error('[ProfilePickerPage] Subscription Exception:', err);
         setIsInitialSnapshotLoaded(true);
-        hydrateTeamsFromFetcher();
+        // hydrateTeamsFromFetcher(); // Do not spam retry if initiation failed
       }
     };
 
