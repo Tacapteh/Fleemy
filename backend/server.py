@@ -5243,8 +5243,41 @@ async def list_notifications(
         # Limiter le nombre de résultats
         query = query.limit(limit)
         
-        # Exécuter la requête
-        docs = await asyncio.to_thread(lambda: list(query.stream()))
+        # Exécuter la requête avec fallback pour les index manquants
+        try:
+            # Tentative 1: Requête optimisée (nécessite un index composite)
+            docs = await asyncio.to_thread(lambda: list(query.stream()))
+        except Exception as e:
+            # Fallback: Si l'index manque, on fait le tri en mémoire
+            # On vérifie si c'est une erreur de précondition (index manquant) ou autre
+            error_msg = str(e).lower()
+            if "failedprecondition" in error_msg or "index" in error_msg or "requires an index" in error_msg:
+                logger.warning(
+                    "Missing Firestore Index for notifications query. Using in-memory fallback. "
+                    "Please create index: userId ASC, read ASC, createdAt DESC. Error: %s", 
+                    e
+                )
+                
+                # Requête simplifiée sans tri ni limite composée
+                # On filtre juste par userId (et read si demandé) car ces index simples existent toujours
+                fallback_query = notifications_ref.where("userId", "==", userId)
+                if onlyUnread:
+                    fallback_query = fallback_query.where("read", "==", False)
+                
+                # On récupère tout (attention si beaucoup de notifs, mais c'est temporaire)
+                docs = await asyncio.to_thread(lambda: list(fallback_query.stream()))
+                
+                # Tri en mémoire (plus récent en premier)
+                docs.sort(
+                    key=lambda x: x.get("createdAt") or datetime.min.replace(tzinfo=timezone.utc), 
+                    reverse=True
+                )
+                
+                # Application de la limite
+                docs = docs[:limit]
+            else:
+                # Si c'est une autre erreur, on la laisse remonter
+                raise e
         
         # Construire la liste des notifications
         notifications: List[Dict[str, Any]] = []
