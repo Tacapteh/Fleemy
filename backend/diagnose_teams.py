@@ -115,14 +115,14 @@ def diagnose():
         print(f"Keys: {keys}")
         
         members = data.get("members")
-        # print(f"members type: {type(members)}")
+        print(f"members type: {type(members)}")
         if isinstance(members, list):
-            # print(f"members count: {len(members)}")
+            print(f"members count: {len(members)}")
             if members:
-                # print(f"Sample member: {members[0]}")
+                print(f"Sample member: {members[0]}")
                 sample_uid = members[0]
         elif isinstance(members, dict):
-             # print(f"members (dict) count: {len(members)}")
+             print(f"members (dict) count: {len(members)}")
              if members:
                  sample_uid = list(members.keys())[0]
         
@@ -153,6 +153,26 @@ def diagnose():
             print(f"Results: {len(results)}")
         except Exception as e:
             print(f"FAILED: {e}")
+
+        # Test 3: Collection Group (memberships)
+        print("Query: collection_group('memberships').where('uid', '==', UID)")
+        try:
+            # Note: collection_group is on db, not col ref
+            q = db.collection_group("memberships").where("uid", "==", sample_uid)
+            results = list(q.stream())
+            print(f"Results: {len(results)}")
+        except Exception as e:
+            print(f"FAILED (Index likely missing?): {e}")
+
+        # Test 4: Collection Group (members) - as code tries both
+        print("Query: collection_group('members').where('uid', '==', UID)")
+        try:
+            q = db.collection_group("members").where("uid", "==", sample_uid)
+            results = list(q.stream())
+            print(f"Results: {len(results)}")
+        except Exception as e:
+            print(f"FAILED (Index likely missing?): {e}")
+
 
 if __name__ == "__main__":
     diagnose()
