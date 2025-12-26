@@ -16,7 +16,9 @@ export default function Header({ user }) {
     notifications,
     unreadCount,
     fetchNotifications,
+    markAsRead,
     markAllAsRead,
+    deleteNotification,
   } = useNotifications(user?.uid);
 
   useEffect(() => {
@@ -63,6 +65,22 @@ export default function Header({ user }) {
     await markAllAsRead(ids);
   };
 
+  const handleMarkAsRead = async (id) => {
+    await markAsRead(id);
+  };
+
+  const handleDeleteNotification = async (id) => {
+    await deleteNotification(id);
+  };
+
+  const handleNotificationClick = (notification) => {
+    // Handle navigation based on relatedResource
+    if (notification.relatedResource?.resourceType && notification.relatedResource?.resourceId) {
+      // TODO: Implement navigation logic based on resource type
+      console.log('Navigate to:', notification.relatedResource);
+    }
+  };
+
   const ariaLabel = unreadCount > 0
     ? `Notifications, ${unreadCount} non lues`
     : 'Notifications';
@@ -94,6 +112,9 @@ export default function Header({ user }) {
               onClose={handleCloseNotifications}
               notifications={notifications}
               onMarkAllAsRead={handleMarkAllAsRead}
+              onMarkAsRead={handleMarkAsRead}
+              onDelete={handleDeleteNotification}
+              onNotificationClick={handleNotificationClick}
               anchorRef={anchorRef}
             />
           </div>

@@ -220,6 +220,115 @@ export function useNotifications(userId) {
     }
   }, [notificationsEnabled, userId]);
 
+  const markAsRead = useCallback(
+    async (id) => {
+      if (!notificationsEnabled) {
+        return false;
+      }
+
+      const currentUserId = userId || auth.currentUser?.uid;
+      if (!currentUserId || !id) {
+        return false;
+      }
+
+      // Optimistic update
+      setNotifications((prevNotifications) => {
+        if (!Array.isArray(prevNotifications) || prevNotifications.length === 0) {
+          return prevNotifications;
+        }
+
+        return prevNotifications.map((notification) =>
+          notification.id === id
+            ? { ...notification, read: true }
+            : notification
+        );
+      });
+
+      try {
+        const headers = await getAuthHeaders();
+        headers['Content-Type'] = 'application/json';
+
+        const response = await fetch(MARK_READ_ENDPOINT, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            userId: currentUserId,
+            notificationIds: [id],
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`);
+        }
+
+        setError(null);
+        return true;
+      } catch (markError) {
+        console.error('Failed to mark notification as read', markError);
+        // Revert optimistic update on error
+        setNotifications((prevNotifications) => {
+          if (!Array.isArray(prevNotifications) || prevNotifications.length === 0) {
+            return prevNotifications;
+          }
+
+          return prevNotifications.map((notification) =>
+            notification.id === id
+              ? { ...notification, read: false }
+              : notification
+          );
+        });
+        setError(markError);
+        return false;
+      }
+    },
+    [notificationsEnabled, userId],
+  );
+
+  const deleteNotification = useCallback(
+    async (id) => {
+      if (!notificationsEnabled) {
+        return false;
+      }
+
+      const currentUserId = userId || auth.currentUser?.uid;
+      if (!currentUserId || !id) {
+        return false;
+      }
+
+      // Optimistic update
+      const previousNotifications = notifications;
+      setNotifications((prevNotifications) => {
+        if (!Array.isArray(prevNotifications) || prevNotifications.length === 0) {
+          return prevNotifications;
+        }
+
+        return prevNotifications.filter((notification) => notification.id !== id);
+      });
+
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch(`/api/notifications/${id}`, {
+          method: 'DELETE',
+          headers,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`);
+        }
+
+        setError(null);
+        return true;
+      } catch (deleteError) {
+        console.error('Failed to delete notification', deleteError);
+        // Revert optimistic update on error
+        setNotifications(previousNotifications);
+        setError(deleteError);
+        return false;
+      }
+    },
+    [notifications, notificationsEnabled, userId],
+  );
+
   const markAllAsRead = useCallback(
     async (ids) => {
       if (!notificationsEnabled) {
@@ -351,14 +460,16 @@ export function useNotifications(userId) {
   }, [fetchNotifications, notificationsEnabled, userId]);
 
   if (!notificationsEnabled) {
-    const noop = () => {};
+    const noop = () => { };
     return {
       notifications: [],
       unreadCount: 0,
       loading: false,
       error: null,
       fetchNotifications: noop,
+      markAsRead: noop,
       markAllAsRead: noop,
+      deleteNotification: noop,
       setNotifications: noop,
     };
   }
@@ -369,7 +480,9 @@ export function useNotifications(userId) {
     loading,
     error,
     fetchNotifications,
+    markAsRead,
     markAllAsRead,
+    deleteNotification,
     setNotifications,
   };
 }
