@@ -265,16 +265,14 @@ const ProfilePickerPage = () => {
         clearTimeout(safetyTimeout);
         if (shouldUpdate()) {
           setIsInitialSyncComplete(true);
-          // Ensure loading is off if we have anything
+          // Only stop loading if we have teams OR both sources failed
           setLoading((prev) => {
-            if (prev && teamsRef.current.length > 0) return false;
+            // If we have teams, stop loading
+            if (teamsRef.current.length > 0) return false;
+            // If we're still loading and have no teams, keep loading
+            // (don't show empty state prematurely)
             return prev;
           });
-          // Final check: if everything failed and we have nothing
-          if (teamsRef.current.length === 0 && !errorRef.current) {
-            // Maybe show empty state? Handled by render logic
-            setLoading(false);
-          }
         }
       }
     },
@@ -682,7 +680,7 @@ const ProfilePickerPage = () => {
   };
 
   const isActuallyLoading = loading && teams.length === 0;
-  const shouldShowEmptyState = !loading && teams.length === 0 && !error;
+  const shouldShowEmptyState = !loading && teams.length === 0 && !error && isInitialSyncComplete;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center p-4">
