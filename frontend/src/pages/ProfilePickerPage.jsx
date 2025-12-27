@@ -38,6 +38,30 @@ const DEFAULT_TEAM_NAME = 'Equipe sans nom';
 const FRIENDLY_EMPTY_STATE_MESSAGE =
   "Aucune équipe n'est disponible pour le moment. Créez-en une ou rejoignez une équipe existante pour commencer.";
 
+// 🚨 EMERGENCY CIRCUIT BREAKER - Prevent quota exhaustion
+const FIRESTORE_REQUEST_LIMIT = 100; // Max 100 requests per session
+let firestoreRequestCount = 0;
+let circuitBreakerTripped = false;
+
+function checkFirestoreQuota(operation = 'unknown') {
+  if (circuitBreakerTripped) {
+    console.error('[CIRCUIT BREAKER] Firestore requests blocked to prevent quota exhaustion');
+    return false;
+  }
+
+  firestoreRequestCount++;
+  console.log(`[Firestore] Request #${firestoreRequestCount} (${operation})`);
+
+  if (firestoreRequestCount >= FIRESTORE_REQUEST_LIMIT) {
+    circuitBreakerTripped = true;
+    console.error('[CIRCUIT BREAKER] TRIPPED! Too many Firestore requests. Blocking further requests.');
+    alert('⚠️ Trop de requêtes Firestore détectées. Rechargez la page si nécessaire.');
+    return false;
+  }
+
+  return true;
+}
+
 const ProfilePickerPage = () => {
   const navigate = useNavigate();
   const [teams, setTeams] = useState([]);
@@ -390,6 +414,13 @@ const ProfilePickerPage = () => {
           }
 
           for (const candidateQuery of queries) {
+            // 🚨 Circuit breaker check
+            if (!checkFirestoreQuota(`getDocs-${name}`)) {
+              setError('Trop de requêtes Firestore. Rechargez la page.');
+              setLoading(false);
+              return;
+            }
+
             let snapshot = null;
             try {
               snapshot = await getDocs(candidateQuery);
@@ -474,6 +505,12 @@ const ProfilePickerPage = () => {
             try {
               const batchSize = 30;
               for (let i = 0; i < teamIds.length; i += batchSize) {
+                // 🚨 Circuit breaker check
+                if (!checkFirestoreQuota('batch-getDocs')) {
+                  setError('Trop de requêtes Firestore. Rechargez la page.');
+                  return;
+                }
+
                 const chunk = teamIds.slice(i, i + batchSize);
                 const q = query(collection(db, 'teams'), where(documentId(), 'in', chunk));
                 const querySnap = await getDocs(q);
@@ -513,21 +550,41 @@ const ProfilePickerPage = () => {
           });
         };
 
-        unsubscribeTeams = onSnapshot(
-          membershipsQuery,
-          (snapshot) => { if (active) handleSnapshot(snapshot); },
-          (err) => {
-            console.error('[ProfilePickerPage] onSnapshot Error:', err);
-            if (err?.code === 'resource-exhausted') {
-              console.error('[ProfilePickerPage] QUOTA EXCEEDED (onSnapshot). Stopping.');
-              setError('Quota dépassé. Réessayez demain.');
-              setLoading(false);
-              return;
-            }
-            setIsInitialSnapshotLoaded(true);
-            hydrateTeamsFromFetcher();
+        // 🚨 TEMPORARY: onSnapshot disabled to prevent quota exhaustion
+        // The listener was causing infinite loops. Using one-time fetch instead.
+        console.log('[ProfilePickerPage] Using one-time fetch instead of onSnapshot');
+
+        try {
+          const snapshot = await getDocs(membershipsQuery);
+          if (active) handleSnapshot(snapshot);
+        } catch (err) {
+          console.error('[ProfilePickerPage] Snapshot Error:', err);
+          if (err?.code === 'resource-exhausted') {
+            console.error('[ProfilePickerPage] QUOTA EXCEEDED. Stopping.');
+            setError('Quota dépassé. Réessayez demain.');
+            setLoading(false);
+            return;
           }
-        );
+          setIsInitialSnapshotLoaded(true);
+          hydrateTeamsFromFetcher();
+        }
+
+        // ORIGINAL CODE (disabled to prevent quota issues):
+        // unsubscribeTeams = onSnapshot(
+        //   membershipsQuery,
+        //   (snapshot) => { if (active) handleSnapshot(snapshot); },
+        //   (err) => {
+        //     console.error('[ProfilePickerPage] onSnapshot Error:', err);
+        //     if (err?.code === 'resource-exhausted') {
+        //       console.error('[ProfilePickerPage] QUOTA EXCEEDED (onSnapshot). Stopping.');
+        //       setError('Quota dépassé. Réessayez demain.');
+        //       setLoading(false);
+        //       return;
+        //     }
+        //     setIsInitialSnapshotLoaded(true);
+        //     hydrateTeamsFromFetcher();
+        //   }
+        // );
       } catch (err) {
         console.error('[ProfilePickerPage] Subscription Exception:', err);
         setIsInitialSnapshotLoaded(true);
