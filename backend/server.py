@@ -428,7 +428,7 @@ api_router = APIRouter(prefix="/api")
 
 # Teams memory cache for performance optimization
 _USER_TEAMS_CACHE: Dict[str, Tuple[float, List[Any]]] = {}
-_USER_TEAMS_CACHE_TTL = 30.0  # seconds
+_USER_TEAMS_CACHE_TTL = 300.0  # seconds (5 minutes)
 
 
 def _get_cached_teams(uid: str) -> Optional[List[Any]]:
@@ -444,6 +444,14 @@ def _get_cached_teams(uid: str) -> Optional[List[Any]]:
 def _set_cached_teams(uid: str, teams: List[Any]):
     """Store user teams in the short-lived memory cache."""
     _USER_TEAMS_CACHE[uid] = (asyncio.get_event_loop().time(), teams)
+
+
+@api_router.api_route("/_debug/info", methods=["GET"], include_in_schema=False)
+async def debug_info() -> Dict[str, str]:
+    return {
+        "cache_ttl": str(_USER_TEAMS_CACHE_TTL),
+        "cache_size": str(len(_USER_TEAMS_CACHE))
+    }
 
 
 @api_router.api_route("/_debug/info", methods=["GET"], include_in_schema=False)
@@ -4718,16 +4726,11 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
         async def fetch_owner_teams():
             """Fetch teams where UID is owner (parallel optimized)."""
             # Expanded set of owner fields to be as thorough as the frontend fallback logic.
+            # Optimized: reduced from 9 fields to the 3 most likely candidates to save quota
             owner_fields = [
-                "owner_uid",
-                "ownerUid",
-                "ownerId",
-                "owner.uid",
-                "owner.id",
-                "owner.user_uid",
-                "owner.userUid",
-                "owner.user_id",
-                "owner.userId",
+                "owner_uid",       # Standard modern field
+                "owner.uid",       # Legacy nested field
+                "owner.id",        # Legacy nested field (rare but checking)
             ]
 
             async def _query_field(field_name: str) -> List[Any]:
