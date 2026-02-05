@@ -1125,7 +1125,7 @@ async def _create_notification_if_missing(
     """Create a notification while preventing duplicates for the same resource."""
 
     notifications_ref = db.collection("notifications")
-    query = notifications_ref.where("userId", "==", user_id).where("type", "==", notif_type)
+    query = notifications_ref.where(field_path="userId", op_string="==", value=user_id).where(field_path="type", op_string="==", value=notif_type)
 
     resource_id: Optional[str] = None
     related_payload: Optional[Dict[str, Any]] = None
@@ -4767,8 +4767,7 @@ async def get_my_teams(user: Dict[str, Any] = Depends(verify_token)):
                     # We query both by the 'uid' field and by the document ID itself.
                     # This ensures we catch both "legacy" and "optimized" membership structures.
                     queries = [
-                        (f"{collection_name}.uid", group_ref.where("uid", "==", uid)),
-                        (f"{collection_name}.id", group_ref.where(DOCUMENT_ID_FIELD, "==", uid))
+                        (f"{collection_name}.uid", group_ref.where(field_path="uid", op_string="==", value=uid))
                     ]
                     
                     async def _run_q(name, q):
