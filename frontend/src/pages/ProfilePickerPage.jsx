@@ -570,20 +570,53 @@ const ProfilePickerPage = () => {
         {teams.map((team) => {
           const isOwner = auth.currentUser?.uid && team.owner_uid === auth.currentUser.uid;
           return (
-            <button key={team.team_id} onClick={() => handleSelectTeam(team)} className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 min-h-[160px]">
-              <span className="absolute top-3 left-3 z-10 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold text-white">Équipe</span>
+            <div
+              key={team.team_id}
+              onClick={() => handleSelectTeam(team)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  handleSelectTeam(team);
+                }
+              }}
+              className="group relative aspect-square bg-white/10 backdrop-blur-sm border-2 border-white/20 rounded-2xl overflow-hidden hover:bg-white/20 hover:border-white/50 transition-all hover:scale-105 min-h-[160px] cursor-pointer"
+            >
+              <span className="absolute top-3 left-3 z-10 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold text-white">
+                Équipe
+              </span>
               {isOwner && (
                 <>
-                  <Share2 size={18} className="absolute top-3 right-3 text-white/50 hover:text-white" onClick={(e) => { e.stopPropagation(); setInviteDialogTeam(team); }} />
-                  <Trash2 size={18} className="absolute bottom-3 right-3 text-white/50 hover:text-red-400" onClick={(e) => { e.stopPropagation(); handleDeleteTeam(team); }} />
+                  <Share2
+                    size={18}
+                    className="absolute top-3 right-3 text-white/50 hover:text-white z-20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInviteDialogTeam(team);
+                    }}
+                  />
+                  <Trash2
+                    size={18}
+                    className="absolute bottom-3 right-3 text-white/50 hover:text-red-400 z-20"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteTeam(team);
+                    }}
+                  />
                 </>
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-                <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center"><Users size={32} className="text-white" /></div>
-                <span className="text-white font-semibold text-center text-sm line-clamp-2">{team.name}</span>
-                <span className="text-white/80 text-xs mt-1">{team.members_count} membre{team.members_count > 1 ? 's' : ''}</span>
+                <div className="w-16 h-16 mb-3 bg-white/20 rounded-full flex items-center justify-center">
+                  <Users size={32} className="text-white" />
+                </div>
+                <span className="text-white font-semibold text-center text-sm line-clamp-2">
+                  {team.name}
+                </span>
+                <span className="text-white/80 text-xs mt-1">
+                  {team.members_count} membre{team.members_count > 1 ? 's' : ''}
+                </span>
               </div>
-            </button>
+            </div>
           );
         })}
 

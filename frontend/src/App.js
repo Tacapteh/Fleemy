@@ -8,7 +8,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
-import { auth, logout, waitForAuth } from "./firebase";
+import { auth, logout, waitForAuth, fetchUserTeamsFromFirestore } from "./firebase";
 import { contextStore } from "./stores/contextStore";
 import { SettingsProvider, useSettings } from "./context/SettingsContext";
 
@@ -112,7 +112,7 @@ function AuthGuard({ user, children }) {
 
       try {
         // Vérifier si un contexte existe
-        
+
         if (savedContext) {
           // Valider que le contexte est toujours valide
           if (savedContext.type === 'solo') {
@@ -123,11 +123,10 @@ function AuthGuard({ user, children }) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
             const cachedTeams = readTeamsCache();
 
-            const ensurePromise = ensureTeamsCache(
-              () => apiFetch('/teams/my'),
-              { forceRefresh: true },
-            )
-              .then((value) => ({ status: 'resolved', value }))
+            // We use Firestore directly because it's faster and less likely to timeout/fail 
+            // than the API, which caused redirect loops.
+            const ensurePromise = fetchUserTeamsFromFirestore()
+              .then((teams) => ({ status: 'resolved', value: teams }))
               .catch((error) => ({ status: 'rejected', error }));
 
             const resultOrTimeout = await Promise.race([
@@ -156,20 +155,19 @@ function AuthGuard({ user, children }) {
               throw resultOrTimeout.error;
             }
 
-            const result = resultOrTimeout.value;
+            const teams = resultOrTimeout.value;
+            // fetchUserTeamsFromFirestore returns an array on success, or throws.
+            // checking if team is present
+            const stillMember = Array.isArray(teams)
+              ? teams.some((t) => t.team_id === savedContext.teamId)
+              : false;
 
-            if (result.success) {
-              const stillMember = Array.isArray(result.teams)
-                ? result.teams.some((t) => t.team_id === savedContext.teamId)
-                : false;
-
-              if (stillMember) {
-                // Contexte team toujours valide
-                setChecking(false);
-                return;
-              }
+            if (stillMember) {
+              // Contexte team toujours valide
+              setChecking(false);
+              return;
             } else {
-              console.error('Error checking team membership:', result.raw?.error || result.raw);
+              console.warn('User is no longer a member of the selected team (verified via Firestore)');
               clearTeamsCache();
             }
           }
@@ -251,13 +249,13 @@ function AppWithSettings() {
 
     const timeoutId = typeof window !== "undefined"
       ? window.setTimeout(() => {
-          if (!initialResolved) {
-            console.warn(
-              "Timeout lors de l'initialisation Firebase, affichage de l'écran de connexion en secours.",
-            );
-            finalizeInitialization(null);
-          }
-        }, 8000)
+        if (!initialResolved) {
+          console.warn(
+            "Timeout lors de l'initialisation Firebase, affichage de l'écran de connexion en secours.",
+          );
+          finalizeInitialization(null);
+        }
+      }, 8000)
       : null;
 
     return () => {
@@ -490,11 +488,10 @@ function AppWithSettings() {
 
   return (
     <div
-      className={`min-h-screen ${
-        darkModeEnabled
-          ? "dark bg-slate-900 text-slate-100"
-          : "bg-white text-slate-900"
-      }`}
+      className={`min-h-screen ${darkModeEnabled
+        ? "dark bg-slate-900 text-slate-100"
+        : "bg-white text-slate-900"
+        }`}
     >
       {renderContent()}
     </div>
