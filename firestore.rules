@@ -160,7 +160,12 @@ service cloud.firestore {
     }
 
     match /teams/{teamId} {
-      allow read: if teamResourceShowsMember() || userDocumentListsTeam(teamId);
+      allow list: if isAuthenticated() && (
+        (request.query.limit <= 100 && request.resource.data.members.hasAny([request.auth.uid]))
+        || teamResourceShowsMember()
+        || userDocumentListsTeam(teamId)
+      );
+      allow get: if teamResourceShowsMember() || userDocumentListsTeam(teamId);
       allow write: if isTeamMember(teamId)
         || (isAuthenticated() && get(/databases/$(database)/documents/teams/$(teamId)).data.owner_uid == request.auth.uid);
 

@@ -1546,32 +1546,47 @@ export async function fetchUserTeamsFromFirestore() {
 
   const uniqueTeams = new Map();
 
+  // Helper to add teams to our map
   const collect = (snapshot) => {
     snapshot.forEach((docSnap) => {
       const normalized = normalizeTeamSnapshot(docSnap);
-      uniqueTeams.set(normalized.team_id, {
-        ...normalized,
-        source: "firestore",
-      });
+      if (normalized && normalized.team_id) {
+        uniqueTeams.set(normalized.team_id, {
+          ...normalized,
+          source: "firestore",
+        });
+      }
     });
   };
 
   try {
     const teamsCollection = collection(db, "teams");
+
+    // PRIMARY STRATEGY: Direct 'array-contains' query
+    // This is the most efficient method and should be supported by indexes/rules.
     const memberQuery = query(
       teamsCollection,
       where("members", "array-contains", uid)
     );
+
+    try {
+      const memberSnapshot = await getDocs(memberQuery);
+      collect(memberSnapshot);
+      console.log(`[fetchUserTeamsFromFirestore] 'members array-contains' found ${memberSnapshot.size} teams`);
+    } catch (error) {
+      console.error("[fetchUserTeamsFromFirestore] Primary query failed", error);
+      if (isPermissionDeniedError(error)) {
+        console.warn("[fetchUserTeamsFromFirestore] Permission denied on primary query. Check firestore.rules.");
+      }
+      // We continue to try other methods if this fails, though usually this is the one that should work.
+    }
+
+    // SECONDARY STRATEGY: Check if user is owner (legacy structure support)
+    // Some older teams might not have the owner in the 'members' array correctly, 
+    // or we might want to ensure owners always see their teams.
     const ownerFieldCandidates = [
       "owner_uid",
       "ownerUid",
-      "ownerId",
-      "owner.uid",
-      "owner.user_uid",
-      "owner.userUid",
-      "owner.id",
-      "owner.user_id",
-      "owner.userId",
     ];
 
     const ownerSnapshotPromises = ownerFieldCandidates.map(async (fieldName) => {
@@ -1579,211 +1594,30 @@ export async function fetchUserTeamsFromFirestore() {
         const ownerQuery = query(teamsCollection, where(fieldName, "==", uid));
         return await getDocs(ownerQuery);
       } catch (ownerError) {
-        if (isPermissionDeniedError(ownerError)) {
-          return null;
-        }
-
-        logPermissionError(
-          `teams owner lookup ${fieldName}`,
-          uid,
-          ownerError,
-          { level: "warn", toast: false }
-        );
+        // Silently fail on owner queries if permission denied, as it's secondary
         return null;
       }
     });
 
-    const membershipDocsPromise = (async () => {
-      if (typeof db?.collectionGroup !== "function") {
-        return [];
-      }
-
-      const membershipCollectionNames = ["memberships", "members"];
-      const membershipDocMap = new Map();
-
-      for (const collectionName of membershipCollectionNames) {
-        let groupRef;
-        try {
-          groupRef = collectionGroup(db, collectionName);
-        } catch (groupError) {
-          if (isPermissionDeniedError(groupError)) {
-            break;
-          }
-          logPermissionError(
-            `teams ${collectionName} collectionGroup`,
-            uid,
-            groupError,
-            { level: "warn", toast: false }
-          );
-          continue;
-        }
-
-        const buildQuery = (constraint) => query(groupRef, constraint);
-        const queryConstraints = [where("uid", "==", uid)];
-
-        try {
-          queryConstraints.push(where(documentId(), "==", uid));
-        } catch (fieldError) {
-          // ``documentId`` may not be supported in some mock environments.
-          if (!isPermissionDeniedError(fieldError)) {
-            console.warn("Unable to use documentId constraint", fieldError);
-          }
-        }
-
-        for (const constraint of queryConstraints) {
-          let snapshot = null;
-          try {
-            snapshot = await getDocs(buildQuery(constraint));
-          } catch (membershipError) {
-            if (isPermissionDeniedError(membershipError)) {
-              snapshot = null;
-            } else {
-              logPermissionError(
-                `teams ${collectionName} memberships`,
-                uid,
-                membershipError,
-                { level: "warn", toast: false }
-              );
-            }
-          }
-
-          if (snapshot && !snapshot.empty) {
-            snapshot.forEach((docSnap) => {
-              const docPath = docSnap?.ref?.path || `${collectionName}/${docSnap.id}`;
-              if (!membershipDocMap.has(docPath)) {
-                membershipDocMap.set(docPath, docSnap);
-              }
-            });
-          }
-        }
-
-        if (membershipDocMap.size > 0) {
-          break;
-        }
-      }
-
-      return Array.from(membershipDocMap.values());
-    })();
-
-    const [memberSnapshot, ownerSnapshots, membershipDocSnaps] =
-      await Promise.all([
-        getDocs(memberQuery),
-        Promise.all(ownerSnapshotPromises),
-        membershipDocsPromise,
-      ]);
-
-    collect(memberSnapshot);
-    let ownerDocsFound = 0;
-    ownerSnapshots
-      .filter((snapshot) => snapshot && !snapshot.empty)
-      .forEach((snapshot) => {
-        ownerDocsFound += snapshot.size;
+    const ownerSnapshots = await Promise.all(ownerSnapshotPromises);
+    ownerSnapshots.forEach((snapshot) => {
+      if (snapshot && !snapshot.empty) {
         collect(snapshot);
-      });
-
-    const shouldScanAllTeams =
-      ownerDocsFound === 0 ||
-      !Array.isArray(membershipDocSnaps) ||
-      membershipDocSnaps.length === 0;
-
-    if (shouldScanAllTeams) {
-      try {
-        const fallbackSnapshot = await getDocs(teamsCollection);
-        fallbackSnapshot.forEach((docSnap) => {
-          const data = docSnap?.data?.() || {};
-          const membersValue = data.members;
-
-          const isLegacyMemberMap =
-            membersValue &&
-            typeof membersValue === "object" &&
-            !Array.isArray(membersValue) &&
-            Object.prototype.hasOwnProperty.call(membersValue, uid);
-
-          if (isLegacyMemberMap) {
-            uniqueTeams.set(docSnap.id, {
-              ...normalizeTeamSnapshot(docSnap),
-              source: "firestore-member-scan",
-            });
-          }
-
-          const ownerCandidates = [
-            data.owner_uid,
-            data.ownerUid,
-            data.ownerId,
-            data?.owner?.uid,
-            data?.owner?.user_uid,
-            data?.owner?.userUid,
-            data?.owner?.id,
-            data?.owner?.user_id,
-            data?.owner?.userId,
-          ].filter((value) => typeof value === "string" && value);
-
-          if (ownerCandidates.includes(uid)) {
-            uniqueTeams.set(docSnap.id, {
-              ...normalizeTeamSnapshot(docSnap),
-              source: "firestore-owner-scan",
-            });
-          }
-        });
-      } catch (ownerScanError) {
-        if (!isPermissionDeniedError(ownerScanError)) {
-          console.warn(
-            "Unable to scan teams collection for owner fallback",
-            ownerScanError
-          );
-        }
       }
-    }
+    });
 
-    const missingTeamRefs = new Map();
-
-    if (Array.isArray(membershipDocSnaps)) {
-      membershipDocSnaps.forEach((docSnap) => {
-        const teamRef = docSnap?.ref?.parent?.parent;
-        const data =
-          typeof docSnap.data === "function" ? docSnap.data() : docSnap.data;
-        const teamId =
-          teamRef?.id || data?.team_id || data?.teamId || data?.team || null;
-        if (teamId && !uniqueTeams.has(teamId)) {
-          missingTeamRefs.set(teamId, teamRef || doc(db, "teams", teamId));
-        }
-      });
-    }
-
-    if (missingTeamRefs.size > 0) {
-      const resolved = await Promise.all(
-        Array.from(missingTeamRefs.entries()).map(async ([teamId, teamRef]) => {
-          try {
-            const teamSnap = await getDoc(teamRef);
-            return { teamId, teamSnap };
-          } catch (error) {
-            logPermissionError(`teams/${teamId}`, uid, error, {
-              level: "warn",
-              toast: false,
-            });
-            return null;
-          }
-        })
-      );
-
-      resolved.forEach((entry) => {
-        if (entry?.teamSnap?.exists()) {
-          const normalized = normalizeTeamSnapshot(entry.teamSnap);
-          uniqueTeams.set(entry.teamId, {
-            ...normalized,
-            source: "firestore-membership",
-          });
-        }
-      });
-    }
+    // If we found teams, we return them. 
+    // We do NOT do the expensive collectionGroup scan if we have results or if the primary query just worked (results or empty).
+    // The collectionGroup scan is a heavy fallback that was likely causing performance issues.
 
     return Array.from(uniqueTeams.values());
+
   } catch (error) {
+    console.error("[fetchUserTeamsFromFirestore] Global error", error);
     if (isPermissionDeniedError(error)) {
+      // If everything failed due to permissions, return empty to trigger API fallback
       return [];
     }
-
-    logPermissionError("teams", uid, error, { level: "warn", toast: false });
     throw error;
   }
 }
