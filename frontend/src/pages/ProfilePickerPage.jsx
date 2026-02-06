@@ -149,14 +149,83 @@ const ProfilePickerPage = () => {
     async (options = {}) => {
       const {
         skipStartLoading = false,
-        silent = false,
         shouldUpdate = () => true,
       } = options;
 
-      const persistedTeams = readStaleTeamsCache() || [];
+      // Ensure we don't start loading if we already have data and are just refreshing
+      if (!skipStartLoading && teamsRef.current.length === 0) {
+        setLoading(true);
+      }
+      setError('');
 
-      const mapTeams = (payload) =>
-        payload
+      console.log('[ProfilePickerPage] Starting stable parallel fetch...');
+
+      try {
+        // 1. Fire both requests safely
+        // Note: ensureTeamsCache with forceRefresh might be slow, so we trust firestore first
+        const apiPromise = ensureTeamsCache(() => apiFetch('/teams/my'))
+          .then(result => ({ source: 'api', result }))
+          .catch(err => ({ source: 'api', error: err }));
+
+        const firestorePromise = fetchUserTeamsFromFirestore()
+          .then(result => ({ source: 'firestore', result }))
+          .catch(err => ({ source: 'firestore', error: err }));
+
+        // 2. Wait for BOTH to finish. We do not race. We wait.
+        // This ensures we have the complete picture before showing "No Teams".
+        const results = await Promise.allSettled([apiPromise, firestorePromise]);
+
+        if (!shouldUpdate()) return;
+
+        // 3. Process results
+        let apiTeams = [];
+        let firestoreTeams = [];
+        let apiError = null;
+
+        results.forEach(res => {
+          if (res.status === 'fulfilled') {
+            const { source, result, error } = res.value;
+            if (source === 'api') {
+              if (result?.success !== false && Array.isArray(result?.teams)) {
+                apiTeams = result.teams;
+              } else if (Array.isArray(result)) { // handle raw array return
+                apiTeams = result;
+              } else if (error) {
+                apiError = error;
+              }
+            } else if (source === 'firestore') {
+              if (Array.isArray(result)) {
+                firestoreTeams = result;
+              }
+            }
+          }
+        });
+
+        console.log(`[ProfilePickerPage] Fetched: API=${apiTeams.length}, Firestore=${firestoreTeams.length}`);
+
+        // 4. Merge Strategies
+        // We prefer API data (it has more details), but Firestore is the backup.
+        // We deduplicate by ID.
+        const mergedMap = new Map();
+
+        // Add Firestore teams first (base layer)
+        firestoreTeams.forEach(t => {
+          if (t.team_id) mergedMap.set(t.team_id, t);
+        });
+
+        // Overlay API teams (top layer, authoritative for details)
+        apiTeams.forEach(t => {
+          if (t.team_id) {
+            // If we have existing firestore data, we might merge properties, but usually API is fuller.
+            // However, API might miss locally created teams not yet synced? Unlikely.
+            mergedMap.set(t.team_id, { ...mergedMap.get(t.team_id), ...t });
+          }
+        });
+
+        const finalTeams = Array.from(mergedMap.values());
+
+        // Normalize
+        const mappedTeams = finalTeams
           .map((team) => ({
             team_id: team.team_id || team.id || null,
             name: team.name || DEFAULT_TEAM_NAME,
@@ -172,135 +241,30 @@ const ProfilePickerPage = () => {
           .filter((team) => typeof team.team_id === 'string' && team.team_id.length > 0)
           .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
-      // If we have persisted teams, we can show them immediately if not skipping
-      const hasPersistedData = persistedTeams.length > 0;
-
-      // Only set full loading if we have absolutely no data to show
-      // Only set full loading if we have absolutely no data to show
-      if (!skipStartLoading && shouldUpdate() && !hasPersistedData) {
-        setLoading(true);
-      } else if (hasPersistedData && shouldUpdate()) {
-        // If we have stale data, show it but maybe keep a subtle loading indicator or just rely on reactiveness
-        // For now, let's just make sure we display something
-        setTeams(mapTeams(persistedTeams));
-        setLoading(false); // Validating stale data allows disabling the heavy spinner
-      }
-
-      const safetyTimeout = setTimeout(() => {
-        if (!shouldUpdate()) return;
-        // If still really loading (no teams), ensure we stop
-        setLoading((current) => {
-          if (current) return false;
-          return current;
-        });
-      }, 15000); // reduced to 15s
-
-      // We launch both fetches in parallel
-      let apiFinished = false;
-
-      const handleTeamsUpdate = (sourceName, fetchedTeams, isSuccess, errorMessage) => {
-        if (!shouldUpdate()) return;
-
-        const nextTeams = mapTeams(fetchedTeams || []);
-        console.log(`[ProfilePickerPage] ${sourceName} returned ${nextTeams.length} teams. Success: ${isSuccess}`);
-
-        // If API finished and failed, but we have data from Firestore, we rely on Firestore.
-        // If API finished and succeeded, we trust API.
-        // If Firestore finished, we display it ONLY if API hasn't finished yet or API failed.
-
-        if (sourceName === 'API') {
-          apiFinished = true;
-          if (isSuccess) {
-            setTeams(nextTeams);
-            setError('');
-            // If API is success, that's our source of truth
-            setLoading(false);
-          } else {
-            console.warn('[ProfilePickerPage] API failed, relying on Firestore/Cache');
-            if (error && !fetchedTeams.length) {
-              // Keep existing data if we have it, else show error
-              // Keep existing data if we have it, else show error
-              if (!teamsRef.current.length && !persistedTeams.length) {
-                setError(errorMessage || 'Erreur lors du chargement des équipes');
-              }
-            }
-          }
-        } else if (sourceName === 'Firestore') {
-          // Firestore is a fallback or a fast-first source
-          if (!apiFinished) {
-            // API not back yet.
-            if (nextTeams.length > 0) {
-              // OPTIMISTIC UPDATE: If we found teams in Firestore, show them immediately.
-              setTeams(nextTeams);
-              setLoading(false);
-            } else {
-              // If Firestore has NO data, it *might* be empty, or it might be a cold cache.
-              // We should NOT show "No teams found" yet. We must wait for the API.
-              // So we do NOTHING here regarding state, just let the spinner spin.
-              console.log('[ProfilePickerPage] Firestore returned empty, waiting for API to confirm...');
-            }
-          } else {
-            // API already finished. 
-            // If API failed and we have firestore data, we might want to use it
-            // If API failed (teams empty & error), update with Firestore
-            if (errorRef.current || teamsRef.current.length === 0) {
-              if (nextTeams.length > 0) {
-                setTeams(nextTeams);
-                setError('');
-                setLoading(false);
-                writeTeamsCache(nextTeams);
-              }
-            }
-          }
+        if (mappedTeams.length > 0) {
+          setTeams(mappedTeams);
+          writeTeamsCache(mappedTeams); // Update cache
+        } else if (apiError && firestoreTeams.length === 0) {
+          // Only show error if BOTH failed to give us data
+          console.warn('[ProfilePickerPage] Both sources failed/empty', apiError);
+          // If we have absolutely nothing, we might show the error, or just empty state.
+          // Better to show empty state if just "no teams found" logic, but if API error...
+          // Let's assume empty state is better than error for UX unless specific.
+        } else {
+          // Empty list, but valid (no teams found)
+          setTeams([]);
         }
-      };
 
-      try {
-        console.log('[ProfilePickerPage] Starting parallel fetches...');
-
-        // 1. API Fetch
-        const apiPromise = ensureTeamsCache(() => apiFetch('/teams/my'))
-          .then(result => {
-            const payload = Array.isArray(result?.teams) ? result.teams : normalizeTeamsResponse(result?.raw);
-            const success = result?.success !== false && Array.isArray(payload); // stricter check
-            handleTeamsUpdate('API', payload || [], success, result?.error);
-          })
-          .catch(err => {
-            console.error('[ProfilePickerPage] API fetch exception:', err);
-            handleTeamsUpdate('API', [], false, err.message);
-          });
-
-        // 2. Firestore Fetch
-        const firestorePromise = fetchUserTeamsFromFirestore()
-          .then(teams => {
-            handleTeamsUpdate('Firestore', teams || [], true, null);
-          })
-          .catch(err => {
-            console.warn('[ProfilePickerPage] Firestore fetch exception:', err);
-            handleTeamsUpdate('Firestore', [], false, err.message);
-          });
-
-        // Wait for both to "settle" just to clear timeout, but updates happen individually
-        await Promise.allSettled([apiPromise, firestorePromise]);
-
-      } catch (globalError) {
-        console.error('[ProfilePickerPage] Global fetch error', globalError);
+      } catch (err) {
+        console.error('[ProfilePickerPage] Critical fetch error', err);
       } finally {
-        clearTimeout(safetyTimeout);
         if (shouldUpdate()) {
+          setLoading(false);
           setIsInitialSyncComplete(true);
-          // Only stop loading if we have teams OR both sources failed
-          setLoading((prev) => {
-            // If we have teams, stop loading
-            if (teamsRef.current.length > 0) return false;
-            // If we're still loading and have no teams, keep loading
-            // (don't show empty state prematurely)
-            return prev;
-          });
         }
       }
     },
-    [] // Dependencies removed to prevent recreation. Logic uses refs for current state.
+    []
   );
 
   useEffect(() => {

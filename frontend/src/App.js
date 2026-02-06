@@ -123,8 +123,10 @@ function AuthGuard({ user, children }) {
             // Vérifier que l'utilisateur est toujours membre de l'équipe
             const cachedTeams = readTeamsCache();
 
-            // We use Firestore directly because it's faster and less likely to timeout/fail 
-            // than the API, which caused redirect loops.
+            // We use Firestore directly.
+            // STRATEGY: FAIL SAFE.
+            // If this fails (offline, timeout, permission), we TRUST THE CACHE or existing context.
+            // We ONLY redirect if we affirmatively know the user is NOT a member.
             const ensurePromise = fetchUserTeamsFromFirestore()
               .then((teams) => ({ status: 'resolved', value: teams }))
               .catch((error) => ({ status: 'rejected', error }));
@@ -136,39 +138,32 @@ function AuthGuard({ user, children }) {
               ),
             ]);
 
-            if (resultOrTimeout.status === 'timeout') {
-              if (Array.isArray(cachedTeams)) {
-                const stillMemberWithCache = cachedTeams.some((t) => t.team_id === savedContext.teamId);
+            let validTeams = null;
 
-                if (stillMemberWithCache) {
-                  setChecking(false);
-                  return;
-                }
-              }
-
-              clearTeamsCache();
-              navigate('/profiles');
+            if (resultOrTimeout.status === 'resolved') {
+              validTeams = resultOrTimeout.value;
+            } else {
+              console.warn(
+                'Context check skipped (timeout or error), trusting local state.',
+                resultOrTimeout.status === 'rejected' ? resultOrTimeout.error : 'timeout'
+              );
+              // If we timed out or errored, we assume valid to prevent being kicked out offline
+              setChecking(false);
               return;
             }
 
-            if (resultOrTimeout.status === 'rejected') {
-              throw resultOrTimeout.error;
-            }
-
-            const teams = resultOrTimeout.value;
-            // fetchUserTeamsFromFirestore returns an array on success, or throws.
-            // checking if team is present
-            const stillMember = Array.isArray(teams)
-              ? teams.some((t) => t.team_id === savedContext.teamId)
-              : false;
+            // If we got a valid list, check membership
+            const stillMember = Array.isArray(validTeams)
+              ? validTeams.some((t) => t.team_id === savedContext.teamId)
+              : false; // If list is valid but empty, validTeams is [], so stillMember = false
 
             if (stillMember) {
-              // Contexte team toujours valide
               setChecking(false);
               return;
             } else {
               console.warn('User is no longer a member of the selected team (verified via Firestore)');
               clearTeamsCache();
+              // Only redirect if effectively removed
             }
           }
         }

@@ -1539,9 +1539,8 @@ export async function fetchUserTeamsFromFirestore() {
     uid = await waitForAuthenticatedUid({ warnOnPending: true });
   }
   if (!uid) {
-    throw new Error(
-      "Impossible de récupérer les équipes sans utilisateur authentifié"
-    );
+    console.warn("fetchUserTeamsFromFirestore: unknown user, returning empty list");
+    return [];
   }
 
   const uniqueTeams = new Map();
