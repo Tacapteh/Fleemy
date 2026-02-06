@@ -156,12 +156,12 @@ export const expandWeeklyTasksToMonthRange = (weeklyTasks, range) => {
 
       const explicitDate = parseTaskDate(
         rangeSlot?.task_date ??
-          rangeSlot?.taskDate ??
-          rangeSlot?.task_day_iso ??
-          rangeSlot?.taskDayIso ??
-          task?.task_date ??
-          task?.taskDate ??
-          null
+        rangeSlot?.taskDate ??
+        rangeSlot?.task_day_iso ??
+        rangeSlot?.taskDayIso ??
+        task?.task_date ??
+        task?.taskDate ??
+        null
       );
 
       if (explicitDate) {
@@ -379,7 +379,7 @@ function MonthGrid({
 
   useEffect(() => {
     if (!hasStaticEvents) {
-      return () => {};
+      return () => { };
     }
 
     if (typeof teamUnsubRef.current === "function") {
@@ -388,7 +388,7 @@ function MonthGrid({
     }
     const normalized = Array.isArray(staticEvents) ? staticEvents : [];
     setTeamEvents(normalized);
-    return () => {};
+    return () => { };
   }, [hasStaticEvents, staticEvents]);
 
   useEffect(() => {
@@ -399,23 +399,23 @@ function MonthGrid({
 
   useEffect(() => {
     if (hasStaticEvents) {
-      return () => {};
+      return () => { };
     }
 
     if (!user || !monthRange?.from || !monthRange?.to) {
       setSoloEvents([]);
-      return () => {};
+      return () => { };
     }
 
     if (!context) {
       setSoloEvents([]);
       setTeamEvents([]);
-      return () => {};
+      return () => { };
     }
 
     if (context.type === "team" && !context.memberUid) {
       setTeamEvents([]);
-      return () => {};
+      return () => { };
     }
 
     let cancelled = false;
@@ -481,17 +481,17 @@ function MonthGrid({
   useEffect(() => {
     if (hasStaticTasks) {
       setTasksByDay(groupItemsByDay(staticTasks));
-      return () => {};
+      return () => { };
     }
 
     if (!user || !context || !monthRange?.from || !monthRange?.to) {
       setTasksByDay({});
-      return () => {};
+      return () => { };
     }
 
     if (context.type === "team" && !context.memberUid) {
       setTasksByDay({});
-      return () => {};
+      return () => { };
     }
 
     let active = true;
@@ -558,10 +558,44 @@ function MonthGrid({
     const key = `${year}-${month}-${value}`;
     const dayEvents = eventsByDay[key] || [];
     const dayTasks = tasksByDay[key] || [];
+
+    // Filter out tasks that are attached to an event on this day
+    const attachedTaskIds = new Set();
+    dayEvents.forEach((event) => {
+      if (event.taskId) attachedTaskIds.add(String(event.taskId));
+      if (event.task_id) attachedTaskIds.add(String(event.task_id));
+      if (Array.isArray(event.attachedTaskBadges)) {
+        event.attachedTaskBadges.forEach((badge) => {
+          if (badge.taskId) attachedTaskIds.add(String(badge.taskId));
+          if (badge.task_id) attachedTaskIds.add(String(badge.task_id));
+          if (badge.id) attachedTaskIds.add(String(badge.id));
+        });
+      }
+    });
+
+    const filteredTasks = dayTasks.filter((task) => {
+      const id = task.id ? String(task.id) : null;
+      const taskId = task.taskId ? String(task.taskId) : null;
+      // Some tasks have composite IDs like "taskId:index:date", so we might need to check the prefix or the raw taskId
+      // But typically for matching, we check the main ID.
+      // If task.id is "123", we check if "123" is in attachedTaskIds.
+
+      if (id && attachedTaskIds.has(id)) return false;
+      if (taskId && attachedTaskIds.has(taskId)) return false;
+
+      // Also check if the task ID is contained within the id string (for composite IDs)
+      // e.g. task.id = "taskId:0:..."
+      if (taskId && id && id.startsWith(`${taskId}:`)) {
+        if (attachedTaskIds.has(taskId)) return false;
+      }
+
+      return true;
+    });
+
     return {
       events: dayEvents,
-      tasks: dayTasks,
-      total: dayEvents.length + dayTasks.length,
+      tasks: filteredTasks,
+      total: dayEvents.length + filteredTasks.length,
     };
   };
 
@@ -581,14 +615,14 @@ function MonthGrid({
           const colors = getTaskColor(item.color || "");
           const style = isTask
             ? {
-                "--item-color": colors.backgroundColor,
-                backgroundColor: colors.backgroundColor,
-                color: colors.color,
-                borderColor: colors.borderColor,
-              }
+              "--item-color": colors.backgroundColor,
+              backgroundColor: colors.backgroundColor,
+              color: colors.color,
+              borderColor: colors.borderColor,
+            }
             : !statusClass && item.color
-            ? { "--item-color": item.color }
-            : undefined;
+              ? { "--item-color": item.color }
+              : undefined;
           const label = item.client || item.title;
           const IconComponent = isTask ? getIcon(item.icon ?? undefined) : null;
           return (
