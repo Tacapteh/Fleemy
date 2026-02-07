@@ -31,6 +31,7 @@ import {
   getDocs,
   serverTimestamp,
   documentId,
+  limit,
 } from "firebase/firestore";
 import { showToast } from "./utils/toast";
 import { isPriorityToggleDisabled } from "./utils/priorityFlags";
@@ -1565,7 +1566,8 @@ export async function fetchUserTeamsFromFirestore() {
     // This is the most efficient method and should be supported by indexes/rules.
     const memberQuery = query(
       teamsCollection,
-      where("members", "array-contains", uid)
+      where("members", "array-contains", uid),
+      limit(100)
     );
 
     try {

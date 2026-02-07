@@ -3179,7 +3179,7 @@ export default function Planning() {
   );
 
   const duplicateEventsForDay = useCallback(
-    async (sourceDayIndex, targetDayIndex, targetDate) => {
+    async (sourceDayIndex, targetDayIndex, targetDate, sourceDate) => {
       if (!planningContext) {
         return 0;
       }
@@ -3204,6 +3204,11 @@ export default function Planning() {
         const endDate = getSlotEndDate(slot);
 
         if (!startDate || !endDate || endDate <= startDate) {
+          continue;
+        }
+
+        // Fix: Check if event is actually from the source date, not just the same weekday
+        if (!isSameDayDate(startDate, sourceDate)) {
           continue;
         }
 
@@ -3277,6 +3282,7 @@ export default function Planning() {
       planningContext,
       resolveDayIndexFromDate,
       saveEventNew,
+      isSameDayDate,
     ],
   );
 
@@ -3445,7 +3451,7 @@ export default function Planning() {
 
       try {
         const [createdEvents, createdTasks] = await Promise.all([
-          duplicateEventsForDay(sourceDayIndex, targetDayIndex, normalizedTarget),
+          duplicateEventsForDay(sourceDayIndex, targetDayIndex, normalizedTarget, normalizedSource),
           duplicateWeeklyTasksForDay(
             sourceDayIndex,
             targetDayIndex,
