@@ -511,6 +511,26 @@ const formatHoursDuration = (hours) => {
   return `${wholeHours} h ${minutes} min`;
 };
 
+const deduplicateTasks = (tasks) => {
+  if (!Array.isArray(tasks)) return [];
+  const seen = new Set();
+  return tasks.filter((task) => {
+    if (!task) return false;
+    // Ghost task check
+    const id = task.id || task.occurrenceId || task.taskId;
+    if (!id) return false;
+
+    // Soft delete check
+    if (task.deleted || task.deleted_at || task._deleted) return false;
+
+    // Deduplication
+    const key = String(id);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 export default function Planning() {
   const user = useFirebaseUser();
   const { settings } = useSettings();
@@ -1698,12 +1718,30 @@ export default function Planning() {
       const countedTaskIds = new Set();
       const slotsArray = Array.isArray(slotsList) ? slotsList : [];
 
+      // 1. Identify tasks attached to events
+      const attachedTaskIds = new Set();
+      slotsArray.forEach((event) => {
+        if (!event) return;
+        if (event.taskId) attachedTaskIds.add(String(event.taskId));
+        if (event.task_id) attachedTaskIds.add(String(event.task_id));
+        if (Array.isArray(event.attachedTaskBadges)) {
+          event.attachedTaskBadges.forEach((badge) => {
+            if (badge.taskId) attachedTaskIds.add(String(badge.taskId));
+            if (badge.task_id) attachedTaskIds.add(String(badge.task_id));
+            if (badge.id) attachedTaskIds.add(String(badge.id));
+          });
+        }
+      });
+
       slotsArray.forEach((slot) => {
         const billingInfo = resolveSlotBillingInfo(slot, hourlyRateValue);
         if (!billingInfo) {
           return;
         }
         if (billingInfo.type === "task") {
+          // Check if this task-as-event is actually attached to another event (unlikely but good for safety)
+          // or if it should be deduplicated against the task list.
+          // For now, we trust resolveSlotBillingInfo returns distinct items from slotsList.
           totals.totalTaches += billingInfo.price;
           if (billingInfo.taskIdentifier) {
             countedTaskIds.add(String(billingInfo.taskIdentifier));
@@ -1720,8 +1758,9 @@ export default function Planning() {
         }
       });
 
-      const occurrences = Array.isArray(taskList) ? taskList : [];
-      occurrences.forEach((occurrence) => {
+      const uniqueTasks = deduplicateTasks(taskList);
+
+      uniqueTasks.forEach((occurrence) => {
         if (!occurrence) {
           return;
         }
@@ -1737,6 +1776,14 @@ export default function Planning() {
         if (occurrenceId && countedTaskIds.has(String(occurrenceId))) {
           return;
         }
+
+        // Skip if attached to an event
+        const taskId = occurrence.taskId || occurrence.task_id || occurrence.id;
+        if (taskId && attachedTaskIds.has(String(taskId))) {
+          return;
+        }
+
+        // Double check composite ID for attachments if needed, but attachedTaskIds usually has the main ID.
 
         const price = Number(occurrence.price);
         if (Number.isFinite(price) && price !== 0) {
